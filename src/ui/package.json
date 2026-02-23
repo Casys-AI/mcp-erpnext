@@ -1,0 +1,27 @@
+{
+  "name": "@casys/mcp-erpnext-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build-all.mjs",
+    "dev:invoice": "UI_NAME=invoice-viewer vite --config vite.single.config.mjs",
+    "dev:stock": "UI_NAME=stock-viewer vite --config vite.single.config.mjs",
+    "dev:dashboard": "UI_NAME=dashboard-viewer vite --config vite.single.config.mjs",
+    "dev:doclist": "UI_NAME=doclist-viewer vite --config vite.single.config.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^3.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.5.3",
+    "vite": "^6.0.0",
+    "vite-plugin-singlefile": "^2.0.3"
+  }
+}

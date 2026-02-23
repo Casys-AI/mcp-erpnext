@@ -1,0 +1,138 @@
+/**
+ * ERPNext MCP Apps UI — Global Styles
+ *
+ * Dark theme matching the Casys PML project palette.
+ * No Tailwind — plain CSS custom properties + utility classes.
+ */
+
+/* ── Shared tokens ──────────────────────────────────────────────── */
+:root {
+  --accent: #0089FF;
+  --accent-dim: rgba(0, 137, 255, 0.15);
+  --accent-border: rgba(0, 137, 255, 0.3);
+
+  --success: #16a34a;
+  --success-dim: rgba(22, 163, 74, 0.10);
+  --error: #dc2626;
+  --error-dim: rgba(220, 38, 38, 0.10);
+  --warning: #d97706;
+  --warning-dim: rgba(217, 119, 6, 0.10);
+  --info: #2563eb;
+  --info-dim: rgba(37, 99, 235, 0.10);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+
+  /* ── Light mode (default) ──────────────────────────────────── */
+  --bg-root: #ffffff;
+  --bg-surface: #f9fafb;
+  --bg-elevated: #f3f4f6;
+  --bg-hover: #e5e7eb;
+  --bg-active: #d1d5db;
+
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --text-faint: #9ca3af;
+
+  --border: #e5e7eb;
+  --border-subtle: #f3f4f6;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-root: #08080a;
+    --bg-surface: #111113;
+    --bg-elevated: #18181b;
+    --bg-hover: #1f1f23;
+    --bg-active: #27272a;
+
+    --text-primary: #e7e5e4;
+    --text-secondary: #a8a29e;
+    --text-muted: #78716c;
+    --text-faint: #57534e;
+
+    --border: #27272a;
+    --border-subtle: #1f1f23;
+
+    --success: #4ade80;
+    --success-dim: rgba(74, 222, 128, 0.12);
+    --error: #f87171;
+    --error-dim: rgba(248, 113, 113, 0.12);
+    --warning: #fbbf24;
+    --warning-dim: rgba(251, 191, 36, 0.12);
+    --info: #60a5fa;
+    --info-dim: rgba(96, 165, 250, 0.12);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background: var(--bg-root);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  /* No min-height: viewers size to their content in the feed iframe */
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.15; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-hover) 50%, var(--bg-elevated) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}

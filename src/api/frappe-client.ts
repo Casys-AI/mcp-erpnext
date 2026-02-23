@@ -39,7 +39,29 @@ export interface FrappeClientConfig {
   timeoutMs?: number;
 }
 
+/**
+ * Error thrown when a Frappe REST API request fails.
+ *
+ * Carries the HTTP status code and the raw response body for programmatic
+ * error handling (e.g. retries on 429, user-facing messages from `exc_type`).
+ *
+ * @example
+ * ```ts
+ * try {
+ *   await client.get("Sales Order", "SO-00001");
+ * } catch (e) {
+ *   if (e instanceof FrappeAPIError && e.status === 404) {
+ *     console.log("Document not found");
+ *   }
+ * }
+ * ```
+ */
 export class FrappeAPIError extends Error {
+  /**
+   * @param message - Human-readable error description
+   * @param status - HTTP status code (0 for network errors, 408 for timeouts)
+   * @param body - Raw response body (parsed JSON object or plain text string)
+   */
   constructor(
     message: string,
     public readonly status: number,

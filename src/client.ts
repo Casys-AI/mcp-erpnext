@@ -32,18 +32,29 @@ export type { ErpNextTool, ErpNextToolCategory };
 // Wire format types (MCP protocol)
 // ============================================================================
 
+/** Minimal JSON Schema representation used for MCP tool input validation. */
 export interface JSONSchema {
+  /** JSON Schema type, e.g. "object", "string", "number", "array", "boolean" */
   type: string;
+  /** Nested property schemas (for type "object") */
   properties?: Record<string, JSONSchema>;
+  /** List of required property names */
   required?: string[];
+  /** Human-readable description of the schema or property */
   description?: string;
+  /** Additional JSON Schema keywords (e.g. `enum`, `items`, `default`) */
   [key: string]: unknown;
 }
 
+/** MCP protocol wire format for tool registration. Sent to MCP clients during `tools/list`. */
 export interface MCPToolWireFormat {
+  /** Unique tool name, e.g. "erpnext_list_customers" */
   name: string;
+  /** Human-readable tool description shown to LLM / MCP client */
   description: string;
+  /** JSON Schema defining the tool's input parameters */
   inputSchema: JSONSchema;
+  /** Optional MCP metadata for UI rendering (e.g. iframe viewer resource URI) */
   _meta?: { ui: { resourceUri: string } };
 }
 
@@ -51,7 +62,9 @@ export interface MCPToolWireFormat {
 // ErpNextToolsClient Class
 // ============================================================================
 
+/** Configuration options for {@link ErpNextToolsClient}. */
 export interface ErpNextToolsClientOptions {
+  /** Restrict tools to specific categories (e.g. `["selling", "stock"]`). Omit to load all. */
   categories?: string[];
 }
 

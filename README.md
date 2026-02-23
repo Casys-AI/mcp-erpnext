@@ -17,6 +17,8 @@ Generate API credentials in ERPNext:
 
 Add to your MCP config (e.g. `.pml.json` or `claude_desktop_config.json`):
 
+**Deno:**
+
 ```json
 {
   "mcpServers": {
@@ -33,13 +35,45 @@ Add to your MCP config (e.g. `.pml.json` or `claude_desktop_config.json`):
 }
 ```
 
+**Node.js** (via `dist-node/`):
+
+```json
+{
+  "mcpServers": {
+    "erpnext": {
+      "command": "npx",
+      "args": ["tsx", "dist-node/server.ts"],
+      "env": {
+        "ERPNEXT_URL": "http://localhost:8000",
+        "ERPNEXT_API_KEY": "your-api-key",
+        "ERPNEXT_API_SECRET": "your-api-secret"
+      }
+    }
+  }
+}
+```
+
+> Requires Node >= 20. Run `cd dist-node && npm install` first.
+
 ### HTTP mode
+
+**Deno:**
 
 ```bash
 ERPNEXT_URL=http://localhost:8000 \
 ERPNEXT_API_KEY=xxx \
 ERPNEXT_API_SECRET=xxx \
 deno run --allow-all server.ts --http --port=3012
+```
+
+**Node.js:**
+
+```bash
+cd dist-node && npm install
+ERPNEXT_URL=http://localhost:8000 \
+ERPNEXT_API_KEY=xxx \
+ERPNEXT_API_SECRET=xxx \
+npx tsx server.ts --http --port=3012
 ```
 
 ### Category filtering

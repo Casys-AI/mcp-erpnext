@@ -27,7 +27,7 @@
     ]
   },
   "imports": {
-    "@casys/mcp-server": "../server/mod.ts",
+    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.8.0",
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.15.1",
     "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.15.1/types.js",
     "ajv": "npm:ajv@^8.17.1",

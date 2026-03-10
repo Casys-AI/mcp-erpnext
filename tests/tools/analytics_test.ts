@@ -46,49 +46,11 @@ function assertChartMeta(result: any, viewerName = "chart-viewer") {
   assertEquals(result._meta.ui.resourceUri, `ui://mcp-erpnext/${viewerName}`);
 }
 
-// ── erpnext_order_pipeline ──────────────────────────────────────────────────
+// ── Legacy pipeline surface removed ─────────────────────────────────────────
 
-Deno.test("erpnext_order_pipeline - groups orders by status", async () => {
-  const mockClient = makeMockClient({
-    list: async (doctype: string) => {
-      assertEquals(doctype, "Sales Order");
-      return [
-        { name: "SO-001", customer: "Acme", customer_name: "Acme Corp", status: "Draft", grand_total: 1000, transaction_date: "2026-01-01" },
-        { name: "SO-002", customer: "Globex", customer_name: "Globex Inc", status: "Draft", grand_total: 2000, transaction_date: "2026-01-05" },
-        { name: "SO-003", customer: "Acme", customer_name: "Acme Corp", status: "Completed", grand_total: 1500, transaction_date: "2026-01-10" },
-      ];
-    },
-  });
-
-  const tool = getTool("erpnext_order_pipeline");
-  // deno-lint-ignore no-explicit-any
-  const result = await tool.handler({}, makeCtx(mockClient)) as any;
-
-  assertEquals(result.title, "Sales Order Pipeline");
-  assert(result.columns.length >= 2, "Should have at least 2 status columns");
-  const draftCol = result.columns.find((c: { status: string }) => c.status === "Draft");
-  assert(draftCol, "Should have Draft column");
-  assertEquals(draftCol.count, 2);
-  assertEquals(draftCol.total, 3000);
-  assertChartMeta(result, "order-pipeline-viewer");
-});
-
-Deno.test("erpnext_order_pipeline - respects exclude_cancelled", async () => {
-  let capturedFilters: unknown[][] = [];
-  const mockClient = makeMockClient({
-    list: async (_doctype: string, opts: { filters?: unknown[][] }) => {
-      capturedFilters = opts?.filters ?? [];
-      return [];
-    },
-  });
-
-  const tool = getTool("erpnext_order_pipeline");
-  await tool.handler({ exclude_cancelled: true }, makeCtx(mockClient));
-
-  const hasCancelFilter = capturedFilters.some(
-    (f) => f[0] === "status" && f[1] === "!=" && f[2] === "Cancelled",
-  );
-  assertEquals(hasCancelFilter, true);
+Deno.test("analytics tools no longer expose legacy order/purchase pipeline viewers", () => {
+  assertEquals(analyticsTools.some((tool) => tool.name === "erpnext_order_pipeline"), false);
+  assertEquals(analyticsTools.some((tool) => tool.name === "erpnext_purchase_pipeline"), false);
 });
 
 // ── erpnext_stock_chart ─────────────────────────────────────────────────────
@@ -602,25 +564,6 @@ Deno.test("erpnext_profit_loss - returns monthly income vs expense", async () =>
   assert(result.labels.length > 0);
   assert(result.datasets.length >= 2);
   assertChartMeta(result);
-});
-
-// ── erpnext_purchase_pipeline ───────────────────────────────────────────────
-
-Deno.test("erpnext_purchase_pipeline - groups POs by status", async () => {
-  const mockClient = makeMockClient({
-    list: async () => [
-      { name: "PO-001", supplier: "S1", supplier_name: "Supplier One", status: "Draft", grand_total: 5000, transaction_date: "2026-02-01", schedule_date: "2026-03-01" },
-      { name: "PO-002", supplier: "S2", supplier_name: "Supplier Two", status: "To Receive and Bill", grand_total: 3000, transaction_date: "2026-02-05", schedule_date: "2026-03-05" },
-    ],
-  });
-
-  const tool = getTool("erpnext_purchase_pipeline");
-  // deno-lint-ignore no-explicit-any
-  const result = await tool.handler({}, makeCtx(mockClient)) as any;
-
-  assertEquals(result.title, "Purchase Order Pipeline");
-  assert(result.columns.length >= 2);
-  assertChartMeta(result, "order-pipeline-viewer");
 });
 
 // ── All tools have required fields ──────────────────────────────────────────

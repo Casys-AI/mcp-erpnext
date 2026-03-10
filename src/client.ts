@@ -16,6 +16,7 @@ import {
 } from "./tools/mod.ts";
 import type { ErpNextTool, ErpNextToolCategory } from "./tools/types.ts";
 import { getFrappeClient } from "./api/frappe-client.ts";
+import { withUiRefreshRequest } from "./tools/ui-refresh.ts";
 
 // Re-export from tools
 export {
@@ -108,9 +109,10 @@ export class ErpNextToolsClient {
   buildHandlersMap(): Map<string, (args: Record<string, unknown>) => Promise<unknown>> {
     const handlers = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>();
     for (const tool of this.tools) {
-      handlers.set(tool.name, (args: Record<string, unknown>) => {
+      handlers.set(tool.name, async (args: Record<string, unknown>) => {
         const client = getFrappeClient();
-        return tool.handler(args, { client });
+        const result = await tool.handler(args, { client });
+        return withUiRefreshRequest(result, tool.name, args);
       });
     }
     return handlers;
@@ -126,7 +128,8 @@ export class ErpNextToolsClient {
       );
     }
     const client = getFrappeClient();
-    return await tool.handler(args, { client });
+    const result = await tool.handler(args, { client });
+    return withUiRefreshRequest(result, tool.name, args);
   }
 
   /** Get tool count */

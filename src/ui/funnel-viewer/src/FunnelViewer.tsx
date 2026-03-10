@@ -8,16 +8,26 @@
  * @module lib/erpnext/src/ui/funnel-viewer
  */
 
-import { useState, useEffect, CSSProperties } from "react";
+import { useState, useEffect, useRef, CSSProperties } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles, formatNumber, formatCurrency } from "~/shared/theme";
 import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
+import {
+  canRequestUiRefresh,
+  extractToolResultText,
+  normalizeUiRefreshFailureMessage,
+  resolveUiRefreshRequest,
+  type ToolResultPayload,
+  type UiRefreshRequestData,
+} from "~/shared/refresh";
 
 // ============================================================================
 // MCP App
 // ============================================================================
 
 const app = new App({ name: "Funnel Viewer", version: "1.0.0" });
+const FUNNEL_REFRESH_INTERVAL_MS = 15_000;
+const TOOL_CALL_TIMEOUT_MS = 10_000;
 
 // ============================================================================
 // Types
@@ -36,6 +46,7 @@ interface FunnelData {
   subtitle?: string;
   stages: FunnelStage[];
   currency?: string;
+  refreshRequest?: UiRefreshRequestData;
 }
 
 // ============================================================================
@@ -204,23 +215,120 @@ function ConversionBadge({ rate }: { rate: number }) {
 export function FunnelViewer() {
   const [data, setData] = useState<FunnelData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dataRef = useRef<FunnelData | null>(null);
+  const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshStartedAtRef = useRef(0);
+
+  function hydrateData(nextData: FunnelData) {
+    dataRef.current = nextData;
+    refreshRequestRef.current = resolveUiRefreshRequest(nextData, refreshRequestRef.current);
+    setData(nextData);
+  }
+
+  function consumeToolResult(result: ToolResultPayload): boolean {
+    const text = extractToolResultText(result);
+    if (!text) return false;
+
+    try {
+      const parsed = JSON.parse(text) as FunnelData;
+      hydrateData(parsed);
+      setError(null);
+      setLoading(false);
+      return true;
+    } catch (cause) {
+      console.error("Parse error:", cause);
+      setError("Failed to parse funnel payload");
+      setLoading(false);
+      return false;
+    }
+  }
+
+  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+    const request = resolveUiRefreshRequest(dataRef.current, refreshRequestRef.current);
+    if (!canRequestUiRefresh({
+      request,
+      visibilityState: typeof document === "undefined" ? "visible" : document.visibilityState,
+      refreshInFlight: refreshInFlightRef.current,
+      now: Date.now(),
+      lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+      minIntervalMs: FUNNEL_REFRESH_INTERVAL_MS,
+    }, options)) {
+      return false;
+    }
+
+    if (!request || !app.getHostCapabilities()?.serverTools) {
+      return false;
+    }
+
+    refreshInFlightRef.current = true;
+    lastRefreshStartedAtRef.current = Date.now();
+    setRefreshing(true);
+
+    try {
+      const result = await app.callServerTool({
+        name: request.toolName,
+        arguments: request.arguments,
+      }, { timeout: TOOL_CALL_TIMEOUT_MS });
+
+      if (result.isError) {
+        setError("Refresh failed");
+        return false;
+      }
+
+      if (!consumeToolResult(result)) {
+        setError("Refresh returned no data");
+        return false;
+      }
+
+      return true;
+    } catch (cause) {
+      setError(normalizeUiRefreshFailureMessage(cause));
+      return false;
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
-    app.connect().then(() => { appConnected = true; }).catch(() => {});
+    app.connect().catch(() => {});
 
-    app.ontoolresult = (result: { content?: Array<{ type: string; text?: string }> }) => {
-      setLoading(false);
-      const text = result.content?.find((c) => c.type === "text")?.text;
-      if (text) {
-        try { setData(JSON.parse(text)); } catch (e) { console.error("Parse error:", e); }
-      }
+    app.ontoolresult = (result: ToolResultPayload) => {
+      consumeToolResult(result);
     };
 
-    app.ontoolinputpartial = () => setLoading(true);
+    app.ontoolinputpartial = () => {
+      if (!dataRef.current) {
+        setLoading(true);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleWindowFocus() {
+      void requestRefresh({ ignoreInterval: true });
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void requestRefresh({ ignoreInterval: true });
+      }
+    }
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }} aria-busy={refreshing}>
       <ErpNextBrandHeader />
       <div style={{ flex: 1, overflow: "auto" }}>
         {loading ? (
@@ -228,7 +336,12 @@ export function FunnelViewer() {
         ) : !data ? (
           <FunnelEmptyState />
         ) : (
-          <FunnelContent data={data} />
+          <FunnelContent
+            data={data}
+            error={error}
+            refreshing={refreshing}
+            onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+          />
         )}
       </div>
     </div>
@@ -239,7 +352,14 @@ export function FunnelViewer() {
 // Funnel Content
 // ============================================================================
 
-function FunnelContent({ data }: { data: FunnelData }) {
+function FunnelContent(
+  { data, error, refreshing, onRefresh }: {
+    data: FunnelData;
+    error: string | null;
+    refreshing: boolean;
+    onRefresh: () => void;
+  },
+) {
   const currency = data.currency ?? "EUR";
   const stages = data.stages ?? [];
 
@@ -263,15 +383,44 @@ function FunnelContent({ data }: { data: FunnelData }) {
   return (
     <div style={{ padding: 20, fontFamily: fonts.sans, maxWidth: 680, margin: "0 auto" }}>
       {/* Title */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: colors.text.primary }}>
-          {data.title}
-        </div>
-        {data.subtitle && (
-          <div style={{ fontSize: 12, color: colors.text.muted, marginTop: 2 }}>
-            {data.subtitle}
+      <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: colors.text.primary }}>
+            {data.title}
           </div>
-        )}
+          {data.subtitle && (
+            <div style={{ fontSize: 12, color: colors.text.muted, marginTop: 2 }}>
+              {data.subtitle}
+            </div>
+          )}
+          <div
+            aria-live="polite"
+            style={{
+              fontSize: 11,
+              color: error ? colors.error : colors.text.faint,
+              marginTop: 6,
+            }}
+          >
+            {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
+          </div>
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={refreshing}
+          style={styles.button}
+          onMouseEnter={(e) => {
+            if (!refreshing) {
+              (e.currentTarget as HTMLElement).style.borderColor = colors.accent;
+              (e.currentTarget as HTMLElement).style.color = colors.accent;
+            }
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = colors.border;
+            (e.currentTarget as HTMLElement).style.color = colors.text.secondary;
+          }}
+        >
+          {refreshing ? "Refreshing" : "Refresh"}
+        </button>
       </div>
 
       {/* Funnel stages */}

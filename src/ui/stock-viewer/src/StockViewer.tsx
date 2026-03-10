@@ -7,10 +7,18 @@
  * @module lib/erpnext/src/ui/stock-viewer
  */
 
-import { useState, useEffect, useMemo, CSSProperties } from "react";
+import { useState, useEffect, useMemo, useRef, CSSProperties } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles, formatNumber, formatCurrency } from "~/shared/theme";
 import { ErpNextBrandHeader, ErpNextBrandFooter } from "~/shared/ErpNextBrand";
+import {
+  canRequestUiRefresh,
+  extractToolResultText,
+  normalizeUiRefreshFailureMessage,
+  resolveUiRefreshRequest,
+  type ToolResultPayload,
+  type UiRefreshRequestData,
+} from "~/shared/refresh";
 
 // ============================================================================
 // MCP App
@@ -18,6 +26,8 @@ import { ErpNextBrandHeader, ErpNextBrandFooter } from "~/shared/ErpNextBrand";
 
 const app = new App({ name: "Stock Viewer", version: "1.0.0" });
 let appConnected = false;
+const STOCK_REFRESH_INTERVAL_MS = 15_000;
+const TOOL_CALL_TIMEOUT_MS = 10_000;
 
 // ============================================================================
 // Types
@@ -36,6 +46,7 @@ interface StockEntry {
 interface StockData {
   count: number;
   data: StockEntry[];
+  refreshRequest?: UiRefreshRequestData;
 }
 
 type SortKey = keyof StockEntry;
@@ -128,6 +139,10 @@ function QtyBadge({ qty }: { qty: number }) {
   );
 }
 
+function extractTextContent(result: ToolResultPayload): string | null {
+  return extractToolResultText(result);
+}
+
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -135,23 +150,120 @@ function QtyBadge({ qty }: { qty: number }) {
 export function StockViewer() {
   const [data, setData] = useState<StockData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dataRef = useRef<StockData | null>(null);
+  const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshStartedAtRef = useRef(0);
+
+  function hydrateData(nextData: StockData) {
+    dataRef.current = nextData;
+    refreshRequestRef.current = resolveUiRefreshRequest(nextData, refreshRequestRef.current);
+    setData(nextData);
+  }
+
+  function consumeToolResult(result: ToolResultPayload): boolean {
+    const text = extractTextContent(result);
+    if (!text) return false;
+
+    try {
+      const parsed = JSON.parse(text) as StockData;
+      hydrateData(parsed);
+      setError(null);
+      setLoading(false);
+      return true;
+    } catch (cause) {
+      console.error("Parse error:", cause);
+      setError("Failed to parse stock payload");
+      setLoading(false);
+      return false;
+    }
+  }
+
+  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+    const request = resolveUiRefreshRequest(dataRef.current, refreshRequestRef.current);
+    if (!canRequestUiRefresh({
+      request,
+      visibilityState: typeof document === "undefined" ? "visible" : document.visibilityState,
+      refreshInFlight: refreshInFlightRef.current,
+      now: Date.now(),
+      lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+      minIntervalMs: STOCK_REFRESH_INTERVAL_MS,
+    }, options)) {
+      return false;
+    }
+
+    if (!request || !app.getHostCapabilities()?.serverTools) {
+      return false;
+    }
+
+    refreshInFlightRef.current = true;
+    lastRefreshStartedAtRef.current = Date.now();
+    setRefreshing(true);
+
+    try {
+      const result = await app.callServerTool({
+        name: request.toolName,
+        arguments: request.arguments,
+      }, { timeout: TOOL_CALL_TIMEOUT_MS });
+
+      if (result.isError) {
+        setError("Refresh failed");
+        return false;
+      }
+
+      if (!consumeToolResult(result)) {
+        setError("Refresh returned no data");
+        return false;
+      }
+
+      return true;
+    } catch (cause) {
+      setError(normalizeUiRefreshFailureMessage(cause));
+      return false;
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
     app.connect().then(() => { appConnected = true; }).catch(() => {});
 
-    app.ontoolresult = (result: { content?: Array<{ type: string; text?: string }> }) => {
-      setLoading(false);
-      const text = result.content?.find((c) => c.type === "text")?.text;
-      if (text) {
-        try { setData(JSON.parse(text)); } catch (e) { console.error("Parse error:", e); }
-      }
+    app.ontoolresult = (result: ToolResultPayload) => {
+      consumeToolResult(result);
     };
 
-    app.ontoolinputpartial = () => setLoading(true);
+    app.ontoolinputpartial = () => {
+      if (!dataRef.current) {
+        setLoading(true);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleWindowFocus() {
+      void requestRefresh({ ignoreInterval: true });
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void requestRefresh({ ignoreInterval: true });
+      }
+    }
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }} aria-busy={refreshing}>
       <ErpNextBrandHeader />
       <div style={{ flex: 1 }}>
         {loading ? (
@@ -159,7 +271,12 @@ export function StockViewer() {
         ) : !data ? (
           <StockEmptyState />
         ) : (
-          <StockContent data={data} />
+          <StockContent
+            data={data}
+            error={error}
+            refreshing={refreshing}
+            onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+          />
         )}
       </div>
       <ErpNextBrandFooter />
@@ -177,7 +294,14 @@ const COLUMNS: { key: SortKey; label: string; align: "left" | "right"; width?: s
   { key: "stock_value", label: "Value", align: "right", width: "11%" },
 ];
 
-function StockContent({ data }: { data: StockData }) {
+function StockContent(
+  { data, error, refreshing, onRefresh }: {
+    data: StockData;
+    error: string | null;
+    refreshing: boolean;
+    onRefresh: () => void;
+  },
+) {
   const [sortKey, setSortKey] = useState<SortKey>("item_code");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filter, setFilter] = useState("");
@@ -231,16 +355,36 @@ function StockContent({ data }: { data: StockData }) {
           <div style={{ fontSize: 12, color: colors.text.muted }}>
             {sorted.length} entries{filter ? ` (filtered from ${data.count})` : ""}
           </div>
+          <div aria-live="polite" style={{ fontSize: 11, color: error ? colors.error : colors.text.faint, marginTop: 4 }}>
+            {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
+          </div>
         </div>
-        <input
-          type="text"
-          placeholder="Filter items / warehouses..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          style={{ ...styles.input, maxWidth: 260 }}
-          onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = colors.accent; }}
-          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = colors.border; }}
-        />
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            type="text"
+            placeholder="Filter items / warehouses..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            style={{ ...styles.input, maxWidth: 260 }}
+            onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = colors.accent; }}
+            onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = colors.border; }}
+          />
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            style={styles.button}
+            onMouseEnter={(e) => { if (!refreshing) { (e.currentTarget as HTMLElement).style.borderColor = colors.accent; (e.currentTarget as HTMLElement).style.color = colors.accent; } }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = colors.border; (e.currentTarget as HTMLElement).style.color = colors.text.secondary; }}
+          >
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M10 6a4 4 0 1 1-1.1-2.76" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                <path d="M10 2v2.8H7.2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {refreshing ? "Refreshing" : "Refresh"}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Table */}

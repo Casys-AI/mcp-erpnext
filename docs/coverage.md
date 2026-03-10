@@ -1,6 +1,6 @@
 # ERPNext MCP Library - Coverage
 
-## Covered (100 tools, 12 categories)
+## Covered (120 tools, 14 categories)
 
 ### Sales (17 tools)
 
@@ -99,6 +99,35 @@
 | `erpnext_doc_get` | Any | Get any document by DocType + name | - |
 | `erpnext_doc_list` | Any | List any DocType with field/filter/limit control | doclist-viewer |
 
+### Kanban (2 tools)
+
+| Tool | DocType | Operations | UI Viewer |
+|------|---------|-----------|-----------|
+| `erpnext_kanban_get_board` | Task / Opportunity / Issue | Get normalized kanban board with columns, cards, transitions, pagination, and refresh metadata | kanban-viewer |
+| `erpnext_kanban_move_card` | Task / Opportunity / Issue | Execute validated move with optimistic reconciliation and business error payloads | kanban-viewer |
+
+### Analytics (17 tools)
+
+| Tool | DocType / Domain | Operations | UI Viewer |
+|------|------------------|-----------|-----------|
+| `erpnext_stock_chart` | Bin / Inventory | Bar or horizontal-bar stock chart | chart-viewer |
+| `erpnext_sales_chart` | Sales Invoice | Revenue chart by customer, item, or status | chart-viewer |
+| `erpnext_revenue_trend` | Sales Order | Revenue trend line/area chart | chart-viewer |
+| `erpnext_order_breakdown` | Sales Order | Stacked-bar / pie / donut order breakdown | chart-viewer |
+| `erpnext_revenue_vs_orders` | Sales Order | Dual-axis revenue vs order count | chart-viewer |
+| `erpnext_stock_treemap` | Bin / Inventory | Stock value treemap | chart-viewer |
+| `erpnext_product_radar` | Inventory / Sales | Multi-axis product comparison | chart-viewer |
+| `erpnext_price_vs_qty` | Inventory / Sales | Scatter plot price vs quantity | chart-viewer |
+| `erpnext_ar_aging` | Sales Invoice | AR aging buckets | chart-viewer |
+| `erpnext_gross_profit` | Sales Invoice Item | Revenue vs margin composed chart | chart-viewer |
+| `erpnext_profit_loss` | Sales / Purchase | Income vs expenses per month | chart-viewer |
+| `erpnext_kpi_revenue` | Sales Order | Revenue KPI with delta + sparkline | kpi-viewer |
+| `erpnext_kpi_outstanding` | Sales Invoice | Outstanding receivables KPI | kpi-viewer |
+| `erpnext_kpi_orders` | Sales Order | Order volume KPI | kpi-viewer |
+| `erpnext_kpi_gross_margin` | Sales / Inventory | Margin KPI | kpi-viewer |
+| `erpnext_kpi_overdue` | Sales Invoice | Overdue invoice KPI | kpi-viewer |
+| `erpnext_sales_funnel` | CRM / Sales | Lead to order funnel | funnel-viewer |
+
 ### Purchasing (11 tools)
 
 | Tool | DocType | Operations | UI Viewer |
@@ -184,15 +213,19 @@ Specific DocTypes also have dedicated submit/cancel tools: `erpnext_sales_order_
 
 ---
 
-## UI Viewers (3 active)
+## UI Viewers (7 active)
 
 | Viewer | URI | Usage |
 |--------|-----|-------|
-| `doclist-viewer` | `ui://mcp-erpnext/doclist-viewer` | Generic table with sort, filter, pagination, CSV export |
-| `invoice-viewer` | `ui://mcp-erpnext/invoice-viewer` | Single invoice display (header, items, totals, payment status) |
-| `stock-viewer` | `ui://mcp-erpnext/stock-viewer` | Stock balance table with color-coded qty badges |
+| `doclist-viewer` | `ui://mcp-erpnext/doclist-viewer` | Generic table with sort, filter, pagination, CSV export, and refresh-aware revalidation |
+| `invoice-viewer` | `ui://mcp-erpnext/invoice-viewer` | Single invoice display with refresh-aware revalidation |
+| `stock-viewer` | `ui://mcp-erpnext/stock-viewer` | Stock balance table with refresh-aware revalidation |
+| `chart-viewer` | `ui://mcp-erpnext/chart-viewer` | Universal chart renderer for analytics tools |
+| `kanban-viewer` | `ui://mcp-erpnext/kanban-viewer` | Canonical read-write kanban board for Task, Opportunity, and Issue |
+| `kpi-viewer` | `ui://mcp-erpnext/kpi-viewer` | Metric card with delta, sparkline, and refresh-aware revalidation |
+| `funnel-viewer` | `ui://mcp-erpnext/funnel-viewer` | Sales funnel with conversion stages and refresh-aware revalidation |
 
-> `dashboard-viewer` was removed — not wired to any tool. Use `erpnext_doc_list` + a future aggregate tool instead.
+> `order-pipeline-viewer` and the legacy `erpnext_order_pipeline` / `erpnext_purchase_pipeline` tools were removed once `kanban-viewer` became the canonical kanban surface.
 
 ---
 

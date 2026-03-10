@@ -15,6 +15,7 @@ export type ErpNextToolCategory =
   | "inventory"
   | "accounting"
   | "hr"
+  | "kanban"
   | "project"
   | "operations"
   | "purchasing"

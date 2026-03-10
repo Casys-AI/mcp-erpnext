@@ -73,6 +73,35 @@ export class FrappeAPIError extends Error {
 }
 
 /**
+ * Extract human-readable messages from Frappe's `_server_messages` field.
+ * Frappe returns a JSON-encoded array of JSON-encoded strings, each containing a `message` field.
+ * Returns a concatenated string of all messages, or undefined if parsing fails.
+ */
+function extractServerMessages(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== "string") return undefined;
+  try {
+    const outer = JSON.parse(raw);
+    if (!Array.isArray(outer)) return undefined;
+    const msgs: string[] = [];
+    for (const item of outer) {
+      try {
+        const inner = JSON.parse(item);
+        if (typeof inner === "object" && inner?.message) {
+          msgs.push(inner.message);
+        } else if (typeof inner === "string") {
+          msgs.push(inner);
+        }
+      } catch {
+        if (typeof item === "string") msgs.push(item);
+      }
+    }
+    return msgs.length > 0 ? msgs.join("; ") : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Frappe REST API client.
  * Follows no-silent-fallbacks policy — throws FrappeAPIError on any HTTP error.
  */
@@ -140,11 +169,17 @@ export class FrappeClient {
     }
 
     if (!response.ok) {
-      const msg = typeof responseBody === "object" && responseBody !== null
-        ? ((responseBody as Record<string, unknown>).message as string) ??
-          ((responseBody as Record<string, unknown>).exc_type as string) ??
-          response.statusText
-        : response.statusText;
+      let msg = response.statusText;
+      if (typeof responseBody === "object" && responseBody !== null) {
+        const rb = responseBody as Record<string, unknown>;
+        const excType = rb.exc_type as string | undefined;
+        const baseMsg = (rb.message as string) ?? excType ?? response.statusText;
+
+        // Parse _server_messages — Frappe returns a JSON-encoded array of JSON-encoded strings
+        // e.g. "[\"{ \\\"message\\\": \\\"Row #1: Warehouse is required\\\" }\"]"
+        const serverDetails = extractServerMessages(rb._server_messages);
+        msg = serverDetails ? `${baseMsg}: ${serverDetails}` : baseMsg;
+      }
       throw new FrappeAPIError(
         `${method} ${path} failed: ${msg}`,
         response.status,

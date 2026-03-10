@@ -4,8 +4,9 @@
 # What this does:
 # 1. Copies src/ and server.ts to dist-node/
 # 2. Replaces runtime.ts with runtime.node.ts (node:fs instead of Deno.*)
-# 3. Remaps Deno-ecosystem imports to npm equivalents
-# 4. Strips .ts extensions from relative imports (Node ESM convention)
+# 3. Strips .ts extensions from relative imports (Node ESM convention)
+# 4. Installs the Node build dependencies in dist-node/
+# 5. Produces a publishable npm package in dist-node/bin/
 #
 # Usage:
 #   cd lib/erpnext && ./scripts/build-node.sh
@@ -17,6 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist-node"
+VERSION="$(grep '"version"' "$ROOT_DIR/deno.json" | sed 's/.*"version": *"\([^"]*\)".*/\1/')"
 
 echo "[build-node] Building Node.js distribution for @casys/mcp-erpnext..."
 
@@ -42,40 +44,34 @@ if [ -f "$DIST_DIR/src/runtime.node.ts" ]; then
   rm "$DIST_DIR/src/runtime.node.ts"
 fi
 
-# Remap Deno-ecosystem imports to npm equivalents
-# @casys/mcp-server → @casys/mcp-server (same npm package name)
-# @std/yaml → yaml
-find "$DIST_DIR" -name "*.ts" -exec sed -i 's|from "@std/yaml"|from "yaml"|g' {} +
-
 # Strip .ts extensions from relative imports → .js (Node ESM)
 find "$DIST_DIR" -name "*.ts" -exec sed -i \
   -e 's/from "\(\.[^"]*\)\.ts"/from "\1.js"/g' \
   -e 's/import("\(\.[^"]*\)\.ts")/import("\1.js")/g' \
   {} +
 
-# Generate package.json
-cat > "$DIST_DIR/package.json" <<'PKGJSON'
+# Generate package.json for the intermediate Node workspace
+cat > "$DIST_DIR/package.json" <<PKGJSON
 {
-  "name": "@casys/mcp-erpnext",
-  "version": "0.1.0",
-  "description": "ERPNext MCP server with analytics, KPI, and UI viewers",
+  "name": "@casys/mcp-erpnext-build",
+  "private": true,
+  "version": "$VERSION",
+  "description": "Intermediate build workspace for @casys/mcp-erpnext",
   "type": "module",
   "main": "server.ts",
   "types": "server.ts",
-  "bin": {
-    "mcp-erpnext": "server.ts"
-  },
   "scripts": {
     "start": "tsx server.ts",
     "serve": "tsx server.ts --http --port=3012"
   },
   "dependencies": {
-    "@casys/mcp-server": "*",
-    "@modelcontextprotocol/sdk": "*"
+    "@casys/mcp-server": "^0.8.0",
+    "@modelcontextprotocol/sdk": "^1.15.1"
   },
   "devDependencies": {
-    "typescript": "*",
-    "tsx": "*"
+    "esbuild": "^0.25.12",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -84,9 +80,63 @@ cat > "$DIST_DIR/package.json" <<'PKGJSON'
 }
 PKGJSON
 
-echo "[build-node] Done! Output: $DIST_DIR"
+# Copy README into the intermediate workspace
+cp "$ROOT_DIR/README.md" "$DIST_DIR/README.md" 2>/dev/null || true
+
+pushd "$DIST_DIR" >/dev/null
+npm install --no-fund --no-audit
+./node_modules/.bin/esbuild server.ts \
+  --bundle \
+  --platform=node \
+  --target=node20 \
+  --format=esm \
+  --outfile=bin/mcp-erpnext.mjs \
+  --external:node:* \
+  --banner:js='import { createRequire } from "node:module"; const require = createRequire(import.meta.url);'
+sed -i '1s/^/#!\/usr\/bin\/env node\n/' bin/mcp-erpnext.mjs
+chmod +x bin/mcp-erpnext.mjs
+cp -r src/ui/dist bin/ui-dist
+cp README.md bin/README.md 2>/dev/null || cp ../README.md bin/README.md 2>/dev/null || true
+
+cat > bin/package.json <<PKGJSON
+{
+  "name": "@casys/mcp-erpnext",
+  "version": "$VERSION",
+  "description": "MCP server for ERPNext with interactive UI viewers",
+  "type": "module",
+  "bin": {
+    "mcp-erpnext": "mcp-erpnext.mjs"
+  },
+  "files": [
+    "mcp-erpnext.mjs",
+    "ui-dist/**/*",
+    "README.md"
+  ],
+  "keywords": [
+    "mcp",
+    "erpnext",
+    "frappe",
+    "erp",
+    "model-context-protocol",
+    "claude",
+    "ai",
+    "tools"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Casys-AI/mcp-erpnext"
+  },
+  "license": "MIT"
+}
+PKGJSON
+popd >/dev/null
+
+echo "[build-node] Done! Intermediate workspace: $DIST_DIR"
+echo "[build-node] Publishable package: $DIST_DIR/bin"
 echo ""
-echo "Next steps:"
-echo "  cd $DIST_DIR"
-echo "  npm install"
-echo "  tsx server.ts --http"
+echo "Useful commands:"
+echo "  node $DIST_DIR/bin/mcp-erpnext.mjs --http --port=3012"
+echo "  cd $DIST_DIR/bin && npm pack"

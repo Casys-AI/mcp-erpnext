@@ -33,6 +33,8 @@
 
 import { ConcurrentMCPServer, MCP_APP_MIME_TYPE } from "@casys/mcp-server";
 import { ErpNextToolsClient } from "./src/client.ts";
+import { UI_VIEWERS } from "./src/ui/viewers.ts";
+import { resolveViewerDistPath } from "./src/ui/viewer-resource-paths.ts";
 import {
   getArgs,
   statSync,
@@ -42,17 +44,6 @@ import {
 } from "./src/runtime.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
-
-// UI viewer dist folder names (must match what build-all.mjs produces)
-const UI_VIEWERS = [
-  "invoice-viewer",
-  "stock-viewer",
-  "doclist-viewer",
-  "order-pipeline-viewer",
-  "chart-viewer",
-  "kpi-viewer",
-  "funnel-viewer",
-];
 
 async function main() {
   const args = getArgs();
@@ -78,7 +69,7 @@ async function main() {
   // Build MCP server
   const server = new ConcurrentMCPServer({
     name: "mcp-erpnext",
-    version: "0.1.0",
+    version: "0.1.9",
     maxConcurrent: 10,
     backpressureStrategy: "queue",
     validateSchema: true,
@@ -93,10 +84,7 @@ async function main() {
   // Register UI resources (MCP Apps viewers)
   // Built by: cd lib/erpnext/src/ui && node build-all.mjs
   for (const viewerName of UI_VIEWERS) {
-    const distPath = new URL(
-      `./src/ui/dist/${viewerName}/index.html`,
-      import.meta.url,
-    ).pathname;
+    const distPath = resolveViewerDistPath(import.meta.url, viewerName, statSync);
 
     const resourceUri = `ui://mcp-erpnext/${viewerName}`;
     const humanName = viewerName
@@ -104,7 +92,7 @@ async function main() {
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(" ");
 
-    if (statSync(distPath)) {
+    if (distPath) {
       server.registerResource(
         {
           uri: resourceUri,
@@ -121,7 +109,7 @@ async function main() {
     } else {
       console.error(
         `[mcp-erpnext] Warning: UI not built for ${resourceUri}. ` +
-          `Run 'cd lib/erpnext/src/ui && node build-all.mjs' first.`,
+          `Run 'cd lib/erpnext/src/ui && node build-all.mjs' first or package ui-dist with the npm bundle.`,
       );
     }
   }

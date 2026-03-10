@@ -1,8 +1,15 @@
 # @casys/mcp-erpnext
 
-MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **119 tools** across **13 categories**, with **7 interactive UI viewers**.
+MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **120 tools** across **14 categories**, with **7 interactive UI viewers**.
 
 Connect any MCP-compatible AI agent (Claude Desktop, PML, custom) to your ERPNext instance via the standard [Model Context Protocol](https://modelcontextprotocol.io).
+
+## Current Surface
+
+- `kanban-viewer` is the canonical read-write MCP App viewer
+- kanban is live for `Task`, `Opportunity`, and `Issue`
+- `doclist-viewer`, `stock-viewer`, `invoice-viewer`, `chart-viewer`, `kpi-viewer`, and `funnel-viewer` are refresh-aware MCP Apps
+- `order-pipeline-viewer` and the legacy order/purchase pipeline tools have been removed
 
 ## Quick Start
 
@@ -13,11 +20,27 @@ Generate API credentials in ERPNext:
 2. Section **API Access** → **Generate Keys**
 3. Copy `API Key` and `API Secret`
 
-### stdio mode (Claude Desktop / PML)
+### Claude Desktop / Claude Code (npm)
 
-Add to your MCP config (e.g. `.pml.json` or `claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "erpnext": {
+      "command": "npx",
+      "args": ["-y", "@casys/mcp-erpnext"],
+      "env": {
+        "ERPNEXT_URL": "http://localhost:8000",
+        "ERPNEXT_API_KEY": "your-api-key",
+        "ERPNEXT_API_SECRET": "your-api-secret"
+      }
+    }
+  }
+}
+```
 
-**Deno:**
+> Zero dependencies — single self-contained bundle. Requires Node >= 20.
+
+### Deno (stdio)
 
 ```json
 {
@@ -35,45 +58,13 @@ Add to your MCP config (e.g. `.pml.json` or `claude_desktop_config.json`):
 }
 ```
 
-**Node.js** (via `dist-node/`):
-
-```json
-{
-  "mcpServers": {
-    "erpnext": {
-      "command": "npx",
-      "args": ["tsx", "dist-node/server.ts"],
-      "env": {
-        "ERPNEXT_URL": "http://localhost:8000",
-        "ERPNEXT_API_KEY": "your-api-key",
-        "ERPNEXT_API_SECRET": "your-api-secret"
-      }
-    }
-  }
-}
-```
-
-> Requires Node >= 20. Run `cd dist-node && npm install` first.
-
 ### HTTP mode
 
-**Deno:**
-
 ```bash
 ERPNEXT_URL=http://localhost:8000 \
 ERPNEXT_API_KEY=xxx \
 ERPNEXT_API_SECRET=xxx \
-deno run --allow-all server.ts --http --port=3012
-```
-
-**Node.js:**
-
-```bash
-cd dist-node && npm install
-ERPNEXT_URL=http://localhost:8000 \
-ERPNEXT_API_KEY=xxx \
-ERPNEXT_API_SECRET=xxx \
-npx tsx server.ts --http --port=3012
+npx -y @casys/mcp-erpnext --http --port=3012
 ```
 
 ### Category filtering
@@ -81,7 +72,7 @@ npx tsx server.ts --http --port=3012
 Load only the categories you need:
 
 ```bash
-deno run --allow-all server.ts --categories=sales,inventory
+npx -y @casys/mcp-erpnext --categories=sales,inventory
 ```
 
 ## Fresh Instance Setup
@@ -98,7 +89,7 @@ On a fresh ERPNext instance (no setup wizard), you need to create master data be
 7. Company: requires Warehouse Types to exist first
 ```
 
-## Tools (119)
+## Tools (120)
 
 ### Setup (2)
 
@@ -263,14 +254,21 @@ These tools work with **any** ERPNext DocType:
 | `erpnext_doc_submit` | Submit | Any submittable document |
 | `erpnext_doc_cancel` | Cancel | Any submitted document |
 
-### Analytics (19)
+### Kanban (2)
 
-Tools that return shaped data for chart, pipeline, KPI, and funnel viewers.
+Tools that power the canonical read-write kanban MCP App.
 
 | Tool | Viewer | Description |
 |------|--------|-------------|
-| `erpnext_order_pipeline` | order-pipeline-viewer | Sales orders kanban by status |
-| `erpnext_purchase_pipeline` | order-pipeline-viewer | Purchase orders kanban by status |
+| `erpnext_kanban_get_board` | `kanban-viewer` | Get a normalized kanban board for `Task`, `Opportunity`, or `Issue` |
+| `erpnext_kanban_move_card` | `kanban-viewer` | Execute a validated card move and return reconciliation data / business errors |
+
+### Analytics (17)
+
+Tools that return shaped data for chart, KPI, and funnel viewers.
+
+| Tool | Viewer | Description |
+|------|--------|-------------|
 | `erpnext_stock_chart` | chart-viewer | Bar chart of stock levels by item/warehouse |
 | `erpnext_sales_chart` | chart-viewer | Revenue by customer, item, or status (bar/donut) |
 | `erpnext_revenue_trend` | chart-viewer | Monthly revenue trend (line/area, per customer) |
@@ -291,7 +289,7 @@ Tools that return shaped data for chart, pipeline, KPI, and funnel viewers.
 
 ## UI Viewers
 
-Seven interactive [MCP Apps](https://github.com/anthropics/mcp-apps-sdk) viewers, registered as `ui://mcp-erpnext/{name}`:
+Seven interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) viewers, registered as `ui://mcp-erpnext/{name}`:
 
 | Viewer | Description |
 |--------|-------------|
@@ -299,9 +297,20 @@ Seven interactive [MCP Apps](https://github.com/anthropics/mcp-apps-sdk) viewers
 | `invoice-viewer` | Single invoice display (header, items, totals, payment status) |
 | `stock-viewer` | Stock balance table with color-coded qty badges |
 | `chart-viewer` | Universal chart renderer (12 chart types via Recharts) |
-| `order-pipeline-viewer` | Sales/Purchase Order kanban by status |
+| `kanban-viewer` | Canonical read-write kanban board with optimistic updates, AX, and server reconciliation |
 | `kpi-viewer` | Single metric card with delta, sparkline, trend indicator |
 | `funnel-viewer` | Trapezoid sales funnel with conversion rates between stages |
+
+### Why not native ERPNext kanban?
+
+`kanban-viewer` exists because the user is already inside an MCP host conversation. Instead of sending them back into the ERPNext web app, the viewer keeps the context in-chat, reads through MCP tools, and writes back through `app.callServerTool()` with the server as source of truth.
+
+### Refresh model
+
+Interactive and long-lived viewers carry their own `refreshRequest` payload so they can safely revalidate through MCP without depending on host-provided `tool-input` echoes.
+
+- `kanban-viewer` revalidates after successful mutations and refreshes on focus
+- `doclist-viewer`, `stock-viewer`, `invoice-viewer`, `chart-viewer`, `kpi-viewer`, and `funnel-viewer` support focus refresh plus a manual fallback refresh action
 
 ### Building UI viewers
 
@@ -311,30 +320,18 @@ npm install
 node build-all.mjs
 ```
 
-## Node.js Compatibility
+## npm Package
 
-The server runs natively on Deno. For Node.js environments, use the build script:
+The npm package (`@casys/mcp-erpnext`) is a single self-contained bundle (1.3MB) with zero runtime dependencies. UI viewers are embedded.
+
+To rebuild for npm from source:
 
 ```bash
 cd lib/erpnext
-./scripts/build-node.sh
+deno task ui:build           # Build UI viewers
+./scripts/build-node.sh      # Generate dist-node/ and a publishable dist-node/bin/
+cd dist-node/bin && npm publish --access public
 ```
-
-This produces a `dist-node/` directory with:
-- `runtime.ts` replaced by `runtime.node.ts` (uses `node:fs` instead of `Deno.*`)
-- Relative imports rewritten `.ts` → `.js` for Node ESM
-- Generated `package.json` with `tsx` as runner
-
-```bash
-cd dist-node
-npm install
-# stdio mode (Claude Desktop / PML config)
-tsx server.ts
-# HTTP mode (with auth via @casys/mcp-server)
-tsx server.ts --http --port=3012
-```
-
-> **Note**: `@casys/mcp-server` must be published to npm before installing `@casys/mcp-erpnext` dependencies.
 
 ## Environment Variables
 
@@ -356,6 +353,10 @@ src/
   api/
     frappe-client.ts  # Frappe REST HTTP client
     types.ts          # Type definitions
+  kanban/
+    adapters/         # Per-DocType kanban adapters
+    definitions.ts    # V1 board registry
+    types.ts          # Shared kanban contracts
   tools/
     sales.ts          # 17 sales tools
     inventory.ts      # 9 inventory tools
@@ -369,7 +370,8 @@ src/
     assets.ts         # 8 asset tools
     operations.ts     # 7 generic CRUD tools
     setup.ts          # 2 company/setup tools
-    analytics.ts      # 19 analytics tools (charts, KPIs, pipelines, funnel)
+    kanban.ts         # 2 read-write kanban tools
+    analytics.ts      # 17 analytics tools (charts, KPIs, funnel)
     mod.ts            # Registry
     types.ts          # Tool interface
   client.ts           # ErpNextToolsClient
@@ -380,11 +382,14 @@ src/
     invoice-viewer/   # Invoice display
     stock-viewer/     # Stock balance display
     chart-viewer/     # Universal chart renderer (Recharts)
-    order-pipeline-viewer/  # Kanban pipeline
+    kanban-viewer/    # Canonical read-write kanban
     kpi-viewer/       # Single metric card
     funnel-viewer/    # Sales funnel
     shared/           # Shared theme + branding
+    viewers.ts        # UI viewer registry
 tests/
+  kanban/             # Kanban domain tests
+  ui/                 # Kanban UI state tests
 docs/
   coverage.md         # Full coverage matrix
   ROADMAP.md          # Viewer & analytics roadmap

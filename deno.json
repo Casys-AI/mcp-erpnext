@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-erpnext",
-  "version": "0.1.2",
+  "version": "0.1.9",
   "nodeModulesDir": "auto",
   "tasks": {
     "serve": "deno run --allow-all server.ts --http --port=3012",
@@ -17,6 +17,7 @@
       "mod.ts",
       "server.ts",
       "src/**/*.ts",
+      "src/ui/dist/",
       "README.md",
       "LICENSE"
     ],

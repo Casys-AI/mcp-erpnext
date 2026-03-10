@@ -1,14 +1,12 @@
 /**
  * ERPNext Analytics Tools
  *
- * Tools that return shaped data for chart/pipeline viewers.
- * - erpnext_order_pipeline     → Kanban columns by SO status
+ * Tools that return shaped data for chart/funnel viewers.
  * - erpnext_stock_chart        → Bar chart of stock levels by item
  * - erpnext_sales_chart        → Bar/donut chart of sales by customer or item
  * - erpnext_ar_aging           → Stacked bar of AR aging buckets by customer
  * - erpnext_gross_profit       → Composed chart: revenue bars + margin % line
  * - erpnext_profit_loss        → P&L: income vs expenses per month + net profit
- * - erpnext_purchase_pipeline  → Kanban columns by PO status
  *
  * @module lib/erpnext/tools/analytics
  */
@@ -20,104 +18,9 @@ import type { ErpNextTool } from "./types.ts";
 
 const CHART_UI = { ui: { resourceUri: "ui://mcp-erpnext/chart-viewer" } };
 const KPI_UI = { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } };
-const PIPELINE_UI = { ui: { resourceUri: "ui://mcp-erpnext/order-pipeline-viewer" } };
 const FUNNEL_UI = { ui: { resourceUri: "ui://mcp-erpnext/funnel-viewer" } };
 
 export const analyticsTools: ErpNextTool[] = [
-  // ── Order Pipeline ────────────────────────────────────────────────────────
-
-  {
-    name: "erpnext_order_pipeline",
-    _meta: PIPELINE_UI,
-    description:
-      "Get sales orders grouped by workflow status as a kanban pipeline. " +
-      "Returns columns (Draft, Open, To Deliver, To Bill, Completed, Cancelled) " +
-      "with order count, total value, and individual order cards. " +
-      "Ideal for seeing the current state of your sales pipeline at a glance.",
-    category: "analytics",
-    inputSchema: {
-      type: "object",
-      properties: {
-        limit: { type: "number", description: "Max total orders to fetch (default 200)" },
-        customer: { type: "string", description: "Filter by customer name" },
-        exclude_cancelled: {
-          type: "boolean",
-          description: "Exclude cancelled orders from results (default false)",
-        },
-      },
-    },
-    handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 200;
-      const filters: FrappeFilter[] = [];
-
-      if (input.customer) {
-        filters.push(["customer", "=", input.customer as string]);
-      }
-      if (input.exclude_cancelled) {
-        filters.push(["status", "!=", "Cancelled"]);
-      }
-
-      const orders = await ctx.client.list("Sales Order", {
-        fields: [
-          "name",
-          "customer",
-          "customer_name",
-          "status",
-          "grand_total",
-          "transaction_date",
-          "delivery_date",
-        ],
-        filters,
-        limit,
-        order_by: "modified desc",
-      });
-
-      const STATUS_MAP: Record<string, { label: string; color: string }> = {
-        "Draft":                { label: "Draft",       color: "#78716c" },
-        "Open":                 { label: "Open",        color: "#fbbf24" },
-        "To Deliver and Bill":  { label: "To Deliver",  color: "#60a5fa" },
-        "To Bill":              { label: "To Bill",     color: "#c084fc" },
-        "Completed":            { label: "Completed",   color: "#4ade80" },
-        "Cancelled":            { label: "Cancelled",   color: "#f87171" },
-      };
-
-      const grouped: Record<string, typeof orders> = {};
-      for (const order of orders) {
-        const status = (order.status as string) ?? "Draft";
-        if (!grouped[status]) grouped[status] = [];
-        grouped[status].push(order);
-      }
-
-      const columns = Object.entries(STATUS_MAP)
-        .filter(([status]) => grouped[status]?.length > 0)
-        .map(([status, { label, color }]) => {
-          const statusOrders = grouped[status] ?? [];
-          return {
-            status,
-            label,
-            color,
-            count: statusOrders.length,
-            total: statusOrders.reduce((sum, o) => sum + (Number(o.grand_total) || 0), 0),
-            orders: statusOrders.map((o) => ({
-              name: o.name,
-              customer: (o.customer_name ?? o.customer) as string,
-              amount: Number(o.grand_total) || 0,
-              date: o.transaction_date as string,
-              delivery_date: o.delivery_date as string | undefined,
-            })),
-          };
-        });
-
-      return {
-        title: "Sales Order Pipeline",
-        currency: "EUR",
-        generatedAt: new Date().toISOString(),
-        columns,
-        _meta: PIPELINE_UI,
-      };
-    },
-  },
-
   // ── Stock Chart ───────────────────────────────────────────────────────────
 
   {
@@ -1565,89 +1468,4 @@ export const analyticsTools: ErpNextTool[] = [
     },
   },
 
-  // ── Purchase Pipeline ─────────────────────────────────────────────────────
-
-  {
-    name: "erpnext_purchase_pipeline",
-    _meta: PIPELINE_UI,
-    description:
-      "Purchase Orders grouped by status as a kanban pipeline. " +
-      "Shows columns (Draft, To Receive, To Bill, Completed, Cancelled) " +
-      "with order count, total value, and individual order cards.",
-    category: "analytics",
-    inputSchema: {
-      type: "object",
-      properties: {
-        limit: { type: "number", description: "Max POs (default 200)" },
-        supplier: { type: "string", description: "Filter by supplier name" },
-      },
-    },
-    handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 200;
-      const filters: FrappeFilter[] = [];
-
-      if (input.supplier) {
-        filters.push(["supplier_name", "=", input.supplier as string]);
-      }
-
-      const orders = await ctx.client.list("Purchase Order", {
-        fields: [
-          "name",
-          "supplier",
-          "supplier_name",
-          "status",
-          "grand_total",
-          "transaction_date",
-          "schedule_date",
-        ],
-        filters,
-        limit,
-        order_by: "modified desc",
-      });
-
-      const STATUS_MAP: Record<string, { label: string; color: string }> = {
-        "Draft":                { label: "Draft",           color: "#78716c" },
-        "To Receive and Bill":  { label: "To Receive",      color: "#60a5fa" },
-        "To Receive":           { label: "To Receive Only", color: "#fbbf24" },
-        "To Bill":              { label: "To Bill",         color: "#c084fc" },
-        "Completed":            { label: "Completed",       color: "#4ade80" },
-        "Cancelled":            { label: "Cancelled",       color: "#f87171" },
-      };
-
-      const grouped: Record<string, typeof orders> = {};
-      for (const order of orders) {
-        const status = (order.status as string) ?? "Draft";
-        if (!grouped[status]) grouped[status] = [];
-        grouped[status].push(order);
-      }
-
-      const columns = Object.entries(STATUS_MAP)
-        .filter(([status]) => grouped[status]?.length > 0)
-        .map(([status, { label, color }]) => {
-          const statusOrders = grouped[status] ?? [];
-          return {
-            status,
-            label,
-            color,
-            count: statusOrders.length,
-            total: statusOrders.reduce((sum, o) => sum + (Number(o.grand_total) || 0), 0),
-            orders: statusOrders.map((o) => ({
-              name: o.name,
-              customer: (o.supplier_name ?? o.supplier) as string,
-              amount: Number(o.grand_total) || 0,
-              date: o.transaction_date as string,
-              delivery_date: o.schedule_date as string | undefined,
-            })),
-          };
-        });
-
-      return {
-        title: "Purchase Order Pipeline",
-        currency: "EUR",
-        generatedAt: new Date().toISOString(),
-        columns,
-        _meta: PIPELINE_UI,
-      };
-    },
-  },
 ];

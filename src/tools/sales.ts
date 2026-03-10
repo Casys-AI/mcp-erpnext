@@ -225,6 +225,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_order_get",
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
     description:
       "Get a single Sales Order by name (e.g. SO-00001). Returns full document with line items.",
     category: "sales",
@@ -246,9 +247,10 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_order_create",
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
     description:
       "Create a new Sales Order. Requires customer and at least one item with item_code, qty, rate. " +
-      "Optionally set delivery_date (YYYY-MM-DD).",
+      "On a fresh ERPNext instance, you may also need to set company, selling_price_list, and currency.",
     category: "sales",
     inputSchema: {
       type: "object",
@@ -256,13 +258,14 @@ export const salesTools: ErpNextTool[] = [
         customer: { type: "string", description: "Customer name (ID)" },
         items: {
           type: "array",
-          description: "Line items: [{item_code, qty, rate}]",
+          description: "Line items: [{item_code, qty, rate, warehouse?}]",
           items: {
             type: "object",
             properties: {
               item_code: { type: "string" },
               qty: { type: "number" },
               rate: { type: "number" },
+              warehouse: { type: "string", description: "Item warehouse (e.g. 'Stores - CI')" },
             },
             required: ["item_code", "qty", "rate"],
           },
@@ -270,6 +273,22 @@ export const salesTools: ErpNextTool[] = [
         delivery_date: {
           type: "string",
           description: "Delivery date YYYY-MM-DD (default: today + 7 days)",
+        },
+        company: {
+          type: "string",
+          description: "Company name. Required if multiple companies exist.",
+        },
+        selling_price_list: {
+          type: "string",
+          description: "Price list name (e.g. 'Standard Selling'). Required if no default is set.",
+        },
+        currency: {
+          type: "string",
+          description: "Transaction currency (e.g. 'EUR', 'USD'). Defaults to company currency.",
+        },
+        set_warehouse: {
+          type: "string",
+          description: "Default warehouse for all items (e.g. 'Stores - CI').",
         },
       },
       required: ["customer", "items"],
@@ -282,27 +301,39 @@ export const salesTools: ErpNextTool[] = [
         throw new Error("[erpnext_sales_order_create] 'items' must be a non-empty array");
       }
 
-      const items = (input.items as Array<{ item_code: string; qty: number; rate: number }>).map(
-        (item) => {
-          if (!item.item_code || item.qty == null || item.rate == null) {
-            throw new Error(
-              "[erpnext_sales_order_create] Each item must have item_code, qty, and rate",
-            );
-          }
-          return {
-            item_code: item.item_code,
-            qty: item.qty,
-            rate: item.rate,
-            delivery_date: (input.delivery_date as string) ?? undefined,
-          };
-        },
-      );
+      const items = (
+        input.items as Array<{ item_code: string; qty: number; rate: number; warehouse?: string }>
+      ).map((item) => {
+        if (!item.item_code || item.qty == null || item.rate == null) {
+          throw new Error(
+            "[erpnext_sales_order_create] Each item must have item_code, qty, and rate",
+          );
+        }
+        const mapped: Record<string, unknown> = {
+          item_code: item.item_code,
+          qty: item.qty,
+          rate: item.rate,
+          delivery_date: (input.delivery_date as string) ?? undefined,
+        };
+        if (item.warehouse) mapped.warehouse = item.warehouse;
+        return mapped;
+      });
 
-      const doc = await ctx.client.create("Sales Order", {
+      const data: Record<string, unknown> = {
         customer: input.customer as string,
         items,
-        delivery_date: (input.delivery_date as string) ?? undefined,
-      });
+      };
+      if (input.delivery_date) data.delivery_date = input.delivery_date as string;
+      if (input.company) data.company = input.company as string;
+      if (input.selling_price_list) data.selling_price_list = input.selling_price_list as string;
+      if (input.currency) {
+        data.currency = input.currency as string;
+        data.price_list_currency = input.currency as string;
+        data.plc_conversion_rate = 1;
+      }
+      if (input.set_warehouse) data.set_warehouse = input.set_warehouse as string;
+
+      const doc = await ctx.client.create("Sales Order", data);
 
       return {
         data: doc,
@@ -360,6 +391,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_order_submit",
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
     description:
       "Submit a Draft Sales Order (changes status to 'To Deliver and Bill'). " +
       "Triggers stock reservation and fulfillment workflow.",
@@ -510,7 +542,7 @@ export const salesTools: ErpNextTool[] = [
     name: "erpnext_sales_invoice_create",
     description:
       "Create a new Sales Invoice. Requires customer and at least one item. " +
-      "Optionally set posting_date (YYYY-MM-DD). " +
+      "On a fresh ERPNext instance, you may also need to set company, selling_price_list, and currency. " +
       "To generate from a Sales Order, use erpnext_doc_update to set is_return etc.",
     category: "sales",
     inputSchema: {
@@ -519,13 +551,14 @@ export const salesTools: ErpNextTool[] = [
         customer: { type: "string", description: "Customer name (ID)" },
         items: {
           type: "array",
-          description: "Line items: [{item_code, qty, rate}]",
+          description: "Line items: [{item_code, qty, rate, warehouse?}]",
           items: {
             type: "object",
             properties: {
               item_code: { type: "string" },
               qty: { type: "number" },
               rate: { type: "number" },
+              warehouse: { type: "string", description: "Item warehouse (e.g. 'Stores - CI')" },
             },
             required: ["item_code", "qty", "rate"],
           },
@@ -538,6 +571,22 @@ export const salesTools: ErpNextTool[] = [
           type: "string",
           description: "Payment due date YYYY-MM-DD",
         },
+        company: {
+          type: "string",
+          description: "Company name. Required if multiple companies exist.",
+        },
+        selling_price_list: {
+          type: "string",
+          description: "Price list name (e.g. 'Standard Selling'). Required if no default is set.",
+        },
+        currency: {
+          type: "string",
+          description: "Transaction currency (e.g. 'EUR', 'USD'). Defaults to company currency.",
+        },
+        set_warehouse: {
+          type: "string",
+          description: "Default warehouse for all items.",
+        },
       },
       required: ["customer", "items"],
     },
@@ -549,16 +598,22 @@ export const salesTools: ErpNextTool[] = [
         throw new Error("[erpnext_sales_invoice_create] 'items' must be a non-empty array");
       }
 
-      const items = (input.items as Array<{ item_code: string; qty: number; rate: number }>).map(
-        (item) => {
-          if (!item.item_code || item.qty == null || item.rate == null) {
-            throw new Error(
-              "[erpnext_sales_invoice_create] Each item must have item_code, qty, and rate",
-            );
-          }
-          return { item_code: item.item_code, qty: item.qty, rate: item.rate };
-        },
-      );
+      const items = (
+        input.items as Array<{ item_code: string; qty: number; rate: number; warehouse?: string }>
+      ).map((item) => {
+        if (!item.item_code || item.qty == null || item.rate == null) {
+          throw new Error(
+            "[erpnext_sales_invoice_create] Each item must have item_code, qty, and rate",
+          );
+        }
+        const mapped: Record<string, unknown> = {
+          item_code: item.item_code,
+          qty: item.qty,
+          rate: item.rate,
+        };
+        if (item.warehouse) mapped.warehouse = item.warehouse;
+        return mapped;
+      });
 
       const data: Record<string, unknown> = {
         customer: input.customer as string,
@@ -566,11 +621,20 @@ export const salesTools: ErpNextTool[] = [
       };
       if (input.posting_date) data.posting_date = input.posting_date as string;
       if (input.due_date) data.due_date = input.due_date as string;
+      if (input.company) data.company = input.company as string;
+      if (input.selling_price_list) data.selling_price_list = input.selling_price_list as string;
+      if (input.currency) {
+        data.currency = input.currency as string;
+        data.price_list_currency = input.currency as string;
+        data.plc_conversion_rate = 1;
+      }
+      if (input.set_warehouse) data.set_warehouse = input.set_warehouse as string;
 
       const doc = await ctx.client.create("Sales Invoice", data);
       return {
         data: doc,
         message: `Sales Invoice ${doc.name} created successfully`,
+        _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
       };
     },
   },
@@ -605,6 +669,7 @@ export const salesTools: ErpNextTool[] = [
       return {
         data: result,
         message: `Sales Invoice ${input.name} submitted successfully`,
+        _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
       };
     },
   },
@@ -657,6 +722,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_quotation_get",
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
     description:
       "Get a single Quotation by name. Returns full document with line items and terms.",
     category: "sales",
@@ -678,6 +744,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_quotation_create",
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
     description:
       "Create a new Quotation for a customer or lead. " +
       "Requires quotation_to (Customer or Lead), party_name, and at least one item.",
@@ -715,6 +782,18 @@ export const salesTools: ErpNextTool[] = [
           type: "string",
           description: "Validity date YYYY-MM-DD",
         },
+        company: {
+          type: "string",
+          description: "Company name. Required if multiple companies exist.",
+        },
+        selling_price_list: {
+          type: "string",
+          description: "Price list name (e.g. 'Standard Selling').",
+        },
+        currency: {
+          type: "string",
+          description: "Transaction currency (e.g. 'EUR', 'USD').",
+        },
       },
       required: ["quotation_to", "party_name", "items"],
     },
@@ -747,6 +826,13 @@ export const salesTools: ErpNextTool[] = [
       };
       if (input.transaction_date) data.transaction_date = input.transaction_date as string;
       if (input.valid_till) data.valid_till = input.valid_till as string;
+      if (input.company) data.company = input.company as string;
+      if (input.selling_price_list) data.selling_price_list = input.selling_price_list as string;
+      if (input.currency) {
+        data.currency = input.currency as string;
+        data.price_list_currency = input.currency as string;
+        data.plc_conversion_rate = 1;
+      }
 
       const doc = await ctx.client.create("Quotation", data);
       return {

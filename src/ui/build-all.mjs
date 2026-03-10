@@ -6,7 +6,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { readdirSync, statSync, mkdirSync } from "node:fs";
+import { readdirSync, statSync, mkdirSync, rmSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,6 +28,7 @@ const uis = readdirSync(__dirname).filter((entry) => {
 
 console.log(`\nBuilding ${uis.length} ERPNext UIs: ${uis.join(", ")}\n`);
 
+rmSync(resolve(__dirname, "dist"), { recursive: true, force: true });
 mkdirSync(resolve(__dirname, "dist"), { recursive: true });
 
 for (const ui of uis) {

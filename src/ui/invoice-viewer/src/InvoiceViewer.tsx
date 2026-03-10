@@ -7,11 +7,19 @@
  * @module lib/erpnext/src/ui/invoice-viewer
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles, formatCurrency } from "~/shared/theme";
 import { ErpNextBrandHeader, ErpNextBrandFooter } from "~/shared/ErpNextBrand";
 import { CSSProperties } from "react";
+import {
+  canRequestUiRefresh,
+  extractToolResultText,
+  normalizeUiRefreshFailureMessage,
+  resolveUiRefreshRequest,
+  type ToolResultPayload,
+  type UiRefreshRequestData,
+} from "~/shared/refresh";
 
 // ============================================================================
 // MCP App
@@ -19,6 +27,8 @@ import { CSSProperties } from "react";
 
 const app = new App({ name: "Invoice Viewer", version: "1.0.0" });
 let appConnected = false;
+const INVOICE_REFRESH_INTERVAL_MS = 15_000;
+const TOOL_CALL_TIMEOUT_MS = 10_000;
 
 // ============================================================================
 // Types
@@ -45,6 +55,12 @@ interface InvoiceData {
   outstanding_amount?: number;
   currency?: string;
   items?: InvoiceItem[];
+}
+
+interface InvoicePayload {
+  data?: InvoiceData;
+  refreshRequest?: UiRefreshRequestData;
+  [key: string]: unknown;
 }
 
 // ============================================================================
@@ -136,23 +152,120 @@ function InvoiceEmptyState() {
 export function InvoiceViewer() {
   const [data, setData] = useState<InvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dataRef = useRef<InvoiceData | null>(null);
+  const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshStartedAtRef = useRef(0);
+
+  function hydrateData(nextData: InvoiceData) {
+    dataRef.current = nextData;
+    setData(nextData);
+  }
+
+  function consumeToolResult(result: ToolResultPayload): boolean {
+    const text = extractToolResultText(result);
+    if (!text) return false;
+
+    try {
+      const parsed = JSON.parse(text) as InvoicePayload;
+      refreshRequestRef.current = resolveUiRefreshRequest(parsed, refreshRequestRef.current);
+      hydrateData((parsed.data ?? parsed) as InvoiceData);
+      setError(null);
+      setLoading(false);
+      return true;
+    } catch (cause) {
+      console.error("Parse error:", cause);
+      setError("Failed to parse invoice payload");
+      setLoading(false);
+      return false;
+    }
+  }
+
+  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+    const request = refreshRequestRef.current;
+    if (!canRequestUiRefresh({
+      request,
+      visibilityState: typeof document === "undefined" ? "visible" : document.visibilityState,
+      refreshInFlight: refreshInFlightRef.current,
+      now: Date.now(),
+      lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+      minIntervalMs: INVOICE_REFRESH_INTERVAL_MS,
+    }, options)) {
+      return false;
+    }
+
+    if (!request || !app.getHostCapabilities()?.serverTools) {
+      return false;
+    }
+
+    refreshInFlightRef.current = true;
+    lastRefreshStartedAtRef.current = Date.now();
+    setRefreshing(true);
+
+    try {
+      const result = await app.callServerTool({
+        name: request.toolName,
+        arguments: request.arguments,
+      }, { timeout: TOOL_CALL_TIMEOUT_MS });
+
+      if (result.isError) {
+        setError("Refresh failed");
+        return false;
+      }
+
+      if (!consumeToolResult(result)) {
+        setError("Refresh returned no data");
+        return false;
+      }
+
+      return true;
+    } catch (cause) {
+      setError(normalizeUiRefreshFailureMessage(cause));
+      return false;
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
     app.connect().then(() => { appConnected = true; }).catch(() => {});
 
-    app.ontoolresult = (result: { content?: Array<{ type: string; text?: string }> }) => {
-      setLoading(false);
-      const text = result.content?.find((c) => c.type === "text")?.text;
-      if (text) {
-        try { setData(JSON.parse(text)); } catch (e) { console.error("Parse error:", e); }
-      }
+    app.ontoolresult = (result: ToolResultPayload) => {
+      consumeToolResult(result);
     };
 
-    app.ontoolinputpartial = () => setLoading(true);
+    app.ontoolinputpartial = () => {
+      if (!dataRef.current) {
+        setLoading(true);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleWindowFocus() {
+      void requestRefresh({ ignoreInterval: true });
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void requestRefresh({ ignoreInterval: true });
+      }
+    }
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }} aria-busy={refreshing}>
       <ErpNextBrandHeader />
       <div style={{ flex: 1 }}>
         {loading ? (
@@ -160,7 +273,12 @@ export function InvoiceViewer() {
         ) : !data ? (
           <InvoiceEmptyState />
         ) : (
-          <InvoiceContent data={data} />
+          <InvoiceContent
+            data={data}
+            error={error}
+            refreshing={refreshing}
+            onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+          />
         )}
       </div>
       <ErpNextBrandFooter />
@@ -168,7 +286,14 @@ export function InvoiceViewer() {
   );
 }
 
-function InvoiceContent({ data }: { data: InvoiceData }) {
+function InvoiceContent(
+  { data, error, refreshing, onRefresh }: {
+    data: InvoiceData;
+    error: string | null;
+    refreshing: boolean;
+    onRefresh: () => void;
+  },
+) {
   const ccy = data.currency ?? "USD";
   const party = data.customer ?? data.supplier ?? "—";
   const isCustomer = !!data.customer;
@@ -195,8 +320,22 @@ function InvoiceContent({ data }: { data: InvoiceData }) {
           <div style={{ fontSize: 20, fontWeight: 700, color: colors.text.primary, fontFamily: fonts.mono }}>
             {data.name}
           </div>
+          <div aria-live="polite" style={{ fontSize: 11, color: error ? colors.error : colors.text.faint, marginTop: 6 }}>
+            {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
+          </div>
         </div>
-        <StatusBadge status={data.status} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            style={styles.button}
+            onMouseEnter={(e) => { if (!refreshing) { (e.currentTarget as HTMLElement).style.borderColor = colors.accent; (e.currentTarget as HTMLElement).style.color = colors.accent; } }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = colors.border; (e.currentTarget as HTMLElement).style.color = colors.text.secondary; }}
+          >
+            {refreshing ? "Refreshing" : "Refresh"}
+          </button>
+          <StatusBadge status={data.status} />
+        </div>
       </div>
 
       {/* Info Row */}

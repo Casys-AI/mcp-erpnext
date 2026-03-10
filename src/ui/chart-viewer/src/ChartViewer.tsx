@@ -13,7 +13,7 @@
  * 3. Any MCP tool returning { _meta: { ui: { resourceUri: "ui://mcp-erpnext/chart-viewer" } } }
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import {
   BarChart, Bar,
@@ -29,12 +29,22 @@ import {
 } from "recharts";
 import { fonts, formatNumber, formatCurrency } from "~/shared/theme";
 import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
+import {
+  canRequestUiRefresh,
+  extractToolResultText,
+  normalizeUiRefreshFailureMessage,
+  resolveUiRefreshRequest,
+  type ToolResultPayload,
+  type UiRefreshRequestData,
+} from "~/shared/refresh";
 
 // ============================================================================
 // MCP App
 // ============================================================================
 
 const app = new App({ name: "Chart Viewer", version: "3.0.0" });
+const CHART_REFRESH_INTERVAL_MS = 15_000;
+const TOOL_CALL_TIMEOUT_MS = 10_000;
 
 // ============================================================================
 // Types — Universal ChartData format
@@ -111,6 +121,7 @@ interface ChartData {
   treeData?: TreeNode[];
   /** Height override (default varies by type) */
   height?: number;
+  refreshRequest?: UiRefreshRequestData;
 }
 
 // ============================================================================
@@ -695,16 +706,56 @@ function ChartRouter({ data }: { data: ChartData }) {
 // Main Component
 // ============================================================================
 
-function ChartContent({ data }: { data: ChartData }) {
+function ChartContent(
+  { data, error, refreshing, onRefresh }: {
+    data: ChartData;
+    error: string | null;
+    refreshing: boolean;
+    onRefresh: () => void;
+  },
+) {
   // Header ~36px + title ~40px + padding ~24px = ~100px overhead
   const chartHeight = "calc(100vh - 100px)";
 
   return (
     <div style={{ fontFamily: fonts.sans, background: "var(--bg-root)", height: "100vh", overflow: "hidden" }}>
       <ErpNextBrandHeader />
-      <div style={{ padding: "8px 16px 0" }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>{data.title}</div>
-        {data.subtitle && <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{data.subtitle}</div>}
+      <div style={{ padding: "8px 16px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>{data.title}</div>
+          {data.subtitle && <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{data.subtitle}</div>}
+          <div
+            aria-live="polite"
+            style={{
+              fontSize: 11,
+              color: error
+                ? "var(--error)"
+                : refreshing
+                ? "var(--text-muted)"
+                : "var(--text-faint)",
+              marginTop: 4,
+            }}
+          >
+            {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
+          </div>
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={refreshing}
+          style={{
+            border: "1px solid var(--border)",
+            background: "var(--bg-elevated)",
+            color: "var(--text-secondary)",
+            borderRadius: 6,
+            padding: "4px 8px",
+            fontSize: 11,
+            fontFamily: fonts.sans,
+            cursor: refreshing ? "default" : "pointer",
+            flexShrink: 0,
+          }}
+        >
+          {refreshing ? "Refreshing" : "Refresh"}
+        </button>
       </div>
       <div style={{ height: chartHeight, padding: "4px 8px 8px" }}>
         <ChartRouter data={data} />
@@ -716,19 +767,116 @@ function ChartContent({ data }: { data: ChartData }) {
 export function ChartViewer() {
   const [data, setData] = useState<ChartData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dataRef = useRef<ChartData | null>(null);
+  const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const lastRefreshStartedAtRef = useRef(0);
+
+  function hydrateData(nextData: ChartData) {
+    dataRef.current = nextData;
+    refreshRequestRef.current = resolveUiRefreshRequest(nextData, refreshRequestRef.current);
+    setData(nextData);
+  }
+
+  function consumeToolResult(result: ToolResultPayload): boolean {
+    const text = extractToolResultText(result);
+    if (!text) return false;
+
+    try {
+      const parsed = JSON.parse(text) as ChartData;
+      hydrateData(parsed);
+      setError(null);
+      setLoading(false);
+      return true;
+    } catch (cause) {
+      console.error("Parse error:", cause);
+      setError("Failed to parse chart payload");
+      setLoading(false);
+      return false;
+    }
+  }
+
+  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+    const request = resolveUiRefreshRequest(dataRef.current, refreshRequestRef.current);
+    if (!canRequestUiRefresh({
+      request,
+      visibilityState: typeof document === "undefined" ? "visible" : document.visibilityState,
+      refreshInFlight: refreshInFlightRef.current,
+      now: Date.now(),
+      lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+      minIntervalMs: CHART_REFRESH_INTERVAL_MS,
+    }, options)) {
+      return false;
+    }
+
+    if (!request || !app.getHostCapabilities()?.serverTools) {
+      return false;
+    }
+
+    refreshInFlightRef.current = true;
+    lastRefreshStartedAtRef.current = Date.now();
+    setRefreshing(true);
+
+    try {
+      const result = await app.callServerTool({
+        name: request.toolName,
+        arguments: request.arguments,
+      }, { timeout: TOOL_CALL_TIMEOUT_MS });
+
+      if (result.isError) {
+        setError("Refresh failed");
+        return false;
+      }
+
+      if (!consumeToolResult(result)) {
+        setError("Refresh returned no data");
+        return false;
+      }
+
+      return true;
+    } catch (cause) {
+      setError(normalizeUiRefreshFailureMessage(cause));
+      return false;
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
     app.connect().catch(() => {});
 
-    app.ontoolresult = (result: { content?: Array<{ type: string; text?: string }> }) => {
-      setLoading(false);
-      const text = result.content?.find((c) => c.type === "text")?.text;
-      if (text) {
-        try { setData(JSON.parse(text)); } catch (e) { console.error("Parse error:", e); }
-      }
+    app.ontoolresult = (result: ToolResultPayload) => {
+      consumeToolResult(result);
     };
 
-    app.ontoolinputpartial = () => setLoading(true);
+    app.ontoolinputpartial = () => {
+      if (!dataRef.current) {
+        setLoading(true);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleWindowFocus() {
+      void requestRefresh({ ignoreInterval: true });
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void requestRefresh({ ignoreInterval: true });
+      }
+    }
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   if (loading) return <LoadingSkeleton />;
@@ -741,5 +889,5 @@ export function ChartViewer() {
     );
   }
 
-  return <ChartContent data={data} />;
+  return <ChartContent data={data} error={error} refreshing={refreshing} onRefresh={() => void requestRefresh({ ignoreInterval: true })} />;
 }

@@ -6,12 +6,70 @@ on:
       - main
 
 jobs:
-  publish:
+  publish-jsr:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v5
-      - name: Publish package
-        run: npx jsr publish
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build UI viewers
+        run: |
+          cd src/ui
+          npm ci
+          node build-all.mjs
+
+      - name: Publish to JSR
+        run: npx jsr publish --allow-dirty
+
+  publish-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Build UI viewers
+        run: |
+          cd src/ui
+          npm ci
+          node build-all.mjs
+
+      - name: Build Node.js bundle
+        run: |
+          bash scripts/build-node.sh
+
+      - name: Publish to npm
+        run: |
+          cd dist-node/bin
+          set +e
+          PUBLISH_OUTPUT=$(npm publish --access public 2>&1)
+          PUBLISH_STATUS=$?
+          set -e
+
+          echo "$PUBLISH_OUTPUT"
+
+          if [ "$PUBLISH_STATUS" -eq 0 ]; then
+            exit 0
+          fi
+
+          if echo "$PUBLISH_OUTPUT" | grep -qiE "cannot publish over the previously published versions|cannot publish over previously published version|you cannot publish over"; then
+            echo "Version already published, skipping"
+            exit 0
+          fi
+
+          exit "$PUBLISH_STATUS"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

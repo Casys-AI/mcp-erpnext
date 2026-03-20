@@ -297,7 +297,7 @@ Seven interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) v
 | `invoice-viewer` | Single invoice display (header, items, totals, payment status) |
 | `stock-viewer` | Stock balance table with color-coded qty badges |
 | `chart-viewer` | Universal chart renderer (12 chart types via Recharts) |
-| `kanban-viewer` | Canonical read-write kanban board with optimistic updates, AX, and server reconciliation |
+| `kanban-viewer` | Canonical read-write kanban board with accent-colored cards, tone-aware badges, column-colored move actions, optimistic updates, and server reconciliation |
 | `kpi-viewer` | Single metric card with delta, sparkline, trend indicator |
 | `funnel-viewer` | Trapezoid sales funnel with conversion rates between stages |
 
@@ -309,7 +309,7 @@ Seven interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) v
 
 Interactive and long-lived viewers carry their own `refreshRequest` payload so they can safely revalidate through MCP without depending on host-provided `tool-input` echoes.
 
-- `kanban-viewer` revalidates after successful mutations and refreshes on focus
+- `kanban-viewer` revalidates after successful mutations and refreshes on focus. In column focus mode (narrow viewports), drag is disabled and cards use button-based moves with column-colored destination indicators
 - `doclist-viewer`, `stock-viewer`, `invoice-viewer`, `chart-viewer`, `kpi-viewer`, and `funnel-viewer` support focus refresh plus a manual fallback refresh action
 
 ### Building UI viewers

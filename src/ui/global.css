@@ -93,10 +93,13 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 #app {
-  /* No min-height: viewers size to their content in the feed iframe */
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
 }
 
 /* Scrollbar */
@@ -135,4 +138,22 @@ html, body {
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-sm);
+}
+
+/* Drag-scroll containers — no visible scrollbar */
+.drag-scroll::-webkit-scrollbar {
+  display: none;
+}
+.drag-scroll {
+  scrollbar-width: none;
+}
+
+/* Kanban card action buttons */
+article button:hover:not(:disabled) {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+article[draggable="true"]:active {
+  cursor: grabbing;
+  opacity: 0.85;
 }

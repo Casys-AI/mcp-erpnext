@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useRef, useState, useCallback, type CSSProperties, type DragEvent, type ReactNode, type HTMLAttributes } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles } from "~/shared/theme";
 import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
@@ -48,6 +48,83 @@ function hiddenLiveRegionStyle(): CSSProperties {
 
 function extractTextContent(result: { content?: Array<{ type: string; text?: string }> }): string | null {
   return result.content?.find((item) => item.type === "text")?.text ?? null;
+}
+
+function DragScrollContainer({
+  children,
+  style,
+  ...rest
+}: { children: ReactNode; style?: CSSProperties } & HTMLAttributes<HTMLDivElement>) {
+  const ref = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ active: false, startX: 0, scrollLeft: 0 });
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateFades = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    updateFades();
+    const observer = new ResizeObserver(updateFades);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [updateFades]);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    const el = ref.current;
+    if (!el) return;
+    dragState.current = { active: true, startX: e.clientX, scrollLeft: el.scrollLeft };
+    el.style.cursor = "grabbing";
+    el.style.userSelect = "none";
+  }, []);
+
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragState.current.active) return;
+    const el = ref.current;
+    if (!el) return;
+    const delta = e.clientX - dragState.current.startX;
+    el.scrollLeft = dragState.current.scrollLeft - delta;
+    updateFades();
+  }, [updateFades]);
+
+  const onMouseUp = useCallback(() => {
+    dragState.current.active = false;
+    const el = ref.current;
+    if (el) {
+      el.style.cursor = "grab";
+      el.style.userSelect = "";
+    }
+  }, []);
+
+  const maskImage = canScrollLeft && canScrollRight
+    ? "linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent)"
+    : canScrollRight
+    ? "linear-gradient(to right, black calc(100% - 24px), transparent)"
+    : canScrollLeft
+    ? "linear-gradient(to right, transparent, black 24px)"
+    : undefined;
+
+  return (
+    <div
+      ref={ref}
+      style={{ ...style, WebkitMaskImage: maskImage, maskImage }}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+      onScroll={updateFades}
+      className="drag-scroll"
+      {...rest}
+    >
+      {children}
+    </div>
+  );
 }
 
 function LoadingSkeleton() {
@@ -107,86 +184,242 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
+function badgeToneColors(tone?: string): { color: string; bg: string } {
+  switch (tone) {
+    case "error":
+      return { color: colors.error, bg: colors.errorDim };
+    case "warning":
+      return { color: colors.warning, bg: colors.warningDim };
+    case "success":
+      return { color: colors.success, bg: colors.successDim };
+    case "info":
+      return { color: colors.info, bg: colors.infoDim };
+    default:
+      return { color: colors.text.secondary, bg: colors.bg.elevated };
+  }
+}
+
 function KanbanCard({
   card,
   allowedTargets,
   onMove,
   onDragStart,
   onDragEnd,
+  enableDrag = true,
 }: {
   card: KanbanCardData;
-  allowedTargets: Array<{ columnId: string; label: string }>;
+  allowedTargets: Array<{ columnId: string; label: string; color?: string }>;
   onMove: (card: KanbanCardData, toColumn: string, label: string) => void;
   onDragStart: (card: KanbanCardData, event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
+  enableDrag?: boolean;
 }) {
+  const isDraggable = enableDrag && !card.pending;
+  const accentColor = card.accent ?? colors.accent;
+
   const cardStyle: CSSProperties = {
     background: colors.bg.surface,
     border: `1px solid ${card.pending ? colors.accent : colors.border}`,
     borderRadius: 8,
-    padding: "12px 12px 10px",
+    padding: 0,
     display: "flex",
     flexDirection: "column",
-    gap: 8,
     opacity: card.pending ? 0.72 : 1,
-    boxShadow: card.pending ? `0 0 0 1px ${colors.accentDim}` : undefined,
+    boxShadow: card.pending
+      ? `0 0 0 1px ${colors.accentDim}`
+      : `0 1px 3px rgba(0,0,0,0.06)`,
+    cursor: isDraggable ? "grab" : undefined,
+    overflow: "hidden",
+    position: "relative" as const,
   };
+
+  const hasMetrics = (card.metrics?.length ?? 0) > 0;
+  const hasBadges = (card.badges?.length ?? 0) > 0;
 
   return (
     <article
       style={cardStyle}
-      draggable={!card.pending}
-      onDragStart={(event) => onDragStart(card, event)}
-      onDragEnd={onDragEnd}
+      draggable={isDraggable}
+      onDragStart={isDraggable ? (event) => onDragStart(card, event) : undefined}
+      onDragEnd={isDraggable ? onDragEnd : undefined}
       className={card.pending ? "animate-pulse" : undefined}
       aria-busy={card.pending}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: colors.text.primary }}>{card.title}</div>
-        {card.subtitle && (
-          <div style={{ fontSize: 11, color: colors.text.muted }}>{card.subtitle}</div>
+      {/* Accent strip */}
+      <div
+        aria-hidden="true"
+        style={{
+          height: 4,
+          background: accentColor,
+          flexShrink: 0,
+          opacity: card.pending ? 0.5 : 0.85,
+        }}
+      />
+
+      {/* Card body */}
+      <div style={{ padding: "10px 12px 0", display: "flex", flexDirection: "column", gap: 6 }}>
+        {/* Header row: title + badges */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: colors.text.primary,
+                lineHeight: 1.35,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical" as const,
+              }}
+            >
+              {card.title}
+            </div>
+            {card.subtitle && (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: colors.text.muted,
+                  marginTop: 2,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {card.subtitle}
+              </div>
+            )}
+          </div>
+          {hasBadges && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, flexShrink: 0 }}>
+              {card.badges?.map((badge) => {
+                const tone = badgeToneColors(badge.tone);
+                return (
+                  <span
+                    key={`${card.id}-${badge.label}`}
+                    style={{
+                      ...styles.badge(tone.color, tone.bg),
+                      fontSize: 10,
+                      padding: "1px 7px",
+                      borderRadius: 3,
+                      fontWeight: 700,
+                      letterSpacing: "0.03em",
+                      textTransform: "uppercase" as const,
+                    }}
+                  >
+                    {badge.label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Metrics row */}
+        {hasMetrics && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              padding: "4px 0 2px",
+              borderTop: `1px solid ${colors.borderSubtle}`,
+            }}
+          >
+            {card.metrics?.map((metric) => (
+              <div
+                key={`${card.id}-${metric.label}`}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    color: colors.text.faint,
+                    textTransform: "uppercase" as const,
+                    letterSpacing: "0.06em",
+                  }}
+                >
+                  {metric.label}
+                </span>
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: colors.text.primary,
+                    fontFamily: fonts.mono,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {metric.value}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
-      {(card.badges?.length ?? 0) > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {card.badges?.map((badge) => (
-            <span
-              key={`${card.id}-${badge.label}`}
-              style={styles.badge(colors.text.secondary, colors.bg.elevated)}
-            >
-              {badge.label}
-            </span>
-          ))}
-        </div>
-      )}
-      {(card.metrics?.length ?? 0) > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-          {card.metrics?.map((metric) => (
-            <div key={`${card.id}-${metric.label}`} style={{ fontSize: 11, color: colors.text.muted }}>
-              <span style={{ color: colors.text.faint }}>{metric.label}</span>{" "}
-              <span style={{ color: colors.text.primary, fontFamily: fonts.mono }}>{metric.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
+
+      {/* Action buttons */}
       {allowedTargets.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {allowedTargets.map((target) => (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 0,
+            borderTop: `1px solid ${colors.borderSubtle}`,
+            marginTop: hasMetrics ? 0 : 6,
+          }}
+        >
+          {allowedTargets.map((target, index) => (
             <button
               key={`${card.id}-${target.columnId}`}
               type="button"
               onClick={() => onMove(card, target.columnId, target.label)}
               disabled={card.pending}
               style={{
-                ...styles.button,
-                padding: "5px 10px",
+                flex: 1,
+                minWidth: 0,
+                padding: "7px 6px",
                 fontSize: 11,
-                color: colors.text.primary,
-                opacity: card.pending ? 0.6 : 1,
-                outlineOffset: 2,
+                fontWeight: 500,
+                fontFamily: fonts.sans,
+                color: colors.text.muted,
+                background: "transparent",
+                border: "none",
+                borderRight: index < allowedTargets.length - 1
+                  ? `1px solid ${colors.borderSubtle}`
+                  : "none",
+                cursor: card.pending ? "default" : "pointer",
+                opacity: card.pending ? 0.5 : 1,
+                transition: "color 0.12s, background 0.12s",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                outlineOffset: -2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 5,
               }}
               aria-label={`Move ${card.title} to ${target.label}`}
             >
+              {target.color && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: target.color,
+                    flexShrink: 0,
+                  }}
+                />
+              )}
               {target.label}
             </button>
           ))}
@@ -224,13 +457,14 @@ function KanbanColumn({
         transition.fromColumn === card.columnId &&
         transition.toColumn !== card.columnId
       )
-      .map((transition) => ({
-        columnId: transition.toColumn,
-        label:
-          transition.label ??
-          board.columns.find((candidate) => candidate.id === transition.toColumn)?.label ??
-          transition.toColumn,
-      }));
+      .map((transition) => {
+        const targetCol = board.columns.find((candidate) => candidate.id === transition.toColumn);
+        return {
+          columnId: transition.toColumn,
+          label: transition.label ?? targetCol?.label ?? transition.toColumn,
+          color: targetCol?.color,
+        };
+      });
 
   return (
     <section
@@ -296,12 +530,13 @@ function ColumnTabs({
   onSelect: (index: number) => void;
 }) {
   return (
-    <div
+    <DragScrollContainer
       style={{
         display: "flex",
         gap: 4,
         overflowX: "auto",
-        paddingBottom: 4,
+        minWidth: 0,
+        cursor: "grab",
       }}
       role="tablist"
       aria-label="Kanban columns"
@@ -318,12 +553,15 @@ function ColumnTabs({
             onClick={() => onSelect(index)}
             style={{
               ...styles.button,
-              padding: "7px 14px",
+              padding: "7px 14px 6px",
               fontSize: 12,
               fontWeight: isActive ? 700 : 500,
               color: isActive ? colors.text.primary : colors.text.muted,
               background: isActive ? colors.bg.surface : "transparent",
-              borderColor: isActive ? colors.accent : colors.border,
+              borderColor: isActive ? "transparent" : colors.border,
+              borderBottomWidth: 2,
+              borderBottomColor: isActive ? column.color : "transparent",
+              borderRadius: isActive ? "6px 6px 0 0" : "6px",
               display: "flex",
               alignItems: "center",
               gap: 6,
@@ -356,7 +594,7 @@ function ColumnTabs({
           </button>
         );
       })}
-    </div>
+    </DragScrollContainer>
   );
 }
 
@@ -397,9 +635,9 @@ function BoardView({
   const focusedColumn = useFocusMode ? board.columns[safeFocusIndex] : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: colors.bg.root }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: colors.bg.root, overflowX: "hidden", width: "100%" }}>
       <ErpNextBrandHeader />
-      <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: colors.text.primary }}>
             {board.title}
@@ -423,9 +661,7 @@ function BoardView({
                 id={`kanban-panel-${focusedColumn.id}`}
                 role="tabpanel"
                 aria-label={focusedColumn.label}
-                style={{ display: "flex", flexDirection: "column", gap: 8 }}
-                onDragOver={(event) => onDragOverColumn(focusedColumn.id, event)}
-                onDrop={(event) => onDropCard(focusedColumn.id, event)}
+                style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}
               >
                 {board.cards
                   .filter((card) => card.columnId === focusedColumn.id)
@@ -437,13 +673,14 @@ function BoardView({
                           t.fromColumn === card.columnId &&
                           t.toColumn !== card.columnId
                       )
-                      .map((t) => ({
-                        columnId: t.toColumn,
-                        label:
-                          t.label ??
-                          board.columns.find((c) => c.id === t.toColumn)?.label ??
-                          t.toColumn,
-                      }));
+                      .map((t) => {
+                        const targetCol = board.columns.find((c) => c.id === t.toColumn);
+                        return {
+                          columnId: t.toColumn,
+                          label: t.label ?? targetCol?.label ?? t.toColumn,
+                          color: targetCol?.color,
+                        };
+                      });
                     return (
                       <KanbanCard
                         key={card.id}
@@ -452,6 +689,7 @@ function BoardView({
                         onMove={onMove}
                         onDragStart={onDragStart}
                         onDragEnd={onDragEnd}
+                        enableDrag={false}
                       />
                     );
                   })}

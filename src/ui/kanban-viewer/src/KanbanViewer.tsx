@@ -51,6 +51,14 @@ function extractTextContent(result: { content?: Array<{ type: string; text?: str
   return result.content?.find((item) => item.type === "text")?.text ?? null;
 }
 
+/** Unwrap Frappe-style `{ data: { ... } }` envelope, falling back to the raw object. */
+function unwrapDoc(payload: Record<string, unknown>): Record<string, unknown> {
+  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
+    return payload.data as Record<string, unknown>;
+  }
+  return payload;
+}
+
 function getAvailableTargets(
   board: KanbanBoardData,
   columnId: string,
@@ -952,14 +960,14 @@ function CardDetailModal({
   onClose,
   onMove,
   onSave,
-  onSendMessage,
+  onAction,
 }: {
   detail: CardDetailState;
   board: KanbanBoardData;
   onClose: () => void;
   onMove: (card: KanbanCardData, toColumn: string, label: string) => void;
   onSave?: (doctype: string, name: string, data: Record<string, string>) => void;
-  onSendMessage?: (message: string) => void;
+  onAction?: (toolName: string, args: Record<string, unknown>) => void;
 }) {
   const [editedFields, setEditedFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -1173,8 +1181,8 @@ function CardDetailModal({
           </div>
         )}
 
-        {/* Cross-viewer navigation */}
-        {onSendMessage && (
+        {/* Actions */}
+        {onAction && (
           <div
             style={{
               display: "flex",
@@ -1186,7 +1194,7 @@ function CardDetailModal({
           >
             <button
               type="button"
-              onClick={() => onSendMessage(`Show doclist for ${board.doctype} ${detail.selectedCardId}`)}
+              onClick={() => onAction("erpnext_doc_list", { doctype: board.doctype, filters: [["name", "=", detail.selectedCardId]] })}
               style={{
                 ...styles.button,
                 padding: "5px 12px",
@@ -1199,7 +1207,7 @@ function CardDetailModal({
             {board.doctype === "Task" && (
               <button
                 type="button"
-                onClick={() => onSendMessage(`Show timesheets for task ${detail.selectedCardId}`)}
+                onClick={() => onAction("erpnext_doc_list", { doctype: "Timesheet Detail", filters: [["task", "=", detail.selectedCardId]] })}
                 style={{
                   ...styles.button,
                   padding: "5px 12px",
@@ -1599,7 +1607,7 @@ export function KanbanViewer() {
           return;
         }
 
-        hydrateDetail(JSON.parse(text) as Record<string, unknown>);
+        hydrateDetail(unwrapDoc(JSON.parse(text) as Record<string, unknown>));
       } catch (error) {
         if (detailFetchCardIdRef.current !== cardId) return;
         setDetailError(error instanceof Error ? error.message : "Failed to fetch detail");
@@ -1607,11 +1615,11 @@ export function KanbanViewer() {
     })();
   }
 
-  function handleSendMessage(message: string) {
+  async function handleAction(toolName: string, args: Record<string, unknown>): Promise<void> {
     try {
-      app.sendMessage({ content: [{ type: "text", text: message }] });
+      await app.callServerTool({ name: toolName, arguments: args }, { timeout: TOOL_CALL_TIMEOUT_MS });
     } catch {
-      // Host may not support cross-viewer messaging — silently ignore
+      // Best-effort: host may not support this tool call
     }
   }
 
@@ -1634,7 +1642,9 @@ export function KanbanViewer() {
 
     if (!refreshResult.isError) {
       const text = extractTextContent(refreshResult);
-      if (text) hydrateDetail(JSON.parse(text) as Record<string, unknown>);
+      if (text) {
+        hydrateDetail(unwrapDoc(JSON.parse(text) as Record<string, unknown>));
+      }
     }
 
     // Refresh the board to reflect changes on cards
@@ -1693,7 +1703,7 @@ export function KanbanViewer() {
           onClose={closeDetail}
           onMove={requestMove}
           onSave={canFetchDetail ? handleSaveDetail : undefined}
-          onSendMessage={handleSendMessage}
+          onAction={canFetchDetail ? handleAction : undefined}
         />
       )}
     </>

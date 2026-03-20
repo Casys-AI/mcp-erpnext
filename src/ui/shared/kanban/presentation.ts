@@ -19,20 +19,26 @@ export function getErrorPresentation(state: Pick<KanbanViewerState, "board" | "e
 export function formatBoardSummary(
   board: Pick<KanbanBoardData, "doctype" | "moveToolName" | "cards" | "pagination">,
 ): string {
-  const countLabel = board.pagination.total !== undefined
-    ? `${board.pagination.total} cards`
-    : board.pagination.hasMore
-    ? `${board.pagination.loadedCount}+ cards loaded`
-    : `${board.pagination.loadedCount} cards`;
+  let countLabel: string;
+  if (board.pagination.total !== undefined) {
+    countLabel = `${board.pagination.total} cards`;
+  } else if (board.pagination.hasMore) {
+    countLabel = `${board.pagination.loadedCount}+ cards loaded`;
+  } else {
+    countLabel = `${board.pagination.loadedCount} cards`;
+  }
   return `${countLabel} · ${board.doctype} · move tool ${board.moveToolName}`;
 }
 
 export function normalizeMoveFailureMessage(error: unknown): string {
-  const raw = error instanceof Error
-    ? error.message
-    : typeof error === "string"
-    ? error
-    : "Move failed";
+  let raw: string;
+  if (error instanceof Error) {
+    raw = error.message;
+  } else if (typeof error === "string") {
+    raw = error;
+  } else {
+    raw = "Move failed";
+  }
 
   if (/timeout|timed out/i.test(raw)) {
     return "La mise a jour a expire, veuillez reessayer.";

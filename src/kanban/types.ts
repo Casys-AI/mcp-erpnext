@@ -28,6 +28,9 @@ export interface KanbanCard {
   badges?: KanbanBadge[];
   metrics?: KanbanMetric[];
   pending?: boolean;
+  description?: string;
+  dueDate?: string;
+  assignee?: string;
 }
 
 export interface KanbanTransition {

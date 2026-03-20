@@ -7,6 +7,7 @@ import type {
   KanbanMoveResult,
   KanbanTransition,
 } from "../types.ts";
+import { formatShortDate, isDateOverdue, parseFirstAssignee, priorityTone } from "../field-utils.ts";
 
 const ISSUE_COLUMNS: Array<{ id: string; label: string; color: string; status: string }> = [
   { id: "open", label: "Open", color: "#60a5fa", status: "Open" },
@@ -26,6 +27,8 @@ const ISSUE_LIST_FIELDS = [
   "priority",
   "customer",
   "raised_by",
+  "resolution_by",
+  "_assign",
 ];
 
 const ISSUE_ALLOWED_TRANSITIONS: KanbanTransition[] = [
@@ -52,21 +55,32 @@ function columnIdForIssueStatus(status: unknown): string {
   return COLUMN_BY_STATUS.get(String(status ?? "Open")) ?? "open";
 }
 
-function priorityTone(priority: string): "neutral" | "warning" | "error" {
-  if (priority === "Urgent") return "error";
-  if (priority === "High") return "warning";
-  return "neutral";
-}
-
 function buildIssueCard(row: Record<string, unknown>): KanbanCard {
   const status = String(row.status ?? "Open");
   const columnId = columnIdForIssueStatus(status);
   const priority = typeof row.priority === "string" ? row.priority : undefined;
-  const subtitle = typeof row.customer === "string" && row.customer.length > 0
-    ? row.customer
-    : typeof row.raised_by === "string" && row.raised_by.length > 0
-    ? row.raised_by
-    : undefined;
+  let subtitle: string | undefined;
+  if (typeof row.customer === "string" && row.customer.length > 0) {
+    subtitle = row.customer;
+  } else if (typeof row.raised_by === "string" && row.raised_by.length > 0) {
+    subtitle = row.raised_by;
+  }
+
+  const badges: KanbanCard["badges"] = [];
+  if (priority) badges.push({ label: priority, tone: priorityTone(priority) });
+  const slaDate = row.resolution_by;
+  if (isDateOverdue(slaDate) && columnId !== "resolved" && columnId !== "closed") {
+    badges.push({ label: "SLA breach", tone: "error" });
+  }
+
+  const metrics: KanbanCard["metrics"] = [];
+  if (typeof row.raised_by === "string" && row.raised_by.length > 0) {
+    metrics.push({ label: "Raised By", value: row.raised_by });
+  }
+  const slaDisplay = formatShortDate(slaDate);
+  if (slaDisplay) metrics.push({ label: "SLA", value: slaDisplay });
+
+  const assignee = parseFirstAssignee(row._assign);
 
   return {
     id: String(row.name ?? ""),
@@ -74,10 +88,10 @@ function buildIssueCard(row: Record<string, unknown>): KanbanCard {
     subtitle,
     columnId,
     accent: ISSUE_COLUMNS.find((column) => column.id === columnId)?.color,
-    badges: priority ? [{ label: priority, tone: priorityTone(priority) }] : [],
-    metrics: typeof row.raised_by === "string" && row.raised_by.length > 0
-      ? [{ label: "Raised By", value: row.raised_by }]
-      : [],
+    badges,
+    metrics,
+    dueDate: typeof slaDate === "string" ? slaDate : undefined,
+    assignee,
   };
 }
 

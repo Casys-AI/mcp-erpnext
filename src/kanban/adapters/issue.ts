@@ -28,6 +28,9 @@ const ISSUE_LIST_FIELDS = [
   "customer",
   "raised_by",
   "resolution_by",
+  "opening_date",
+  "resolution_date",
+  "first_responded_on",
   "_assign",
 ];
 
@@ -79,6 +82,10 @@ function buildIssueCard(row: Record<string, unknown>): KanbanCard {
   }
   const slaDisplay = formatShortDate(slaDate);
   if (slaDisplay) metrics.push({ label: "SLA", value: slaDisplay });
+  const openedDisplay = formatShortDate(row.opening_date);
+  if (openedDisplay) metrics.push({ label: "Opened", value: openedDisplay });
+  const resolvedDisplay = formatShortDate(row.resolution_date);
+  if (resolvedDisplay) metrics.push({ label: "Resolved", value: resolvedDisplay });
 
   const assignee = parseFirstAssignee(row._assign);
 

@@ -32,6 +32,9 @@ const OPPORTUNITY_LIST_FIELDS = [
   "probability",
   "opportunity_owner",
   "expected_closing",
+  "transaction_date",
+  "contact_person",
+  "source",
 ];
 
 const OPPORTUNITY_ALLOWED_TRANSITIONS: KanbanTransition[] = [
@@ -93,14 +96,23 @@ function buildOpportunityCard(row: Record<string, unknown>): KanbanCard {
     badges.push({ label: "Overdue", tone: "error" });
   }
 
+  if (typeof row.source === "string" && row.source.length > 0) {
+    badges.push({ label: row.source, tone: "info" });
+  }
+
   const metrics: KanbanCard["metrics"] = [];
   if (amountValue) metrics.push({ label: "Amount", value: amountValue });
   if (probabilityValue) metrics.push({ label: "Probability", value: probabilityValue });
   const closingDisplay = formatShortDate(closingDate);
   if (closingDisplay) metrics.push({ label: "Closing", value: closingDisplay });
+  const createdDisplay = formatShortDate(row.transaction_date);
+  if (createdDisplay) metrics.push({ label: "Created", value: createdDisplay });
 
   const assignee = typeof row.opportunity_owner === "string" && row.opportunity_owner.length > 0
     ? row.opportunity_owner
+    : undefined;
+  const contactPerson = typeof row.contact_person === "string" && row.contact_person.length > 0
+    ? row.contact_person
     : undefined;
 
   return {

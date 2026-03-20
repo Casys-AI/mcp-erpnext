@@ -33,9 +33,13 @@ const TASK_LIST_FIELDS = [
   "status",
   "priority",
   "progress",
+  "exp_start_date",
   "exp_end_date",
+  "expected_time",
+  "actual_time",
   "description",
   "_assign",
+  "is_milestone",
 ];
 
 const TASK_ALLOWED_TRANSITIONS: KanbanTransition[] = [
@@ -69,6 +73,7 @@ function buildTaskCard(row: Record<string, unknown>): KanbanCard {
 
   const badges: KanbanCard["badges"] = [];
   if (priority) badges.push({ label: priority, tone: priorityTone(priority) });
+  if (row.is_milestone === 1) badges.push({ label: "Milestone", tone: "info" });
   const dueDateStr = row.exp_end_date;
   if (isDateOverdue(dueDateStr) && columnId !== "completed" && columnId !== "cancelled") {
     badges.push({ label: "Overdue", tone: "error" });
@@ -78,6 +83,12 @@ function buildTaskCard(row: Record<string, unknown>): KanbanCard {
   if (progress !== undefined) metrics.push({ label: "Progress", value: `${progress}%` });
   const dueDateDisplay = formatShortDate(dueDateStr);
   if (dueDateDisplay) metrics.push({ label: "Due", value: dueDateDisplay });
+  const startDisplay = formatShortDate(row.exp_start_date);
+  if (startDisplay) metrics.push({ label: "Start", value: startDisplay });
+  const expectedTime = Number(row.expected_time);
+  if (Number.isFinite(expectedTime) && expectedTime > 0) metrics.push({ label: "Est.", value: `${expectedTime}h` });
+  const actualTime = Number(row.actual_time);
+  if (Number.isFinite(actualTime) && actualTime > 0) metrics.push({ label: "Actual", value: `${actualTime}h` });
 
   const assignee = parseFirstAssignee(row._assign);
 

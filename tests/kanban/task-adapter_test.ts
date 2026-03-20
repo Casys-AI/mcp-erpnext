@@ -32,9 +32,13 @@ Deno.test("task kanban adapter - exposes Task columns and allowed transitions", 
     "status",
     "priority",
     "progress",
+    "exp_start_date",
     "exp_end_date",
+    "expected_time",
+    "actual_time",
     "description",
     "_assign",
+    "is_milestone",
   ]);
   assertEquals(filters, [
     ["project", "=", "Alpha"],

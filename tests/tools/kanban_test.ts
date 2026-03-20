@@ -88,9 +88,13 @@ Deno.test("erpnext_kanban_get_board - returns a Task board with metadata and pag
     "status",
     "priority",
     "progress",
+    "exp_start_date",
     "exp_end_date",
+    "expected_time",
+    "actual_time",
     "description",
     "_assign",
+    "is_milestone",
   ]);
   assertEquals(capturedFilters, [
     ["project", "=", "Alpha"],
@@ -164,6 +168,9 @@ Deno.test("erpnext_kanban_get_board - returns an Opportunity board", async () =>
     "probability",
     "opportunity_owner",
     "expected_closing",
+    "transaction_date",
+    "contact_person",
+    "source",
   ]);
   assertEquals(capturedFilters, [
     ["opportunity_owner", "=", "alice@example.com"],
@@ -217,6 +224,9 @@ Deno.test("erpnext_kanban_get_board - returns an Issue board", async () => {
     "customer",
     "raised_by",
     "resolution_by",
+    "opening_date",
+    "resolution_date",
+    "first_responded_on",
     "_assign",
   ]);
   assertEquals(capturedFilters, [

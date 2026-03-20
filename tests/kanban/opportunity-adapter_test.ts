@@ -36,6 +36,9 @@ Deno.test("opportunity kanban adapter - exposes Opportunity columns and filters"
     "probability",
     "opportunity_owner",
     "expected_closing",
+    "transaction_date",
+    "contact_person",
+    "source",
   ]);
   assertEquals(filters, [
     ["status", "=", "Open"],

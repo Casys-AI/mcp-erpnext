@@ -781,7 +781,7 @@ function BoardView({
   const focusedColumn = useFocusMode ? board.columns[safeFocusIndex] : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%", background: colors.bg.root, overflowX: "hidden", width: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 480, background: colors.bg.root, overflowX: "hidden", width: "100%" }}>
       <ErpNextBrandHeader />
       <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -1789,7 +1789,7 @@ export function KanbanViewer() {
 
   if (state.loading) {
     return (
-      <div style={{ minHeight: "100%", background: colors.bg.root }}>
+      <div style={{ minHeight: 480, background: colors.bg.root }}>
         <ErpNextBrandHeader />
         <LoadingSkeleton />
       </div>
@@ -1800,7 +1800,7 @@ export function KanbanViewer() {
 
   if (errorPresentation.blockingError) {
     return (
-      <div style={{ minHeight: "100%", background: colors.bg.root }}>
+      <div style={{ minHeight: 480, background: colors.bg.root }}>
         <ErpNextBrandHeader />
         <ErrorState message={errorPresentation.blockingError} />
       </div>
@@ -1809,7 +1809,7 @@ export function KanbanViewer() {
 
   if (!state.board) {
     return (
-      <div style={{ minHeight: "100%", background: colors.bg.root }}>
+      <div style={{ minHeight: 480, background: colors.bg.root }}>
         <ErpNextBrandHeader />
         <EmptyState />
       </div>

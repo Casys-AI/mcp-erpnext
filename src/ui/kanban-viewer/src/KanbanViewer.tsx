@@ -875,44 +875,41 @@ const READONLY_FIELDS = new Set([
 ]);
 
 const FIELD_LABELS: Record<string, string> = {
-  name: "ID",
-  subject: "Subject",
-  status: "Status",
-  priority: "Priority",
-  project: "Project",
-  progress: "Progress (%)",
-  description: "Description",
-  exp_start_date: "Start date",
-  exp_end_date: "Due date",
-  expected_time: "Estimated (h)",
-  actual_time: "Actual time (h)",
-  is_milestone: "Milestone",
-  task_weight: "Weight",
-  total_costing_amount: "Cost",
-  total_billing_amount: "Billing",
-  start: "Start",
-  duration: "Duration",
-  title: "Title",
-  opportunity_from: "Source type",
-  party_name: "Party",
-  opportunity_amount: "Amount",
-  currency: "Currency",
-  probability: "Probability (%)",
-  opportunity_owner: "Owner",
-  expected_closing: "Expected closing",
-  transaction_date: "Created",
-  contact_person: "Contact",
-  source: "Source",
-  customer: "Customer",
-  raised_by: "Raised by",
-  resolution_by: "SLA deadline",
-  opening_date: "Opened",
-  resolution_date: "Resolved",
+  name: "ID", subject: "Subject", status: "Status", priority: "Priority",
+  project: "Project", progress: "Progress (%)", description: "Description",
+  exp_start_date: "Start date", exp_end_date: "Due date",
+  expected_time: "Estimated (h)", actual_time: "Actual time (h)",
+  is_milestone: "Milestone", task_weight: "Weight",
+  total_costing_amount: "Cost", total_billing_amount: "Billing",
+  start: "Start", duration: "Duration", title: "Title",
+  opportunity_from: "Source type", party_name: "Party",
+  opportunity_amount: "Amount", currency: "Currency",
+  probability: "Probability (%)", opportunity_owner: "Owner",
+  expected_closing: "Expected closing", transaction_date: "Created",
+  contact_person: "Contact", source: "Source", customer: "Customer",
+  raised_by: "Raised by", resolution_by: "SLA deadline",
+  opening_date: "Opened", resolution_date: "Resolved",
   first_responded_on: "First response",
 };
 
+const BOOLEAN_FIELDS = new Set(["is_milestone", "is_group", "is_template"]);
+
 function fieldLabel(key: string): string {
   return FIELD_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatFieldValue(key: string, value: unknown): string {
+  if (BOOLEAN_FIELDS.has(key)) return value === 1 ? "Yes" : "No";
+  if (typeof value === "number" && value === 0) {
+    if (key.includes("amount") || key.includes("cost") || key.includes("billing")) return "0.00";
+    if (key.includes("time") || key === "duration") return "0h";
+    if (key === "progress") return "0%";
+  }
+  return String(value);
+}
+
+function isDescriptionField(key: string): boolean {
+  return key === "description" || key === "resolution_details" || key === "notes";
 }
 
 function DetailFieldGrid({
@@ -934,32 +931,35 @@ function DetailFieldGrid({
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0, fontSize: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column" }}>
       {entries.map(([key, value]) => {
         const isReadonly = READONLY_FIELDS.has(key);
         const isEdited = key in editedFields;
-        const displayValue = isEdited ? editedFields[key] : String(value);
+        const isLong = isDescriptionField(key);
+        const displayValue = isEdited ? editedFields[key] : formatFieldValue(key, value);
 
         return (
           <div
             key={key}
+            className="detail-field-row"
             style={{
               display: "flex",
-              alignItems: "baseline",
-              gap: 8,
-              padding: "8px 16px",
+              flexDirection: isLong ? "column" : "row",
+              alignItems: isLong ? "stretch" : "center",
+              gap: isLong ? 4 : 0,
+              padding: isLong ? "10px 20px" : "0 20px",
+              minHeight: isLong ? undefined : 36,
               borderBottom: `1px solid ${colors.borderSubtle}`,
             }}
           >
             <label
               style={{
-                width: 120,
+                width: isLong ? "auto" : 140,
                 flexShrink: 0,
-                fontWeight: 600,
-                fontSize: 11,
+                fontWeight: 500,
+                fontSize: 12,
                 color: isEdited ? colors.accent : colors.text.muted,
-                textTransform: "uppercase" as const,
-                letterSpacing: "0.03em",
+                padding: isLong ? 0 : "8px 0",
               }}
             >
               {fieldLabel(key)}
@@ -968,12 +968,30 @@ function DetailFieldGrid({
               <span
                 style={{
                   flex: 1,
+                  fontSize: 13,
                   color: colors.text.primary,
                   fontFamily: typeof value === "number" ? fonts.mono : fonts.sans,
+                  fontWeight: key === "name" ? 500 : 400,
+                  padding: "8px 0",
                 }}
               >
-                {String(value)}
+                {formatFieldValue(key, value)}
               </span>
+            ) : isLong ? (
+              <textarea
+                value={displayValue}
+                onChange={(e) => onFieldChange(key, e.target.value)}
+                rows={3}
+                style={{
+                  ...styles.input,
+                  fontSize: 13,
+                  padding: "8px 10px",
+                  resize: "vertical" as const,
+                  borderColor: isEdited ? colors.accent : colors.border,
+                  background: isEdited ? colors.accentDim : colors.bg.elevated,
+                  lineHeight: 1.5,
+                }}
+              />
             ) : (
               <input
                 type="text"
@@ -982,10 +1000,10 @@ function DetailFieldGrid({
                 style={{
                   ...styles.input,
                   flex: 1,
-                  padding: "4px 8px",
-                  fontSize: 12,
-                  borderColor: isEdited ? colors.accent : colors.border,
-                  background: isEdited ? colors.accentDim : colors.bg.elevated,
+                  padding: "6px 10px",
+                  fontSize: 13,
+                  borderColor: isEdited ? colors.accent : "transparent",
+                  background: isEdited ? colors.accentDim : "transparent",
                 }}
               />
             )}
@@ -1067,6 +1085,13 @@ function CardDetailModal({
     }
   }
 
+  const columnLabel = card
+    ? board.columns.find((c) => c.id === card.columnId)?.label
+    : undefined;
+  const columnColor = card
+    ? board.columns.find((c) => c.id === card.columnId)?.color
+    : undefined;
+
   return (
     <div
       className="kanban-detail-backdrop"
@@ -1076,52 +1101,66 @@ function CardDetailModal({
       aria-label={`Detail: ${cardTitle}`}
     >
       <div className="kanban-detail-panel">
+        {/* Color accent bar */}
+        {columnColor && (
+          <div aria-hidden="true" style={{ height: 3, background: columnColor, borderRadius: "12px 12px 0 0", flexShrink: 0 }} />
+        )}
+
         {/* Header */}
-        <div
-          style={{
-            padding: "14px 16px 12px",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 10,
-            borderBottom: `1px solid ${colors.border}`,
-          }}
-        >
+        <div style={{ padding: "16px 20px 12px", display: "flex", alignItems: "flex-start", gap: 12, borderBottom: `1px solid ${colors.border}` }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: colors.text.primary }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: colors.text.primary, lineHeight: 1.3 }}>
               {cardTitle}
             </div>
-            <div style={{ fontSize: 11, color: colors.text.muted, marginTop: 2, fontFamily: fonts.mono }}>
-              {detail.selectedCardId}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+              <span style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.text.faint }}>
+                {detail.selectedCardId}
+              </span>
+              {columnLabel && (
+                <span style={{
+                  ...styles.badge(columnColor ?? colors.text.muted, `${columnColor ?? colors.text.muted}20`),
+                  fontSize: 10,
+                }}>
+                  {columnLabel}
+                </span>
+              )}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            style={{
-              ...styles.button,
-              padding: "4px 10px",
-              fontSize: 13,
-              lineHeight: 1,
-              borderRadius: 4,
-            }}
             aria-label="Close detail"
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              padding: 4,
+              borderRadius: 4,
+              color: colors.text.faint,
+              fontSize: 18,
+              lineHeight: 1,
+              transition: "color 0.1s",
+            }}
           >
-            x
+            \u2715
           </button>
         </div>
 
         {/* Content */}
-        <div>
+        <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
           {detail.detailLoading && (
-            <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="skeleton" style={{ height: 28, width: "100%" }} />
+            <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <div className="skeleton" style={{ width: 120, height: 14 }} />
+                  <div className="skeleton" style={{ flex: 1, height: 14 }} />
+                </div>
               ))}
             </div>
           )}
 
           {detail.detailError && (
-            <div style={{ padding: 16, color: colors.error, fontSize: 12 }}>
+            <div style={{ margin: 16, padding: "10px 14px", background: colors.errorDim, borderRadius: 6, color: colors.error, fontSize: 12 }}>
               {detail.detailError}
             </div>
           )}
@@ -1135,133 +1174,103 @@ function CardDetailModal({
           )}
         </div>
 
-        {/* Save bar */}
-        {onSave && detail.cardDetail && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 16px",
-              borderTop: `1px solid ${colors.border}`,
-            }}
-          >
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!hasEdits || saving}
-              style={{
-                ...styles.button,
-                padding: "5px 16px",
-                fontSize: 11,
-                fontWeight: 600,
-                background: hasEdits ? colors.accent : colors.bg.elevated,
-                color: hasEdits ? "#fff" : colors.text.muted,
-                borderColor: hasEdits ? colors.accent : colors.border,
-                opacity: saving ? 0.6 : 1,
-              }}
-            >
-              {saving ? "Saving..." : "Save"}
-            </button>
-            {hasEdits && (
+        {/* Sticky footer */}
+        <div style={{ borderTop: `1px solid ${colors.border}`, padding: "12px 20px", display: "flex", flexDirection: "column", gap: 10, flexShrink: 0 }}>
+
+          {/* Save bar */}
+          {onSave && detail.cardDetail && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <button
                 type="button"
-                onClick={() => { setEditedFields({}); setSaveMessage(null); }}
-                style={{ ...styles.button, padding: "5px 12px", fontSize: 11 }}
+                onClick={handleSave}
+                disabled={!hasEdits || saving}
+                style={{
+                  ...styles.button,
+                  padding: "7px 20px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: hasEdits ? colors.accent : colors.bg.elevated,
+                  color: hasEdits ? "#fff" : colors.text.faint,
+                  borderColor: hasEdits ? colors.accent : colors.border,
+                  opacity: saving ? 0.6 : 1,
+                  borderRadius: 6,
+                }}
               >
-                Reset
+                {saving ? "Saving\u2026" : "Save changes"}
               </button>
-            )}
-            {saveMessage && (
-              <span style={{ fontSize: 11, color: saveMessage.isError ? colors.error : colors.success }}>
-                {saveMessage.text}
-              </span>
-            )}
-          </div>
-        )}
+              {hasEdits && (
+                <button
+                  type="button"
+                  onClick={() => { setEditedFields({}); setSaveMessage(null); }}
+                  style={{ ...styles.button, padding: "7px 14px", fontSize: 12 }}
+                >
+                  Discard
+                </button>
+              )}
+              {saveMessage && (
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: saveMessage.isError ? colors.error : colors.success,
+                  padding: "2px 8px",
+                  borderRadius: 4,
+                  background: saveMessage.isError ? colors.errorDim : colors.successDim,
+                }}>
+                  {saveMessage.text}
+                </span>
+              )}
+            </div>
+          )}
 
-        {/* Move actions */}
-        {card && availableTargets.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 6,
-              padding: "12px 16px",
-              borderTop: `1px solid ${colors.border}`,
-            }}
-          >
-            {availableTargets.map((target) => (
+          {/* Move + action buttons in a single row */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+            {card && availableTargets.map((target) => (
               <button
                 key={target.columnId}
                 type="button"
                 onClick={() => { onMove(card, target.columnId, target.label); onClose(); }}
                 style={{
                   ...styles.button,
-                  padding: "5px 12px",
+                  padding: "5px 10px",
                   fontSize: 11,
-                  display: "flex",
+                  display: "inline-flex",
                   alignItems: "center",
                   gap: 5,
                 }}
               >
                 {target.color && (
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: target.color,
-                      flexShrink: 0,
-                    }}
-                  />
+                  <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: "50%", background: target.color, flexShrink: 0 }} />
                 )}
                 {target.label}
               </button>
             ))}
-          </div>
-        )}
 
-        {/* Actions */}
-        {onAction && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 6,
-              padding: "8px 16px 14px",
-              borderTop: `1px solid ${colors.borderSubtle}`,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => onAction("erpnext_doc_list", { doctype: board.doctype, filters: [["name", "=", detail.selectedCardId]] })}
-              style={{
-                ...styles.button,
-                padding: "5px 12px",
-                fontSize: 11,
-                color: colors.accent,
-              }}
-            >
-              View in Doclist
-            </button>
-            {board.doctype === "Task" && (
-              <button
-                type="button"
-                onClick={() => onAction("erpnext_doc_list", { doctype: "Timesheet Detail", filters: [["task", "=", detail.selectedCardId]] })}
-                style={{
-                  ...styles.button,
-                  padding: "5px 12px",
-                  fontSize: 11,
-                  color: colors.accent,
-                }}
-              >
-                View timesheets
-              </button>
+            {onAction && (card || availableTargets.length > 0) && (
+              <span style={{ width: 1, height: 16, background: colors.border, flexShrink: 0 }} />
+            )}
+
+            {onAction && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onAction("erpnext_doc_list", { doctype: board.doctype, filters: [["name", "=", detail.selectedCardId]] })}
+                  style={{ ...styles.button, padding: "5px 10px", fontSize: 11, color: colors.accent }}
+                >
+                  Doclist
+                </button>
+                {board.doctype === "Task" && (
+                  <button
+                    type="button"
+                    onClick={() => onAction("erpnext_doc_list", { doctype: "Timesheet Detail", filters: [["task", "=", detail.selectedCardId]] })}
+                    style={{ ...styles.button, padding: "5px 10px", fontSize: 11, color: colors.accent }}
+                  >
+                    Timesheets
+                  </button>
+                )}
+              </>
             )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

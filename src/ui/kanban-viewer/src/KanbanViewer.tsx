@@ -23,6 +23,10 @@ import {
   resolveKanbanRefreshRequest,
   type KanbanRefreshRequestData,
 } from "~/shared/kanban/refresh";
+import {
+  shouldUseKanbanColumnFocus,
+  clampKanbanFocusIndex,
+} from "~/shared/kanban/layout";
 
 const app = new App({ name: "Kanban Viewer", version: "1.0.0" });
 const AUTO_REFRESH_INTERVAL_MS = 15_000;
@@ -282,6 +286,80 @@ function KanbanColumn({
   );
 }
 
+function ColumnTabs({
+  columns,
+  focusIndex,
+  onSelect,
+}: {
+  columns: KanbanColumnData[];
+  focusIndex: number;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 4,
+        overflowX: "auto",
+        paddingBottom: 4,
+      }}
+      role="tablist"
+      aria-label="Kanban columns"
+    >
+      {columns.map((column, index) => {
+        const isActive = index === focusIndex;
+        return (
+          <button
+            key={column.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            aria-controls={`kanban-panel-${column.id}`}
+            onClick={() => onSelect(index)}
+            style={{
+              ...styles.button,
+              padding: "7px 14px",
+              fontSize: 12,
+              fontWeight: isActive ? 700 : 500,
+              color: isActive ? colors.text.primary : colors.text.muted,
+              background: isActive ? colors.bg.surface : "transparent",
+              borderColor: isActive ? colors.accent : colors.border,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: column.color,
+                flexShrink: 0,
+              }}
+            />
+            {column.label}
+            <span
+              style={{
+                ...styles.badge(
+                  isActive ? colors.text.primary : colors.text.muted,
+                  isActive ? `${column.color}30` : `${colors.text.muted}15`
+                ),
+                fontSize: 10,
+              }}
+            >
+              {column.count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function BoardView({
   board,
   inlineError,
@@ -301,6 +379,23 @@ function BoardView({
   onDragEnd: () => void;
   onDragOverColumn: (columnId: string, event: React.DragEvent<HTMLElement>) => void;
 }) {
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1200
+  );
+  const [focusIndex, setFocusIndex] = useState(0);
+
+  useEffect(() => {
+    function handleResize() {
+      setViewportWidth(window.innerWidth);
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const useFocusMode = shouldUseKanbanColumnFocus(viewportWidth, board.columns.length);
+  const safeFocusIndex = clampKanbanFocusIndex(focusIndex, board.columns.length);
+  const focusedColumn = useFocusMode ? board.columns[safeFocusIndex] : null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: colors.bg.root }}>
       <ErpNextBrandHeader />
@@ -316,22 +411,83 @@ function BoardView({
 
         {inlineError && <ErrorState message={inlineError} />}
 
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", overflowX: "auto", paddingBottom: 8 }}>
-          {board.columns.map((column) => (
-            <KanbanColumn
-              key={column.id}
-              column={column}
-              board={board}
-              cards={board.cards.filter((card) => card.columnId === column.id)}
-              activeDropColumn={activeDropColumn}
-              onMove={onMove}
-              onDropCard={onDropCard}
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              onDragOverColumn={onDragOverColumn}
+        {useFocusMode ? (
+          <>
+            <ColumnTabs
+              columns={board.columns}
+              focusIndex={safeFocusIndex}
+              onSelect={setFocusIndex}
             />
-          ))}
-        </div>
+            {focusedColumn && (
+              <div
+                id={`kanban-panel-${focusedColumn.id}`}
+                role="tabpanel"
+                aria-label={focusedColumn.label}
+                style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                onDragOver={(event) => onDragOverColumn(focusedColumn.id, event)}
+                onDrop={(event) => onDropCard(focusedColumn.id, event)}
+              >
+                {board.cards
+                  .filter((card) => card.columnId === focusedColumn.id)
+                  .map((card) => {
+                    const availableTargets = board.allowedTransitions
+                      .filter(
+                        (t) =>
+                          t.allowed &&
+                          t.fromColumn === card.columnId &&
+                          t.toColumn !== card.columnId
+                      )
+                      .map((t) => ({
+                        columnId: t.toColumn,
+                        label:
+                          t.label ??
+                          board.columns.find((c) => c.id === t.toColumn)?.label ??
+                          t.toColumn,
+                      }));
+                    return (
+                      <KanbanCard
+                        key={card.id}
+                        card={card}
+                        allowedTargets={availableTargets}
+                        onMove={onMove}
+                        onDragStart={onDragStart}
+                        onDragEnd={onDragEnd}
+                      />
+                    );
+                  })}
+                {board.cards.filter((card) => card.columnId === focusedColumn.id).length === 0 && (
+                  <div
+                    style={{
+                      padding: "20px 12px",
+                      textAlign: "center",
+                      fontSize: 12,
+                      color: colors.text.muted,
+                    }}
+                  >
+                    No cards in {focusedColumn.label}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", overflowX: "auto", paddingBottom: 8 }}>
+            {board.columns.map((column) => (
+              <KanbanColumn
+                key={column.id}
+                column={column}
+                board={board}
+                cards={board.cards.filter((card) => card.columnId === column.id)}
+                activeDropColumn={activeDropColumn}
+                onMove={onMove}
+                onDropCard={onDropCard}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onDragOverColumn={onDragOverColumn}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

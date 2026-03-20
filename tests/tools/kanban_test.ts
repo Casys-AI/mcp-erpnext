@@ -88,6 +88,9 @@ Deno.test("erpnext_kanban_get_board - returns a Task board with metadata and pag
     "status",
     "priority",
     "progress",
+    "exp_end_date",
+    "description",
+    "_assign",
   ]);
   assertEquals(capturedFilters, [
     ["project", "=", "Alpha"],
@@ -160,6 +163,7 @@ Deno.test("erpnext_kanban_get_board - returns an Opportunity board", async () =>
     "currency",
     "probability",
     "opportunity_owner",
+    "expected_closing",
   ]);
   assertEquals(capturedFilters, [
     ["opportunity_owner", "=", "alice@example.com"],
@@ -212,6 +216,8 @@ Deno.test("erpnext_kanban_get_board - returns an Issue board", async () => {
     "priority",
     "customer",
     "raised_by",
+    "resolution_by",
+    "_assign",
   ]);
   assertEquals(capturedFilters, [
     ["priority", "=", "High"],
@@ -221,6 +227,85 @@ Deno.test("erpnext_kanban_get_board - returns an Issue board", async () => {
   assertEquals(result.doctype, "Issue");
   assertEquals((result.columns as Array<{ id: string }>)[0].id, "open");
   assertEquals((result.cards as Array<{ title: string }>)[0].title, "Shipment damaged in transit");
+});
+
+Deno.test("erpnext_kanban_get_board - Task cards include enriched fields", async () => {
+  const mockClient = makeMockClient({
+    list: async () => [
+      {
+        name: "TASK-0001",
+        subject: "Draft protocol",
+        project: "Alpha",
+        status: "Open",
+        priority: "High",
+        progress: 20,
+        exp_end_date: "2025-01-01",
+        description: "<p>Some <b>HTML</b> description</p>",
+        _assign: '["alice@example.com"]',
+      },
+    ],
+  });
+
+  const tool = getTool("erpnext_kanban_get_board");
+  const result = await tool.handler({ doctype: "Task" }, makeCtx(mockClient)) as Record<string, unknown>;
+  const cards = result.cards as Array<Record<string, unknown>>;
+  assertEquals(cards[0].assignee, "alice@example.com");
+  assertEquals(cards[0].description, "Some HTML description");
+  assertEquals(cards[0].dueDate, "2025-01-01");
+  const badges = cards[0].badges as Array<{ label: string }>;
+  assert(badges.some((b) => b.label === "Overdue"));
+});
+
+Deno.test("erpnext_kanban_get_board - Opportunity cards include closing date and assignee", async () => {
+  const mockClient = makeMockClient({
+    list: async () => [
+      {
+        name: "CRM-OPP-2026-00001",
+        title: "ACME renewal",
+        opportunity_from: "Customer",
+        party_name: "Acme Corp",
+        status: "Open",
+        opportunity_amount: 12500,
+        currency: "EUR",
+        probability: 70,
+        opportunity_owner: "alice@example.com",
+        expected_closing: "2025-06-15",
+      },
+    ],
+  });
+
+  const tool = getTool("erpnext_kanban_get_board");
+  const result = await tool.handler({ doctype: "Opportunity" }, makeCtx(mockClient)) as Record<string, unknown>;
+  const cards = result.cards as Array<Record<string, unknown>>;
+  assertEquals(cards[0].assignee, "alice@example.com");
+  assertEquals(cards[0].dueDate, "2025-06-15");
+  const badges = cards[0].badges as Array<{ label: string }>;
+  assert(badges.some((b) => b.label === "Overdue"));
+});
+
+Deno.test("erpnext_kanban_get_board - Issue cards include SLA breach badge", async () => {
+  const mockClient = makeMockClient({
+    list: async () => [
+      {
+        name: "ISS-2026-00001",
+        subject: "Shipment damaged",
+        status: "Open",
+        priority: "High",
+        customer: "Acme Corp",
+        raised_by: "alice@example.com",
+        resolution_by: "2025-01-01",
+        _assign: '["bob@example.com"]',
+      },
+    ],
+  });
+
+  const tool = getTool("erpnext_kanban_get_board");
+  const result = await tool.handler({ doctype: "Issue" }, makeCtx(mockClient)) as Record<string, unknown>;
+  const cards = result.cards as Array<Record<string, unknown>>;
+  assertEquals(cards[0].assignee, "bob@example.com");
+  assertEquals(cards[0].dueDate, "2025-01-01");
+  const badges = cards[0].badges as Array<{ label: string }>;
+  assert(badges.some((b) => b.label === "SLA breach"));
 });
 
 Deno.test("erpnext_kanban_move_card - executes an allowed Task move", async () => {

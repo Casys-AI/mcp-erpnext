@@ -221,7 +221,7 @@ Specific DocTypes also have dedicated submit/cancel tools: `erpnext_sales_order_
 | `invoice-viewer` | `ui://mcp-erpnext/invoice-viewer` | Single invoice display with refresh-aware revalidation |
 | `stock-viewer` | `ui://mcp-erpnext/stock-viewer` | Stock balance table with refresh-aware revalidation |
 | `chart-viewer` | `ui://mcp-erpnext/chart-viewer` | Universal chart renderer for analytics tools |
-| `kanban-viewer` | `ui://mcp-erpnext/kanban-viewer` | Canonical read-write kanban board for Task, Opportunity, and Issue |
+| `kanban-viewer` | `ui://mcp-erpnext/kanban-viewer` | Canonical read-write kanban board for Task, Opportunity, and Issue. Accent-colored cards, tone-aware badges, column-colored move buttons, column focus mode for narrow viewports |
 | `kpi-viewer` | `ui://mcp-erpnext/kpi-viewer` | Metric card with delta, sparkline, and refresh-aware revalidation |
 | `funnel-viewer` | `ui://mcp-erpnext/funnel-viewer` | Sales funnel with conversion stages and refresh-aware revalidation |
 

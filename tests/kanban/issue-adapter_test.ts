@@ -32,6 +32,8 @@ Deno.test("issue kanban adapter - exposes Issue columns and filters", () => {
     "priority",
     "customer",
     "raised_by",
+    "resolution_by",
+    "_assign",
   ]);
   assertEquals(filters, [
     ["status", "=", "Open"],

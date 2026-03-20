@@ -53,3 +53,61 @@ Deno.test("kanban state - marks loading when tool input starts", () => {
   assertEquals(loadingState.loading, true);
   assertEquals(loadingState.board?.boardId, "task-board");
 });
+
+Deno.test("kanban state - select-card sets loading detail state", () => {
+  const state = kanbanStateReducer(createKanbanInitialState(), {
+    type: "select-card",
+    cardId: "TASK-0001",
+  });
+
+  assertEquals(state.detail.selectedCardId, "TASK-0001");
+  assertEquals(state.detail.detailLoading, true);
+  assertEquals(state.detail.cardDetail, null);
+  assertEquals(state.detail.detailError, null);
+});
+
+Deno.test("kanban state - hydrate-detail populates card detail", () => {
+  const selected = kanbanStateReducer(createKanbanInitialState(), {
+    type: "select-card",
+    cardId: "TASK-0001",
+  });
+
+  const detail = { name: "TASK-0001", subject: "Draft protocol", status: "Open" };
+  const state = kanbanStateReducer(selected, {
+    type: "hydrate-detail",
+    detail,
+  });
+
+  assertEquals(state.detail.detailLoading, false);
+  assertEquals(state.detail.cardDetail?.name, "TASK-0001");
+  assertEquals(state.detail.detailError, null);
+});
+
+Deno.test("kanban state - close-detail resets detail state", () => {
+  const selected = kanbanStateReducer(createKanbanInitialState(), {
+    type: "select-card",
+    cardId: "TASK-0001",
+  });
+
+  const state = kanbanStateReducer(selected, { type: "close-detail" });
+
+  assertEquals(state.detail.selectedCardId, null);
+  assertEquals(state.detail.cardDetail, null);
+  assertEquals(state.detail.detailLoading, false);
+});
+
+Deno.test("kanban state - detail-error sets error on detail", () => {
+  const selected = kanbanStateReducer(createKanbanInitialState(), {
+    type: "select-card",
+    cardId: "TASK-0001",
+  });
+
+  const state = kanbanStateReducer(selected, {
+    type: "detail-error",
+    message: "Network error",
+  });
+
+  assertEquals(state.detail.detailLoading, false);
+  assertEquals(state.detail.detailError, "Network error");
+  assertEquals(state.detail.selectedCardId, "TASK-0001");
+});

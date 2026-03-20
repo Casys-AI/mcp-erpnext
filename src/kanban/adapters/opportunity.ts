@@ -7,6 +7,7 @@ import type {
   KanbanMoveResult,
   KanbanTransition,
 } from "../types.ts";
+import { formatShortDate, isDateOverdue } from "../field-utils.ts";
 
 const OPPORTUNITY_COLUMNS: Array<{ id: string; label: string; color: string; status: string }> = [
   { id: "open", label: "Open", color: "#60a5fa", status: "Open" },
@@ -30,6 +31,7 @@ const OPPORTUNITY_LIST_FIELDS = [
   "currency",
   "probability",
   "opportunity_owner",
+  "expected_closing",
 ];
 
 const OPPORTUNITY_ALLOWED_TRANSITIONS: KanbanTransition[] = [
@@ -73,11 +75,33 @@ function buildOpportunityCard(row: Record<string, unknown>): KanbanCard {
   const amountValue = formatOpportunityAmount(row.opportunity_amount, row.currency);
   const probability = Number(row.probability);
   const probabilityValue = Number.isFinite(probability) ? `${probability}%` : null;
-  const title = typeof row.title === "string" && row.title.length > 0
-    ? row.title
-    : typeof row.party_name === "string" && row.party_name.length > 0
-    ? row.party_name
-    : String(row.name ?? "Untitled opportunity");
+  let title: string;
+  if (typeof row.title === "string" && row.title.length > 0) {
+    title = row.title;
+  } else if (typeof row.party_name === "string" && row.party_name.length > 0) {
+    title = row.party_name;
+  } else {
+    title = String(row.name ?? "Untitled opportunity");
+  }
+
+  const badges: KanbanCard["badges"] = [];
+  if (typeof row.opportunity_from === "string" && row.opportunity_from.length > 0) {
+    badges.push({ label: row.opportunity_from, tone: "neutral" });
+  }
+  const closingDate = row.expected_closing;
+  if (isDateOverdue(closingDate) && columnId !== "converted" && columnId !== "closed" && columnId !== "lost") {
+    badges.push({ label: "Overdue", tone: "error" });
+  }
+
+  const metrics: KanbanCard["metrics"] = [];
+  if (amountValue) metrics.push({ label: "Amount", value: amountValue });
+  if (probabilityValue) metrics.push({ label: "Probability", value: probabilityValue });
+  const closingDisplay = formatShortDate(closingDate);
+  if (closingDisplay) metrics.push({ label: "Closing", value: closingDisplay });
+
+  const assignee = typeof row.opportunity_owner === "string" && row.opportunity_owner.length > 0
+    ? row.opportunity_owner
+    : undefined;
 
   return {
     id: String(row.name ?? ""),
@@ -85,13 +109,10 @@ function buildOpportunityCard(row: Record<string, unknown>): KanbanCard {
     subtitle: typeof row.party_name === "string" ? row.party_name : undefined,
     columnId,
     accent: OPPORTUNITY_COLUMNS.find((column) => column.id === columnId)?.color,
-    badges: typeof row.opportunity_from === "string" && row.opportunity_from.length > 0
-      ? [{ label: row.opportunity_from, tone: "neutral" }]
-      : [],
-    metrics: [
-      ...(amountValue ? [{ label: "Amount", value: amountValue }] : []),
-      ...(probabilityValue ? [{ label: "Probability", value: probabilityValue }] : []),
-    ],
+    badges,
+    metrics,
+    dueDate: typeof closingDate === "string" ? closingDate : undefined,
+    assignee,
   };
 }
 

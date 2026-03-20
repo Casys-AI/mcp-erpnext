@@ -7,6 +7,13 @@ import type {
   KanbanMoveResult,
   KanbanTransition,
 } from "../types.ts";
+import {
+  formatShortDate,
+  isDateOverdue,
+  parseFirstAssignee,
+  priorityTone,
+  truncateDescription,
+} from "../field-utils.ts";
 
 const TASK_COLUMNS: Array<{ id: string; label: string; color: string; status: string }> = [
   { id: "open", label: "Open", color: "#60a5fa", status: "Open" },
@@ -26,6 +33,9 @@ const TASK_LIST_FIELDS = [
   "status",
   "priority",
   "progress",
+  "exp_end_date",
+  "description",
+  "_assign",
 ];
 
 const TASK_ALLOWED_TRANSITIONS: KanbanTransition[] = [
@@ -50,11 +60,26 @@ function buildTaskCard(row: Record<string, unknown>): KanbanCard {
   const status = String(row.status ?? "Open");
   const columnId = columnIdForTaskStatus(status);
   const priority = typeof row.priority === "string" ? row.priority : undefined;
-  const progress = typeof row.progress === "number"
-    ? row.progress
-    : Number.isFinite(Number(row.progress))
-    ? Number(row.progress)
-    : undefined;
+  let progress: number | undefined;
+  if (typeof row.progress === "number") {
+    progress = row.progress;
+  } else if (Number.isFinite(Number(row.progress))) {
+    progress = Number(row.progress);
+  }
+
+  const badges: KanbanCard["badges"] = [];
+  if (priority) badges.push({ label: priority, tone: priorityTone(priority) });
+  const dueDateStr = row.exp_end_date;
+  if (isDateOverdue(dueDateStr) && columnId !== "completed" && columnId !== "cancelled") {
+    badges.push({ label: "Overdue", tone: "error" });
+  }
+
+  const metrics: KanbanCard["metrics"] = [];
+  if (progress !== undefined) metrics.push({ label: "Progress", value: `${progress}%` });
+  const dueDateDisplay = formatShortDate(dueDateStr);
+  if (dueDateDisplay) metrics.push({ label: "Due", value: dueDateDisplay });
+
+  const assignee = parseFirstAssignee(row._assign);
 
   return {
     id: String(row.name ?? ""),
@@ -62,15 +87,12 @@ function buildTaskCard(row: Record<string, unknown>): KanbanCard {
     subtitle: typeof row.project === "string" ? row.project : undefined,
     columnId,
     accent: TASK_COLUMNS.find((column) => column.id === columnId)?.color,
-    badges: priority ? [{ label: priority, tone: priorityTone(priority) }] : [],
-    metrics: progress === undefined ? [] : [{ label: "Progress", value: `${progress}%` }],
+    badges,
+    metrics,
+    description: truncateDescription(row.description),
+    dueDate: typeof dueDateStr === "string" ? dueDateStr : undefined,
+    assignee,
   };
-}
-
-function priorityTone(priority: string): "neutral" | "warning" | "error" {
-  if (priority === "Urgent") return "error";
-  if (priority === "High") return "warning";
-  return "neutral";
 }
 
 function columnIdForTaskStatus(status: unknown): string {

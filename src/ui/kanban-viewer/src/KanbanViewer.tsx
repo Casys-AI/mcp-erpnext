@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useEffect, useRef, useState, useCallback, type CSSProperties, type DragEvent, type ReactNode, type HTMLAttributes } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles } from "~/shared/theme";
 import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
@@ -9,6 +9,7 @@ import {
 } from "~/shared/kanban/presentation";
 import { useKanbanBoard } from "~/shared/kanban/useKanbanBoard";
 import type { KanbanBoardData, KanbanCardData, KanbanColumnData } from "~/shared/kanban/types";
+import type { CardDetailState } from "~/shared/kanban/state";
 import {
   applyOptimisticMove,
   canDropCardInColumn,
@@ -48,6 +49,110 @@ function hiddenLiveRegionStyle(): CSSProperties {
 
 function extractTextContent(result: { content?: Array<{ type: string; text?: string }> }): string | null {
   return result.content?.find((item) => item.type === "text")?.text ?? null;
+}
+
+function getAvailableTargets(
+  board: KanbanBoardData,
+  columnId: string,
+): Array<{ columnId: string; label: string; color?: string }> {
+  return board.allowedTransitions
+    .filter((transition) =>
+      transition.allowed &&
+      transition.fromColumn === columnId &&
+      transition.toColumn !== columnId
+    )
+    .map((transition) => {
+      const targetCol = board.columns.find((column) => column.id === transition.toColumn);
+      return {
+        columnId: transition.toColumn,
+        label: transition.label ?? targetCol?.label ?? transition.toColumn,
+        color: targetCol?.color,
+      };
+    });
+}
+
+function DragScrollContainer({
+  children,
+  style,
+  ...rest
+}: { children: ReactNode; style?: CSSProperties } & HTMLAttributes<HTMLDivElement>) {
+  const ref = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ active: false, startX: 0, scrollLeft: 0 });
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateFades = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    updateFades();
+    const observer = new ResizeObserver(updateFades);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [updateFades]);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    const el = ref.current;
+    if (!el) return;
+    dragState.current = { active: true, startX: e.clientX, scrollLeft: el.scrollLeft };
+    el.style.cursor = "grabbing";
+    el.style.userSelect = "none";
+  }, []);
+
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragState.current.active) return;
+    const el = ref.current;
+    if (!el) return;
+    const delta = e.clientX - dragState.current.startX;
+    el.scrollLeft = dragState.current.scrollLeft - delta;
+    updateFades();
+  }, [updateFades]);
+
+  const onMouseUp = useCallback(() => {
+    dragState.current.active = false;
+    const el = ref.current;
+    if (el) {
+      el.style.cursor = "grab";
+      el.style.userSelect = "";
+    }
+  }, []);
+
+  function computeMaskImage(): string | undefined {
+    if (canScrollLeft && canScrollRight) {
+      return "linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent)";
+    }
+    if (canScrollRight) {
+      return "linear-gradient(to right, black calc(100% - 24px), transparent)";
+    }
+    if (canScrollLeft) {
+      return "linear-gradient(to right, transparent, black 24px)";
+    }
+    return undefined;
+  }
+
+  const maskImage = computeMaskImage();
+
+  return (
+    <div
+      ref={ref}
+      style={{ ...style, WebkitMaskImage: maskImage, maskImage }}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+      onScroll={updateFades}
+      className="drag-scroll"
+      {...rest}
+    >
+      {children}
+    </div>
+  );
 }
 
 function LoadingSkeleton() {
@@ -107,86 +212,311 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
+function badgeToneColors(tone?: string): { color: string; bg: string } {
+  switch (tone) {
+    case "error":
+      return { color: colors.error, bg: colors.errorDim };
+    case "warning":
+      return { color: colors.warning, bg: colors.warningDim };
+    case "success":
+      return { color: colors.success, bg: colors.successDim };
+    case "info":
+      return { color: colors.info, bg: colors.infoDim };
+    default:
+      return { color: colors.text.secondary, bg: colors.bg.elevated };
+  }
+}
+
+function AssigneeBadge({ email }: { email: string }) {
+  const initial = email.charAt(0).toUpperCase();
+  const atIndex = email.indexOf("@");
+  const displayName = atIndex > 0 ? email.slice(0, atIndex) : email;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <span
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: "50%",
+          background: colors.accent,
+          color: "#fff",
+          fontSize: 8,
+          fontWeight: 700,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        {initial}
+      </span>
+      <span style={{ fontSize: 10, color: colors.text.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {displayName}
+      </span>
+    </span>
+  );
+}
+
 function KanbanCard({
   card,
   allowedTargets,
   onMove,
   onDragStart,
   onDragEnd,
+  onTitleClick,
+  enableDrag = true,
 }: {
   card: KanbanCardData;
-  allowedTargets: Array<{ columnId: string; label: string }>;
+  allowedTargets: Array<{ columnId: string; label: string; color?: string }>;
   onMove: (card: KanbanCardData, toColumn: string, label: string) => void;
   onDragStart: (card: KanbanCardData, event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
+  onTitleClick?: (card: KanbanCardData) => void;
+  enableDrag?: boolean;
 }) {
+  const isDraggable = enableDrag && !card.pending;
+  const accentColor = card.accent ?? colors.accent;
+
   const cardStyle: CSSProperties = {
     background: colors.bg.surface,
     border: `1px solid ${card.pending ? colors.accent : colors.border}`,
     borderRadius: 8,
-    padding: "12px 12px 10px",
+    padding: 0,
     display: "flex",
     flexDirection: "column",
-    gap: 8,
     opacity: card.pending ? 0.72 : 1,
-    boxShadow: card.pending ? `0 0 0 1px ${colors.accentDim}` : undefined,
+    boxShadow: card.pending
+      ? `0 0 0 1px ${colors.accentDim}`
+      : `0 1px 3px rgba(0,0,0,0.06)`,
+    cursor: isDraggable ? "grab" : undefined,
+    overflow: "hidden",
+    position: "relative" as const,
+  };
+
+  const hasMetrics = (card.metrics?.length ?? 0) > 0;
+  const hasBadges = (card.badges?.length ?? 0) > 0;
+
+  const titleStyle: CSSProperties = {
+    fontSize: 13,
+    fontWeight: 600,
+    color: colors.text.primary,
+    lineHeight: 1.35,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical" as const,
   };
 
   return (
     <article
       style={cardStyle}
-      draggable={!card.pending}
-      onDragStart={(event) => onDragStart(card, event)}
-      onDragEnd={onDragEnd}
+      draggable={isDraggable}
+      onDragStart={isDraggable ? (event) => onDragStart(card, event) : undefined}
+      onDragEnd={isDraggable ? onDragEnd : undefined}
       className={card.pending ? "animate-pulse" : undefined}
       aria-busy={card.pending}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: colors.text.primary }}>{card.title}</div>
-        {card.subtitle && (
-          <div style={{ fontSize: 11, color: colors.text.muted }}>{card.subtitle}</div>
+      {/* Accent strip */}
+      <div
+        aria-hidden="true"
+        style={{
+          height: 4,
+          background: accentColor,
+          flexShrink: 0,
+          opacity: card.pending ? 0.5 : 0.85,
+        }}
+      />
+
+      {/* Card body */}
+      <div style={{ padding: "10px 12px 0", display: "flex", flexDirection: "column", gap: 6 }}>
+        {/* Header row: title + badges */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {onTitleClick ? (
+              <span
+                className="kanban-card-title-link"
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); onTitleClick(card); }}
+                onKeyDown={(e) => { if (e.key === "Enter") onTitleClick(card); }}
+                style={titleStyle}
+              >
+                {card.title}
+              </span>
+            ) : (
+              <div style={titleStyle}>
+                {card.title}
+              </div>
+            )}
+            {card.subtitle && (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: colors.text.muted,
+                  marginTop: 2,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {card.subtitle}
+              </div>
+            )}
+          </div>
+          {hasBadges && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, flexShrink: 0 }}>
+              {card.badges?.map((badge) => {
+                const tone = badgeToneColors(badge.tone);
+                return (
+                  <span
+                    key={`${card.id}-${badge.label}`}
+                    style={{
+                      ...styles.badge(tone.color, tone.bg),
+                      fontSize: 10,
+                      padding: "1px 7px",
+                      borderRadius: 3,
+                      fontWeight: 700,
+                      letterSpacing: "0.03em",
+                      textTransform: "uppercase" as const,
+                    }}
+                  >
+                    {badge.label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Description */}
+        {card.description && (
+          <div
+            style={{
+              fontSize: 11,
+              fontStyle: "italic",
+              color: colors.text.muted,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              lineHeight: 1.3,
+            }}
+          >
+            {card.description}
+          </div>
+        )}
+
+        {/* Assignee */}
+        {card.assignee && (
+          <div style={{ marginTop: -2 }}>
+            <AssigneeBadge email={card.assignee} />
+          </div>
+        )}
+
+        {/* Metrics row */}
+        {hasMetrics && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              padding: "4px 0 2px",
+              borderTop: `1px solid ${colors.borderSubtle}`,
+            }}
+          >
+            {card.metrics?.map((metric) => (
+              <div
+                key={`${card.id}-${metric.label}`}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    color: colors.text.faint,
+                    textTransform: "uppercase" as const,
+                    letterSpacing: "0.06em",
+                  }}
+                >
+                  {metric.label}
+                </span>
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: colors.text.primary,
+                    fontFamily: fonts.mono,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {metric.value}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
-      {(card.badges?.length ?? 0) > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {card.badges?.map((badge) => (
-            <span
-              key={`${card.id}-${badge.label}`}
-              style={styles.badge(colors.text.secondary, colors.bg.elevated)}
-            >
-              {badge.label}
-            </span>
-          ))}
-        </div>
-      )}
-      {(card.metrics?.length ?? 0) > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-          {card.metrics?.map((metric) => (
-            <div key={`${card.id}-${metric.label}`} style={{ fontSize: 11, color: colors.text.muted }}>
-              <span style={{ color: colors.text.faint }}>{metric.label}</span>{" "}
-              <span style={{ color: colors.text.primary, fontFamily: fonts.mono }}>{metric.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
+
+      {/* Action buttons */}
       {allowedTargets.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {allowedTargets.map((target) => (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 0,
+            borderTop: `1px solid ${colors.borderSubtle}`,
+            marginTop: hasMetrics ? 0 : 6,
+          }}
+        >
+          {allowedTargets.map((target, index) => (
             <button
               key={`${card.id}-${target.columnId}`}
               type="button"
               onClick={() => onMove(card, target.columnId, target.label)}
               disabled={card.pending}
               style={{
-                ...styles.button,
-                padding: "5px 10px",
+                flex: 1,
+                minWidth: 0,
+                padding: "7px 6px",
                 fontSize: 11,
-                color: colors.text.primary,
-                opacity: card.pending ? 0.6 : 1,
-                outlineOffset: 2,
+                fontWeight: 500,
+                fontFamily: fonts.sans,
+                color: colors.text.muted,
+                background: "transparent",
+                border: "none",
+                borderRight: index < allowedTargets.length - 1
+                  ? `1px solid ${colors.borderSubtle}`
+                  : "none",
+                cursor: card.pending ? "default" : "pointer",
+                opacity: card.pending ? 0.5 : 1,
+                transition: "color 0.12s, background 0.12s",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                outlineOffset: -2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 5,
               }}
               aria-label={`Move ${card.title} to ${target.label}`}
             >
+              {target.color && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: target.color,
+                    flexShrink: 0,
+                  }}
+                />
+              )}
               {target.label}
             </button>
           ))}
@@ -206,6 +536,7 @@ function KanbanColumn({
   onDragStart,
   onDragEnd,
   onDragOverColumn,
+  onTitleClick,
 }: {
   column: KanbanColumnData;
   cards: KanbanCardData[];
@@ -216,22 +547,8 @@ function KanbanColumn({
   onDragStart: (card: KanbanCardData, event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
   onDragOverColumn: (columnId: string, event: DragEvent<HTMLElement>) => void;
+  onTitleClick?: (card: KanbanCardData) => void;
 }) {
-  const availableTargets = (card: KanbanCardData) =>
-    board.allowedTransitions
-      .filter((transition) =>
-        transition.allowed &&
-        transition.fromColumn === card.columnId &&
-        transition.toColumn !== card.columnId
-      )
-      .map((transition) => ({
-        columnId: transition.toColumn,
-        label:
-          transition.label ??
-          board.columns.find((candidate) => candidate.id === transition.toColumn)?.label ??
-          transition.toColumn,
-      }));
-
   return (
     <section
       style={{
@@ -275,14 +592,36 @@ function KanbanColumn({
           <KanbanCard
             key={card.id}
             card={card}
-            allowedTargets={availableTargets(card)}
+            allowedTargets={getAvailableTargets(board, card.columnId)}
             onMove={onMove}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
+            onTitleClick={onTitleClick}
           />
         ))}
       </div>
     </section>
+  );
+}
+
+function ScrollArrow({ direction, onClick }: { direction: "left" | "right"; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Scroll ${direction}`}
+      style={{
+        ...styles.button,
+        padding: "6px 4px",
+        fontSize: 12,
+        lineHeight: 1,
+        borderRadius: 6,
+        flexShrink: 0,
+        minWidth: 22,
+      }}
+    >
+      {direction === "left" ? "\u2039" : "\u203a"}
+    </button>
   );
 }
 
@@ -295,67 +634,102 @@ function ColumnTabs({
   focusIndex: number;
   onSelect: (index: number) => void;
 }) {
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [showLeft, setShowLeft] = useState(false);
+  const [showRight, setShowRight] = useState(false);
+
+  const updateArrows = useCallback(() => {
+    const first = tabRefs.current[0];
+    const last = tabRefs.current[columns.length - 1];
+    const container = first?.parentElement;
+    if (!container || !first || !last) return;
+    setShowLeft(container.scrollLeft > 0);
+    setShowRight(container.scrollLeft < container.scrollWidth - container.clientWidth - 1);
+  }, [columns.length]);
+
+  useEffect(updateArrows, [updateArrows]);
+
+  useEffect(() => {
+    const btn = tabRefs.current[focusIndex];
+    if (!btn) return;
+    const container = btn.parentElement;
+    if (!container) return;
+    container.scrollTo({ left: btn.offsetLeft - 40, behavior: "smooth" });
+    requestAnimationFrame(updateArrows);
+  }, [focusIndex, updateArrows]);
+
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 4,
-        overflowX: "auto",
-        paddingBottom: 4,
-      }}
-      role="tablist"
-      aria-label="Kanban columns"
-    >
-      {columns.map((column, index) => {
-        const isActive = index === focusIndex;
-        return (
-          <button
-            key={column.id}
-            type="button"
-            role="tab"
-            aria-selected={isActive}
-            aria-controls={`kanban-panel-${column.id}`}
-            onClick={() => onSelect(index)}
-            style={{
-              ...styles.button,
-              padding: "7px 14px",
-              fontSize: 12,
-              fontWeight: isActive ? 700 : 500,
-              color: isActive ? colors.text.primary : colors.text.muted,
-              background: isActive ? colors.bg.surface : "transparent",
-              borderColor: isActive ? colors.accent : colors.border,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-            }}
-          >
-            <span
-              aria-hidden="true"
+    <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+      {showLeft && <ScrollArrow direction="left" onClick={() => onSelect(Math.max(0, focusIndex - 1))} />}
+      <DragScrollContainer
+        onScroll={updateArrows}
+        style={{
+          display: "flex",
+          gap: 4,
+          overflowX: "auto",
+          minWidth: 0,
+          flex: 1,
+          cursor: "grab",
+        }}
+        role="tablist"
+        aria-label="Kanban columns"
+      >
+        {columns.map((column, index) => {
+          const isActive = index === focusIndex;
+          return (
+            <button
+              key={column.id}
+              ref={(el) => { tabRefs.current[index] = el; }}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`kanban-panel-${column.id}`}
+              onClick={() => onSelect(index)}
               style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: column.color,
+                ...styles.button,
+                padding: "7px 14px 6px",
+                fontSize: 12,
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? colors.text.primary : colors.text.muted,
+                background: isActive ? colors.bg.surface : "transparent",
+                borderColor: isActive ? "transparent" : colors.border,
+                borderBottomWidth: 2,
+                borderBottomColor: isActive ? column.color : "transparent",
+                borderRadius: isActive ? "6px 6px 0 0" : "6px",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                whiteSpace: "nowrap",
                 flexShrink: 0,
               }}
-            />
-            {column.label}
-            <span
-              style={{
-                ...styles.badge(
-                  isActive ? colors.text.primary : colors.text.muted,
-                  isActive ? `${column.color}30` : `${colors.text.muted}15`
-                ),
-                fontSize: 10,
-              }}
             >
-              {column.count}
-            </span>
-          </button>
-        );
-      })}
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: column.color,
+                  flexShrink: 0,
+                }}
+              />
+              {column.label}
+              <span
+                style={{
+                  ...styles.badge(
+                    isActive ? colors.text.primary : colors.text.muted,
+                    isActive ? `${column.color}30` : `${colors.text.muted}15`
+                  ),
+                  fontSize: 10,
+                }}
+              >
+                {column.count}
+              </span>
+            </button>
+          );
+        })}
+      </DragScrollContainer>
+      {showRight && <ScrollArrow direction="right" onClick={() => onSelect(Math.min(columns.length - 1, focusIndex + 1))} />}
     </div>
   );
 }
@@ -369,6 +743,7 @@ function BoardView({
   onDragStart,
   onDragEnd,
   onDragOverColumn,
+  onTitleClick,
 }: {
   board: KanbanBoardData;
   inlineError: string | null;
@@ -378,6 +753,7 @@ function BoardView({
   onDragStart: (card: KanbanCardData, event: React.DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
   onDragOverColumn: (columnId: string, event: React.DragEvent<HTMLElement>) => void;
+  onTitleClick?: (card: KanbanCardData) => void;
 }) {
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1200
@@ -397,9 +773,9 @@ function BoardView({
   const focusedColumn = useFocusMode ? board.columns[safeFocusIndex] : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: colors.bg.root }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%", background: colors.bg.root, overflowX: "hidden", width: "100%" }}>
       <ErpNextBrandHeader />
-      <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: colors.text.primary }}>
             {board.title}
@@ -423,38 +799,22 @@ function BoardView({
                 id={`kanban-panel-${focusedColumn.id}`}
                 role="tabpanel"
                 aria-label={focusedColumn.label}
-                style={{ display: "flex", flexDirection: "column", gap: 8 }}
-                onDragOver={(event) => onDragOverColumn(focusedColumn.id, event)}
-                onDrop={(event) => onDropCard(focusedColumn.id, event)}
+                style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}
               >
                 {board.cards
                   .filter((card) => card.columnId === focusedColumn.id)
-                  .map((card) => {
-                    const availableTargets = board.allowedTransitions
-                      .filter(
-                        (t) =>
-                          t.allowed &&
-                          t.fromColumn === card.columnId &&
-                          t.toColumn !== card.columnId
-                      )
-                      .map((t) => ({
-                        columnId: t.toColumn,
-                        label:
-                          t.label ??
-                          board.columns.find((c) => c.id === t.toColumn)?.label ??
-                          t.toColumn,
-                      }));
-                    return (
-                      <KanbanCard
-                        key={card.id}
-                        card={card}
-                        allowedTargets={availableTargets}
-                        onMove={onMove}
-                        onDragStart={onDragStart}
-                        onDragEnd={onDragEnd}
-                      />
-                    );
-                  })}
+                  .map((card) => (
+                    <KanbanCard
+                      key={card.id}
+                      card={card}
+                      allowedTargets={getAvailableTargets(board, card.columnId)}
+                      onMove={onMove}
+                      onDragStart={onDragStart}
+                      onDragEnd={onDragEnd}
+                      onTitleClick={onTitleClick}
+                      enableDrag={false}
+                    />
+                  ))}
                 {board.cards.filter((card) => card.columnId === focusedColumn.id).length === 0 && (
                   <div
                     style={{
@@ -484,8 +844,372 @@ function BoardView({
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 onDragOverColumn={onDragOverColumn}
+                onTitleClick={onTitleClick}
               />
             ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const DETAIL_SKIP_FIELDS = new Set([
+  "doctype", "docstatus", "idx", "modified_by", "owner",
+  "creation", "modified", "_user_tags", "_comments", "_assign",
+  "_liked_by", "_seen", "__last_sync_on",
+]);
+
+const READONLY_FIELDS = new Set([
+  "name", "status", "workflow_state",
+]);
+
+function DetailFieldGrid({
+  detail,
+  editedFields,
+  onFieldChange,
+}: {
+  detail: Record<string, unknown>;
+  editedFields: Record<string, string>;
+  onFieldChange: (key: string, value: string) => void;
+}) {
+  const entries = Object.entries(detail).filter(
+    ([key, value]) =>
+      !DETAIL_SKIP_FIELDS.has(key) &&
+      value !== null &&
+      value !== undefined &&
+      value !== "" &&
+      typeof value !== "object",
+  );
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(100px, 1fr) 2fr",
+        gap: "1px",
+        fontSize: 12,
+      }}
+    >
+      {entries.map(([key, value]) => {
+        const isReadonly = READONLY_FIELDS.has(key);
+        const isEdited = key in editedFields;
+        const displayValue = isEdited ? editedFields[key] : String(value);
+
+        return (
+          <div key={key} style={{ display: "contents" }}>
+            <div
+              style={{
+                padding: "6px 10px",
+                fontWeight: 600,
+                color: isEdited ? colors.accent : colors.text.muted,
+                background: colors.bg.elevated,
+                borderBottom: `1px solid ${colors.borderSubtle}`,
+                wordBreak: "break-word",
+              }}
+            >
+              {key.replace(/_/g, " ")}
+            </div>
+            {isReadonly ? (
+              <div
+                style={{
+                  padding: "6px 10px",
+                  color: colors.text.primary,
+                  background: colors.bg.surface,
+                  borderBottom: `1px solid ${colors.borderSubtle}`,
+                  wordBreak: "break-word",
+                  fontFamily: typeof value === "number" ? fonts.mono : fonts.sans,
+                }}
+              >
+                {String(value)}
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={displayValue}
+                onChange={(e) => onFieldChange(key, e.target.value)}
+                style={{
+                  ...styles.input,
+                  padding: "5px 10px",
+                  fontSize: 12,
+                  borderRadius: 0,
+                  border: "none",
+                  borderBottom: `1px solid ${isEdited ? colors.accent : colors.borderSubtle}`,
+                  background: isEdited ? colors.accentDim : colors.bg.surface,
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CardDetailModal({
+  detail,
+  board,
+  onClose,
+  onMove,
+  onSave,
+  onSendMessage,
+}: {
+  detail: CardDetailState;
+  board: KanbanBoardData;
+  onClose: () => void;
+  onMove: (card: KanbanCardData, toColumn: string, label: string) => void;
+  onSave?: (doctype: string, name: string, data: Record<string, string>) => void;
+  onSendMessage?: (message: string) => void;
+}) {
+  const [editedFields, setEditedFields] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!detail.selectedCardId) return;
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [detail.selectedCardId, onClose]);
+
+  useEffect(() => {
+    setEditedFields({});
+    setSaveMessage(null);
+  }, [detail.selectedCardId]);
+
+  if (!detail.selectedCardId) return null;
+
+  const card = board.cards.find((c) => c.id === detail.selectedCardId);
+  const cardTitle = card?.title ?? detail.selectedCardId;
+  const availableTargets = card ? getAvailableTargets(board, card.columnId) : [];
+  const hasEdits = Object.keys(editedFields).length > 0;
+
+  function handleFieldChange(key: string, value: string) {
+    setEditedFields((prev) => {
+      const original = detail.cardDetail ? String(detail.cardDetail[key] ?? "") : "";
+      if (value === original) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: value };
+    });
+    setSaveMessage(null);
+  }
+
+  async function handleSave() {
+    if (!hasEdits || !onSave || !detail.selectedCardId) return;
+    setSaving(true);
+    setSaveMessage(null);
+    try {
+      await onSave(board.doctype, detail.selectedCardId, editedFields);
+      setSaveMessage({ text: "Saved", isError: false });
+      setEditedFields({});
+    } catch (error) {
+      setSaveMessage({
+        text: error instanceof Error ? error.message : "Save failed",
+        isError: true,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="kanban-detail-backdrop"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Detail: ${cardTitle}`}
+    >
+      <div className="kanban-detail-panel">
+        {/* Header */}
+        <div
+          style={{
+            padding: "14px 16px 12px",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+            borderBottom: `1px solid ${colors.border}`,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: colors.text.primary }}>
+              {cardTitle}
+            </div>
+            <div style={{ fontSize: 11, color: colors.text.muted, marginTop: 2, fontFamily: fonts.mono }}>
+              {detail.selectedCardId}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              ...styles.button,
+              padding: "4px 10px",
+              fontSize: 13,
+              lineHeight: 1,
+              borderRadius: 4,
+            }}
+            aria-label="Close detail"
+          >
+            x
+          </button>
+        </div>
+
+        {/* Content */}
+        <div>
+          {detail.detailLoading && (
+            <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="skeleton" style={{ height: 28, width: "100%" }} />
+              ))}
+            </div>
+          )}
+
+          {detail.detailError && (
+            <div style={{ padding: 16, color: colors.error, fontSize: 12 }}>
+              {detail.detailError}
+            </div>
+          )}
+
+          {detail.cardDetail && (
+            <DetailFieldGrid
+              detail={detail.cardDetail}
+              editedFields={editedFields}
+              onFieldChange={handleFieldChange}
+            />
+          )}
+        </div>
+
+        {/* Save bar */}
+        {onSave && detail.cardDetail && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "10px 16px",
+              borderTop: `1px solid ${colors.border}`,
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!hasEdits || saving}
+              style={{
+                ...styles.button,
+                padding: "5px 16px",
+                fontSize: 11,
+                fontWeight: 600,
+                background: hasEdits ? colors.accent : colors.bg.elevated,
+                color: hasEdits ? "#fff" : colors.text.muted,
+                borderColor: hasEdits ? colors.accent : colors.border,
+                opacity: saving ? 0.6 : 1,
+              }}
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+            {hasEdits && (
+              <button
+                type="button"
+                onClick={() => { setEditedFields({}); setSaveMessage(null); }}
+                style={{ ...styles.button, padding: "5px 12px", fontSize: 11 }}
+              >
+                Reset
+              </button>
+            )}
+            {saveMessage && (
+              <span style={{ fontSize: 11, color: saveMessage.isError ? colors.error : colors.success }}>
+                {saveMessage.text}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Move actions */}
+        {card && availableTargets.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              padding: "12px 16px",
+              borderTop: `1px solid ${colors.border}`,
+            }}
+          >
+            {availableTargets.map((target) => (
+              <button
+                key={target.columnId}
+                type="button"
+                onClick={() => { onMove(card, target.columnId, target.label); onClose(); }}
+                style={{
+                  ...styles.button,
+                  padding: "5px 12px",
+                  fontSize: 11,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                {target.color && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: target.color,
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                {target.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Cross-viewer navigation */}
+        {onSendMessage && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              padding: "8px 16px 14px",
+              borderTop: `1px solid ${colors.borderSubtle}`,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => onSendMessage(`Show doclist for ${board.doctype} ${detail.selectedCardId}`)}
+              style={{
+                ...styles.button,
+                padding: "5px 12px",
+                fontSize: 11,
+                color: colors.accent,
+              }}
+            >
+              View in Doclist
+            </button>
+            {board.doctype === "Task" && (
+              <button
+                type="button"
+                onClick={() => onSendMessage(`Show timesheets for task ${detail.selectedCardId}`)}
+                style={{
+                  ...styles.button,
+                  padding: "5px 12px",
+                  fontSize: 11,
+                  color: colors.accent,
+                }}
+              >
+                View timesheets
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -503,7 +1227,7 @@ type ToolResultPayload = {
 };
 
 export function KanbanViewer() {
-  const { state, hydrateBoard, setError, startLoading } = useKanbanBoard();
+  const { state, hydrateBoard, setError, startLoading, selectCard, hydrateDetail, closeDetail, setDetailError } = useKanbanBoard();
   const [liveMessage, setLiveMessage] = useState("");
   const [activeDropColumn, setActiveDropColumn] = useState<string | null>(null);
   const queueRef = useRef<QueuedKanbanMove[]>([]);
@@ -516,6 +1240,7 @@ export function KanbanViewer() {
   const refreshInFlightRef = useRef(false);
   const refreshAfterMutationRef = useRef(false);
   const lastRefreshStartedAtRef = useRef(0);
+  const detailFetchCardIdRef = useRef<string | null>(null);
 
   function updateBoard(board: KanbanBoardData) {
     boardRef.current = board;
@@ -840,9 +1565,85 @@ export function KanbanViewer() {
     }
   }
 
+  const canFetchDetail = !!app.getHostCapabilities()?.serverTools;
+
+  function handleCardTitleClick(card: KanbanCardData) {
+    if (!boardRef.current) return;
+    const cardId = card.id;
+    detailFetchCardIdRef.current = cardId;
+    selectCard(cardId);
+
+    if (!canFetchDetail) {
+      // No serverTools — show card data as-is (no full doc fetch)
+      hydrateDetail({ name: card.id, title: card.title, subtitle: card.subtitle ?? "", columnId: card.columnId });
+      return;
+    }
+
+    void (async () => {
+      try {
+        const result = await app.callServerTool({
+          name: "erpnext_doc_get",
+          arguments: { doctype: boardRef.current!.doctype, name: cardId },
+        }, { timeout: TOOL_CALL_TIMEOUT_MS });
+
+        if (detailFetchCardIdRef.current !== cardId) return;
+
+        if (result.isError) {
+          setDetailError(extractToolError(result));
+          return;
+        }
+
+        const text = extractTextContent(result);
+        if (!text) {
+          setDetailError("No detail payload returned");
+          return;
+        }
+
+        hydrateDetail(JSON.parse(text) as Record<string, unknown>);
+      } catch (error) {
+        if (detailFetchCardIdRef.current !== cardId) return;
+        setDetailError(error instanceof Error ? error.message : "Failed to fetch detail");
+      }
+    })();
+  }
+
+  function handleSendMessage(message: string) {
+    try {
+      app.sendMessage({ content: [{ type: "text", text: message }] });
+    } catch {
+      // Host may not support cross-viewer messaging — silently ignore
+    }
+  }
+
+  async function handleSaveDetail(doctype: string, name: string, data: Record<string, string>) {
+    if (!canFetchDetail) throw new Error("Host does not support server tool calls");
+    const result = await app.callServerTool({
+      name: "erpnext_doc_update",
+      arguments: { doctype, name, data },
+    }, { timeout: TOOL_CALL_TIMEOUT_MS });
+
+    if (result.isError) {
+      throw new Error(extractToolError(result));
+    }
+
+    // Re-fetch the detail to get the updated values
+    const refreshResult = await app.callServerTool({
+      name: "erpnext_doc_get",
+      arguments: { doctype, name },
+    }, { timeout: TOOL_CALL_TIMEOUT_MS });
+
+    if (!refreshResult.isError) {
+      const text = extractTextContent(refreshResult);
+      if (text) hydrateDetail(JSON.parse(text) as Record<string, unknown>);
+    }
+
+    // Refresh the board to reflect changes on cards
+    void requestBoardRefresh({ ignoreInterval: true });
+  }
+
   if (state.loading) {
     return (
-      <div style={{ minHeight: "100vh", background: colors.bg.root }}>
+      <div style={{ minHeight: "100%", background: colors.bg.root }}>
         <ErpNextBrandHeader />
         <LoadingSkeleton />
       </div>
@@ -853,7 +1654,7 @@ export function KanbanViewer() {
 
   if (errorPresentation.blockingError) {
     return (
-      <div style={{ minHeight: "100vh", background: colors.bg.root }}>
+      <div style={{ minHeight: "100%", background: colors.bg.root }}>
         <ErpNextBrandHeader />
         <ErrorState message={errorPresentation.blockingError} />
       </div>
@@ -862,7 +1663,7 @@ export function KanbanViewer() {
 
   if (!state.board) {
     return (
-      <div style={{ minHeight: "100vh", background: colors.bg.root }}>
+      <div style={{ minHeight: "100%", background: colors.bg.root }}>
         <ErpNextBrandHeader />
         <EmptyState />
       </div>
@@ -883,7 +1684,18 @@ export function KanbanViewer() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onDragOverColumn={handleDragOverColumn}
+        onTitleClick={handleCardTitleClick}
       />
+      {state.detail.selectedCardId && state.board && (
+        <CardDetailModal
+          detail={state.detail}
+          board={state.board}
+          onClose={closeDetail}
+          onMove={requestMove}
+          onSave={canFetchDetail ? handleSaveDetail : undefined}
+          onSendMessage={handleSendMessage}
+        />
+      )}
     </>
   );
 }

@@ -23,5 +23,17 @@ export function useKanbanBoard() {
     setError(message: string) {
       dispatch({ type: "tool-error", message });
     },
+    selectCard(cardId: string) {
+      dispatch({ type: "select-card", cardId });
+    },
+    hydrateDetail(detail: Record<string, unknown>) {
+      dispatch({ type: "hydrate-detail", detail });
+    },
+    closeDetail() {
+      dispatch({ type: "close-detail" });
+    },
+    setDetailError(message: string) {
+      dispatch({ type: "detail-error", message });
+    },
   };
 }

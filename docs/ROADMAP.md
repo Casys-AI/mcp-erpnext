@@ -88,7 +88,7 @@ The MCP App exists because the user is already inside a host conversation. Keepi
 
 | Interaction | Viewer | Tool Called | Description |
 |-------------|--------|------------|-------------|
-| **Task kanban drag-and-drop** | kanban-viewer | `erpnext_kanban_move_card` | Delivered in V1 with optimistic UI, FIFO mutation queue, AX affordances, and rollback on business errors. |
+| **Task kanban drag-and-drop** | kanban-viewer | `erpnext_kanban_move_card` | Delivered in V1 with optimistic UI, FIFO mutation queue, AX affordances, and rollback on business errors. Drag disabled in column focus mode (narrow viewports); button-based moves with column-colored destination dots instead. |
 | **Opportunity kanban** | kanban-viewer | `erpnext_kanban_get_board` + `erpnext_kanban_move_card` | Delivered. Opportunity boards run on the same canonical kanban viewer and adapter model. |
 | **Issue kanban** | kanban-viewer | `erpnext_kanban_get_board` + `erpnext_kanban_move_card` | Delivered. Issue boards run on the same canonical kanban viewer and adapter model. |
 | **KPI drill-down** | kpi-viewer | `erpnext_sales_invoice_list` (via `sendMessage`) | Click "Outstanding Receivables" KPI card -> injects a message that triggers doclist-viewer filtered on `outstanding_amount > 0`. |
@@ -109,6 +109,8 @@ The MCP App exists because the user is already inside a host conversation. Keepi
 - **Confirmation dialogs**: Destructive actions (Submit, Cancel) must show a confirmation step before calling the tool.
 - **Error surfaces**: `callServerTool` errors (permissions, validation) must be shown inline, not silently swallowed.
 - **Host capability check**: Before enabling interactive features, check `app.getHostCapabilities()?.serverTools` — not all hosts support proxied tool calls.
+- **Column focus mode**: On narrow viewports (≤920px), the board switches to single-column tab navigation. Drag-and-drop is disabled in this mode; cards use button-based moves exclusively with colored destination dots matching target column colors.
+- **Card design**: Accent strip (column color) at top, tone-aware badges (error=red, warning=amber, success=green), vertical metric layout with micro-caps labels, integrated action footer with column-colored destination indicators.
 
 ### TIER 2 — New Viewers & Infrastructure (P1)
 
@@ -142,7 +144,9 @@ The MCP App exists because the user is already inside a host conversation. Keepi
 - Register viewer name in `lib/erpnext/server.ts` UI_VIEWERS array
 - Interactive tool calls use `app.callServerTool()` from `@modelcontextprotocol/ext-apps`
 - Cross-viewer navigation uses `app.sendMessage()` to inject follow-up queries
-- `kanban-viewer` is the canonical read-write viewer
+- `kanban-viewer` is the canonical read-write viewer with accent-colored cards, tone-aware badges, and column-colored move buttons
+- Card `accent` field maps to column color for the top accent strip; badge `tone` maps to semantic colors (error/warning/success/info/neutral)
+- Move action buttons display a colored dot matching the destination column's color for visual orientation
 
 ## Sources
 - [MCP Apps SDK](https://github.com/modelcontextprotocol/ext-apps) — `@modelcontextprotocol/ext-apps`

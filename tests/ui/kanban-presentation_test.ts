@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert";
 import type { KanbanViewerState } from "../../src/ui/shared/kanban/state.ts";
+import { createKanbanInitialState } from "../../src/ui/shared/kanban/state.ts";
 import type { KanbanBoardData } from "../../src/ui/shared/kanban/types.ts";
 import {
   formatBoardSummary,
@@ -33,6 +34,7 @@ function makeBoard(): KanbanBoardData {
 
 Deno.test("kanban presentation - keeps board visible and surfaces inline errors", () => {
   const state: KanbanViewerState = {
+    ...createKanbanInitialState(),
     board: makeBoard(),
     loading: false,
     error: "Move failed",
@@ -46,6 +48,7 @@ Deno.test("kanban presentation - keeps board visible and surfaces inline errors"
 
 Deno.test("kanban presentation - keeps blocking errors for empty boards", () => {
   const state: KanbanViewerState = {
+    ...createKanbanInitialState(),
     board: null,
     loading: false,
     error: "No kanban payload received from tool result",

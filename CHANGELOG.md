@@ -2,6 +2,22 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [0.2.0] - 2026-03-20
+
+### Added
+
+- **Kanban card redesign** — accent-colored top strip (column color), tone-aware badges (error/warning/success/info/neutral with semantic colors), vertical metric layout with micro-caps labels, and integrated action footer with column-colored destination dots.
+- **Column-colored move buttons** — each move action button shows a 6px colored dot matching the destination column's color for instant visual orientation.
+
+### Changed
+
+- **Column focus mode improvements** — drag-and-drop is now disabled in focus mode (narrow viewports ≤920px) since only one column is visible. Cards use button-based moves exclusively. Removed unused `onDragOver`/`onDrop` handlers from the focus panel.
+- **Cursor affordance** — draggable cards in multi-column mode now show `cursor: grab` (and `grabbing` on drag).
+
+### Fixed
+
+- **Horizontal scroll eliminated** — added `overflow-x: hidden` on `html, body` and the `BoardView` root container, plus `minWidth: 0` on flex children (tabs, panel) to prevent content overflow in column focus mode.
+
 ## [0.1.9] - 2026-03-10
 
 ### Added

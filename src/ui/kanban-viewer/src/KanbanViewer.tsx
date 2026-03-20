@@ -893,23 +893,30 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const BOOLEAN_FIELDS = new Set(["is_milestone", "is_group", "is_template"]);
+const DATE_FIELDS = new Set([
+  "exp_start_date", "exp_end_date", "expected_closing", "transaction_date",
+  "opening_date", "resolution_date", "resolution_by", "first_responded_on",
+]);
+const SELECT_OPTIONS: Record<string, string[]> = {
+  priority: ["Low", "Medium", "High", "Urgent"],
+  opportunity_from: ["Lead", "Customer"],
+};
 
 function fieldLabel(key: string): string {
   return FIELD_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function formatFieldValue(key: string, value: unknown): string {
-  if (BOOLEAN_FIELDS.has(key)) return value === 1 ? "Yes" : "No";
-  if (typeof value === "number" && value === 0) {
-    if (key.includes("amount") || key.includes("cost") || key.includes("billing")) return "0.00";
-    if (key.includes("time") || key === "duration") return "0h";
-    if (key === "progress") return "0%";
-  }
-  return String(value);
-}
-
 function isDescriptionField(key: string): boolean {
   return key === "description" || key === "resolution_details" || key === "notes";
+}
+
+function getFieldType(key: string, value: unknown): "boolean" | "date" | "select" | "number" | "textarea" | "text" {
+  if (BOOLEAN_FIELDS.has(key)) return "boolean";
+  if (DATE_FIELDS.has(key)) return "date";
+  if (key in SELECT_OPTIONS) return "select";
+  if (isDescriptionField(key)) return "textarea";
+  if (typeof value === "number") return "number";
+  return "text";
 }
 
 function DetailFieldGrid({
@@ -930,13 +937,114 @@ function DetailFieldGrid({
       typeof value !== "object",
   );
 
+  const inputBase: CSSProperties = {
+    ...styles.input,
+    flex: 1,
+    padding: "6px 10px",
+    fontSize: 13,
+  };
+
+  function inputStyle(edited: boolean): CSSProperties {
+    return {
+      ...inputBase,
+      borderColor: edited ? colors.accent : "transparent",
+      background: edited ? colors.accentDim : "transparent",
+    };
+  }
+
+  function renderField(key: string, value: unknown, edited: boolean, displayValue: string) {
+    const type = getFieldType(key, value);
+
+    switch (type) {
+      case "boolean":
+        return (
+          <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={edited ? displayValue === "1" : value === 1}
+              onChange={(e) => onFieldChange(key, e.target.checked ? "1" : "0")}
+              style={{ width: 16, height: 16, accentColor: "var(--accent)", cursor: "pointer" }}
+            />
+            <span style={{ fontSize: 12, color: colors.text.secondary }}>
+              {(edited ? displayValue === "1" : value === 1) ? "Yes" : "No"}
+            </span>
+          </label>
+        );
+
+      case "select":
+        return (
+          <select
+            value={displayValue}
+            onChange={(e) => onFieldChange(key, e.target.value)}
+            style={{
+              ...inputBase,
+              borderColor: edited ? colors.accent : colors.border,
+              background: edited ? colors.accentDim : colors.bg.elevated,
+              cursor: "pointer",
+            }}
+          >
+            {SELECT_OPTIONS[key]?.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        );
+
+      case "date":
+        return (
+          <input
+            type="date"
+            value={displayValue}
+            onChange={(e) => onFieldChange(key, e.target.value)}
+            style={inputStyle(edited)}
+          />
+        );
+
+      case "number":
+        return (
+          <input
+            type="number"
+            value={displayValue}
+            onChange={(e) => onFieldChange(key, e.target.value)}
+            style={{ ...inputStyle(edited), fontFamily: fonts.mono }}
+          />
+        );
+
+      case "textarea":
+        return (
+          <textarea
+            value={displayValue}
+            onChange={(e) => onFieldChange(key, e.target.value)}
+            rows={3}
+            style={{
+              ...inputBase,
+              resize: "vertical" as const,
+              borderColor: edited ? colors.accent : colors.border,
+              background: edited ? colors.accentDim : colors.bg.elevated,
+              lineHeight: 1.5,
+            }}
+          />
+        );
+
+      default:
+        return (
+          <input
+            type="text"
+            value={displayValue}
+            onChange={(e) => onFieldChange(key, e.target.value)}
+            style={inputStyle(edited)}
+          />
+        );
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       {entries.map(([key, value]) => {
         const isReadonly = READONLY_FIELDS.has(key);
         const isEdited = key in editedFields;
-        const isLong = isDescriptionField(key);
-        const displayValue = isEdited ? editedFields[key] : formatFieldValue(key, value);
+        const type = getFieldType(key, value);
+        const isLong = type === "textarea";
+        const displayValue = isEdited ? editedFields[key] : String(value);
 
         return (
           <div
@@ -952,7 +1060,7 @@ function DetailFieldGrid({
               borderBottom: `1px solid ${colors.borderSubtle}`,
             }}
           >
-            <label
+            <span
               style={{
                 width: isLong ? "auto" : 140,
                 flexShrink: 0,
@@ -963,7 +1071,7 @@ function DetailFieldGrid({
               }}
             >
               {fieldLabel(key)}
-            </label>
+            </span>
             {isReadonly ? (
               <span
                 style={{
@@ -975,37 +1083,10 @@ function DetailFieldGrid({
                   padding: "8px 0",
                 }}
               >
-                {formatFieldValue(key, value)}
+                {String(value)}
               </span>
-            ) : isLong ? (
-              <textarea
-                value={displayValue}
-                onChange={(e) => onFieldChange(key, e.target.value)}
-                rows={3}
-                style={{
-                  ...styles.input,
-                  fontSize: 13,
-                  padding: "8px 10px",
-                  resize: "vertical" as const,
-                  borderColor: isEdited ? colors.accent : colors.border,
-                  background: isEdited ? colors.accentDim : colors.bg.elevated,
-                  lineHeight: 1.5,
-                }}
-              />
             ) : (
-              <input
-                type="text"
-                value={displayValue}
-                onChange={(e) => onFieldChange(key, e.target.value)}
-                style={{
-                  ...styles.input,
-                  flex: 1,
-                  padding: "6px 10px",
-                  fontSize: 13,
-                  borderColor: isEdited ? colors.accent : "transparent",
-                  background: isEdited ? colors.accentDim : "transparent",
-                }}
-              />
+              renderField(key, value, isEdited, displayValue)
             )}
           </div>
         );

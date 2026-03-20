@@ -866,11 +866,54 @@ const DETAIL_SKIP_FIELDS = new Set([
   "doctype", "docstatus", "idx", "modified_by", "owner",
   "creation", "modified", "_user_tags", "_comments", "_assign",
   "_liked_by", "_seen", "__last_sync_on",
+  "lft", "rgt", "old_parent", "is_group", "is_template",
+  "depends_on_tasks", "depends_on",
 ]);
 
 const READONLY_FIELDS = new Set([
   "name", "status", "workflow_state",
 ]);
+
+const FIELD_LABELS: Record<string, string> = {
+  name: "ID",
+  subject: "Subject",
+  status: "Status",
+  priority: "Priority",
+  project: "Project",
+  progress: "Progress (%)",
+  description: "Description",
+  exp_start_date: "Start date",
+  exp_end_date: "Due date",
+  expected_time: "Estimated (h)",
+  actual_time: "Actual time (h)",
+  is_milestone: "Milestone",
+  task_weight: "Weight",
+  total_costing_amount: "Cost",
+  total_billing_amount: "Billing",
+  start: "Start",
+  duration: "Duration",
+  title: "Title",
+  opportunity_from: "Source type",
+  party_name: "Party",
+  opportunity_amount: "Amount",
+  currency: "Currency",
+  probability: "Probability (%)",
+  opportunity_owner: "Owner",
+  expected_closing: "Expected closing",
+  transaction_date: "Created",
+  contact_person: "Contact",
+  source: "Source",
+  customer: "Customer",
+  raised_by: "Raised by",
+  resolution_by: "SLA deadline",
+  opening_date: "Opened",
+  resolution_date: "Resolved",
+  first_responded_on: "First response",
+};
+
+function fieldLabel(key: string): string {
+  return FIELD_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function DetailFieldGrid({
   detail,
@@ -891,46 +934,46 @@ function DetailFieldGrid({
   );
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(100px, 1fr) 2fr",
-        gap: "1px",
-        fontSize: 12,
-      }}
-    >
+    <div style={{ display: "flex", flexDirection: "column", gap: 0, fontSize: 12 }}>
       {entries.map(([key, value]) => {
         const isReadonly = READONLY_FIELDS.has(key);
         const isEdited = key in editedFields;
         const displayValue = isEdited ? editedFields[key] : String(value);
 
         return (
-          <div key={key} style={{ display: "contents" }}>
-            <div
+          <div
+            key={key}
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: 8,
+              padding: "8px 16px",
+              borderBottom: `1px solid ${colors.borderSubtle}`,
+            }}
+          >
+            <label
               style={{
-                padding: "6px 10px",
+                width: 120,
+                flexShrink: 0,
                 fontWeight: 600,
+                fontSize: 11,
                 color: isEdited ? colors.accent : colors.text.muted,
-                background: colors.bg.elevated,
-                borderBottom: `1px solid ${colors.borderSubtle}`,
-                wordBreak: "break-word",
+                textTransform: "uppercase" as const,
+                letterSpacing: "0.03em",
               }}
             >
-              {key.replace(/_/g, " ")}
-            </div>
+              {fieldLabel(key)}
+            </label>
             {isReadonly ? (
-              <div
+              <span
                 style={{
-                  padding: "6px 10px",
+                  flex: 1,
                   color: colors.text.primary,
-                  background: colors.bg.surface,
-                  borderBottom: `1px solid ${colors.borderSubtle}`,
-                  wordBreak: "break-word",
                   fontFamily: typeof value === "number" ? fonts.mono : fonts.sans,
                 }}
               >
                 {String(value)}
-              </div>
+              </span>
             ) : (
               <input
                 type="text"
@@ -938,12 +981,11 @@ function DetailFieldGrid({
                 onChange={(e) => onFieldChange(key, e.target.value)}
                 style={{
                   ...styles.input,
-                  padding: "5px 10px",
+                  flex: 1,
+                  padding: "4px 8px",
                   fontSize: 12,
-                  borderRadius: 0,
-                  border: "none",
-                  borderBottom: `1px solid ${isEdited ? colors.accent : colors.borderSubtle}`,
-                  background: isEdited ? colors.accentDim : colors.bg.surface,
+                  borderColor: isEdited ? colors.accent : colors.border,
+                  background: isEdited ? colors.accentDim : colors.bg.elevated,
                 }}
               />
             )}
@@ -1616,9 +1658,22 @@ export function KanbanViewer() {
   }
 
   async function handleSaveDetail(doctype: string, name: string, data: Record<string, string>) {
+    // Coerce types: if original value was a number, convert back
+    const coerced: Record<string, unknown> = {};
+    const originalDetail = state.detail.cardDetail;
+    for (const [key, val] of Object.entries(data)) {
+      const orig = originalDetail?.[key];
+      if (typeof orig === "number") {
+        const num = Number(val);
+        coerced[key] = Number.isFinite(num) ? num : val;
+      } else {
+        coerced[key] = val;
+      }
+    }
+
     const result = await app.callServerTool({
       name: "erpnext_doc_update",
-      arguments: { doctype, name, data },
+      arguments: { doctype, name, data: coerced },
     }, { timeout: TOOL_CALL_TIMEOUT_MS });
 
     if (result.isError) {

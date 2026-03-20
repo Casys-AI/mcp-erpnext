@@ -1573,19 +1573,11 @@ export function KanbanViewer() {
     }
   }
 
-  const canFetchDetail = !!app.getHostCapabilities()?.serverTools;
-
   function handleCardTitleClick(card: KanbanCardData) {
     if (!boardRef.current) return;
     const cardId = card.id;
     detailFetchCardIdRef.current = cardId;
     selectCard(cardId);
-
-    if (!canFetchDetail) {
-      // No serverTools — show card data as-is (no full doc fetch)
-      hydrateDetail({ name: card.id, title: card.title, subtitle: card.subtitle ?? "", columnId: card.columnId });
-      return;
-    }
 
     void (async () => {
       try {
@@ -1624,7 +1616,6 @@ export function KanbanViewer() {
   }
 
   async function handleSaveDetail(doctype: string, name: string, data: Record<string, string>) {
-    if (!canFetchDetail) throw new Error("Host does not support server tool calls");
     const result = await app.callServerTool({
       name: "erpnext_doc_update",
       arguments: { doctype, name, data },
@@ -1702,8 +1693,8 @@ export function KanbanViewer() {
           board={state.board}
           onClose={closeDetail}
           onMove={requestMove}
-          onSave={canFetchDetail ? handleSaveDetail : undefined}
-          onAction={canFetchDetail ? handleAction : undefined}
+          onSave={handleSaveDetail}
+          onAction={handleAction}
         />
       )}
     </>

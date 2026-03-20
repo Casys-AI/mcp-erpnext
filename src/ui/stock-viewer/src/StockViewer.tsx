@@ -263,7 +263,7 @@ export function StockViewer() {
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }} aria-busy={refreshing}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }} aria-busy={refreshing}>
       <ErpNextBrandHeader />
       <div style={{ flex: 1 }}>
         {loading ? (

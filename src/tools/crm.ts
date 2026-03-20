@@ -17,8 +17,8 @@ export const crmTools: ErpNextTool[] = [
     name: "erpnext_lead_list",
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
-      "List CRM Leads. Filterable by status, lead_owner, source. " +
-      "Fields: name, lead_name, company_name, status, lead_owner, source, email_id, mobile_no.",
+      "List CRM Leads. Filterable by status, lead_owner. " +
+      "Fields: name, lead_name, company_name, status, lead_owner, email_id, mobile_no.",
     category: "crm",
     inputSchema: {
       type: "object",
@@ -30,10 +30,6 @@ export const crmTools: ErpNextTool[] = [
             "Filter by status (Open, Replied, Opportunity, Interested, Converted, Do Not Contact)",
         },
         lead_owner: { type: "string", description: "Filter by assigned sales rep (user)" },
-        source: {
-          type: "string",
-          description: "Filter by lead source (Cold Calling, Website, etc.)",
-        },
       },
     },
     handler: async (input, ctx) => {
@@ -45,9 +41,6 @@ export const crmTools: ErpNextTool[] = [
       if (input.lead_owner) {
         filters.push(["lead_owner", "=", input.lead_owner as string]);
       }
-      if (input.source) {
-        filters.push(["source", "=", input.source as string]);
-      }
 
       const docs = await ctx.client.list("Lead", {
         fields: [
@@ -56,7 +49,6 @@ export const crmTools: ErpNextTool[] = [
           "company_name",
           "status",
           "lead_owner",
-          "source",
           "email_id",
           "mobile_no",
         ],

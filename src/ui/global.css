@@ -167,7 +167,7 @@ article[draggable="true"]:active {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 32px 16px;
+  padding: 20px 12px;
   overflow-y: auto;
   backdrop-filter: blur(2px);
 }
@@ -175,8 +175,8 @@ article[draggable="true"]:active {
 .kanban-detail-panel {
   background: var(--bg-root);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  max-width: 560px;
+  border-radius: 10px;
+  max-width: 520px;
   width: 100%;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
   position: relative;
@@ -189,6 +189,25 @@ article[draggable="true"]:active {
 }
 .kanban-detail-panel .detail-field-row:hover {
   background: var(--bg-surface);
+}
+
+.kanban-detail-panel .detail-field-cell {
+  transition: background 0.1s;
+  border-radius: 4px;
+}
+.kanban-detail-panel .detail-field-cell:hover {
+  background: var(--bg-surface);
+}
+.kanban-detail-panel .detail-field-cell:hover input,
+.kanban-detail-panel .detail-field-cell:hover select {
+  border-color: var(--border) !important;
+  background: var(--bg-elevated) !important;
+}
+
+.kanban-detail-panel select:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-dim);
+  outline: none;
 }
 
 .kanban-detail-panel input:focus {

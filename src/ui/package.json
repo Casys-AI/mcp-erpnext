@@ -12,7 +12,7 @@
     "dev:kanban": "UI_NAME=kanban-viewer vite --config vite.single.config.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/ext-apps": "^1.0.1",
+    "@modelcontextprotocol/ext-apps": "^1.2.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^3.7.0"

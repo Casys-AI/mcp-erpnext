@@ -1244,11 +1244,11 @@ export function KanbanViewer() {
     })();
   }
 
-  async function handleAction(toolName: string, args: Record<string, unknown>): Promise<void> {
+  async function handleNavigate(message: string): Promise<void> {
     try {
-      await app.callServerTool({ name: toolName, arguments: args }, { timeout: TOOL_CALL_TIMEOUT_MS });
+      await app.sendMessage({ role: "user", content: [{ type: "text", text: message }] });
     } catch {
-      // Best-effort: host may not support this tool call
+      // Best-effort: host may not support sendMessage
     }
   }
 
@@ -1344,7 +1344,7 @@ export function KanbanViewer() {
           onClose={closeDetail}
           onMove={requestMove}
           onSave={handleSaveDetail}
-          onAction={handleAction}
+          onNavigate={handleNavigate}
         />
       )}
     </>

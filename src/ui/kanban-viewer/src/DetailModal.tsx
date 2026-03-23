@@ -3,6 +3,7 @@ import { colors, fonts, styles } from "~/shared/theme";
 import type { KanbanBoardData, KanbanCardData } from "~/shared/kanban/types";
 import type { CardDetailState } from "~/shared/kanban/state";
 import { badgeToneColors, getAvailableTargets } from "./KanbanViewer";
+import { ActionButton } from "~/shared/ActionButton";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -543,14 +544,14 @@ export function CardDetailModal({
   onClose,
   onMove,
   onSave,
-  onAction,
+  onNavigate,
 }: {
   detail: CardDetailState;
   board: KanbanBoardData;
   onClose: () => void;
   onMove: (card: KanbanCardData, toColumn: string, label: string) => void;
   onSave?: (doctype: string, name: string, data: Record<string, string>) => void;
-  onAction?: (toolName: string, args: Record<string, unknown>) => void;
+  onNavigate?: (message: string) => void;
 }) {
   const [editedFields, setEditedFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -858,27 +859,37 @@ export function CardDetailModal({
               </>
             )}
 
-            {onAction && card && availableTargets.length > 0 && (
+            {onNavigate && card && availableTargets.length > 0 && (
               <span style={{ width: 1, height: 14, background: colors.border, flexShrink: 0 }} />
             )}
 
-            {onAction && (
+            {onNavigate && detail.selectedCardId && (
               <>
-                <button
-                  type="button"
-                  onClick={() => onAction("erpnext_doc_list", { doctype: board.doctype, filters: [["name", "=", detail.selectedCardId]] })}
-                  style={{ ...styles.button, padding: "4px 8px", fontSize: 11, color: colors.accent }}
-                >
-                  Doclist
-                </button>
+                <ActionButton
+                  label="Open in doclist"
+                  variant="info"
+                  onClick={() => onNavigate(`Show me a list view of ${board.doctype} ${detail.selectedCardId}`)}
+                />
                 {board.doctype === "Task" && (
-                  <button
-                    type="button"
-                    onClick={() => onAction("erpnext_doc_list", { doctype: "Timesheet Detail", filters: [["task", "=", detail.selectedCardId]] })}
-                    style={{ ...styles.button, padding: "4px 8px", fontSize: 11, color: colors.accent }}
-                  >
-                    Timesheets
-                  </button>
+                  <ActionButton
+                    label="Timesheets"
+                    variant="info"
+                    onClick={() => onNavigate(`Show timesheets for task ${detail.selectedCardId}`)}
+                  />
+                )}
+                {board.doctype === "Opportunity" && (
+                  <ActionButton
+                    label="Quotations"
+                    variant="info"
+                    onClick={() => onNavigate(`Show quotations linked to opportunity ${detail.selectedCardId}`)}
+                  />
+                )}
+                {board.doctype === "Issue" && (
+                  <ActionButton
+                    label="Related tasks"
+                    variant="info"
+                    onClick={() => onNavigate(`Show tasks related to issue ${detail.selectedCardId}`)}
+                  />
                 )}
               </>
             )}

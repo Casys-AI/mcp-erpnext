@@ -7,8 +7,8 @@ import {
   rollbackMoveFailure,
   takeNextQueuedMove,
   type QueuedKanbanMove,
-} from "../../src/ui/shared/kanban/interactions.ts";
-import type { KanbanBoardData } from "../../src/ui/shared/kanban/types.ts";
+} from "./interactions.ts";
+import type { KanbanBoardData } from "./types.ts";
 
 function makeBoard(): KanbanBoardData {
   return {

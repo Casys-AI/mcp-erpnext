@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import type { FrappeFilter } from "../../src/api/types.ts";
+import type { FrappeFilter } from "../api/types.ts";
 import type {
   KanbanAdapter,
   KanbanBoard,
@@ -8,7 +8,7 @@ import type {
   KanbanMoveRequest,
   KanbanMoveResult,
   KanbanTransition,
-} from "../../src/kanban/types.ts";
+} from "./types.ts";
 
 Deno.test("kanban shared types - describe the normalized board payload", () => {
   const column: KanbanColumn = {

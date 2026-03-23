@@ -10,10 +10,10 @@ MCP server for ERPNext/Frappe ERP — 120 tools across 14 categories with 7 inte
 
 ```bash
 # Run all tests
-deno test --allow-all tests/
+deno test --allow-all src/
 
 # Run a single test file
-deno test --allow-all tests/tools/sales_test.ts
+deno test --allow-all src/tools/sales_test.ts
 
 # Type check
 deno check mod.ts server.ts
@@ -100,7 +100,7 @@ const ctx = { client: makeMockClient({ list: async () => [...] }) };
 const result = await tool.handler(input, ctx);
 ```
 
-Test files mirror source structure: `tests/tools/sales_test.ts` tests `src/tools/sales.ts`.
+Test files are colocated with source files (Deno convention): `src/tools/sales_test.ts` tests `src/tools/sales.ts`.
 
 ## CI/CD
 

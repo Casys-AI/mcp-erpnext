@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "jsr:@std/assert";
-import { opportunityKanbanAdapter } from "../../src/kanban/adapters/opportunity.ts";
-import type { ErpNextToolContext } from "../../src/tools/types.ts";
+import { opportunityKanbanAdapter } from "./opportunity.ts";
+import type { ErpNextToolContext } from "../../tools/types.ts";
 
 Deno.test("opportunity kanban adapter - exposes Opportunity columns and filters", () => {
   const columns = opportunityKanbanAdapter.getColumns();

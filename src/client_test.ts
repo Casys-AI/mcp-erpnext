@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import { ErpNextToolsClient } from "../../src/client.ts";
+import { ErpNextToolsClient } from "./client.ts";
 
 // Note: Error handling previously tested here (isError wrapping) has been moved
 // to the server layer via toolErrorMapper in server.ts. Handlers now throw

@@ -2,8 +2,8 @@ import { assertEquals } from "jsr:@std/assert";
 import {
   createKanbanInitialState,
   kanbanStateReducer,
-} from "../../src/ui/shared/kanban/state.ts";
-import type { KanbanBoardData } from "../../src/ui/shared/kanban/types.ts";
+} from "./state.ts";
+import type { KanbanBoardData } from "./types.ts";
 
 function makeBoard(): KanbanBoardData {
   return {

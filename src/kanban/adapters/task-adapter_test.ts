@@ -1,6 +1,6 @@
 import { assertEquals, assert } from "jsr:@std/assert";
-import { taskKanbanAdapter } from "../../src/kanban/adapters/task.ts";
-import type { ErpNextToolContext } from "../../src/tools/types.ts";
+import { taskKanbanAdapter } from "./task.ts";
+import type { ErpNextToolContext } from "../../tools/types.ts";
 
 Deno.test("task kanban adapter - exposes Task columns and allowed transitions", () => {
   const columns = taskKanbanAdapter.getColumns();

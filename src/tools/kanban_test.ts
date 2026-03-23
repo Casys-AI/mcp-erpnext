@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert";
-import { FrappeClient } from "../../src/api/frappe-client.ts";
-import { kanbanTools } from "../../src/tools/kanban.ts";
-import type { ErpNextToolContext } from "../../src/tools/types.ts";
+import { FrappeClient } from "../api/frappe-client.ts";
+import { kanbanTools } from "./kanban.ts";
+import type { ErpNextToolContext } from "./types.ts";
 
 // deno-lint-ignore no-explicit-any
 type AnyFn = (...args: any[]) => any;

@@ -37,28 +37,33 @@ Upgrade from 0.9.2 to 0.12.0. Analysis done 2026-03-23 with Codex.
 - All 14 tool files import from `viewer-meta.ts`
 - `MCPToolMeta` type used throughout instead of inline types
 
+#### 6. StructuredToolResult — DONE
+
+- `client.ts:buildHandlersMap()` returns pre-formatted MCP results for viewer tools with both `content` (JSON text for LLM backward compat) and `structuredContent` (data object for viewers)
+- `src/ui/shared/refresh.ts:extractToolResultText()` prefers `structuredContent` over `content[0].text`
+- Pattern matches mcp-einvoice implementation
+
 ### P2 — Future
 
 #### 5. Compose-ready navigation intents
 
 - **What**: Replace prompt-string sendMessage hints with typed navigation descriptors + `_meta.ui.emits`/`_meta.ui.accepts`
-- **Blocked by**: MCP Compose support in hosts (Claude Desktop, etc.)
-- **Files**: `src/tools/ui-refresh.ts`, viewers
-- **Effort**: L
-
-#### 6. StructuredToolResult — separate LLM summary from viewer payload
-
-- **What**: Return `{ content: summary, structuredContent: viewerData }` so LLM gets a short text and viewers get full JSON
-- **Pattern already validated in mcp-einvoice**: viewers use `extractToolResultText()` which prefers `structuredContent` over `content[0].text` (fallback for clients that don't support it)
-- **Migration path**:
-  1. Update `src/ui/shared/refresh.ts` → add `structuredContent` to `ToolResultPayload` type, prefer it in `extractToolResultText()`
-  2. Update tool handlers to return `{ content: humanSummary, structuredContent: viewerData }`
-  3. All viewers already use `extractToolResultText()` so they auto-migrate
-  4. Clients without structuredContent support still get `content` text — no breaking change
-- **Files**: `src/ui/shared/refresh.ts`, `src/tools/*.ts`, `src/client.ts`
+- **Available now**: `uiMeta()` already supports `emits` and `accepts` arrays
+- **Example**:
+  ```ts
+  const DOCLIST_META = uiMeta({
+    resourceUri: "ui://mcp-erpnext/doclist-viewer",
+    emits: ["rowSelected", "navigate"],
+    accepts: ["setFilter", "refresh"],
+  })._meta;
+  ```
+- **What's needed**: viewer-side `composeEvents()` listener + server routing logic
+- **Blocked by**: MCP Compose support in hosts (Claude Desktop, etc.) — mcp-einvoice doesn't use it yet either
+- **Files**: `src/tools/viewer-meta.ts`, `src/tools/ui-refresh.ts`, viewers
 - **Effort**: L
 
 ## Dependencies
 
-- `@casys/mcp-server@^0.12` (already upgraded)
-- `@casys/mcp-compose@^0.3` (re-exported by mcp-server, needed for P1/P2)
+- `@casys/mcp-server@^0.12` (upgraded, uses `uiMeta` re-exported from mcp-compose)
+- `@casys/mcp-compose@^0.3` (transitive dep, resolved via `npx jsr add` in Node build)
+- Node build uses `npx jsr add` instead of npm for JSR package resolution

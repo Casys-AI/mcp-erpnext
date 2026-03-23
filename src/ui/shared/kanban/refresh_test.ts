@@ -3,8 +3,8 @@ import {
   canRequestBoardRefresh,
   resolveKanbanRefreshRequest,
   type KanbanRefreshGate,
-} from "../../src/ui/shared/kanban/refresh.ts";
-import type { KanbanBoardData } from "../../src/ui/shared/kanban/types.ts";
+} from "./refresh.ts";
+import type { KanbanBoardData } from "./types.ts";
 
 function makeBoard(): KanbanBoardData {
   return {

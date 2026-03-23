@@ -8,9 +8,9 @@
  */
 
 import { assertEquals, assert } from "jsr:@std/assert";
-import { analyticsTools } from "../../src/tools/analytics.ts";
-import { FrappeClient } from "../../src/api/frappe-client.ts";
-import type { ErpNextToolContext } from "../../src/tools/types.ts";
+import { analyticsTools } from "./analytics.ts";
+import { FrappeClient } from "../api/frappe-client.ts";
+import type { ErpNextToolContext } from "./types.ts";
 
 // ── Mock FrappeClient ─────────────────────────────────────────────────────────
 

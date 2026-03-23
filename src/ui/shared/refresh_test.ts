@@ -6,7 +6,7 @@ import {
   resolveUiRefreshRequest,
   type UiRefreshGate,
   type UiRefreshRequestData,
-} from "../../src/ui/shared/refresh.ts";
+} from "./refresh.ts";
 
 function makeRequest(): UiRefreshRequestData {
   return {

@@ -1,5 +1,5 @@
 import { assertEquals, assertNotStrictEquals } from "jsr:@std/assert";
-import { withUiRefreshRequest } from "../../src/tools/ui-refresh.ts";
+import { withUiRefreshRequest } from "./ui-refresh.ts";
 
 // ── refreshRequest injection ─────────────────────────────────────────────────
 

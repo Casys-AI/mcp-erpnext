@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert";
-import { UI_VIEWERS } from "../../src/ui/viewers.ts";
+import { UI_VIEWERS } from "./viewers.ts";
 
 Deno.test("UI_VIEWERS includes the canonical kanban viewer", () => {
   assert(UI_VIEWERS.includes("kanban-viewer"));

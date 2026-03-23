@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "jsr:@std/assert";
-import { issueKanbanAdapter } from "../../src/kanban/adapters/issue.ts";
-import type { ErpNextToolContext } from "../../src/tools/types.ts";
+import { issueKanbanAdapter } from "./issue.ts";
+import type { ErpNextToolContext } from "../../tools/types.ts";
 
 Deno.test("issue kanban adapter - exposes Issue columns and filters", () => {
   const columns = issueKanbanAdapter.getColumns();

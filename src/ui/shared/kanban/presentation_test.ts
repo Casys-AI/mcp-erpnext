@@ -1,12 +1,12 @@
 import { assertEquals } from "jsr:@std/assert";
-import type { KanbanViewerState } from "../../src/ui/shared/kanban/state.ts";
-import { createKanbanInitialState } from "../../src/ui/shared/kanban/state.ts";
-import type { KanbanBoardData } from "../../src/ui/shared/kanban/types.ts";
+import type { KanbanViewerState } from "./state.ts";
+import { createKanbanInitialState } from "./state.ts";
+import type { KanbanBoardData } from "./types.ts";
 import {
   formatBoardSummary,
   getErrorPresentation,
   normalizeMoveFailureMessage,
-} from "../../src/ui/shared/kanban/presentation.ts";
+} from "./presentation.ts";
 
 function makeBoard(): KanbanBoardData {
   return {

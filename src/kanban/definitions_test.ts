@@ -2,7 +2,7 @@ import { assertEquals } from "jsr:@std/assert";
 import {
   KANBAN_BOARD_DEFINITIONS,
   getKanbanBoardDefinition,
-} from "../../src/kanban/definitions.ts";
+} from "./definitions.ts";
 
 Deno.test("kanban board definitions - registers Task, Opportunity, and Issue", () => {
   assertEquals(KANBAN_BOARD_DEFINITIONS.length, 3);

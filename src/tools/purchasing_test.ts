@@ -7,9 +7,9 @@
  */
 
 import { assertEquals, assertRejects } from "jsr:@std/assert";
-import { purchasingTools } from "../../src/tools/purchasing.ts";
-import { FrappeClient } from "../../src/api/frappe-client.ts";
-import type { ErpNextToolContext } from "../../src/tools/types.ts";
+import { purchasingTools } from "./purchasing.ts";
+import { FrappeClient } from "../api/frappe-client.ts";
+import type { ErpNextToolContext } from "./types.ts";
 
 // deno-lint-ignore no-explicit-any
 type AnyFn = (...args: any[]) => any;

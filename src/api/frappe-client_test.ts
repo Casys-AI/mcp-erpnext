@@ -8,7 +8,7 @@
  */
 
 import { assertEquals, assertRejects } from "jsr:@std/assert";
-import { FrappeAPIError, FrappeClient } from "../../src/api/frappe-client.ts";
+import { FrappeAPIError, FrappeClient } from "./frappe-client.ts";
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 

@@ -51,6 +51,10 @@ interface KpiData {
   color?: string;
   icon?: string;
   refreshRequest?: UiRefreshRequestData;
+  /** sendMessage text when clicking the big number (drill into exceptions) */
+  _drillDown?: string;
+  /** sendMessage text when clicking the sparkline (drill into trend) */
+  _trendDrillDown?: string;
 }
 
 // ============================================================================
@@ -185,6 +189,11 @@ function KpiContent(
   },
 ) {
   const accentColor = data.color ?? "var(--accent)";
+  const hasServerTools = app.getHostCapabilities()?.serverTools;
+
+  async function drillDown(message: string) {
+    try { await app.sendMessage({ role: "user", content: [{ type: "text", text: message }] }); } catch {}
+  }
 
   // Format the main value
   let displayValue: string;
@@ -264,8 +273,9 @@ function KpiContent(
               </div>
             </div>
 
-            {/* Big number */}
+            {/* Big number — clickable for drill-down */}
             <div
+              onClick={hasServerTools && data._drillDown ? () => drillDown(data._drillDown!) : undefined}
               style={{
                 fontSize: 32,
                 fontWeight: 700,
@@ -273,7 +283,12 @@ function KpiContent(
                 color: accentColor,
                 lineHeight: 1.1,
                 marginBottom: 8,
+                cursor: hasServerTools && data._drillDown ? "pointer" : "default",
+                transition: "opacity 0.15s",
               }}
+              onMouseEnter={(e) => { if (data._drillDown) (e.currentTarget as HTMLElement).style.opacity = "0.75"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+              title={data._drillDown ? "Click to drill down" : undefined}
             >
               {displayValue}
             </div>
@@ -291,7 +306,15 @@ function KpiContent(
 
           {/* Right side: sparkline */}
           {data.sparkline && data.sparkline.length >= 2 && (
-            <div style={{ paddingTop: 20, paddingLeft: 12 }}>
+            <div
+              style={{
+                paddingTop: 20,
+                paddingLeft: 12,
+                cursor: hasServerTools && data._trendDrillDown ? "pointer" : "default",
+              }}
+              onClick={hasServerTools && data._trendDrillDown ? () => drillDown(data._trendDrillDown!) : undefined}
+              title={data._trendDrillDown ? "Click to see trend details" : undefined}
+            >
               <Sparkline data={data.sparkline} color={sparklineColor} />
             </div>
           )}

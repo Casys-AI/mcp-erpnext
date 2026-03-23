@@ -340,9 +340,9 @@ export function FunnelViewer() {
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }} aria-busy={refreshing}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }} aria-busy={refreshing}>
       <ErpNextBrandHeader />
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div style={{ flex: 1 }}>
         {loading ? (
           <LoadingSkeleton />
         ) : !data ? (

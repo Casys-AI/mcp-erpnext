@@ -15,6 +15,7 @@ export const crmTools: ErpNextTool[] = [
 
   {
     name: "erpnext_lead_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List CRM Leads. Filterable by status, lead_owner. " +
@@ -68,6 +69,7 @@ export const crmTools: ErpNextTool[] = [
 
   {
     name: "erpnext_lead_get",
+    annotations: { readOnlyHint: true },
     description: "Get a single CRM Lead by name. Returns all lead details including contact info.",
     category: "crm",
     inputSchema: {
@@ -131,6 +133,7 @@ export const crmTools: ErpNextTool[] = [
 
   {
     name: "erpnext_opportunity_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List CRM Opportunities. Filterable by status, opportunity_owner, opportunity_from. " +
@@ -191,6 +194,7 @@ export const crmTools: ErpNextTool[] = [
 
   {
     name: "erpnext_opportunity_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single CRM Opportunity by name. Returns full details including items and competitors.",
     category: "crm",
@@ -214,6 +218,7 @@ export const crmTools: ErpNextTool[] = [
 
   {
     name: "erpnext_contact_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Contacts. Filterable by company_name, status. " +
@@ -266,6 +271,7 @@ export const crmTools: ErpNextTool[] = [
 
   {
     name: "erpnext_contact_get",
+    annotations: { readOnlyHint: true },
     description: "Get a single Contact by name. Returns all contact details.",
     category: "crm",
     inputSchema: {
@@ -288,6 +294,7 @@ export const crmTools: ErpNextTool[] = [
 
   {
     name: "erpnext_campaign_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List CRM Campaigns. " +

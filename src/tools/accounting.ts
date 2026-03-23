@@ -15,6 +15,7 @@ export const accountingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_account_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Chart of Accounts. Filterable by root_type and is_group. " +
@@ -67,6 +68,7 @@ export const accountingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_journal_entry_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Journal Entries. Filterable by date range and voucher_type. " +
@@ -115,6 +117,7 @@ export const accountingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_journal_entry_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Journal Entry by name (e.g. JV-00001). Returns full document with accounts.",
     category: "accounting",
@@ -138,6 +141,7 @@ export const accountingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_payment_entry_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Payment Entries. Filterable by payment_type, party_type, date range. " +
@@ -203,6 +207,7 @@ export const accountingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_payment_entry_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Payment Entry by name (e.g. PE-00001). Returns full document including references.",
     category: "accounting",

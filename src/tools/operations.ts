@@ -114,6 +114,7 @@ export const operationsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_doc_delete",
+    annotations: { destructiveHint: true },
     description:
       "Delete any ERPNext document. Only Draft documents can usually be deleted. " +
       "For submitted documents, use cancel first. Works on any DocType.",
@@ -155,6 +156,7 @@ export const operationsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_doc_submit",
+    annotations: { destructiveHint: true },
     description:
       "Submit any ERPNext document (changes status from Draft to Submitted). " +
       "Applies to submittable DocTypes like Sales Order, Purchase Order, Sales Invoice, etc. " +
@@ -202,6 +204,7 @@ export const operationsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_doc_cancel",
+    annotations: { destructiveHint: true },
     description:
       "Cancel any ERPNext submitted document (changes status to Cancelled). " +
       "Applies to submittable DocTypes like Sales Order, Purchase Order, Sales Invoice, etc. " +
@@ -248,6 +251,7 @@ export const operationsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_doc_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get any ERPNext document by DocType and name. Useful for DocTypes not covered " +
       "by dedicated tools. Returns the full document with all fields.",
@@ -283,6 +287,7 @@ export const operationsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_doc_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List any ERPNext documents by DocType. Useful for DocTypes not covered " +

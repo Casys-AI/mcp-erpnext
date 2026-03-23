@@ -14,6 +14,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_customer_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List ERPNext customers. Returns active customers by default. " +
@@ -62,6 +63,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_customer_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single ERPNext customer by name (ID). Returns all fields including contact details.",
     category: "sales",
@@ -173,6 +175,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_order_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Sales Orders. Filterable by customer, status, date range. " +
@@ -225,6 +228,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_order_get",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
     description:
       "Get a single Sales Order by name (e.g. SO-00001). Returns full document with line items.",
@@ -391,6 +395,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_order_submit",
+    annotations: { destructiveHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
     description:
       "Submit a Draft Sales Order (changes status to 'To Deliver and Bill'). " +
@@ -423,6 +428,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_order_cancel",
+    annotations: { destructiveHint: true },
     description:
       "Cancel a submitted Sales Order. Reverses stock reservation. " +
       "Only works on submitted (non-completed) Sales Orders.",
@@ -455,6 +461,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_invoice_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Sales Invoices. Filterable by customer, status, date range. " +
@@ -515,6 +522,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_invoice_get",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
     description:
       "Get a single Sales Invoice by name (e.g. SINV-00001). Returns full document with line items.",
@@ -641,6 +649,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_invoice_submit",
+    annotations: { destructiveHint: true },
     description:
       "Submit a Draft Sales Invoice (posts it to the ledger, changes status to 'Unpaid'). " +
       "Once submitted, the invoice is visible to the customer and affects GL.",
@@ -678,6 +687,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_quotation_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Quotations. Filterable by party_name, status. " +
@@ -722,6 +732,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_quotation_get",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
     description:
       "Get a single Quotation by name. Returns full document with line items and terms.",

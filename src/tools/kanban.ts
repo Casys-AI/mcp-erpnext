@@ -44,6 +44,7 @@ function withColumnCounts(columns: KanbanColumn[], cards: KanbanCard[]): KanbanC
 export const kanbanTools: ErpNextTool[] = [
   {
     name: "erpnext_kanban_get_board",
+    annotations: { readOnlyHint: true },
     category: "kanban",
     _meta: KANBAN_UI,
     description:

@@ -14,6 +14,7 @@ export const deliveryTools: ErpNextTool[] = [
 
   {
     name: "erpnext_delivery_note_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Delivery Notes. Filterable by customer, status, date range. " +
@@ -66,6 +67,7 @@ export const deliveryTools: ErpNextTool[] = [
 
   {
     name: "erpnext_delivery_note_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Delivery Note by name (e.g. MAT-DN-00001). Returns full document with delivered items.",
     category: "delivery",
@@ -158,6 +160,7 @@ export const deliveryTools: ErpNextTool[] = [
 
   {
     name: "erpnext_shipment_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Shipments. Filterable by status, pickup_from date range. " +
@@ -217,6 +220,7 @@ export const deliveryTools: ErpNextTool[] = [
 
   {
     name: "erpnext_shipment_get",
+    annotations: { readOnlyHint: true },
     description: "Get a single Shipment by name. Returns full shipment details including parcels.",
     category: "delivery",
     inputSchema: {

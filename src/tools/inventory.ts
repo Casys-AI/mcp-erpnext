@@ -14,6 +14,7 @@ export const inventoryTools: ErpNextTool[] = [
 
   {
     name: "erpnext_item_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List ERPNext Items. Returns active items by default. " +
@@ -74,6 +75,7 @@ export const inventoryTools: ErpNextTool[] = [
 
   {
     name: "erpnext_item_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single ERPNext Item by name/item_code. Returns all fields including pricing and stock details.",
     category: "inventory",
@@ -188,6 +190,7 @@ export const inventoryTools: ErpNextTool[] = [
 
   {
     name: "erpnext_stock_balance",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/stock-viewer" } },
     description:
       "Get stock balance by item and/or warehouse. Reads from the Bin DocType. " +
@@ -241,6 +244,7 @@ export const inventoryTools: ErpNextTool[] = [
 
   {
     name: "erpnext_warehouse_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List ERPNext Warehouses. " +
@@ -284,6 +288,7 @@ export const inventoryTools: ErpNextTool[] = [
 
   {
     name: "erpnext_stock_entry_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Stock Entries (material transfers, receipts, issues). " +
@@ -341,6 +346,7 @@ export const inventoryTools: ErpNextTool[] = [
 
   {
     name: "erpnext_stock_entry_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Stock Entry by name. Returns full document with item details.",
     category: "inventory",

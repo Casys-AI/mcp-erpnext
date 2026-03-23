@@ -25,6 +25,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_stock_chart",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Get stock levels as a bar chart. Shows actual_qty per item (optionally filtered by warehouse). " +
@@ -98,6 +99,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_chart",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Analyze sales revenue as a chart. " +
@@ -223,6 +225,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_revenue_trend",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Sales revenue trend over time. Returns a line chart (or area if type='area') " +
@@ -338,6 +341,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_order_breakdown",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Breakdown of Sales Orders by customer (stacked-bar by status) or as a pie chart of totals. " +
@@ -433,6 +437,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_revenue_vs_orders",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Composed chart (bar + line) showing revenue (bars, left axis) vs order count (line, right axis) " +
@@ -499,6 +504,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_stock_treemap",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Stock value as a treemap. Each rectangle represents an item, sized by stock value. " +
@@ -558,6 +564,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_product_radar",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Radar chart comparing items across multiple dimensions: " +
@@ -655,6 +662,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_price_vs_qty",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Scatter chart: item selling price (X) vs total qty ordered (Y). " +
@@ -754,6 +762,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_kpi_revenue",
+    annotations: { readOnlyHint: true },
     _meta: KPI_UI,
     description:
       "KPI card: total Sales Order revenue for the current month, " +
@@ -813,6 +822,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_kpi_outstanding",
+    annotations: { readOnlyHint: true },
     _meta: KPI_UI,
     description:
       "KPI card: total outstanding receivables from submitted Sales Invoices " +
@@ -851,6 +861,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_kpi_orders",
+    annotations: { readOnlyHint: true },
     _meta: KPI_UI,
     description:
       "KPI card: count and total value of Sales Orders created this month, " +
@@ -909,6 +920,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_kpi_gross_margin",
+    annotations: { readOnlyHint: true },
     _meta: KPI_UI,
     description:
       "KPI card: estimated gross margin % based on Sales Order revenue vs " +
@@ -976,6 +988,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_kpi_overdue",
+    annotations: { readOnlyHint: true },
     _meta: KPI_UI,
     description:
       "KPI card: count and total value of overdue Sales Invoices " +
@@ -1016,6 +1029,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_funnel",
+    annotations: { readOnlyHint: true },
     _meta: FUNNEL_UI,
     description:
       "Sales funnel from Lead → Opportunity → Quotation → Sales Order. " +
@@ -1132,6 +1146,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_ar_aging",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Accounts Receivable Aging — stacked bar showing outstanding invoices by customer, " +
@@ -1232,6 +1247,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_gross_profit",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Gross profit analysis — composed chart showing revenue (bars) vs margin % (line) by item or customer. " +
@@ -1367,6 +1383,7 @@ export const analyticsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_profit_loss",
+    annotations: { readOnlyHint: true },
     _meta: CHART_UI,
     description:
       "Profit & Loss overview — bar chart comparing total income vs total expenses per month " +

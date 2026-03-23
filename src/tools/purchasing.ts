@@ -15,6 +15,7 @@ export const purchasingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_supplier_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List ERPNext suppliers. Returns active suppliers by default. " +
@@ -73,6 +74,7 @@ export const purchasingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_supplier_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single ERPNext supplier by name (ID). Returns all fields including contact details.",
     category: "purchasing",
@@ -141,6 +143,7 @@ export const purchasingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_purchase_order_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Purchase Orders. Filterable by supplier, status, date range. " +
@@ -202,6 +205,7 @@ export const purchasingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_purchase_order_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Purchase Order by name (e.g. PO-00001). Returns full document with line items.",
     category: "purchasing",
@@ -292,6 +296,7 @@ export const purchasingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_purchase_invoice_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Purchase Invoices (bills from suppliers). Filterable by supplier, status, date range. " +
@@ -352,6 +357,7 @@ export const purchasingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_purchase_invoice_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Purchase Invoice by name (e.g. PINV-00001). Returns full document with line items.",
     category: "purchasing",
@@ -375,6 +381,7 @@ export const purchasingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_purchase_receipt_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Purchase Receipts (goods received notes). Filterable by supplier, status, date range. " +
@@ -427,6 +434,7 @@ export const purchasingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_purchase_receipt_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Purchase Receipt by name (e.g. MAT-PRE-00001). Returns full document with received items.",
     category: "purchasing",
@@ -450,6 +458,7 @@ export const purchasingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_supplier_quotation_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Supplier Quotations (RFQ responses from suppliers). Filterable by supplier, status. " +

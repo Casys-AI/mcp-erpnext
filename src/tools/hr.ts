@@ -14,6 +14,7 @@ export const hrTools: ErpNextTool[] = [
 
   {
     name: "erpnext_employee_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Employees. Filterable by department, status. " +
@@ -71,6 +72,7 @@ export const hrTools: ErpNextTool[] = [
 
   {
     name: "erpnext_employee_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Employee by name/ID (e.g. HR-EMP-00001). Returns all fields.",
     category: "hr",
@@ -94,6 +96,7 @@ export const hrTools: ErpNextTool[] = [
 
   {
     name: "erpnext_attendance_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Attendance records. Filterable by employee, date range. " +
@@ -149,6 +152,7 @@ export const hrTools: ErpNextTool[] = [
 
   {
     name: "erpnext_leave_application_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Leave Applications. Filterable by employee, status, leave_type. " +
@@ -206,6 +210,7 @@ export const hrTools: ErpNextTool[] = [
 
   {
     name: "erpnext_leave_application_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Leave Application by name. Returns full document.",
     category: "hr",
@@ -278,6 +283,7 @@ export const hrTools: ErpNextTool[] = [
 
   {
     name: "erpnext_salary_slip_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Salary Slips. Filterable by employee, status, date range. " +
@@ -341,6 +347,7 @@ export const hrTools: ErpNextTool[] = [
 
   {
     name: "erpnext_salary_slip_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Salary Slip by name/ID. Returns all fields including earnings and deductions.",
     category: "hr",
@@ -364,6 +371,7 @@ export const hrTools: ErpNextTool[] = [
 
   {
     name: "erpnext_payroll_entry_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Payroll Entries. Filterable by company, status. " +
@@ -411,6 +419,7 @@ export const hrTools: ErpNextTool[] = [
 
   {
     name: "erpnext_expense_claim_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Expense Claims. Filterable by employee, status, approval_status. " +
@@ -531,6 +540,7 @@ export const hrTools: ErpNextTool[] = [
 
   {
     name: "erpnext_leave_balance",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "Get leave balance (allocations) for an employee. " +

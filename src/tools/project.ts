@@ -14,6 +14,7 @@ export const projectTools: ErpNextTool[] = [
 
   {
     name: "erpnext_project_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Projects. Filterable by status. " +
@@ -68,6 +69,7 @@ export const projectTools: ErpNextTool[] = [
 
   {
     name: "erpnext_project_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Project by name. Returns full document including tasks summary.",
     category: "project",
@@ -91,6 +93,7 @@ export const projectTools: ErpNextTool[] = [
 
   {
     name: "erpnext_task_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Tasks. Filterable by project, status, priority. " +
@@ -203,6 +206,7 @@ export const projectTools: ErpNextTool[] = [
 
   {
     name: "erpnext_task_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Task by name. Returns full document including description and dependencies.",
     category: "project",
@@ -278,6 +282,7 @@ export const projectTools: ErpNextTool[] = [
 
   {
     name: "erpnext_timesheet_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Timesheets. Filterable by employee, project. " +
@@ -326,6 +331,7 @@ export const projectTools: ErpNextTool[] = [
 
   {
     name: "erpnext_timesheet_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Timesheet by name. Returns full document with time log details.",
     category: "project",

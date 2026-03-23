@@ -15,6 +15,7 @@ export const assetsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_asset_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Fixed Assets. Filterable by status, asset_category, location, custodian. " +
@@ -79,6 +80,7 @@ export const assetsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_asset_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Asset by name. Returns full details including depreciation schedule and maintenance logs.",
     category: "assets",
@@ -157,6 +159,7 @@ export const assetsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_asset_movement_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Asset Movements (transfers between locations/custodians). " +
@@ -205,6 +208,7 @@ export const assetsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_asset_movement_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Asset Movement by name. Returns full details including assets moved.",
     category: "assets",
@@ -228,6 +232,7 @@ export const assetsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_asset_maintenance_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Asset Maintenance records. Filterable by asset_name, maintenance_status. " +
@@ -278,6 +283,7 @@ export const assetsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_asset_maintenance_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Asset Maintenance record by name. Returns full details including maintenance tasks.",
     category: "assets",
@@ -301,6 +307,7 @@ export const assetsTools: ErpNextTool[] = [
 
   {
     name: "erpnext_asset_category_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Asset Categories. " +

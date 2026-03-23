@@ -14,6 +14,7 @@ export const setupTools: ErpNextTool[] = [
 
   {
     name: "erpnext_company_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List ERPNext companies. " +

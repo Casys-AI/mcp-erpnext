@@ -15,6 +15,7 @@ export const manufacturingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_bom_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Bills of Materials (BOM). Filterable by item, is_active, is_default. " +
@@ -75,6 +76,7 @@ export const manufacturingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_bom_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single BOM by name (e.g. BOM-ITEM-00001). Returns full document with raw materials and operations.",
     category: "manufacturing",
@@ -98,6 +100,7 @@ export const manufacturingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_work_order_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Work Orders. Filterable by production_item, status, date range. " +
@@ -159,6 +162,7 @@ export const manufacturingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_work_order_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Work Order by name (e.g. MFG-WO-00001). Returns full document with operations and materials.",
     category: "manufacturing",
@@ -236,6 +240,7 @@ export const manufacturingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_job_card_list",
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     description:
       "List Job Cards (production operations tracking). Filterable by work_order, status, operation. " +
@@ -292,6 +297,7 @@ export const manufacturingTools: ErpNextTool[] = [
 
   {
     name: "erpnext_job_card_get",
+    annotations: { readOnlyHint: true },
     description:
       "Get a single Job Card by name. Returns full document with time logs and material transfers.",
     category: "manufacturing",

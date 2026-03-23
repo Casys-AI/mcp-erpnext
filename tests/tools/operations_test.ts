@@ -135,7 +135,7 @@ Deno.test("erpnext_doc_create - works with Item Group (tree doctype)", async () 
 
 Deno.test("erpnext_doc_list - has _meta.ui for doclist-viewer", () => {
   const tool = getTool("erpnext_doc_list");
-  assertEquals(tool._meta?.ui.resourceUri, "ui://mcp-erpnext/doclist-viewer");
+  assertEquals(tool._meta?.ui?.resourceUri, "ui://mcp-erpnext/doclist-viewer");
 });
 
 // ── erpnext_doc_update ──────────────────────────────────────────────────────

@@ -124,7 +124,7 @@ Deno.test("erpnext_supplier_create - passes optional fields", async () => {
 
 Deno.test("erpnext_supplier_list - has _meta.ui", () => {
   const tool = getTool("erpnext_supplier_list");
-  assertEquals(tool._meta?.ui.resourceUri, "ui://mcp-erpnext/doclist-viewer");
+  assertEquals(tool._meta?.ui?.resourceUri, "ui://mcp-erpnext/doclist-viewer");
 });
 
 // ── erpnext_purchase_order_create ───────────────────────────────────────────

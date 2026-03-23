@@ -14,7 +14,8 @@ import {
   getToolsByCategory,
   toolsByCategory,
 } from "./tools/mod.ts";
-import type { ErpNextTool, ErpNextToolCategory } from "./tools/types.ts";
+import type { ErpNextTool, ErpNextToolCategory, ToolAnnotations } from "./tools/types.ts";
+import type { MCPToolMeta } from "@casys/mcp-server";
 import { getFrappeClient } from "./api/frappe-client.ts";
 import { withUiRefreshRequest } from "./tools/ui-refresh.ts";
 
@@ -47,13 +48,7 @@ export interface JSONSchema {
   [key: string]: unknown;
 }
 
-/** Behavioural hints for model clients (mirrors ToolAnnotations from @casys/mcp-server). */
-export interface ToolAnnotations {
-  readOnlyHint?: boolean;
-  destructiveHint?: boolean;
-  idempotentHint?: boolean;
-  openWorldHint?: boolean;
-}
+export type { ToolAnnotations } from "./tools/types.ts";
 
 /** MCP protocol wire format for tool registration. Sent to MCP clients during `tools/list`. */
 export interface MCPToolWireFormat {
@@ -66,7 +61,7 @@ export interface MCPToolWireFormat {
   /** Behavioural hints for model clients */
   annotations?: ToolAnnotations;
   /** Optional MCP metadata for UI rendering (e.g. iframe viewer resource URI) */
-  _meta?: { ui: { resourceUri: string; [key: string]: unknown }; [key: string]: unknown };
+  _meta?: MCPToolMeta;
 }
 
 // ============================================================================
@@ -117,14 +112,40 @@ export class ErpNextToolsClient {
    * Build a handlers Map for ConcurrentMCPServer.registerTools().
    * Each handler wraps the tool to inject the FrappeClient context.
    * Errors are handled by the server's toolErrorMapper (configured in server.ts).
+   *
+   * For viewer tools (result has _meta.ui), the return value is a pre-formatted
+   * MCP result with both `content` (text JSON for LLM) and `structuredContent`
+   * (object for the UI viewer). ConcurrentMCPServer passes pre-formatted results
+   * through unchanged.
    */
   buildHandlersMap(): Map<string, (args: Record<string, unknown>) => Promise<unknown>> {
     const handlers = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>();
     for (const tool of this.tools) {
       handlers.set(tool.name, async (args: Record<string, unknown>) => {
         const client = getFrappeClient();
-        const result = await tool.handler(args, { client });
-        return withUiRefreshRequest(result, tool.name, args);
+        const rawResult = await tool.handler(args, { client });
+        const result = withUiRefreshRequest(rawResult, tool.name, args);
+
+        // For viewer tools, return a pre-formatted MCP result so the server
+        // passes it through intact. Viewers receive structuredContent directly;
+        // LLMs receive the same data as a JSON text string in content.
+        if (
+          result !== null &&
+          typeof result === "object" &&
+          !Array.isArray(result) &&
+          (result as Record<string, unknown>)._meta !== undefined &&
+          typeof (result as Record<string, unknown>)._meta === "object" &&
+          ((result as Record<string, unknown>)._meta as Record<string, unknown>).ui !== undefined
+        ) {
+          const r = result as Record<string, unknown>;
+          return {
+            content: [{ type: "text", text: JSON.stringify(result) }],
+            structuredContent: r,
+            _meta: r._meta,
+          };
+        }
+
+        return result;
       });
     }
     return handlers;

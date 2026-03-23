@@ -8,6 +8,7 @@
  */
 
 import type { FrappeClient } from "../api/frappe-client.ts";
+import type { MCPToolMeta } from "@casys/mcp-server";
 
 /**
  * Behavioural hints for model clients (mirrors MCP SDK ToolAnnotations).
@@ -72,8 +73,8 @@ export interface ErpNextTool {
   inputSchema: JSONSchema;
   /** Behavioural hints for model clients */
   annotations?: ToolAnnotations;
-  /** MCP Apps UI metadata (optional) */
-  _meta?: { ui: { resourceUri: string; [key: string]: unknown }; [key: string]: unknown };
+  /** MCP Apps UI metadata — uses MCPToolMeta from @casys/mcp-server */
+  _meta?: MCPToolMeta;
   /** Execute the tool and return a JSON-serializable result */
   handler: (
     input: Record<string, unknown>,
@@ -87,7 +88,7 @@ export interface MCPToolWireFormat {
   description: string;
   inputSchema: JSONSchema;
   annotations?: ToolAnnotations;
-  _meta?: { ui: { resourceUri: string; [key: string]: unknown }; [key: string]: unknown };
+  _meta?: MCPToolMeta;
 }
 
 /** Convert an ErpNextTool to MCP wire format */

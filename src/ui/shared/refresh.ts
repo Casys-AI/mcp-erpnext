@@ -5,6 +5,7 @@ export interface UiRefreshRequestData {
 
 export interface ToolResultPayload {
   content?: Array<{ type: string; text?: string }>;
+  structuredContent?: Record<string, unknown>;
   isError?: boolean;
 }
 
@@ -56,5 +57,8 @@ export function normalizeUiRefreshFailureMessage(cause: unknown): string {
 }
 
 export function extractToolResultText(result: ToolResultPayload): string | null {
+  if (result.structuredContent) {
+    return JSON.stringify(result.structuredContent);
+  }
   return result.content?.find((entry) => entry.type === "text")?.text ?? null;
 }

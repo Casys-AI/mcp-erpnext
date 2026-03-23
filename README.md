@@ -38,6 +38,8 @@ Generate API credentials in ERPNext:
 }
 ```
 
+> **Works with ERPNext Cloud** — set `ERPNEXT_URL` to your Frappe Cloud URL (e.g. `https://mycompany.erpnext.com` or `https://mysite.frappe.cloud`). API key authentication works the same way on self-hosted and cloud instances.
+
 > Zero dependencies — single self-contained bundle. Requires Node >= 20.
 
 ### Deno (stdio)
@@ -337,7 +339,7 @@ cd dist-node/bin && npm publish --access public
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ERPNEXT_URL` | Yes | ERPNext base URL (e.g. `http://localhost:8000`) |
+| `ERPNEXT_URL` | Yes | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`) |
 | `ERPNEXT_API_KEY` | Yes | API Key from User Settings |
 | `ERPNEXT_API_SECRET` | Yes | API Secret from User Settings |
 

@@ -64,10 +64,7 @@ cat > "$DIST_DIR/package.json" <<PKGJSON
     "start": "tsx server.ts",
     "serve": "tsx server.ts --http --port=3012"
   },
-  "dependencies": {
-    "@casys/mcp-server": "^0.12.0",
-    "@modelcontextprotocol/sdk": "^1.15.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "esbuild": "^0.25.12",
     "tsx": "^4.20.6",
@@ -85,6 +82,8 @@ cp "$ROOT_DIR/README.md" "$DIST_DIR/README.md" 2>/dev/null || true
 
 pushd "$DIST_DIR" >/dev/null
 npm install --no-fund --no-audit
+# Install JSR packages via jsr shim (resolves transitive JSR deps like @casys/mcp-compose)
+npx jsr add @casys/mcp-server@^0.12
 ./node_modules/.bin/esbuild server.ts \
   --bundle \
   --platform=node \

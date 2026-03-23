@@ -2,3 +2,6 @@ node_modules/
 deno.lock
 src/ui/dist/
 src/ui/node_modules/
+.env*
+.vscode/
+.mcp.json

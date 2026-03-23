@@ -85,6 +85,11 @@
   padding: 0;
 }
 
+html {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
 html, body {
   background: var(--bg-root);
   color: var(--text-primary);
@@ -93,14 +98,13 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
 }
 
-#app {
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  border: 1px solid var(--border);
+body {
+  overflow: auto;
 }
+
+#app {}
 
 /* Scrollbar */
 ::-webkit-scrollbar {

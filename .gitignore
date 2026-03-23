@@ -5,3 +5,4 @@ src/ui/node_modules/
 .env*
 .vscode/
 .mcp.json
+.stitch

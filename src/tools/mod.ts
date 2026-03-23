@@ -24,20 +24,20 @@ import { kanbanTools } from "./kanban.ts";
 import type { ErpNextTool, ErpNextToolCategory } from "./types.ts";
 
 export {
-  salesTools,
-  inventoryTools,
   accountingTools,
+  analyticsTools,
+  assetsTools,
+  crmTools,
+  deliveryTools,
   hrTools,
+  inventoryTools,
+  kanbanTools,
+  manufacturingTools,
+  operationsTools,
   projectTools,
   purchasingTools,
-  deliveryTools,
-  manufacturingTools,
-  crmTools,
-  assetsTools,
-  operationsTools,
+  salesTools,
   setupTools,
-  analyticsTools,
-  kanbanTools,
 };
 export type { ErpNextTool, ErpNextToolCategory };
 

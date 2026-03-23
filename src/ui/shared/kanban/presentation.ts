@@ -1,7 +1,9 @@
 import type { KanbanViewerState } from "./state.ts";
 import type { KanbanBoardData } from "./types.ts";
 
-export function getErrorPresentation(state: Pick<KanbanViewerState, "board" | "error">): {
+export function getErrorPresentation(
+  state: Pick<KanbanViewerState, "board" | "error">,
+): {
   blockingError: string | null;
   inlineError: string | null;
 } {
@@ -17,7 +19,10 @@ export function getErrorPresentation(state: Pick<KanbanViewerState, "board" | "e
 }
 
 export function formatBoardSummary(
-  board: Pick<KanbanBoardData, "doctype" | "moveToolName" | "cards" | "pagination">,
+  board: Pick<
+    KanbanBoardData,
+    "doctype" | "moveToolName" | "cards" | "pagination"
+  >,
 ): string {
   let countLabel: string;
   if (board.pagination.total !== undefined) {

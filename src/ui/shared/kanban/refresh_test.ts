@@ -1,8 +1,8 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
   canRequestBoardRefresh,
-  resolveKanbanRefreshRequest,
   type KanbanRefreshGate,
+  resolveKanbanRefreshRequest,
 } from "./refresh.ts";
 import type { KanbanBoardData } from "./types.ts";
 
@@ -29,7 +29,9 @@ function makeBoard(): KanbanBoardData {
   };
 }
 
-function makeGate(overrides: Partial<KanbanRefreshGate> = {}): KanbanRefreshGate {
+function makeGate(
+  overrides: Partial<KanbanRefreshGate> = {},
+): KanbanRefreshGate {
   return {
     board: makeBoard(),
     request: {
@@ -61,7 +63,10 @@ Deno.test("kanban refresh - blocks background refresh while the document is hidd
 
 Deno.test("kanban refresh - blocks background refresh during drag or queued mutations", () => {
   assertEquals(canRequestBoardRefresh(makeGate({ dragging: true })), false);
-  assertEquals(canRequestBoardRefresh(makeGate({ processingMove: true })), false);
+  assertEquals(
+    canRequestBoardRefresh(makeGate({ processingMove: true })),
+    false,
+  );
   assertEquals(canRequestBoardRefresh(makeGate({ queuedMoves: 1 })), false);
 });
 

@@ -28,9 +28,13 @@ export const deliveryTools: ErpNextTool[] = [
         customer: { type: "string", description: "Filter by customer" },
         status: {
           type: "string",
-          description: "Filter by status (Draft, To Bill, Completed, Cancelled, etc.)",
+          description:
+            "Filter by status (Draft, To Bill, Completed, Cancelled, etc.)",
         },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
         date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
@@ -51,7 +55,14 @@ export const deliveryTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Delivery Note", {
-        fields: ["name", "customer", "posting_date", "status", "total_qty", "grand_total"],
+        fields: [
+          "name",
+          "customer",
+          "posting_date",
+          "status",
+          "total_qty",
+          "grand_total",
+        ],
         filters,
         limit,
         order_by: "modified desc",
@@ -75,7 +86,10 @@ export const deliveryTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Delivery Note name (e.g. MAT-DN-00001)" },
+        name: {
+          type: "string",
+          description: "Delivery Note name (e.g. MAT-DN-00001)",
+        },
       },
       required: ["name"],
     },
@@ -123,14 +137,22 @@ export const deliveryTools: ErpNextTool[] = [
     },
     handler: async (input, ctx) => {
       if (!input.customer) {
-        throw new Error("[erpnext_delivery_note_create] 'customer' is required");
+        throw new Error(
+          "[erpnext_delivery_note_create] 'customer' is required",
+        );
       }
-      if (!input.items || !Array.isArray(input.items) || input.items.length === 0) {
-        throw new Error("[erpnext_delivery_note_create] 'items' must be a non-empty array");
+      if (
+        !input.items || !Array.isArray(input.items) || input.items.length === 0
+      ) {
+        throw new Error(
+          "[erpnext_delivery_note_create] 'items' must be a non-empty array",
+        );
       }
 
       const items = (
-        input.items as Array<{ item_code: string; qty: number; against_sales_order?: string }>
+        input.items as Array<
+          { item_code: string; qty: number; against_sales_order?: string }
+        >
       ).map((item) => {
         if (!item.item_code || item.qty == null) {
           throw new Error(
@@ -173,11 +195,18 @@ export const deliveryTools: ErpNextTool[] = [
         limit: { type: "number", description: "Max results (default 20)" },
         status: {
           type: "string",
-          description: "Filter by status (Draft, Submitted, Booked, Delivered, Cancelled, etc.)",
+          description:
+            "Filter by status (Draft, Submitted, Booked, Delivered, Cancelled, etc.)",
         },
         carrier: { type: "string", description: "Filter by carrier name" },
-        date_from: { type: "string", description: "Pickup date start filter YYYY-MM-DD" },
-        date_to: { type: "string", description: "Pickup date end filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Pickup date start filter YYYY-MM-DD",
+        },
+        date_to: {
+          type: "string",
+          description: "Pickup date end filter YYYY-MM-DD",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -222,7 +251,8 @@ export const deliveryTools: ErpNextTool[] = [
   {
     name: "erpnext_shipment_get",
     annotations: { readOnlyHint: true },
-    description: "Get a single Shipment by name. Returns full shipment details including parcels.",
+    description:
+      "Get a single Shipment by name. Returns full shipment details including parcels.",
     category: "delivery",
     inputSchema: {
       type: "object",

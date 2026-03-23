@@ -1,4 +1,4 @@
-import { assertEquals, assert } from "jsr:@std/assert";
+import { assert, assertEquals } from "jsr:@std/assert";
 import { taskKanbanAdapter } from "./task.ts";
 import type { ErpNextToolContext } from "../../tools/types.ts";
 
@@ -20,11 +20,13 @@ Deno.test("task kanban adapter - exposes Task columns and allowed transitions", 
     "cancelled",
   ]);
 
-  assert(allowedTransitions.some((transition) =>
-    transition.fromColumn === "open" &&
-    transition.toColumn === "working" &&
-    transition.allowed
-  ));
+  assert(
+    allowedTransitions.some((transition) =>
+      transition.fromColumn === "open" &&
+      transition.toColumn === "working" &&
+      transition.allowed
+    ),
+  );
   assertEquals(fields, [
     "name",
     "subject",
@@ -44,15 +46,18 @@ Deno.test("task kanban adapter - exposes Task columns and allowed transitions", 
     ["project", "=", "Alpha"],
     ["priority", "=", "High"],
   ]);
-  assertEquals(taskKanbanAdapter.validateTransition({
-    doctype: "Task",
-    cardId: "TASK-0001",
-    fromColumn: "working",
-    toColumn: "overdue",
-  }), {
-    allowed: false,
-    reason: "Overdue is system-managed",
-  });
+  assertEquals(
+    taskKanbanAdapter.validateTransition({
+      doctype: "Task",
+      cardId: "TASK-0001",
+      fromColumn: "working",
+      toColumn: "overdue",
+    }),
+    {
+      allowed: false,
+      reason: "Overdue is system-managed",
+    },
+  );
 });
 
 Deno.test("task kanban adapter - maps ERPNext tasks to normalized cards", () => {
@@ -89,7 +94,11 @@ Deno.test("task kanban adapter - executes an allowed move through Task update", 
         priority: "High",
         progress: 80,
       }),
-      update: async (doctype: string, name: string, data: Record<string, unknown>) => {
+      update: async (
+        doctype: string,
+        name: string,
+        data: Record<string, unknown>,
+      ) => {
         capturedDoctype = doctype;
         capturedName = name;
         capturedData = data;

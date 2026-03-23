@@ -18,8 +18,7 @@ export const crmTools: ErpNextTool[] = [
     name: "erpnext_lead_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List CRM Leads. Filterable by status, lead_owner. " +
+    description: "List CRM Leads. Filterable by status, lead_owner. " +
       "Fields: name, lead_name, company_name, status, lead_owner, email_id, mobile_no.",
     category: "crm",
     inputSchema: {
@@ -31,7 +30,10 @@ export const crmTools: ErpNextTool[] = [
           description:
             "Filter by status (Open, Replied, Opportunity, Interested, Converted, Do Not Contact)",
         },
-        lead_owner: { type: "string", description: "Filter by assigned sales rep (user)" },
+        lead_owner: {
+          type: "string",
+          description: "Filter by assigned sales rep (user)",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -71,7 +73,8 @@ export const crmTools: ErpNextTool[] = [
   {
     name: "erpnext_lead_get",
     annotations: { readOnlyHint: true },
-    description: "Get a single CRM Lead by name. Returns all lead details including contact info.",
+    description:
+      "Get a single CRM Lead by name. Returns all lead details including contact info.",
     category: "crm",
     inputSchema: {
       type: "object",
@@ -97,15 +100,22 @@ export const crmTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        lead_name: { type: "string", description: "Full name of the lead contact" },
+        lead_name: {
+          type: "string",
+          description: "Full name of the lead contact",
+        },
         company_name: { type: "string", description: "Company name" },
         email_id: { type: "string", description: "Email address" },
         mobile_no: { type: "string", description: "Mobile number" },
         source: {
           type: "string",
-          description: "Lead source (Cold Calling, Website, Advertisement, etc.)",
+          description:
+            "Lead source (Cold Calling, Website, Advertisement, etc.)",
         },
-        lead_owner: { type: "string", description: "Assigned sales rep (ERPNext user)" },
+        lead_owner: {
+          type: "string",
+          description: "Assigned sales rep (ERPNext user)",
+        },
       },
       required: ["lead_name"],
     },
@@ -146,13 +156,17 @@ export const crmTools: ErpNextTool[] = [
         limit: { type: "number", description: "Max results (default 20)" },
         status: {
           type: "string",
-          description: "Filter by status (Open, Quotation, Converted, Lost, Closed)",
+          description:
+            "Filter by status (Open, Quotation, Converted, Lost, Closed)",
         },
         opportunity_owner: {
           type: "string",
           description: "Filter by assigned sales rep (user)",
         },
-        party_name: { type: "string", description: "Filter by customer or lead name" },
+        party_name: {
+          type: "string",
+          description: "Filter by customer or lead name",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -162,7 +176,11 @@ export const crmTools: ErpNextTool[] = [
         filters.push(["status", "=", input.status as string]);
       }
       if (input.opportunity_owner) {
-        filters.push(["opportunity_owner", "=", input.opportunity_owner as string]);
+        filters.push([
+          "opportunity_owner",
+          "=",
+          input.opportunity_owner as string,
+        ]);
       }
       if (input.party_name) {
         filters.push(["party_name", "=", input.party_name as string]);
@@ -221,8 +239,7 @@ export const crmTools: ErpNextTool[] = [
     name: "erpnext_contact_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List Contacts. Filterable by company_name, status. " +
+    description: "List Contacts. Filterable by company_name, status. " +
       "Fields: name, first_name, last_name, company_name, email_id, mobile_no, status.",
     category: "crm",
     inputSchema: {
@@ -297,15 +314,17 @@ export const crmTools: ErpNextTool[] = [
     name: "erpnext_campaign_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List CRM Campaigns. " +
+    description: "List CRM Campaigns. " +
       "Fields: name, campaign_name, campaign_type, start_date, end_date, description.",
     category: "crm",
     inputSchema: {
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        campaign_type: { type: "string", description: "Filter by campaign type" },
+        campaign_type: {
+          type: "string",
+          description: "Filter by campaign type",
+        },
       },
     },
     handler: async (input, ctx) => {

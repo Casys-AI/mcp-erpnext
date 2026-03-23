@@ -32,9 +32,15 @@ export const assetsTools: ErpNextTool[] = [
           description:
             "Filter by status (Draft, Submitted, Partially Depreciated, Fully Depreciated, Scrapped, Sold)",
         },
-        asset_category: { type: "string", description: "Filter by asset category" },
+        asset_category: {
+          type: "string",
+          description: "Filter by asset category",
+        },
         location: { type: "string", description: "Filter by location" },
-        custodian: { type: "string", description: "Filter by custodian (employee)" },
+        custodian: {
+          type: "string",
+          description: "Filter by custodian (employee)",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -110,16 +116,43 @@ export const assetsTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        asset_name: { type: "string", description: "Name/description of the asset" },
-        asset_category: { type: "string", description: "Asset category (e.g. Computers, Vehicles)" },
+        asset_name: {
+          type: "string",
+          description: "Name/description of the asset",
+        },
+        asset_category: {
+          type: "string",
+          description: "Asset category (e.g. Computers, Vehicles)",
+        },
         company: { type: "string", description: "Company owning the asset" },
-        purchase_date: { type: "string", description: "Purchase date YYYY-MM-DD" },
-        gross_purchase_amount: { type: "number", description: "Purchase cost (before depreciation)" },
-        item_code: { type: "string", description: "Linked item code (optional)" },
-        location: { type: "string", description: "Physical location of the asset" },
-        custodian: { type: "string", description: "Employee responsible for the asset" },
+        purchase_date: {
+          type: "string",
+          description: "Purchase date YYYY-MM-DD",
+        },
+        gross_purchase_amount: {
+          type: "number",
+          description: "Purchase cost (before depreciation)",
+        },
+        item_code: {
+          type: "string",
+          description: "Linked item code (optional)",
+        },
+        location: {
+          type: "string",
+          description: "Physical location of the asset",
+        },
+        custodian: {
+          type: "string",
+          description: "Employee responsible for the asset",
+        },
       },
-      required: ["asset_name", "asset_category", "company", "purchase_date", "gross_purchase_amount"],
+      required: [
+        "asset_name",
+        "asset_category",
+        "company",
+        "purchase_date",
+        "gross_purchase_amount",
+      ],
     },
     handler: async (input, ctx) => {
       if (!input.asset_name) {
@@ -135,7 +168,9 @@ export const assetsTools: ErpNextTool[] = [
         throw new Error("[erpnext_asset_create] 'purchase_date' is required");
       }
       if (input.gross_purchase_amount == null) {
-        throw new Error("[erpnext_asset_create] 'gross_purchase_amount' is required");
+        throw new Error(
+          "[erpnext_asset_create] 'gross_purchase_amount' is required",
+        );
       }
 
       const doc = await ctx.client.create("Asset", {
@@ -174,8 +209,14 @@ export const assetsTools: ErpNextTool[] = [
           type: "string",
           description: "Filter by purpose (Issue, Transfer, Receipt)",
         },
-        date_from: { type: "string", description: "Transaction date from YYYY-MM-DD" },
-        date_to: { type: "string", description: "Transaction date to YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Transaction date from YYYY-MM-DD",
+        },
+        date_to: {
+          type: "string",
+          description: "Transaction date to YYYY-MM-DD",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -246,7 +287,8 @@ export const assetsTools: ErpNextTool[] = [
         asset_name: { type: "string", description: "Filter by asset name" },
         maintenance_status: {
           type: "string",
-          description: "Filter by status (Planned, Overdue, Cancelled, Completed)",
+          description:
+            "Filter by status (Planned, Overdue, Cancelled, Completed)",
         },
       },
     },
@@ -257,7 +299,11 @@ export const assetsTools: ErpNextTool[] = [
         filters.push(["asset_name", "=", input.asset_name as string]);
       }
       if (input.maintenance_status) {
-        filters.push(["maintenance_status", "=", input.maintenance_status as string]);
+        filters.push([
+          "maintenance_status",
+          "=",
+          input.maintenance_status as string,
+        ]);
       }
 
       const docs = await ctx.client.list("Asset Maintenance", {
@@ -299,7 +345,10 @@ export const assetsTools: ErpNextTool[] = [
       if (!input.name) {
         throw new Error("[erpnext_asset_maintenance_get] 'name' is required");
       }
-      const doc = await ctx.client.get("Asset Maintenance", input.name as string);
+      const doc = await ctx.client.get(
+        "Asset Maintenance",
+        input.name as string,
+      );
       return { data: doc };
     },
   },
@@ -310,8 +359,7 @@ export const assetsTools: ErpNextTool[] = [
     name: "erpnext_asset_category_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List Asset Categories. " +
+    description: "List Asset Categories. " +
       "Fields: name, asset_category_name.",
     category: "assets",
     inputSchema: {

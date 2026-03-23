@@ -7,7 +7,7 @@
 
 /* ── Shared tokens ──────────────────────────────────────────────── */
 :root {
-  --accent: #0089FF;
+  --accent: #0089ff;
   --accent-dim: rgba(0, 137, 255, 0.15);
   --accent-border: rgba(0, 137, 255, 0.3);
 
@@ -24,8 +24,8 @@
   --radius-md: 6px;
   --radius-lg: 8px;
 
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "Fira Code", monospace;
 
   /* ── Light mode (default) ──────────────────────────────────── */
   --bg-root: #ffffff;
@@ -124,13 +124,21 @@ body {
 
 /* Animations */
 @keyframes pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.15; }
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.15;
+  }
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .animate-pulse {
@@ -138,7 +146,12 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-hover) 50%, var(--bg-elevated) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-elevated) 25%,
+    var(--bg-hover) 50%,
+    var(--bg-elevated) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-sm);

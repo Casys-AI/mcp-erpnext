@@ -17,8 +17,7 @@ export const inventoryTools: ErpNextTool[] = [
     name: "erpnext_item_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List ERPNext Items. Returns active items by default. " +
+    description: "List ERPNext Items. Returns active items by default. " +
       "Fields: name, item_code, item_name, item_group, stock_uom, is_stock_item, standard_rate. " +
       "Filterable by item_group, is_stock_item.",
     category: "inventory",
@@ -47,7 +46,11 @@ export const inventoryTools: ErpNextTool[] = [
         filters.push(["item_group", "=", input.item_group as string]);
       }
       if (input.is_stock_item !== undefined) {
-        filters.push(["is_stock_item", "=", (input.is_stock_item as boolean) ? 1 : 0]);
+        filters.push([
+          "is_stock_item",
+          "=",
+          (input.is_stock_item as boolean) ? 1 : 0,
+        ]);
       }
 
       const docs = await ctx.client.list("Item", {
@@ -111,7 +114,10 @@ export const inventoryTools: ErpNextTool[] = [
           type: "string",
           description: "Item group (default: 'All Item Groups')",
         },
-        uom: { type: "string", description: "Unit of measure (default: 'Nos')" },
+        uom: {
+          type: "string",
+          description: "Unit of measure (default: 'Nos')",
+        },
         is_stock_item: {
           type: "boolean",
           description: "True for physical stock items (default: true)",
@@ -135,8 +141,12 @@ export const inventoryTools: ErpNextTool[] = [
       };
       if (input.item_group) data.item_group = input.item_group as string;
       if (input.uom) data.uom = input.uom as string;
-      if (input.is_stock_item !== undefined) data.is_stock_item = input.is_stock_item;
-      if (input.standard_rate !== undefined) data.standard_rate = input.standard_rate;
+      if (input.is_stock_item !== undefined) {
+        data.is_stock_item = input.is_stock_item;
+      }
+      if (input.standard_rate !== undefined) {
+        data.standard_rate = input.standard_rate;
+      }
       if (input.description) data.description = input.description as string;
 
       const doc = await ctx.client.create("Item", data);
@@ -158,9 +168,15 @@ export const inventoryTools: ErpNextTool[] = [
         name: { type: "string", description: "Item name/item_code" },
         item_name: { type: "string", description: "New item name" },
         item_group: { type: "string", description: "New item group" },
-        standard_rate: { type: "number", description: "New default selling rate" },
+        standard_rate: {
+          type: "number",
+          description: "New default selling rate",
+        },
         description: { type: "string", description: "New description" },
-        disabled: { type: "boolean", description: "Set to true to disable the item" },
+        disabled: {
+          type: "boolean",
+          description: "Set to true to disable the item",
+        },
       },
       required: ["name"],
     },
@@ -176,7 +192,9 @@ export const inventoryTools: ErpNextTool[] = [
       }
 
       if (Object.keys(data).length === 0) {
-        throw new Error("[erpnext_item_update] At least one field to update is required");
+        throw new Error(
+          "[erpnext_item_update] At least one field to update is required",
+        );
       }
 
       const doc = await ctx.client.update("Item", name as string, data);
@@ -247,8 +265,7 @@ export const inventoryTools: ErpNextTool[] = [
     name: "erpnext_warehouse_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List ERPNext Warehouses. " +
+    description: "List ERPNext Warehouses. " +
       "Fields: name, warehouse_name, warehouse_type, company.",
     category: "inventory",
     inputSchema: {
@@ -256,7 +273,10 @@ export const inventoryTools: ErpNextTool[] = [
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
         company: { type: "string", description: "Filter by company" },
-        warehouse_type: { type: "string", description: "Filter by warehouse type" },
+        warehouse_type: {
+          type: "string",
+          description: "Filter by warehouse type",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -291,8 +311,7 @@ export const inventoryTools: ErpNextTool[] = [
     name: "erpnext_stock_entry_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List Stock Entries (material transfers, receipts, issues). " +
+    description: "List Stock Entries (material transfers, receipts, issues). " +
       "Fields: name, stock_entry_type, posting_date, from_warehouse, to_warehouse, total_amount. " +
       "Filterable by stock_entry_type, date range.",
     category: "inventory",
@@ -305,7 +324,10 @@ export const inventoryTools: ErpNextTool[] = [
           description:
             "Filter by type (Material Issue, Material Receipt, Material Transfer, etc.)",
         },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
         date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
@@ -313,7 +335,11 @@ export const inventoryTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.stock_entry_type) {
-        filters.push(["stock_entry_type", "=", input.stock_entry_type as string]);
+        filters.push([
+          "stock_entry_type",
+          "=",
+          input.stock_entry_type as string,
+        ]);
       }
       if (input.date_from) {
         filters.push(["posting_date", ">=", input.date_from as string]);
@@ -354,7 +380,10 @@ export const inventoryTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Stock Entry name (e.g. STE-00001)" },
+        name: {
+          type: "string",
+          description: "Stock Entry name (e.g. STE-00001)",
+        },
       },
       required: ["name"],
     },
@@ -380,7 +409,8 @@ export const inventoryTools: ErpNextTool[] = [
       properties: {
         stock_entry_type: {
           type: "string",
-          description: "Entry type: Material Issue, Material Receipt, Material Transfer",
+          description:
+            "Entry type: Material Issue, Material Receipt, Material Transfer",
           enum: ["Material Issue", "Material Receipt", "Material Transfer"],
         },
         items: {
@@ -394,37 +424,53 @@ export const inventoryTools: ErpNextTool[] = [
               qty: { type: "number" },
               s_warehouse: { type: "string", description: "Source warehouse" },
               t_warehouse: { type: "string", description: "Target warehouse" },
-              basic_rate: { type: "number", description: "Valuation rate (for receipts)" },
+              basic_rate: {
+                type: "number",
+                description: "Valuation rate (for receipts)",
+              },
             },
             required: ["item_code", "qty"],
           },
         },
         from_warehouse: {
           type: "string",
-          description: "Default source warehouse (applies to all items if not per-item)",
+          description:
+            "Default source warehouse (applies to all items if not per-item)",
         },
         to_warehouse: {
           type: "string",
-          description: "Default target warehouse (applies to all items if not per-item)",
+          description:
+            "Default target warehouse (applies to all items if not per-item)",
         },
-        posting_date: { type: "string", description: "Posting date YYYY-MM-DD" },
+        posting_date: {
+          type: "string",
+          description: "Posting date YYYY-MM-DD",
+        },
         remarks: { type: "string", description: "Optional remarks" },
       },
       required: ["stock_entry_type", "items"],
     },
     handler: async (input, ctx) => {
       if (!input.stock_entry_type) {
-        throw new Error("[erpnext_stock_entry_create] 'stock_entry_type' is required");
+        throw new Error(
+          "[erpnext_stock_entry_create] 'stock_entry_type' is required",
+        );
       }
-      if (!input.items || !Array.isArray(input.items) || input.items.length === 0) {
-        throw new Error("[erpnext_stock_entry_create] 'items' must be a non-empty array");
+      if (
+        !input.items || !Array.isArray(input.items) || input.items.length === 0
+      ) {
+        throw new Error(
+          "[erpnext_stock_entry_create] 'items' must be a non-empty array",
+        );
       }
 
       const data: Record<string, unknown> = {
         stock_entry_type: input.stock_entry_type as string,
         items: input.items,
       };
-      if (input.from_warehouse) data.from_warehouse = input.from_warehouse as string;
+      if (input.from_warehouse) {
+        data.from_warehouse = input.from_warehouse as string;
+      }
       if (input.to_warehouse) data.to_warehouse = input.to_warehouse as string;
       if (input.posting_date) data.posting_date = input.posting_date as string;
       if (input.remarks) data.remarks = input.remarks as string;

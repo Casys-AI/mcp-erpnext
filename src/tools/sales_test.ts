@@ -57,11 +57,17 @@ Deno.test("erpnext_customer_list - returns formatted result", async () => {
   });
 
   const tool = getTool("erpnext_customer_list");
-  const result = await tool.handler({}, makeCtx(mockClient)) as Record<string, unknown>;
+  const result = await tool.handler({}, makeCtx(mockClient)) as Record<
+    string,
+    unknown
+  >;
 
   assertEquals(result.count, 2);
   assertEquals((result.data as unknown[]).length, 2);
-  assertEquals((result._meta as { ui: { resourceUri: string } }).ui.resourceUri, "ui://mcp-erpnext/doclist-viewer");
+  assertEquals(
+    (result._meta as { ui: { resourceUri: string } }).ui.resourceUri,
+    "ui://mcp-erpnext/doclist-viewer",
+  );
 });
 
 Deno.test("erpnext_customer_list - passes limit parameter", async () => {
@@ -123,7 +129,10 @@ Deno.test("erpnext_sales_order_get - returns sales order data", async () => {
   });
 
   const tool = getTool("erpnext_sales_order_get");
-  const result = await tool.handler({ name: "SO-001" }, makeCtx(mockClient)) as Record<string, unknown>;
+  const result = await tool.handler(
+    { name: "SO-001" },
+    makeCtx(mockClient),
+  ) as Record<string, unknown>;
 
   // Tool returns { data: doc } — _meta optional
   const doc = (result.data ?? result) as Record<string, unknown>;
@@ -184,15 +193,26 @@ Deno.test("erpnext_sales_invoice_list - returns invoices with _meta.ui", async (
     list: async (doctype: string) => {
       assertEquals(doctype, "Sales Invoice");
       return [
-        { name: "SINV-001", customer: "CUST-001", grand_total: 1000, status: "Paid" },
+        {
+          name: "SINV-001",
+          customer: "CUST-001",
+          grand_total: 1000,
+          status: "Paid",
+        },
       ];
     },
   });
 
   const tool = getTool("erpnext_sales_invoice_list");
-  const result = await tool.handler({}, makeCtx(mockClient)) as Record<string, unknown>;
+  const result = await tool.handler({}, makeCtx(mockClient)) as Record<
+    string,
+    unknown
+  >;
 
   assertEquals(result.count, 1);
   // Sales invoices list uses doclist viewer
-  assertEquals((result._meta as { ui: { resourceUri: string } }).ui.resourceUri, "ui://mcp-erpnext/doclist-viewer");
+  assertEquals(
+    (result._meta as { ui: { resourceUri: string } }).ui.resourceUri,
+    "ui://mcp-erpnext/doclist-viewer",
+  );
 });

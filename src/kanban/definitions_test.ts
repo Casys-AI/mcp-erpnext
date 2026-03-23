@@ -1,14 +1,17 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
-  KANBAN_BOARD_DEFINITIONS,
   getKanbanBoardDefinition,
+  KANBAN_BOARD_DEFINITIONS,
 } from "./definitions.ts";
 
 Deno.test("kanban board definitions - registers Task, Opportunity, and Issue", () => {
   assertEquals(KANBAN_BOARD_DEFINITIONS.length, 3);
   assertEquals(KANBAN_BOARD_DEFINITIONS[0].doctype, "Task");
   assertEquals(KANBAN_BOARD_DEFINITIONS[0].title, "Task Board");
-  assertEquals(KANBAN_BOARD_DEFINITIONS[0].moveToolName, "erpnext_kanban_move_card");
+  assertEquals(
+    KANBAN_BOARD_DEFINITIONS[0].moveToolName,
+    "erpnext_kanban_move_card",
+  );
   assertEquals(KANBAN_BOARD_DEFINITIONS[1].doctype, "Opportunity");
   assertEquals(KANBAN_BOARD_DEFINITIONS[1].title, "Opportunity Board");
   assertEquals(KANBAN_BOARD_DEFINITIONS[2].doctype, "Issue");

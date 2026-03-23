@@ -12,9 +12,9 @@
  * @module lib/erpnext/ui/kpi-viewer
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
-import { fonts, formatNumber, formatCurrency } from "~/shared/theme";
+import { fonts, formatCurrency, formatNumber } from "~/shared/theme";
 import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
 import {
   canRequestUiRefresh,
@@ -111,7 +111,11 @@ function DeltaBadge({ delta, deltaLabel, trend, trendIsGood }: {
   trendIsGood?: boolean;
 }) {
   const direction = trend ?? (delta > 0 ? "up" : delta < 0 ? "down" : "flat");
-  const arrow = direction === "up" ? "\u25B2" : direction === "down" ? "\u25BC" : "\u25C6";
+  const arrow = direction === "up"
+    ? "\u25B2"
+    : direction === "down"
+    ? "\u25BC"
+    : "\u25C6";
 
   // Determine color: good = green, bad = red, flat = muted
   let badgeColor: string;
@@ -131,7 +135,9 @@ function DeltaBadge({ delta, deltaLabel, trend, trendIsGood }: {
   }
 
   const sign = delta > 0 ? "+" : "";
-  const formatted = `${sign}${formatNumber(Math.abs(delta), Math.abs(delta) < 10 ? 1 : 0)}`;
+  const formatted = `${sign}${
+    formatNumber(Math.abs(delta), Math.abs(delta) < 10 ? 1 : 0)
+  }`;
 
   return (
     <span
@@ -152,7 +158,14 @@ function DeltaBadge({ delta, deltaLabel, trend, trendIsGood }: {
       <span style={{ fontSize: 8 }}>{arrow}</span>
       {formatted}%
       {deltaLabel && (
-        <span style={{ fontWeight: 400, fontFamily: fonts.sans, opacity: 0.75, marginLeft: 2 }}>
+        <span
+          style={{
+            fontWeight: 400,
+            fontFamily: fonts.sans,
+            opacity: 0.75,
+            marginLeft: 2,
+          }}
+        >
           {deltaLabel}
         </span>
       )}
@@ -192,7 +205,12 @@ function KpiContent(
   const hasServerTools = app.getHostCapabilities()?.serverTools;
 
   async function drillDown(message: string) {
-    try { await app.sendMessage({ role: "user", content: [{ type: "text", text: message }] }); } catch {}
+    try {
+      await app.sendMessage({
+        role: "user",
+        content: [{ type: "text", text: message }],
+      });
+    } catch {}
   }
 
   // Format the main value
@@ -225,7 +243,13 @@ function KpiContent(
 
       <div style={{ padding: "12px 16px 14px" }}>
         {/* Layout: text left, sparkline right */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+          }}
+        >
           {/* Left side: label + value + delta */}
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Label */}
@@ -241,7 +265,14 @@ function KpiContent(
             >
               {data.label}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 6,
+              }}
+            >
               <button
                 onClick={onRefresh}
                 disabled={refreshing}
@@ -269,13 +300,16 @@ function KpiContent(
                     : "var(--text-faint)",
                 }}
               >
-                {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
+                {error ??
+                  (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
               </div>
             </div>
 
             {/* Big number — clickable for drill-down */}
             <div
-              onClick={hasServerTools && data._drillDown ? () => drillDown(data._drillDown!) : undefined}
+              onClick={hasServerTools && data._drillDown
+                ? () => drillDown(data._drillDown!)
+                : undefined}
               style={{
                 fontSize: 32,
                 fontWeight: 700,
@@ -283,11 +317,18 @@ function KpiContent(
                 color: accentColor,
                 lineHeight: 1.1,
                 marginBottom: 8,
-                cursor: hasServerTools && data._drillDown ? "pointer" : "default",
+                cursor: hasServerTools && data._drillDown
+                  ? "pointer"
+                  : "default",
                 transition: "opacity 0.15s",
               }}
-              onMouseEnter={(e) => { if (data._drillDown) (e.currentTarget as HTMLElement).style.opacity = "0.75"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+              onMouseEnter={(e) => {
+                if (data._drillDown) {(e.currentTarget as HTMLElement).style
+                    .opacity = "0.75";}
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.opacity = "1";
+              }}
               title={data._drillDown ? "Click to drill down" : undefined}
             >
               {displayValue}
@@ -310,10 +351,16 @@ function KpiContent(
               style={{
                 paddingTop: 20,
                 paddingLeft: 12,
-                cursor: hasServerTools && data._trendDrillDown ? "pointer" : "default",
+                cursor: hasServerTools && data._trendDrillDown
+                  ? "pointer"
+                  : "default",
               }}
-              onClick={hasServerTools && data._trendDrillDown ? () => drillDown(data._trendDrillDown!) : undefined}
-              title={data._trendDrillDown ? "Click to see trend details" : undefined}
+              onClick={hasServerTools && data._trendDrillDown
+                ? () => drillDown(data._trendDrillDown!)
+                : undefined}
+              title={data._trendDrillDown
+                ? "Click to see trend details"
+                : undefined}
             >
               <Sparkline data={data.sparkline} color={sparklineColor} />
             </div>
@@ -340,7 +387,10 @@ export function KpiViewer() {
 
   function hydrateData(nextData: KpiData) {
     dataRef.current = nextData;
-    refreshRequestRef.current = resolveUiRefreshRequest(nextData, refreshRequestRef.current);
+    refreshRequestRef.current = resolveUiRefreshRequest(
+      nextData,
+      refreshRequestRef.current,
+    );
     setData(nextData);
   }
 
@@ -363,15 +413,22 @@ export function KpiViewer() {
   }
 
   async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
-    const request = resolveUiRefreshRequest(dataRef.current, refreshRequestRef.current);
-    if (!canRequestUiRefresh({
-      request,
-      visibilityState: typeof document === "undefined" ? "visible" : document.visibilityState,
-      refreshInFlight: refreshInFlightRef.current,
-      now: Date.now(),
-      lastRefreshStartedAt: lastRefreshStartedAtRef.current,
-      minIntervalMs: KPI_REFRESH_INTERVAL_MS,
-    }, options)) {
+    const request = resolveUiRefreshRequest(
+      dataRef.current,
+      refreshRequestRef.current,
+    );
+    if (
+      !canRequestUiRefresh({
+        request,
+        visibilityState: typeof document === "undefined"
+          ? "visible"
+          : document.visibilityState,
+        refreshInFlight: refreshInFlightRef.current,
+        now: Date.now(),
+        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+        minIntervalMs: KPI_REFRESH_INTERVAL_MS,
+      }, options)
+    ) {
       return false;
     }
 
@@ -461,5 +518,12 @@ export function KpiViewer() {
     );
   }
 
-  return <KpiContent data={data} error={error} refreshing={refreshing} onRefresh={() => void requestRefresh({ ignoreInterval: true })} />;
+  return (
+    <KpiContent
+      data={data}
+      error={error}
+      refreshing={refreshing}
+      onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+    />
+  );
 }

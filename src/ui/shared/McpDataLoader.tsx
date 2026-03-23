@@ -8,7 +8,7 @@
  * Shows loading skeleton or empty state while waiting.
  */
 
-import { useState, useEffect, ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { colors } from "./theme";
 
 /** Extract data from window.mcpData */
@@ -48,7 +48,7 @@ export function McpDataLoader<T>({ children, empty }: McpDataLoaderProps<T>) {
           // Send initialized notification → host will send tool-input + tool-result
           window.parent.postMessage(
             { jsonrpc: "2.0", method: "ui/notifications/initialized" },
-            "*"
+            "*",
           );
           mcpInitialized = true;
           return;
@@ -57,7 +57,7 @@ export function McpDataLoader<T>({ children, empty }: McpDataLoaderProps<T>) {
         // tool-result: extract data from content[0].text
         if (msg.method === "ui/notifications/tool-result") {
           const textContent = msg.params?.content?.find(
-            (c: { type: string; text?: string }) => c.type === "text"
+            (c: { type: string; text?: string }) => c.type === "text",
           );
           if (textContent?.text) {
             try {
@@ -96,7 +96,7 @@ export function McpDataLoader<T>({ children, empty }: McpDataLoaderProps<T>) {
             capabilities: {},
           },
         },
-        "*"
+        "*",
       );
     }
 
@@ -181,8 +181,24 @@ function DefaultEmptyState() {
         <circle cx="12" cy="14" r="1.5" fill="currentColor" />
         <circle cx="17" cy="14" r="1.5" fill="currentColor" />
         <circle cx="22" cy="14" r="1.5" fill="currentColor" />
-        <rect x="14" y="24" width="20" height="2" rx="1" fill="currentColor" opacity="0.5" />
-        <rect x="18" y="30" width="12" height="2" rx="1" fill="currentColor" opacity="0.3" />
+        <rect
+          x="14"
+          y="24"
+          width="20"
+          height="2"
+          rx="1"
+          fill="currentColor"
+          opacity="0.5"
+        />
+        <rect
+          x="18"
+          y="30"
+          width="12"
+          height="2"
+          rx="1"
+          fill="currentColor"
+          opacity="0.3"
+        />
       </svg>
       <div style={{ fontSize: 13, textAlign: "center" }}>
         No data available

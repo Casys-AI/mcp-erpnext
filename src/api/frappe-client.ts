@@ -173,7 +173,8 @@ export class FrappeClient {
       if (typeof responseBody === "object" && responseBody !== null) {
         const rb = responseBody as Record<string, unknown>;
         const excType = rb.exc_type as string | undefined;
-        const baseMsg = (rb.message as string) ?? excType ?? response.statusText;
+        const baseMsg = (rb.message as string) ?? excType ??
+          response.statusText;
 
         // Parse _server_messages — Frappe returns a JSON-encoded array of JSON-encoded strings
         // e.g. "[\"{ \\\"message\\\": \\\"Row #1: Warehouse is required\\\" }\"]"
@@ -237,7 +238,9 @@ export class FrappeClient {
   ): Promise<T> {
     const res = await this.request<FrappeDocResponse<T>>(
       "GET",
-      `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`,
+      `/api/resource/${encodeURIComponent(doctype)}/${
+        encodeURIComponent(name)
+      }`,
     );
     return res.data;
   }
@@ -269,7 +272,9 @@ export class FrappeClient {
   ): Promise<T> {
     const res = await this.request<FrappeDocResponse<T>>(
       "PUT",
-      `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`,
+      `/api/resource/${encodeURIComponent(doctype)}/${
+        encodeURIComponent(name)
+      }`,
       { data },
     );
     return res.data;
@@ -282,7 +287,9 @@ export class FrappeClient {
   async delete(doctype: string, name: string): Promise<void> {
     await this.request<unknown>(
       "DELETE",
-      `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`,
+      `/api/resource/${encodeURIComponent(doctype)}/${
+        encodeURIComponent(name)
+      }`,
     );
   }
 

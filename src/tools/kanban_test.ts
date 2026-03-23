@@ -38,7 +38,12 @@ Deno.test("erpnext_kanban_get_board - returns a Task board with metadata and pag
   const mockClient = makeMockClient({
     list: async (
       _doctype: string,
-      opts: { limit?: number; limit_start?: number; fields?: string[]; filters?: unknown[] },
+      opts: {
+        limit?: number;
+        limit_start?: number;
+        fields?: string[];
+        filters?: unknown[];
+      },
     ) => {
       capturedLimit = opts.limit ?? 0;
       capturedOffset = opts.limit_start ?? 0;
@@ -75,7 +80,13 @@ Deno.test("erpnext_kanban_get_board - returns a Task board with metadata and pag
 
   const tool = getTool("erpnext_kanban_get_board");
   const result = await tool.handler(
-    { doctype: "Task", limit: 2, offset: 3, project: "Alpha", priority: "High" },
+    {
+      doctype: "Task",
+      limit: 2,
+      offset: 3,
+      project: "Alpha",
+      priority: "High",
+    },
     makeCtx(mockClient),
   ) as Record<string, unknown>;
 
@@ -100,15 +111,41 @@ Deno.test("erpnext_kanban_get_board - returns a Task board with metadata and pag
     ["project", "=", "Alpha"],
     ["priority", "=", "High"],
   ]);
-  assertEquals((result._meta as { ui: { resourceUri: string } }).ui.resourceUri, "ui://mcp-erpnext/kanban-viewer");
+  assertEquals(
+    (result._meta as { ui: { resourceUri: string } }).ui.resourceUri,
+    "ui://mcp-erpnext/kanban-viewer",
+  );
   assertEquals(result.doctype, "Task");
-  assertEquals((result.columns as Array<{ id: string; count: number }>)[0].id, "open");
-  assertEquals((result.columns as Array<{ id: string; count: number }>)[0].count, 1);
-  assertEquals((result.pagination as { limit: number; offset: number; hasMore: boolean }).limit, 2);
-  assertEquals((result.pagination as { limit: number; offset: number; hasMore: boolean }).offset, 3);
+  assertEquals(
+    (result.columns as Array<{ id: string; count: number }>)[0].id,
+    "open",
+  );
+  assertEquals(
+    (result.columns as Array<{ id: string; count: number }>)[0].count,
+    1,
+  );
+  assertEquals(
+    (result.pagination as { limit: number; offset: number; hasMore: boolean })
+      .limit,
+    2,
+  );
+  assertEquals(
+    (result.pagination as { limit: number; offset: number; hasMore: boolean })
+      .offset,
+    3,
+  );
   assertEquals((result.pagination as { loadedCount: number }).loadedCount, 5);
-  assertEquals((result.pagination as { limit: number; offset: number; hasMore: boolean }).hasMore, true);
-  assertEquals((result.allowedTransitions as Array<{ fromColumn: string; toColumn: string }>)[0].fromColumn, "open");
+  assertEquals(
+    (result.pagination as { limit: number; offset: number; hasMore: boolean })
+      .hasMore,
+    true,
+  );
+  assertEquals(
+    (result.allowedTransitions as Array<
+      { fromColumn: string; toColumn: string }
+    >)[0].fromColumn,
+    "open",
+  );
 });
 
 Deno.test("erpnext_kanban_get_board - rejects unsupported doctypes", async () => {
@@ -178,7 +215,10 @@ Deno.test("erpnext_kanban_get_board - returns an Opportunity board", async () =>
   ]);
   assertEquals(result.doctype, "Opportunity");
   assertEquals((result.columns as Array<{ id: string }>)[0].id, "open");
-  assertEquals((result.cards as Array<{ title: string }>)[0].title, "ACME renewal");
+  assertEquals(
+    (result.cards as Array<{ title: string }>)[0].title,
+    "ACME renewal",
+  );
 });
 
 Deno.test("erpnext_kanban_get_board - returns an Issue board", async () => {
@@ -236,7 +276,10 @@ Deno.test("erpnext_kanban_get_board - returns an Issue board", async () => {
   ]);
   assertEquals(result.doctype, "Issue");
   assertEquals((result.columns as Array<{ id: string }>)[0].id, "open");
-  assertEquals((result.cards as Array<{ title: string }>)[0].title, "Shipment damaged in transit");
+  assertEquals(
+    (result.cards as Array<{ title: string }>)[0].title,
+    "Shipment damaged in transit",
+  );
 });
 
 Deno.test("erpnext_kanban_get_board - Task cards include enriched fields", async () => {
@@ -257,7 +300,10 @@ Deno.test("erpnext_kanban_get_board - Task cards include enriched fields", async
   });
 
   const tool = getTool("erpnext_kanban_get_board");
-  const result = await tool.handler({ doctype: "Task" }, makeCtx(mockClient)) as Record<string, unknown>;
+  const result = await tool.handler(
+    { doctype: "Task" },
+    makeCtx(mockClient),
+  ) as Record<string, unknown>;
   const cards = result.cards as Array<Record<string, unknown>>;
   assertEquals(cards[0].assignee, "alice@example.com");
   assertEquals(cards[0].description, "Some HTML description");
@@ -285,7 +331,10 @@ Deno.test("erpnext_kanban_get_board - Opportunity cards include closing date and
   });
 
   const tool = getTool("erpnext_kanban_get_board");
-  const result = await tool.handler({ doctype: "Opportunity" }, makeCtx(mockClient)) as Record<string, unknown>;
+  const result = await tool.handler(
+    { doctype: "Opportunity" },
+    makeCtx(mockClient),
+  ) as Record<string, unknown>;
   const cards = result.cards as Array<Record<string, unknown>>;
   assertEquals(cards[0].assignee, "alice@example.com");
   assertEquals(cards[0].dueDate, "2025-06-15");
@@ -310,7 +359,10 @@ Deno.test("erpnext_kanban_get_board - Issue cards include SLA breach badge", asy
   });
 
   const tool = getTool("erpnext_kanban_get_board");
-  const result = await tool.handler({ doctype: "Issue" }, makeCtx(mockClient)) as Record<string, unknown>;
+  const result = await tool.handler(
+    { doctype: "Issue" },
+    makeCtx(mockClient),
+  ) as Record<string, unknown>;
   const cards = result.cards as Array<Record<string, unknown>>;
   assertEquals(cards[0].assignee, "bob@example.com");
   assertEquals(cards[0].dueDate, "2025-01-01");
@@ -324,7 +376,11 @@ Deno.test("erpnext_kanban_move_card - executes an allowed Task move", async () =
   let updatedData: Record<string, unknown> | undefined;
 
   const mockClient = makeMockClient({
-    update: async (doctype: string, name: string, data: Record<string, unknown>) => {
+    update: async (
+      doctype: string,
+      name: string,
+      data: Record<string, unknown>,
+    ) => {
       updatedDoctype = doctype;
       updatedName = name;
       updatedData = data;
@@ -424,7 +480,11 @@ Deno.test("erpnext_kanban_move_card - executes an allowed Opportunity move", asy
       status: "Open",
       party_name: "Acme Corp",
     }),
-    update: async (doctype: string, name: string, data: Record<string, unknown>) => {
+    update: async (
+      doctype: string,
+      name: string,
+      data: Record<string, unknown>,
+    ) => {
       updatedDoctype = doctype;
       updatedName = name;
       updatedData = data;
@@ -457,7 +517,10 @@ Deno.test("erpnext_kanban_move_card - executes an allowed Opportunity move", asy
   assertEquals(updatedName, "CRM-OPP-2026-00001");
   assertEquals(updatedData, { status: "Quotation" });
   assertEquals(result.ok, true);
-  assertEquals((result.serverCard as { columnId: string }).columnId, "quotation");
+  assertEquals(
+    (result.serverCard as { columnId: string }).columnId,
+    "quotation",
+  );
 });
 
 Deno.test("erpnext_kanban_move_card - executes an allowed Issue move", async () => {
@@ -473,7 +536,11 @@ Deno.test("erpnext_kanban_move_card - executes an allowed Issue move", async () 
       customer: "Acme Corp",
       raised_by: "alice@example.com",
     }),
-    update: async (doctype: string, name: string, data: Record<string, unknown>) => {
+    update: async (
+      doctype: string,
+      name: string,
+      data: Record<string, unknown>,
+    ) => {
       updatedDoctype = doctype;
       updatedName = name;
       updatedData = data;
@@ -503,5 +570,8 @@ Deno.test("erpnext_kanban_move_card - executes an allowed Issue move", async () 
   assertEquals(updatedName, "ISS-2026-00001");
   assertEquals(updatedData, { status: "Resolved" });
   assertEquals(result.ok, true);
-  assertEquals((result.serverCard as { columnId: string }).columnId, "resolved");
+  assertEquals(
+    (result.serverCard as { columnId: string }).columnId,
+    "resolved",
+  );
 });

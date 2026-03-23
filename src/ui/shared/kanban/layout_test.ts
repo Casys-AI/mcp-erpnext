@@ -1,8 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import {
-  clampKanbanFocusIndex,
-  shouldUseKanbanColumnFocus,
-} from "./layout.ts";
+import { clampKanbanFocusIndex, shouldUseKanbanColumnFocus } from "./layout.ts";
 
 Deno.test("kanban layout - enables column focus only on narrow viewports with multiple columns", () => {
   assertEquals(shouldUseKanbanColumnFocus(1280, 4), false);

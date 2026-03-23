@@ -17,8 +17,7 @@ export const setupTools: ErpNextTool[] = [
     name: "erpnext_company_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List ERPNext companies. " +
+    description: "List ERPNext companies. " +
       "Fields: name, abbr, default_currency, country, domain.",
     category: "setup",
     inputSchema: {
@@ -56,12 +55,22 @@ export const setupTools: ErpNextTool[] = [
       type: "object",
       properties: {
         company_name: { type: "string", description: "Company name" },
-        abbr: { type: "string", description: "Abbreviation (e.g. CI for Casys Industries)" },
-        default_currency: { type: "string", description: "Currency code (e.g. EUR, USD)" },
-        country: { type: "string", description: "Country name (e.g. France, United States)" },
+        abbr: {
+          type: "string",
+          description: "Abbreviation (e.g. CI for Casys Industries)",
+        },
+        default_currency: {
+          type: "string",
+          description: "Currency code (e.g. EUR, USD)",
+        },
+        country: {
+          type: "string",
+          description: "Country name (e.g. France, United States)",
+        },
         domain: {
           type: "string",
-          description: "Business domain (Manufacturing, Services, Retail, Distribution, Education, etc.)",
+          description:
+            "Business domain (Manufacturing, Services, Retail, Distribution, Education, etc.)",
         },
       },
       required: ["company_name", "abbr", "default_currency", "country"],
@@ -74,7 +83,9 @@ export const setupTools: ErpNextTool[] = [
         throw new Error("[erpnext_company_create] 'abbr' is required");
       }
       if (!input.default_currency) {
-        throw new Error("[erpnext_company_create] 'default_currency' is required");
+        throw new Error(
+          "[erpnext_company_create] 'default_currency' is required",
+        );
       }
       if (!input.country) {
         throw new Error("[erpnext_company_create] 'country' is required");

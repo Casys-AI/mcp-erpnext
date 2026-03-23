@@ -20,11 +20,13 @@ Deno.test("opportunity kanban adapter - exposes Opportunity columns and filters"
     "closed",
     "lost",
   ]);
-  assert(allowedTransitions.some((transition) =>
-    transition.fromColumn === "open" &&
-    transition.toColumn === "quotation" &&
-    transition.allowed
-  ));
+  assert(
+    allowedTransitions.some((transition) =>
+      transition.fromColumn === "open" &&
+      transition.toColumn === "quotation" &&
+      transition.allowed
+    ),
+  );
   assertEquals(fields, [
     "name",
     "title",
@@ -85,7 +87,11 @@ Deno.test("opportunity kanban adapter - executes an allowed move through Opportu
         party_name: "Acme Corp",
         status: "Open",
       }),
-      update: async (doctype: string, name: string, data: Record<string, unknown>) => {
+      update: async (
+        doctype: string,
+        name: string,
+        data: Record<string, unknown>,
+      ) => {
         capturedDoctype = doctype;
         capturedName = name;
         capturedData = data;

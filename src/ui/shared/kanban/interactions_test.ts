@@ -3,10 +3,10 @@ import {
   applyOptimisticMove,
   canDropCardInColumn,
   enqueueMove,
+  type QueuedKanbanMove,
   reconcileMoveSuccess,
   rollbackMoveFailure,
   takeNextQueuedMove,
-  type QueuedKanbanMove,
 } from "./interactions.ts";
 import type { KanbanBoardData } from "./types.ts";
 

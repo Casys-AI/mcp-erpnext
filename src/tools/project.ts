@@ -17,8 +17,7 @@ export const projectTools: ErpNextTool[] = [
     name: "erpnext_project_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List Projects. Filterable by status. " +
+    description: "List Projects. Filterable by status. " +
       "Fields: name, project_name, status, percent_complete, expected_start_date, " +
       "expected_end_date, estimated_costing.",
     category: "project",
@@ -96,8 +95,7 @@ export const projectTools: ErpNextTool[] = [
     name: "erpnext_task_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List Tasks. Filterable by project, status, priority. " +
+    description: "List Tasks. Filterable by project, status, priority. " +
       "Fields: name, subject, project, status, priority, exp_start_date, exp_end_date, progress.",
     category: "project",
     inputSchema: {
@@ -107,7 +105,8 @@ export const projectTools: ErpNextTool[] = [
         project: { type: "string", description: "Filter by project name" },
         status: {
           type: "string",
-          description: "Filter by status (Open, Working, Pending Review, Overdue, Completed, Cancelled)",
+          description:
+            "Filter by status (Open, Working, Pending Review, Overdue, Completed, Cancelled)",
         },
         priority: {
           type: "string",
@@ -168,15 +167,28 @@ export const projectTools: ErpNextTool[] = [
         status: {
           type: "string",
           description: "Task status (default: Open)",
-          enum: ["Open", "Working", "Pending Review", "Overdue", "Completed", "Cancelled"],
+          enum: [
+            "Open",
+            "Working",
+            "Pending Review",
+            "Overdue",
+            "Completed",
+            "Cancelled",
+          ],
         },
         priority: {
           type: "string",
           description: "Task priority (default: Medium)",
           enum: ["Low", "Medium", "High", "Urgent"],
         },
-        exp_start_date: { type: "string", description: "Expected start date YYYY-MM-DD" },
-        exp_end_date: { type: "string", description: "Expected end date YYYY-MM-DD" },
+        exp_start_date: {
+          type: "string",
+          description: "Expected start date YYYY-MM-DD",
+        },
+        exp_end_date: {
+          type: "string",
+          description: "Expected end date YYYY-MM-DD",
+        },
       },
       required: ["project", "subject"],
     },
@@ -194,7 +206,9 @@ export const projectTools: ErpNextTool[] = [
       };
       if (input.status) data.status = input.status as string;
       if (input.priority) data.priority = input.priority as string;
-      if (input.exp_start_date) data.exp_start_date = input.exp_start_date as string;
+      if (input.exp_start_date) {
+        data.exp_start_date = input.exp_start_date as string;
+      }
       if (input.exp_end_date) data.exp_end_date = input.exp_end_date as string;
 
       const doc = await ctx.client.create("Task", data);
@@ -240,7 +254,14 @@ export const projectTools: ErpNextTool[] = [
         status: {
           type: "string",
           description: "New status",
-          enum: ["Open", "Working", "Pending Review", "Overdue", "Completed", "Cancelled"],
+          enum: [
+            "Open",
+            "Working",
+            "Pending Review",
+            "Overdue",
+            "Completed",
+            "Cancelled",
+          ],
         },
         priority: {
           type: "string",
@@ -251,7 +272,10 @@ export const projectTools: ErpNextTool[] = [
           type: "number",
           description: "Completion percentage (0-100)",
         },
-        exp_end_date: { type: "string", description: "New expected end date YYYY-MM-DD" },
+        exp_end_date: {
+          type: "string",
+          description: "New expected end date YYYY-MM-DD",
+        },
         description: { type: "string", description: "New task description" },
       },
       required: ["name"],
@@ -268,7 +292,9 @@ export const projectTools: ErpNextTool[] = [
       }
 
       if (Object.keys(data).length === 0) {
-        throw new Error("[erpnext_task_update] At least one field to update is required");
+        throw new Error(
+          "[erpnext_task_update] At least one field to update is required",
+        );
       }
 
       const doc = await ctx.client.update("Task", name as string, data);
@@ -285,8 +311,7 @@ export const projectTools: ErpNextTool[] = [
     name: "erpnext_timesheet_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List Timesheets. Filterable by employee, project. " +
+    description: "List Timesheets. Filterable by employee, project. " +
       "Fields: name, employee, start_date, end_date, status, total_hours.",
     category: "project",
     inputSchema: {
@@ -315,7 +340,14 @@ export const projectTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Timesheet", {
-        fields: ["name", "employee", "start_date", "end_date", "status", "total_hours"],
+        fields: [
+          "name",
+          "employee",
+          "start_date",
+          "end_date",
+          "status",
+          "total_hours",
+        ],
         filters,
         limit,
         order_by: "modified desc",
@@ -394,7 +426,9 @@ export const projectTools: ErpNextTool[] = [
       if (input.expected_start_date) {
         data.expected_start_date = input.expected_start_date as string;
       }
-      if (input.expected_end_date) data.expected_end_date = input.expected_end_date as string;
+      if (input.expected_end_date) {
+        data.expected_end_date = input.expected_end_date as string;
+      }
       if (input.estimated_costing !== undefined) {
         data.estimated_costing = input.estimated_costing;
       }

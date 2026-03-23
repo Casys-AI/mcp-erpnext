@@ -21,10 +21,26 @@ export function ChipFilters({ columns, chipFilters, onFilterChange }: {
   if (columns.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap",
+        alignItems: "center",
+        marginBottom: 12,
+      }}
+    >
       {columns.map(({ col, values }) => (
         <Fragment key={col}>
-          <span style={{ fontSize: 10, color: colors.text.faint, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>
+          <span
+            style={{
+              fontSize: 10,
+              color: colors.text.faint,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              fontWeight: 700,
+            }}
+          >
             {col.replace(/_/g, " ")}
           </span>
           <button
@@ -35,8 +51,12 @@ export function ChipFilters({ columns, chipFilters, onFilterChange }: {
               fontSize: 10,
               borderRadius: 8,
               border: "1px solid transparent",
-              background: chipFilters[col] == null ? colors.accentDim : colors.bg.elevated,
-              color: chipFilters[col] == null ? colors.accent : colors.text.secondary,
+              background: chipFilters[col] == null
+                ? colors.accentDim
+                : colors.bg.elevated,
+              color: chipFilters[col] == null
+                ? colors.accent
+                : colors.text.secondary,
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
@@ -44,7 +64,7 @@ export function ChipFilters({ columns, chipFilters, onFilterChange }: {
           >
             All
           </button>
-          {values.map(v => {
+          {values.map((v) => {
             const isActive = chipFilters[col] === v;
             const statusScheme = isStatusField(col) ? DOC_STATUS[v] : null;
             return (
@@ -57,8 +77,12 @@ export function ChipFilters({ columns, chipFilters, onFilterChange }: {
                   fontSize: 10,
                   borderRadius: 8,
                   border: "1px solid transparent",
-                  background: isActive ? statusScheme?.bg ?? colors.accentDim : colors.bg.elevated,
-                  color: isActive ? statusScheme?.color ?? colors.accent : colors.text.secondary,
+                  background: isActive
+                    ? statusScheme?.bg ?? colors.accentDim
+                    : colors.bg.elevated,
+                  color: isActive
+                    ? statusScheme?.color ?? colors.accent
+                    : colors.text.secondary,
                   fontWeight: 700,
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",

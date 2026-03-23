@@ -26,7 +26,10 @@ export const manufacturingTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        item: { type: "string", description: "Filter by finished goods item code" },
+        item: {
+          type: "string",
+          description: "Filter by finished goods item code",
+        },
         is_active: {
           type: "boolean",
           description: "Filter by active status (default: all)",
@@ -47,7 +50,11 @@ export const manufacturingTools: ErpNextTool[] = [
         filters.push(["is_active", "=", (input.is_active as boolean) ? 1 : 0]);
       }
       if (input.is_default !== undefined) {
-        filters.push(["is_default", "=", (input.is_default as boolean) ? 1 : 0]);
+        filters.push([
+          "is_default",
+          "=",
+          (input.is_default as boolean) ? 1 : 0,
+        ]);
       }
 
       const docs = await ctx.client.list("BOM", {
@@ -111,14 +118,23 @@ export const manufacturingTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        production_item: { type: "string", description: "Filter by item being produced" },
+        production_item: {
+          type: "string",
+          description: "Filter by item being produced",
+        },
         status: {
           type: "string",
           description:
             "Filter by status (Draft, Submitted, Not Started, In Process, Completed, Stopped, etc.)",
         },
-        date_from: { type: "string", description: "Planned start date from YYYY-MM-DD" },
-        date_to: { type: "string", description: "Planned start date to YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Planned start date from YYYY-MM-DD",
+        },
+        date_to: {
+          type: "string",
+          description: "Planned start date to YYYY-MM-DD",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -170,7 +186,10 @@ export const manufacturingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Work Order name (e.g. MFG-WO-00001)" },
+        name: {
+          type: "string",
+          description: "Work Order name (e.g. MFG-WO-00001)",
+        },
       },
       required: ["name"],
     },
@@ -192,8 +211,14 @@ export const manufacturingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        production_item: { type: "string", description: "Item code of the item to produce" },
-        bom_no: { type: "string", description: "BOM to use (e.g. BOM-ITEM-00001)" },
+        production_item: {
+          type: "string",
+          description: "Item code of the item to produce",
+        },
+        bom_no: {
+          type: "string",
+          description: "BOM to use (e.g. BOM-ITEM-00001)",
+        },
         qty: { type: "number", description: "Quantity to produce" },
         planned_start_date: {
           type: "string",
@@ -212,7 +237,9 @@ export const manufacturingTools: ErpNextTool[] = [
     },
     handler: async (input, ctx) => {
       if (!input.production_item) {
-        throw new Error("[erpnext_work_order_create] 'production_item' is required");
+        throw new Error(
+          "[erpnext_work_order_create] 'production_item' is required",
+        );
       }
       if (!input.bom_no) {
         throw new Error("[erpnext_work_order_create] 'bom_no' is required");
@@ -254,7 +281,8 @@ export const manufacturingTools: ErpNextTool[] = [
         work_order: { type: "string", description: "Filter by Work Order" },
         status: {
           type: "string",
-          description: "Filter by status (Open, Work In Progress, Completed, Cancelled)",
+          description:
+            "Filter by status (Open, Work In Progress, Completed, Cancelled)",
         },
         operation: { type: "string", description: "Filter by operation name" },
       },

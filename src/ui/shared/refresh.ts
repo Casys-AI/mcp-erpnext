@@ -56,7 +56,9 @@ export function normalizeUiRefreshFailureMessage(cause: unknown): string {
   return "Refresh failed";
 }
 
-export function extractToolResultText(result: ToolResultPayload): string | null {
+export function extractToolResultText(
+  result: ToolResultPayload,
+): string | null {
   if (result.structuredContent) {
     return JSON.stringify(result.structuredContent);
   }

@@ -1,8 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import {
-  createKanbanInitialState,
-  kanbanStateReducer,
-} from "./state.ts";
+import { createKanbanInitialState, kanbanStateReducer } from "./state.ts";
 import type { KanbanBoardData } from "./types.ts";
 
 function makeBoard(): KanbanBoardData {
@@ -72,7 +69,11 @@ Deno.test("kanban state - hydrate-detail populates card detail", () => {
     cardId: "TASK-0001",
   });
 
-  const detail = { name: "TASK-0001", subject: "Draft protocol", status: "Open" };
+  const detail = {
+    name: "TASK-0001",
+    subject: "Draft protocol",
+    status: "Open",
+  };
   const state = kanbanStateReducer(selected, {
     type: "hydrate-detail",
     detail,

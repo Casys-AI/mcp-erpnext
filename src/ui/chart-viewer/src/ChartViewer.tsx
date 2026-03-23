@@ -13,21 +13,35 @@
  * 3. Any MCP tool returning { _meta: { ui: { resourceUri: "ui://mcp-erpnext/chart-viewer" } } }
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import {
-  BarChart, Bar,
-  LineChart, Line,
-  AreaChart, Area,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
   ComposedChart,
-  PieChart, Pie, Cell,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  ScatterChart, Scatter,
-  Treemap,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
   ResponsiveContainer,
+  Scatter,
+  ScatterChart,
+  Tooltip,
+  Treemap,
+  XAxis,
+  YAxis,
 } from "recharts";
-import { fonts, formatNumber, formatCurrency } from "~/shared/theme";
+import { fonts, formatCurrency, formatNumber } from "~/shared/theme";
 import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
 import {
   canRequestUiRefresh,
@@ -51,10 +65,15 @@ const TOOL_CALL_TIMEOUT_MS = 10_000;
 // ============================================================================
 
 type ChartType =
-  | "bar" | "horizontal-bar" | "stacked-bar"
-  | "line" | "area" | "stacked-area"
+  | "bar"
+  | "horizontal-bar"
+  | "stacked-bar"
+  | "line"
+  | "area"
+  | "stacked-area"
   | "composed"
-  | "pie" | "donut"
+  | "pie"
+  | "donut"
   | "radar"
   | "scatter"
   | "treemap";
@@ -166,7 +185,9 @@ function toRows(data: ChartData) {
 
 function fmtValue(v: number, data: ChartData) {
   if (data.currency) return formatCurrency(v, data.currency);
-  return `${formatNumber(v, v % 1 === 0 ? 0 : 1)}${data.unit ? " " + data.unit : ""}`;
+  return `${formatNumber(v, v % 1 === 0 ? 0 : 1)}${
+    data.unit ? " " + data.unit : ""
+  }`;
 }
 
 function fmtTick(v: number) {
@@ -177,8 +198,16 @@ function fmtTick(v: number) {
 // Shared axis/grid props
 // ============================================================================
 
-const TICK_X = { fontSize: 11, fill: "var(--text-secondary)", fontFamily: fonts.sans };
-const TICK_Y = { fontSize: 10, fill: "var(--text-faint)", fontFamily: fonts.mono };
+const TICK_X = {
+  fontSize: 11,
+  fill: "var(--text-secondary)",
+  fontFamily: fonts.sans,
+};
+const TICK_Y = {
+  fontSize: 10,
+  fill: "var(--text-faint)",
+  fontFamily: fonts.mono,
+};
 const GRID = { strokeDasharray: "3 3", stroke: "var(--border)" };
 const CURSOR = { fill: "var(--bg-hover)", opacity: 0.5 };
 const MARGIN = { top: 8, right: 16, left: 8, bottom: 4 };
@@ -189,10 +218,17 @@ const MARGIN = { top: 8, right: 16, left: 8, bottom: 4 };
 
 function EmptyChart({ message }: { message: string }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "center",
-      height: "100%", color: "var(--text-muted)", fontSize: 13, fontFamily: fonts.sans,
-    }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100%",
+        color: "var(--text-muted)",
+        fontSize: 13,
+        fontFamily: fonts.sans,
+      }}
+    >
       {message}
     </div>
   );
@@ -210,12 +246,19 @@ function LoadingSkeleton() {
           <div
             key={i}
             className="skeleton"
-            style={{ height: i === 1 ? 32 : 20, width: i === 1 ? "40%" : `${60 + i * 8}%` }}
+            style={{
+              height: i === 1 ? 32 : 20,
+              width: i === 1 ? "40%" : `${60 + i * 8}%`,
+            }}
           />
         ))}
         <div style={{ marginTop: 8 }}>
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="skeleton" style={{ height: 36, marginBottom: 2 }} />
+            <div
+              key={i}
+              className="skeleton"
+              style={{ height: 36, marginBottom: 2 }}
+            />
           ))}
         </div>
       </div>
@@ -235,17 +278,51 @@ function ChartTooltip({ active, payload, label, data }: {
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{
-      background: "var(--bg-elevated)", border: "1px solid var(--border)",
-      borderRadius: 6, padding: "8px 12px", fontSize: 12,
-      fontFamily: fonts.sans, boxShadow: "var(--shadow-md)",
-    }}>
-      {label && <div style={{ color: "var(--text-muted)", marginBottom: 4, fontSize: 11 }}>{label}</div>}
+    <div
+      style={{
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border)",
+        borderRadius: 6,
+        padding: "8px 12px",
+        fontSize: 12,
+        fontFamily: fonts.sans,
+        boxShadow: "var(--shadow-md)",
+      }}
+    >
+      {label && (
+        <div
+          style={{ color: "var(--text-muted)", marginBottom: 4, fontSize: 11 }}
+        >
+          {label}
+        </div>
+      )}
       {payload.map((p, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-          <div style={{ width: 8, height: 8, borderRadius: 2, background: p.color, flexShrink: 0 }} />
+        <div
+          key={i}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 2,
+          }}
+        >
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 2,
+              background: p.color,
+              flexShrink: 0,
+            }}
+          />
           <span style={{ color: "var(--text-secondary)" }}>{p.name}:</span>
-          <span style={{ color: "var(--text-primary)", fontFamily: fonts.mono, fontWeight: 600 }}>
+          <span
+            style={{
+              color: "var(--text-primary)",
+              fontFamily: fonts.mono,
+              fontWeight: 600,
+            }}
+          >
             {fmtValue(p.value, data)}
           </span>
         </div>
@@ -258,27 +335,72 @@ function ChartTooltip({ active, payload, label, data }: {
 // Shared X/Y axis components
 // ============================================================================
 
-function SharedXAxis({ data, isVerticalLayout }: { data: ChartData; isVerticalLayout?: boolean }) {
+function SharedXAxis(
+  { data, isVerticalLayout }: { data: ChartData; isVerticalLayout?: boolean },
+) {
   if (isVerticalLayout) {
     return (
-      <XAxis type="number" tick={TICK_Y} axisLine={false} tickLine={false} tickFormatter={fmtTick}
-        label={data.xAxisLabel ? { value: data.xAxisLabel, position: "insideBottom", offset: -2, fontSize: 10, fill: "var(--text-faint)" } : undefined}
+      <XAxis
+        type="number"
+        tick={TICK_Y}
+        axisLine={false}
+        tickLine={false}
+        tickFormatter={fmtTick}
+        label={data.xAxisLabel
+          ? {
+            value: data.xAxisLabel,
+            position: "insideBottom",
+            offset: -2,
+            fontSize: 10,
+            fill: "var(--text-faint)",
+          }
+          : undefined}
       />
     );
   }
   return (
-    <XAxis dataKey="name" tick={TICK_X} axisLine={{ stroke: "var(--border)" }} tickLine={false}
-      label={data.xAxisLabel ? { value: data.xAxisLabel, position: "insideBottom", offset: -2, fontSize: 10, fill: "var(--text-faint)" } : undefined}
+    <XAxis
+      dataKey="name"
+      tick={TICK_X}
+      axisLine={{ stroke: "var(--border)" }}
+      tickLine={false}
+      label={data.xAxisLabel
+        ? {
+          value: data.xAxisLabel,
+          position: "insideBottom",
+          offset: -2,
+          fontSize: 10,
+          fill: "var(--text-faint)",
+        }
+        : undefined}
     />
   );
 }
 
-function SharedYAxis({ data, yAxisId, orientation }: { data: ChartData; yAxisId?: string; orientation?: "left" | "right" }) {
+function SharedYAxis(
+  { data, yAxisId, orientation }: {
+    data: ChartData;
+    yAxisId?: string;
+    orientation?: "left" | "right";
+  },
+) {
   return (
     <YAxis
-      yAxisId={yAxisId} orientation={orientation}
-      tick={TICK_Y} axisLine={false} tickLine={false} tickFormatter={fmtTick}
-      label={data.yAxisLabel ? { value: data.yAxisLabel, angle: -90, position: "insideLeft", fontSize: 10, fill: "var(--text-faint)" } : undefined}
+      yAxisId={yAxisId}
+      orientation={orientation}
+      tick={TICK_Y}
+      axisLine={false}
+      tickLine={false}
+      tickFormatter={fmtTick}
+      label={data.yAxisLabel
+        ? {
+          value: data.yAxisLabel,
+          angle: -90,
+          position: "insideLeft",
+          fontSize: 10,
+          fill: "var(--text-faint)",
+        }
+        : undefined}
     />
   );
 }
@@ -287,7 +409,12 @@ function SharedYAxis({ data, yAxisId, orientation }: { data: ChartData; yAxisId?
 // Bar Charts (vertical, horizontal, stacked)
 // ============================================================================
 
-function VerticalBarChart({ data, onDataClick }: { data: ChartData; onDataClick?: (label: string) => void }) {
+function VerticalBarChart(
+  { data, onDataClick }: {
+    data: ChartData;
+    onDataClick?: (label: string) => void;
+  },
+) {
   const rows = toRows(data);
   const stacked = data.type === "stacked-bar";
 
@@ -297,9 +424,17 @@ function VerticalBarChart({ data, onDataClick }: { data: ChartData; onDataClick?
         <CartesianGrid {...GRID} vertical={false} />
         <SharedXAxis data={data} />
         <SharedYAxis data={data} />
-        {data.showRightAxis && <SharedYAxis data={data} yAxisId="right" orientation="right" />}
-        <Tooltip content={<ChartTooltip data={data} />} cursor={CURSOR} animationDuration={0} />
-        {data.datasets.length > 1 && <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />}
+        {data.showRightAxis && (
+          <SharedYAxis data={data} yAxisId="right" orientation="right" />
+        )}
+        <Tooltip
+          content={<ChartTooltip data={data} />}
+          cursor={CURSOR}
+          animationDuration={0}
+        />
+        {data.datasets.length > 1 && (
+          <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />
+        )}
         {data.datasets.map((ds, i) => (
           <Bar
             key={ds.label}
@@ -312,7 +447,10 @@ function VerticalBarChart({ data, onDataClick }: { data: ChartData; onDataClick?
             yAxisId={ds.yAxisId}
             animationDuration={0}
             cursor={onDataClick ? "pointer" : undefined}
-            onClick={onDataClick ? (entry: Record<string, unknown>) => onDataClick(String(entry.name ?? "")) : undefined}
+            onClick={onDataClick
+              ? (entry: Record<string, unknown>) =>
+                onDataClick(String(entry.name ?? ""))
+              : undefined}
           />
         ))}
       </BarChart>
@@ -320,7 +458,12 @@ function VerticalBarChart({ data, onDataClick }: { data: ChartData; onDataClick?
   );
 }
 
-function HorizontalBarChart({ data, onDataClick }: { data: ChartData; onDataClick?: (label: string) => void }) {
+function HorizontalBarChart(
+  { data, onDataClick }: {
+    data: ChartData;
+    onDataClick?: (label: string) => void;
+  },
+) {
   const rows = toRows(data);
 
   return (
@@ -328,12 +471,32 @@ function HorizontalBarChart({ data, onDataClick }: { data: ChartData; onDataClic
       <BarChart data={rows} layout="vertical" margin={{ ...MARGIN, left: 8 }}>
         <CartesianGrid {...GRID} horizontal={false} />
         <SharedXAxis data={data} isVerticalLayout />
-        <YAxis type="category" dataKey="name" width={120} tick={TICK_X} axisLine={false} tickLine={false} />
-        <Tooltip content={<ChartTooltip data={data} />} cursor={CURSOR} animationDuration={0} />
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={120}
+          tick={TICK_X}
+          axisLine={false}
+          tickLine={false}
+        />
+        <Tooltip
+          content={<ChartTooltip data={data} />}
+          cursor={CURSOR}
+          animationDuration={0}
+        />
         {data.datasets.map((ds, i) => (
-          <Bar key={ds.label} dataKey={ds.label} fill={dsColor(ds, i)} radius={[0, 3, 3, 0]} opacity={0.85} animationDuration={0}
+          <Bar
+            key={ds.label}
+            dataKey={ds.label}
+            fill={dsColor(ds, i)}
+            radius={[0, 3, 3, 0]}
+            opacity={0.85}
+            animationDuration={0}
             cursor={onDataClick ? "pointer" : undefined}
-            onClick={onDataClick ? (entry: Record<string, unknown>) => onDataClick(String(entry.name ?? "")) : undefined}
+            onClick={onDataClick
+              ? (entry: Record<string, unknown>) =>
+                onDataClick(String(entry.name ?? ""))
+              : undefined}
           />
         ))}
       </BarChart>
@@ -345,20 +508,35 @@ function HorizontalBarChart({ data, onDataClick }: { data: ChartData; onDataClic
 // Line Chart
 // ============================================================================
 
-function LineChartView({ data, onDataClick }: { data: ChartData; onDataClick?: (label: string) => void }) {
+function LineChartView(
+  { data, onDataClick }: {
+    data: ChartData;
+    onDataClick?: (label: string) => void;
+  },
+) {
   const rows = toRows(data);
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={rows} margin={MARGIN}
-        onClick={onDataClick ? (e: Record<string, unknown>) => { if (e?.activeLabel) onDataClick(String(e.activeLabel)); } : undefined}
+      <LineChart
+        data={rows}
+        margin={MARGIN}
+        onClick={onDataClick
+          ? (e: Record<string, unknown>) => {
+            if (e?.activeLabel) onDataClick(String(e.activeLabel));
+          }
+          : undefined}
       >
         <CartesianGrid {...GRID} />
         <SharedXAxis data={data} />
         <SharedYAxis data={data} />
-        {data.showRightAxis && <SharedYAxis data={data} yAxisId="right" orientation="right" />}
+        {data.showRightAxis && (
+          <SharedYAxis data={data} yAxisId="right" orientation="right" />
+        )}
         <Tooltip content={<ChartTooltip data={data} />} animationDuration={0} />
-        {data.datasets.length > 1 && <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />}
+        {data.datasets.length > 1 && (
+          <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />
+        )}
         {data.datasets.map((ds, i) => (
           <Line
             key={ds.label}
@@ -382,20 +560,42 @@ function LineChartView({ data, onDataClick }: { data: ChartData; onDataClick?: (
 // Area Chart
 // ============================================================================
 
-function AreaChartView({ data, onDataClick }: { data: ChartData; onDataClick?: (label: string) => void }) {
+function AreaChartView(
+  { data, onDataClick }: {
+    data: ChartData;
+    onDataClick?: (label: string) => void;
+  },
+) {
   const rows = toRows(data);
   const stacked = data.type === "stacked-area";
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={rows} margin={MARGIN}
-        onClick={onDataClick ? (e: Record<string, unknown>) => { if (e?.activeLabel) onDataClick(String(e.activeLabel)); } : undefined}
+      <AreaChart
+        data={rows}
+        margin={MARGIN}
+        onClick={onDataClick
+          ? (e: Record<string, unknown>) => {
+            if (e?.activeLabel) onDataClick(String(e.activeLabel));
+          }
+          : undefined}
       >
         <defs>
           {data.datasets.map((ds, i) => (
-            <linearGradient key={ds.label} id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient
+              key={ds.label}
+              id={`grad-${i}`}
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="1"
+            >
               <stop offset="5%" stopColor={dsColor(ds, i)} stopOpacity={0.3} />
-              <stop offset="95%" stopColor={dsColor(ds, i)} stopOpacity={0.02} />
+              <stop
+                offset="95%"
+                stopColor={dsColor(ds, i)}
+                stopOpacity={0.02}
+              />
             </linearGradient>
           ))}
         </defs>
@@ -403,7 +603,9 @@ function AreaChartView({ data, onDataClick }: { data: ChartData; onDataClick?: (
         <SharedXAxis data={data} />
         <SharedYAxis data={data} />
         <Tooltip content={<ChartTooltip data={data} />} animationDuration={0} />
-        {data.datasets.length > 1 && <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />}
+        {data.datasets.length > 1 && (
+          <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />
+        )}
         {data.datasets.map((ds, i) => (
           <Area
             key={ds.label}
@@ -427,29 +629,53 @@ function AreaChartView({ data, onDataClick }: { data: ChartData; onDataClick?: (
 // Composed Chart (mix of bar + line + area per dataset)
 // ============================================================================
 
-function ComposedChartView({ data, onDataClick }: { data: ChartData; onDataClick?: (label: string) => void }) {
+function ComposedChartView(
+  { data, onDataClick }: {
+    data: ChartData;
+    onDataClick?: (label: string) => void;
+  },
+) {
   const rows = toRows(data);
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={rows} margin={MARGIN}
-        onClick={onDataClick ? (e: Record<string, unknown>) => { if (e?.activeLabel) onDataClick(String(e.activeLabel)); } : undefined}
+      <ComposedChart
+        data={rows}
+        margin={MARGIN}
+        onClick={onDataClick
+          ? (e: Record<string, unknown>) => {
+            if (e?.activeLabel) onDataClick(String(e.activeLabel));
+          }
+          : undefined}
       >
         <CartesianGrid {...GRID} />
         <SharedXAxis data={data} />
         <SharedYAxis data={data} />
-        {data.showRightAxis && <SharedYAxis data={data} yAxisId="right" orientation="right" />}
-        <Tooltip content={<ChartTooltip data={data} />} cursor={CURSOR} animationDuration={0} />
-        {data.datasets.length > 1 && <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />}
+        {data.showRightAxis && (
+          <SharedYAxis data={data} yAxisId="right" orientation="right" />
+        )}
+        <Tooltip
+          content={<ChartTooltip data={data} />}
+          cursor={CURSOR}
+          animationDuration={0}
+        />
+        {data.datasets.length > 1 && (
+          <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />
+        )}
         {data.datasets.map((ds, i) => {
           const color = dsColor(ds, i);
           const dsType = ds.type ?? "bar";
           if (dsType === "line") {
             return (
               <Line
-                key={ds.label} type="monotone" dataKey={ds.label}
-                stroke={color} strokeWidth={2}
-                strokeDasharray={ds.strokeStyle === "dashed" ? "6 3" : undefined}
+                key={ds.label}
+                type="monotone"
+                dataKey={ds.label}
+                stroke={color}
+                strokeWidth={2}
+                strokeDasharray={ds.strokeStyle === "dashed"
+                  ? "6 3"
+                  : undefined}
                 dot={ds.showDots !== false ? { r: 3, fill: color } : false}
                 yAxisId={ds.yAxisId}
                 animationDuration={0}
@@ -459,8 +685,12 @@ function ComposedChartView({ data, onDataClick }: { data: ChartData; onDataClick
           if (dsType === "area") {
             return (
               <Area
-                key={ds.label} type="monotone" dataKey={ds.label}
-                stroke={color} fill={color} fillOpacity={0.15}
+                key={ds.label}
+                type="monotone"
+                dataKey={ds.label}
+                stroke={color}
+                fill={color}
+                fillOpacity={0.15}
                 yAxisId={ds.yAxisId}
                 animationDuration={0}
               />
@@ -468,9 +698,14 @@ function ComposedChartView({ data, onDataClick }: { data: ChartData; onDataClick
           }
           return (
             <Bar
-              key={ds.label} dataKey={ds.label} fill={color}
-              radius={[3, 3, 0, 0]} opacity={0.85} maxBarSize={56}
-              stackId={ds.stack} yAxisId={ds.yAxisId}
+              key={ds.label}
+              dataKey={ds.label}
+              fill={color}
+              radius={[3, 3, 0, 0]}
+              opacity={0.85}
+              maxBarSize={56}
+              stackId={ds.stack}
+              yAxisId={ds.yAxisId}
               animationDuration={0}
             />
           );
@@ -484,7 +719,13 @@ function ComposedChartView({ data, onDataClick }: { data: ChartData; onDataClick
 // Pie / Donut
 // ============================================================================
 
-function PieDonutChart({ data, isDonut, onDataClick }: { data: ChartData; isDonut: boolean; onDataClick?: (label: string) => void }) {
+function PieDonutChart(
+  { data, isDonut, onDataClick }: {
+    data: ChartData;
+    isDonut: boolean;
+    onDataClick?: (label: string) => void;
+  },
+) {
   const ds = data.datasets[0];
   if (!ds || ds.values.length === 0 || data.labels.length === 0) {
     return <EmptyChart message="No data for chart" />;
@@ -493,23 +734,31 @@ function PieDonutChart({ data, isDonut, onDataClick }: { data: ChartData; isDonu
   const total = ds.values.reduce((s, v) => s + v, 0);
   if (total === 0) return <EmptyChart message="All values are zero" />;
 
-  const pieData = data.labels.map((label, i) => ({ name: label, value: ds.values[i] ?? 0 }));
+  const pieData = data.labels.map((label, i) => ({
+    name: label,
+    value: ds.values[i] ?? 0,
+  }));
 
   return (
     <ResponsiveContainer width="100%" height="100%">
       <PieChart>
         <Pie
           data={pieData}
-          cx="50%" cy="50%"
+          cx="50%"
+          cy="50%"
           innerRadius={isDonut ? 55 : 0}
           outerRadius={90}
           paddingAngle={isDonut ? 2 : 1}
           dataKey="value"
-          label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent * 100).toFixed(0)}%`}
+          label={({ name, percent }: { name: string; percent: number }) =>
+            `${name} ${(percent * 100).toFixed(0)}%`}
           labelLine={{ stroke: "var(--text-faint)", strokeWidth: 1 }}
           animationDuration={0}
           cursor={onDataClick ? "pointer" : undefined}
-          onClick={onDataClick ? (entry: Record<string, unknown>) => onDataClick(String(entry.name ?? "")) : undefined}
+          onClick={onDataClick
+            ? (entry: Record<string, unknown>) =>
+              onDataClick(String(entry.name ?? ""))
+            : undefined}
         >
           {pieData.map((_, i) => (
             <Cell key={i} fill={PALETTE[i % PALETTE.length]} opacity={0.85} />
@@ -519,17 +768,39 @@ function PieDonutChart({ data, isDonut, onDataClick }: { data: ChartData; isDonu
           formatter={(value: number) => fmtValue(value, data)}
           animationDuration={0}
           contentStyle={{
-            background: "var(--bg-elevated)", border: "1px solid var(--border)",
-            borderRadius: 6, fontSize: 12, fontFamily: fonts.sans,
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            fontSize: 12,
+            fontFamily: fonts.sans,
           }}
         />
         {isDonut && (
           <>
-            <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle"
-              fontSize={11} fill="var(--text-muted)" fontFamily={fonts.sans}>Total</text>
-            <text x="50%" y="56%" textAnchor="middle" dominantBaseline="middle"
-              fontSize={15} fill="var(--text-primary)" fontFamily={fonts.mono} fontWeight={700}>
-              {data.currency ? formatCurrency(total, data.currency) : formatNumber(total, 0)}
+            <text
+              x="50%"
+              y="46%"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize={11}
+              fill="var(--text-muted)"
+              fontFamily={fonts.sans}
+            >
+              Total
+            </text>
+            <text
+              x="50%"
+              y="56%"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize={15}
+              fill="var(--text-primary)"
+              fontFamily={fonts.mono}
+              fontWeight={700}
+            >
+              {data.currency
+                ? formatCurrency(total, data.currency)
+                : formatNumber(total, 0)}
             </text>
           </>
         )}
@@ -549,10 +820,25 @@ function RadarChartView({ data }: { data: ChartData }) {
     <ResponsiveContainer width="100%" height="100%">
       <RadarChart data={rows} cx="50%" cy="50%" outerRadius="70%">
         <PolarGrid stroke="var(--border)" />
-        <PolarAngleAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--text-secondary)", fontFamily: fonts.sans }} />
-        <PolarRadiusAxis tick={{ fontSize: 9, fill: "var(--text-faint)", fontFamily: fonts.mono }} />
+        <PolarAngleAxis
+          dataKey="name"
+          tick={{
+            fontSize: 11,
+            fill: "var(--text-secondary)",
+            fontFamily: fonts.sans,
+          }}
+        />
+        <PolarRadiusAxis
+          tick={{
+            fontSize: 9,
+            fill: "var(--text-faint)",
+            fontFamily: fonts.mono,
+          }}
+        />
         <Tooltip content={<ChartTooltip data={data} />} animationDuration={0} />
-        {data.datasets.length > 1 && <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />}
+        {data.datasets.length > 1 && (
+          <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />
+        )}
         {data.datasets.map((ds, i) => (
           <Radar
             key={ds.label}
@@ -583,23 +869,57 @@ function ScatterChartView({ data }: { data: ChartData }) {
       <ScatterChart margin={MARGIN}>
         <CartesianGrid {...GRID} />
         <XAxis
-          type="number" dataKey="x" name="x" tick={TICK_Y}
-          label={data.xAxisLabel ? { value: data.xAxisLabel, position: "insideBottom", offset: -2, fontSize: 10, fill: "var(--text-faint)" } : undefined}
+          type="number"
+          dataKey="x"
+          name="x"
+          tick={TICK_Y}
+          label={data.xAxisLabel
+            ? {
+              value: data.xAxisLabel,
+              position: "insideBottom",
+              offset: -2,
+              fontSize: 10,
+              fill: "var(--text-faint)",
+            }
+            : undefined}
         />
         <YAxis
-          type="number" dataKey="y" name="y" tick={TICK_Y}
-          label={data.yAxisLabel ? { value: data.yAxisLabel, angle: -90, position: "insideLeft", fontSize: 10, fill: "var(--text-faint)" } : undefined}
+          type="number"
+          dataKey="y"
+          name="y"
+          tick={TICK_Y}
+          label={data.yAxisLabel
+            ? {
+              value: data.yAxisLabel,
+              angle: -90,
+              position: "insideLeft",
+              fontSize: 10,
+              fill: "var(--text-faint)",
+            }
+            : undefined}
         />
         <Tooltip
           animationDuration={0}
           contentStyle={{
-            background: "var(--bg-elevated)", border: "1px solid var(--border)",
-            borderRadius: 6, fontSize: 12, fontFamily: fonts.sans,
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            fontSize: 12,
+            fontFamily: fonts.sans,
           }}
         />
-        {series.length > 1 && <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />}
+        {series.length > 1 && (
+          <Legend wrapperStyle={{ fontSize: 11, fontFamily: fonts.sans }} />
+        )}
         {series.map((s, i) => (
-          <Scatter key={s.label} name={s.label} data={s.points} fill={s.color ?? PALETTE[i % PALETTE.length]} opacity={0.75} animationDuration={0} />
+          <Scatter
+            key={s.label}
+            name={s.label}
+            data={s.points}
+            fill={s.color ?? PALETTE[i % PALETTE.length]}
+            opacity={0.75}
+            animationDuration={0}
+          />
         ))}
       </ScatterChart>
     </ResponsiveContainer>
@@ -626,14 +946,40 @@ function TreemapContent(props: TreemapContentProps) {
   if (width < 30 || height < 20) return null;
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} fill={treeColors[index % treeColors.length]} opacity={0.8} rx={3} stroke="var(--bg-root)" strokeWidth={2} />
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={treeColors[index % treeColors.length]}
+        opacity={0.8}
+        rx={3}
+        stroke="var(--bg-root)"
+        strokeWidth={2}
+      />
       {width > 50 && height > 24 && (
-        <text x={x + width / 2} y={y + height / 2 - 6} textAnchor="middle" fontSize={11} fill="#fff" fontFamily={fonts.sans}>
-          {name.length > Math.floor(width / 8) ? name.slice(0, Math.floor(width / 8) - 1) + "…" : name}
+        <text
+          x={x + width / 2}
+          y={y + height / 2 - 6}
+          textAnchor="middle"
+          fontSize={11}
+          fill="#fff"
+          fontFamily={fonts.sans}
+        >
+          {name.length > Math.floor(width / 8)
+            ? name.slice(0, Math.floor(width / 8) - 1) + "…"
+            : name}
         </text>
       )}
       {width > 50 && height > 38 && (
-        <text x={x + width / 2} y={y + height / 2 + 10} textAnchor="middle" fontSize={10} fill="rgba(255,255,255,0.7)" fontFamily={fonts.mono}>
+        <text
+          x={x + width / 2}
+          y={y + height / 2 + 10}
+          textAnchor="middle"
+          fontSize={10}
+          fill="rgba(255,255,255,0.7)"
+          fontFamily={fonts.mono}
+        >
           {formatNumber(props.value, props.value < 10 ? 1 : 0)}
         </text>
       )}
@@ -649,7 +995,10 @@ function TreemapView({ data }: { data: ChartData }) {
   } else {
     const ds = data.datasets[0];
     if (!ds) return null;
-    treeNodes = data.labels.map((label, i) => ({ name: label, value: ds.values[i] ?? 0 }));
+    treeNodes = data.labels.map((label, i) => ({
+      name: label,
+      value: ds.values[i] ?? 0,
+    }));
   }
 
   return (
@@ -658,13 +1007,26 @@ function TreemapView({ data }: { data: ChartData }) {
         data={treeNodes}
         dataKey="value"
         nameKey="name"
-        content={<TreemapContent x={0} y={0} width={0} height={0} name="" value={0} index={0} colors={PALETTE} />}
+        content={
+          <TreemapContent
+            x={0}
+            y={0}
+            width={0}
+            height={0}
+            name=""
+            value={0}
+            index={0}
+            colors={PALETTE}
+          />
+        }
       />
     </ResponsiveContainer>
   );
 }
 
-function flattenTree(nodes: TreeNode[]): Array<{ name: string; value: number }> {
+function flattenTree(
+  nodes: TreeNode[],
+): Array<{ name: string; value: number }> {
   const result: Array<{ name: string; value: number }> = [];
   for (const n of nodes) {
     if (n.children?.length) {
@@ -685,8 +1047,24 @@ function DatasetLegend({ datasets }: { datasets: Dataset[] }) {
   return (
     <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
       {datasets.map((ds, i) => (
-        <div key={ds.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-secondary)" }}>
-          <div style={{ width: 10, height: 10, borderRadius: 2, background: dsColor(ds, i) }} />
+        <div
+          key={ds.label}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 11,
+            color: "var(--text-secondary)",
+          }}
+        >
+          <div
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 2,
+              background: dsColor(ds, i),
+            }}
+          />
           {ds.label}
         </div>
       ))}
@@ -705,25 +1083,41 @@ function ChartRouter({ data }: { data: ChartData }) {
   // Drill-down: when user clicks a data point, send a message to explore the underlying data
   const onDataClick = (hasServerTools && data._drillDown)
     ? (label: string) => {
-        const msg = data._drillDown!.replace(/\{label\}/g, label);
-        app.sendMessage({ role: "user", content: [{ type: "text", text: msg }] }).catch(() => {});
-      }
+      const msg = data._drillDown!.replace(/\{label\}/g, label);
+      app.sendMessage({ role: "user", content: [{ type: "text", text: msg }] })
+        .catch(() => {});
+    }
     : undefined;
 
   switch (type) {
-    case "bar":          return <VerticalBarChart data={data} onDataClick={onDataClick} />;
-    case "stacked-bar":  return <VerticalBarChart data={data} onDataClick={onDataClick} />;
-    case "horizontal-bar": return <HorizontalBarChart data={data} onDataClick={onDataClick} />;
-    case "line":         return <LineChartView data={data} onDataClick={onDataClick} />;
-    case "area":         return <AreaChartView data={data} onDataClick={onDataClick} />;
-    case "stacked-area": return <AreaChartView data={data} onDataClick={onDataClick} />;
-    case "composed":     return <ComposedChartView data={data} onDataClick={onDataClick} />;
-    case "pie":          return <PieDonutChart data={data} isDonut={false} onDataClick={onDataClick} />;
-    case "donut":        return <PieDonutChart data={data} isDonut onDataClick={onDataClick} />;
-    case "radar":        return <RadarChartView data={data} />;
-    case "scatter":      return <ScatterChartView data={data} />;
-    case "treemap":      return <TreemapView data={data} />;
-    default:             return <VerticalBarChart data={data} onDataClick={onDataClick} />;
+    case "bar":
+      return <VerticalBarChart data={data} onDataClick={onDataClick} />;
+    case "stacked-bar":
+      return <VerticalBarChart data={data} onDataClick={onDataClick} />;
+    case "horizontal-bar":
+      return <HorizontalBarChart data={data} onDataClick={onDataClick} />;
+    case "line":
+      return <LineChartView data={data} onDataClick={onDataClick} />;
+    case "area":
+      return <AreaChartView data={data} onDataClick={onDataClick} />;
+    case "stacked-area":
+      return <AreaChartView data={data} onDataClick={onDataClick} />;
+    case "composed":
+      return <ComposedChartView data={data} onDataClick={onDataClick} />;
+    case "pie":
+      return (
+        <PieDonutChart data={data} isDonut={false} onDataClick={onDataClick} />
+      );
+    case "donut":
+      return <PieDonutChart data={data} isDonut onDataClick={onDataClick} />;
+    case "radar":
+      return <RadarChartView data={data} />;
+    case "scatter":
+      return <ScatterChartView data={data} />;
+    case "treemap":
+      return <TreemapView data={data} />;
+    default:
+      return <VerticalBarChart data={data} onDataClick={onDataClick} />;
   }
 }
 
@@ -743,12 +1137,41 @@ function ChartContent(
   const chartHeight = "calc(100vh - 100px)";
 
   return (
-    <div style={{ fontFamily: fonts.sans, background: "var(--bg-root)", height: "100vh", overflow: "hidden" }}>
+    <div
+      style={{
+        fontFamily: fonts.sans,
+        background: "var(--bg-root)",
+        height: "100vh",
+        overflow: "hidden",
+      }}
+    >
       <ErpNextBrandHeader />
-      <div style={{ padding: "8px 16px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+      <div
+        style={{
+          padding: "8px 16px 0",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>{data.title}</div>
-          {data.subtitle && <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{data.subtitle}</div>}
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--text-secondary)",
+            }}
+          >
+            {data.title}
+          </div>
+          {data.subtitle && (
+            <div
+              style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}
+            >
+              {data.subtitle}
+            </div>
+          )}
           <div
             aria-live="polite"
             style={{
@@ -801,7 +1224,10 @@ export function ChartViewer() {
 
   function hydrateData(nextData: ChartData) {
     dataRef.current = nextData;
-    refreshRequestRef.current = resolveUiRefreshRequest(nextData, refreshRequestRef.current);
+    refreshRequestRef.current = resolveUiRefreshRequest(
+      nextData,
+      refreshRequestRef.current,
+    );
     setData(nextData);
   }
 
@@ -824,15 +1250,22 @@ export function ChartViewer() {
   }
 
   async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
-    const request = resolveUiRefreshRequest(dataRef.current, refreshRequestRef.current);
-    if (!canRequestUiRefresh({
-      request,
-      visibilityState: typeof document === "undefined" ? "visible" : document.visibilityState,
-      refreshInFlight: refreshInFlightRef.current,
-      now: Date.now(),
-      lastRefreshStartedAt: lastRefreshStartedAtRef.current,
-      minIntervalMs: CHART_REFRESH_INTERVAL_MS,
-    }, options)) {
+    const request = resolveUiRefreshRequest(
+      dataRef.current,
+      refreshRequestRef.current,
+    );
+    if (
+      !canRequestUiRefresh({
+        request,
+        visibilityState: typeof document === "undefined"
+          ? "visible"
+          : document.visibilityState,
+        refreshInFlight: refreshInFlightRef.current,
+        now: Date.now(),
+        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+        minIntervalMs: CHART_REFRESH_INTERVAL_MS,
+      }, options)
+    ) {
       return false;
     }
 
@@ -908,11 +1341,27 @@ export function ChartViewer() {
 
   if (!data) {
     return (
-      <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)", fontSize: 13, fontFamily: fonts.sans }}>
-        No chart data — run an analytics tool or PML workflow that returns ChartData
+      <div
+        style={{
+          padding: 32,
+          textAlign: "center",
+          color: "var(--text-muted)",
+          fontSize: 13,
+          fontFamily: fonts.sans,
+        }}
+      >
+        No chart data — run an analytics tool or PML workflow that returns
+        ChartData
       </div>
     );
   }
 
-  return <ChartContent data={data} error={error} refreshing={refreshing} onRefresh={() => void requestRefresh({ ignoreInterval: true })} />;
+  return (
+    <ChartContent
+      data={data}
+      error={error}
+      refreshing={refreshing}
+      onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+    />
+  );
 }

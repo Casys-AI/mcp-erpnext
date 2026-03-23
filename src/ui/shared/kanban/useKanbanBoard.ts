@@ -1,8 +1,5 @@
 import { useReducer } from "react";
-import {
-  createKanbanInitialState,
-  kanbanStateReducer,
-} from "./state";
+import { createKanbanInitialState, kanbanStateReducer } from "./state";
 import type { KanbanBoardData } from "./types";
 
 export function useKanbanBoard() {

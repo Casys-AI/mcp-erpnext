@@ -14,7 +14,8 @@ const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  const scheme = STATUS_COLORS[status] ?? { color: colors.text.secondary, bg: colors.bg.elevated };
+  const scheme = STATUS_COLORS[status] ??
+    { color: colors.text.secondary, bg: colors.bg.elevated };
   return <span style={styles.badge(scheme.color, scheme.bg)}>{status}</span>;
 }
 

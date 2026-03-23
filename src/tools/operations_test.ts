@@ -69,7 +69,8 @@ Deno.test("erpnext_doc_create - throws if data missing", async () => {
 Deno.test("erpnext_doc_create - throws if data is not object", async () => {
   const tool = getTool("erpnext_doc_create");
   await assertRejects(
-    () => tool.handler({ doctype: "Item", data: "bad" }, makeCtx(makeMockClient())),
+    () =>
+      tool.handler({ doctype: "Item", data: "bad" }, makeCtx(makeMockClient())),
     Error,
     "data",
   );

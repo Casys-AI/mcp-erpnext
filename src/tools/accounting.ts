@@ -29,10 +29,14 @@ export const accountingTools: ErpNextTool[] = [
         limit: { type: "number", description: "Max results (default 50)" },
         root_type: {
           type: "string",
-          description: "Filter by root type: Asset, Liability, Income, Expense, Equity",
+          description:
+            "Filter by root type: Asset, Liability, Income, Expense, Equity",
           enum: ["Asset", "Liability", "Income", "Expense", "Equity"],
         },
-        is_group: { type: "boolean", description: "Filter by group accounts only" },
+        is_group: {
+          type: "boolean",
+          description: "Filter by group accounts only",
+        },
         company: { type: "string", description: "Filter by company" },
       },
     },
@@ -50,7 +54,14 @@ export const accountingTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Account", {
-        fields: ["name", "account_name", "account_type", "root_type", "parent_account", "is_group"],
+        fields: [
+          "name",
+          "account_name",
+          "account_type",
+          "root_type",
+          "parent_account",
+          "is_group",
+        ],
         filters,
         limit,
         order_by: "name asc",
@@ -81,9 +92,13 @@ export const accountingTools: ErpNextTool[] = [
         limit: { type: "number", description: "Max results (default 20)" },
         voucher_type: {
           type: "string",
-          description: "Filter by voucher type (Journal Entry, Bank Entry, Cash Entry, etc.)",
+          description:
+            "Filter by voucher type (Journal Entry, Bank Entry, Cash Entry, etc.)",
         },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
         date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
@@ -101,7 +116,14 @@ export const accountingTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Journal Entry", {
-        fields: ["name", "voucher_type", "posting_date", "total_debit", "total_credit", "remark"],
+        fields: [
+          "name",
+          "voucher_type",
+          "posting_date",
+          "total_debit",
+          "total_credit",
+          "remark",
+        ],
         filters,
         limit,
         order_by: "modified desc",
@@ -125,7 +147,10 @@ export const accountingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Journal Entry name (e.g. JV-00001)" },
+        name: {
+          type: "string",
+          description: "Journal Entry name (e.g. JV-00001)",
+        },
       },
       required: ["name"],
     },
@@ -155,7 +180,8 @@ export const accountingTools: ErpNextTool[] = [
         limit: { type: "number", description: "Max results (default 20)" },
         payment_type: {
           type: "string",
-          description: "Filter by payment type: Receive, Pay, Internal Transfer",
+          description:
+            "Filter by payment type: Receive, Pay, Internal Transfer",
           enum: ["Receive", "Pay", "Internal Transfer"],
         },
         party_type: {
@@ -163,7 +189,10 @@ export const accountingTools: ErpNextTool[] = [
           description: "Filter by party type (Customer, Supplier, Employee)",
         },
         party: { type: "string", description: "Filter by party name" },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -215,7 +244,10 @@ export const accountingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Payment Entry name (e.g. PE-00001)" },
+        name: {
+          type: "string",
+          description: "Payment Entry name (e.g. PE-00001)",
+        },
       },
       required: ["name"],
     },
@@ -272,10 +304,17 @@ export const accountingTools: ErpNextTool[] = [
     },
     handler: async (input, ctx) => {
       if (!input.voucher_type) {
-        throw new Error("[erpnext_journal_entry_create] 'voucher_type' is required");
+        throw new Error(
+          "[erpnext_journal_entry_create] 'voucher_type' is required",
+        );
       }
-      if (!input.accounts || !Array.isArray(input.accounts) || input.accounts.length === 0) {
-        throw new Error("[erpnext_journal_entry_create] 'accounts' must be a non-empty array");
+      if (
+        !input.accounts || !Array.isArray(input.accounts) ||
+        input.accounts.length === 0
+      ) {
+        throw new Error(
+          "[erpnext_journal_entry_create] 'accounts' must be a non-empty array",
+        );
       }
 
       const data: Record<string, unknown> = {

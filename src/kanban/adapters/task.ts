@@ -15,17 +15,38 @@ import {
   truncateDescription,
 } from "../field-utils.ts";
 
-const TASK_COLUMNS: Array<{ id: string; label: string; color: string; status: string }> = [
+const TASK_COLUMNS: Array<
+  { id: string; label: string; color: string; status: string }
+> = [
   { id: "open", label: "Open", color: "#60a5fa", status: "Open" },
   { id: "working", label: "Working", color: "#f59e0b", status: "Working" },
-  { id: "pending-review", label: "Pending Review", color: "#a78bfa", status: "Pending Review" },
+  {
+    id: "pending-review",
+    label: "Pending Review",
+    color: "#a78bfa",
+    status: "Pending Review",
+  },
   { id: "overdue", label: "Overdue", color: "#ef4444", status: "Overdue" },
-  { id: "completed", label: "Completed", color: "#22c55e", status: "Completed" },
-  { id: "cancelled", label: "Cancelled", color: "#78716c", status: "Cancelled" },
+  {
+    id: "completed",
+    label: "Completed",
+    color: "#22c55e",
+    status: "Completed",
+  },
+  {
+    id: "cancelled",
+    label: "Cancelled",
+    color: "#78716c",
+    status: "Cancelled",
+  },
 ];
 
-const STATUS_BY_COLUMN = new Map(TASK_COLUMNS.map((column) => [column.id, column.status]));
-const COLUMN_BY_STATUS = new Map(TASK_COLUMNS.map((column) => [column.status, column.id]));
+const STATUS_BY_COLUMN = new Map(
+  TASK_COLUMNS.map((column) => [column.id, column.status]),
+);
+const COLUMN_BY_STATUS = new Map(
+  TASK_COLUMNS.map((column) => [column.status, column.id]),
+);
 const TASK_LIST_FIELDS = [
   "name",
   "subject",
@@ -43,19 +64,44 @@ const TASK_LIST_FIELDS = [
 ];
 
 const TASK_ALLOWED_TRANSITIONS: KanbanTransition[] = [
-  { fromColumn: "open", toColumn: "working", allowed: true, label: "Start work" },
+  {
+    fromColumn: "open",
+    toColumn: "working",
+    allowed: true,
+    label: "Start work",
+  },
   { fromColumn: "open", toColumn: "pending-review", allowed: true },
   { fromColumn: "open", toColumn: "completed", allowed: true },
   { fromColumn: "open", toColumn: "cancelled", allowed: true },
   { fromColumn: "working", toColumn: "open", allowed: true },
-  { fromColumn: "working", toColumn: "pending-review", allowed: true, label: "Request review" },
+  {
+    fromColumn: "working",
+    toColumn: "pending-review",
+    allowed: true,
+    label: "Request review",
+  },
   { fromColumn: "working", toColumn: "completed", allowed: true },
   { fromColumn: "working", toColumn: "cancelled", allowed: true },
-  { fromColumn: "pending-review", toColumn: "working", allowed: true, label: "Resume work" },
-  { fromColumn: "pending-review", toColumn: "completed", allowed: true, label: "Approve" },
+  {
+    fromColumn: "pending-review",
+    toColumn: "working",
+    allowed: true,
+    label: "Resume work",
+  },
+  {
+    fromColumn: "pending-review",
+    toColumn: "completed",
+    allowed: true,
+    label: "Approve",
+  },
   { fromColumn: "pending-review", toColumn: "open", allowed: true },
   { fromColumn: "pending-review", toColumn: "cancelled", allowed: true },
-  { fromColumn: "completed", toColumn: "working", allowed: true, label: "Reopen" },
+  {
+    fromColumn: "completed",
+    toColumn: "working",
+    allowed: true,
+    label: "Reopen",
+  },
   { fromColumn: "completed", toColumn: "open", allowed: true },
   { fromColumn: "cancelled", toColumn: "open", allowed: true, label: "Reopen" },
 ];
@@ -75,20 +121,29 @@ function buildTaskCard(row: Record<string, unknown>): KanbanCard {
   if (priority) badges.push({ label: priority, tone: priorityTone(priority) });
   if (row.is_milestone === 1) badges.push({ label: "Milestone", tone: "info" });
   const dueDateStr = row.exp_end_date;
-  if (isDateOverdue(dueDateStr) && columnId !== "completed" && columnId !== "cancelled") {
+  if (
+    isDateOverdue(dueDateStr) && columnId !== "completed" &&
+    columnId !== "cancelled"
+  ) {
     badges.push({ label: "Overdue", tone: "error" });
   }
 
   const metrics: KanbanCard["metrics"] = [];
-  if (progress !== undefined) metrics.push({ label: "Progress", value: `${progress}%` });
+  if (progress !== undefined) {
+    metrics.push({ label: "Progress", value: `${progress}%` });
+  }
   const dueDateDisplay = formatShortDate(dueDateStr);
   if (dueDateDisplay) metrics.push({ label: "Due", value: dueDateDisplay });
   const startDisplay = formatShortDate(row.exp_start_date);
   if (startDisplay) metrics.push({ label: "Start", value: startDisplay });
   const expectedTime = Number(row.expected_time);
-  if (Number.isFinite(expectedTime) && expectedTime > 0) metrics.push({ label: "Est.", value: `${expectedTime}h` });
+  if (Number.isFinite(expectedTime) && expectedTime > 0) {
+    metrics.push({ label: "Est.", value: `${expectedTime}h` });
+  }
   const actualTime = Number(row.actual_time);
-  if (Number.isFinite(actualTime) && actualTime > 0) metrics.push({ label: "Actual", value: `${actualTime}h` });
+  if (Number.isFinite(actualTime) && actualTime > 0) {
+    metrics.push({ label: "Actual", value: `${actualTime}h` });
+  }
 
   const assignee = parseFirstAssignee(row._assign);
 
@@ -160,7 +215,10 @@ export const taskKanbanAdapter: KanbanAdapter = {
     move: KanbanMoveRequest,
     ctx,
   ): Promise<KanbanMoveResult> {
-    const currentTask = await ctx.client.get("Task", move.cardId) as Record<string, unknown>;
+    const currentTask = await ctx.client.get("Task", move.cardId) as Record<
+      string,
+      unknown
+    >;
     const serverColumn = columnIdForTaskStatus(currentTask.status);
 
     if (serverColumn !== move.fromColumn) {
@@ -197,7 +255,9 @@ export const taskKanbanAdapter: KanbanAdapter = {
       };
     }
 
-    const serverTask = await ctx.client.update("Task", move.cardId, { status }) as Record<
+    const serverTask = await ctx.client.update("Task", move.cardId, {
+      status,
+    }) as Record<
       string,
       unknown
     >;

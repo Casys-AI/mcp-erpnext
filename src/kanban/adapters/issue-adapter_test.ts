@@ -20,11 +20,13 @@ Deno.test("issue kanban adapter - exposes Issue columns and filters", () => {
     "resolved",
     "closed",
   ]);
-  assert(allowedTransitions.some((transition) =>
-    transition.fromColumn === "open" &&
-    transition.toColumn === "resolved" &&
-    transition.allowed
-  ));
+  assert(
+    allowedTransitions.some((transition) =>
+      transition.fromColumn === "open" &&
+      transition.toColumn === "resolved" &&
+      transition.allowed
+    ),
+  );
   assertEquals(fields, [
     "name",
     "subject",
@@ -81,7 +83,11 @@ Deno.test("issue kanban adapter - executes an allowed move through Issue update"
         customer: "Acme Corp",
         raised_by: "alice@example.com",
       }),
-      update: async (doctype: string, name: string, data: Record<string, unknown>) => {
+      update: async (
+        doctype: string,
+        name: string,
+        data: Record<string, unknown>,
+      ) => {
         capturedDoctype = doctype;
         capturedName = name;
         capturedData = data;

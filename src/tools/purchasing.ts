@@ -26,7 +26,10 @@ export const purchasingTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        supplier_group: { type: "string", description: "Filter by supplier group" },
+        supplier_group: {
+          type: "string",
+          description: "Filter by supplier group",
+        },
         supplier_type: {
           type: "string",
           description: "Filter by supplier type (Company, Individual)",
@@ -104,23 +107,36 @@ export const purchasingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        supplier_name: { type: "string", description: "Supplier company or person name" },
-        supplier_group: { type: "string", description: "Supplier Group (e.g. 'Hardware', 'Services')" },
+        supplier_name: {
+          type: "string",
+          description: "Supplier company or person name",
+        },
+        supplier_group: {
+          type: "string",
+          description: "Supplier Group (e.g. 'Hardware', 'Services')",
+        },
         supplier_type: {
           type: "string",
           description: "Company or Individual (default Company)",
         },
         country: { type: "string", description: "Country name" },
-        default_currency: { type: "string", description: "Currency code (e.g. EUR, USD)" },
+        default_currency: {
+          type: "string",
+          description: "Currency code (e.g. EUR, USD)",
+        },
       },
       required: ["supplier_name", "supplier_group"],
     },
     handler: async (input, ctx) => {
       if (!input.supplier_name) {
-        throw new Error("[erpnext_supplier_create] 'supplier_name' is required");
+        throw new Error(
+          "[erpnext_supplier_create] 'supplier_name' is required",
+        );
       }
       if (!input.supplier_group) {
-        throw new Error("[erpnext_supplier_create] 'supplier_group' is required");
+        throw new Error(
+          "[erpnext_supplier_create] 'supplier_group' is required",
+        );
       }
 
       const data: Record<string, unknown> = {
@@ -129,7 +145,9 @@ export const purchasingTools: ErpNextTool[] = [
         supplier_type: (input.supplier_type as string) ?? "Company",
       };
       if (input.country) data.country = input.country;
-      if (input.default_currency) data.default_currency = input.default_currency;
+      if (input.default_currency) {
+        data.default_currency = input.default_currency;
+      }
 
       const doc = await ctx.client.create("Supplier", data);
 
@@ -160,7 +178,10 @@ export const purchasingTools: ErpNextTool[] = [
           description:
             "Filter by status (Draft, To Receive and Bill, To Bill, Completed, Cancelled, etc.)",
         },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
         date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
@@ -213,7 +234,10 @@ export const purchasingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Purchase Order name (e.g. PO-00001)" },
+        name: {
+          type: "string",
+          description: "Purchase Order name (e.g. PO-00001)",
+        },
       },
       required: ["name"],
     },
@@ -258,27 +282,35 @@ export const purchasingTools: ErpNextTool[] = [
     },
     handler: async (input, ctx) => {
       if (!input.supplier) {
-        throw new Error("[erpnext_purchase_order_create] 'supplier' is required");
+        throw new Error(
+          "[erpnext_purchase_order_create] 'supplier' is required",
+        );
       }
-      if (!input.items || !Array.isArray(input.items) || input.items.length === 0) {
-        throw new Error("[erpnext_purchase_order_create] 'items' must be a non-empty array");
+      if (
+        !input.items || !Array.isArray(input.items) || input.items.length === 0
+      ) {
+        throw new Error(
+          "[erpnext_purchase_order_create] 'items' must be a non-empty array",
+        );
       }
 
-      const items = (input.items as Array<{ item_code: string; qty: number; rate: number }>).map(
-        (item) => {
-          if (!item.item_code || item.qty == null || item.rate == null) {
-            throw new Error(
-              "[erpnext_purchase_order_create] Each item must have item_code, qty, and rate",
-            );
-          }
-          return {
-            item_code: item.item_code,
-            qty: item.qty,
-            rate: item.rate,
-            schedule_date: (input.schedule_date as string) ?? undefined,
-          };
-        },
-      );
+      const items =
+        (input.items as Array<{ item_code: string; qty: number; rate: number }>)
+          .map(
+            (item) => {
+              if (!item.item_code || item.qty == null || item.rate == null) {
+                throw new Error(
+                  "[erpnext_purchase_order_create] Each item must have item_code, qty, and rate",
+                );
+              }
+              return {
+                item_code: item.item_code,
+                qty: item.qty,
+                rate: item.rate,
+                schedule_date: (input.schedule_date as string) ?? undefined,
+              };
+            },
+          );
 
       const doc = await ctx.client.create("Purchase Order", {
         supplier: input.supplier as string,
@@ -310,9 +342,13 @@ export const purchasingTools: ErpNextTool[] = [
         supplier: { type: "string", description: "Filter by supplier" },
         status: {
           type: "string",
-          description: "Filter by status (Draft, Unpaid, Paid, Overdue, Cancelled, etc.)",
+          description:
+            "Filter by status (Draft, Unpaid, Paid, Overdue, Cancelled, etc.)",
         },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
         date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
@@ -365,7 +401,10 @@ export const purchasingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Purchase Invoice name (e.g. PINV-00001)" },
+        name: {
+          type: "string",
+          description: "Purchase Invoice name (e.g. PINV-00001)",
+        },
       },
       required: ["name"],
     },
@@ -373,7 +412,10 @@ export const purchasingTools: ErpNextTool[] = [
       if (!input.name) {
         throw new Error("[erpnext_purchase_invoice_get] 'name' is required");
       }
-      const doc = await ctx.client.get("Purchase Invoice", input.name as string);
+      const doc = await ctx.client.get(
+        "Purchase Invoice",
+        input.name as string,
+      );
       return { data: doc };
     },
   },
@@ -395,9 +437,13 @@ export const purchasingTools: ErpNextTool[] = [
         supplier: { type: "string", description: "Filter by supplier" },
         status: {
           type: "string",
-          description: "Filter by status (Draft, To Bill, Completed, Cancelled, etc.)",
+          description:
+            "Filter by status (Draft, To Bill, Completed, Cancelled, etc.)",
         },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
         date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
@@ -418,7 +464,14 @@ export const purchasingTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Purchase Receipt", {
-        fields: ["name", "supplier", "posting_date", "status", "total_qty", "grand_total"],
+        fields: [
+          "name",
+          "supplier",
+          "posting_date",
+          "status",
+          "total_qty",
+          "grand_total",
+        ],
         filters,
         limit,
         order_by: "modified desc",
@@ -442,7 +495,10 @@ export const purchasingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Purchase Receipt name (e.g. MAT-PRE-00001)" },
+        name: {
+          type: "string",
+          description: "Purchase Receipt name (e.g. MAT-PRE-00001)",
+        },
       },
       required: ["name"],
     },
@@ -450,7 +506,10 @@ export const purchasingTools: ErpNextTool[] = [
       if (!input.name) {
         throw new Error("[erpnext_purchase_receipt_get] 'name' is required");
       }
-      const doc = await ctx.client.get("Purchase Receipt", input.name as string);
+      const doc = await ctx.client.get(
+        "Purchase Receipt",
+        input.name as string,
+      );
       return { data: doc };
     },
   },
@@ -472,7 +531,8 @@ export const purchasingTools: ErpNextTool[] = [
         supplier: { type: "string", description: "Filter by supplier" },
         status: {
           type: "string",
-          description: "Filter by status (Draft, Submitted, Ordered, Lost, Cancelled)",
+          description:
+            "Filter by status (Draft, Submitted, Ordered, Lost, Cancelled)",
         },
       },
     },
@@ -487,7 +547,13 @@ export const purchasingTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Supplier Quotation", {
-        fields: ["name", "supplier", "transaction_date", "status", "grand_total"],
+        fields: [
+          "name",
+          "supplier",
+          "transaction_date",
+          "status",
+          "grand_total",
+        ],
         filters,
         limit,
         order_by: "modified desc",

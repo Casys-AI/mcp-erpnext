@@ -17,8 +17,7 @@ export const hrTools: ErpNextTool[] = [
     name: "erpnext_employee_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List Employees. Filterable by department, status. " +
+    description: "List Employees. Filterable by department, status. " +
       "Fields: name, employee_name, designation, department, company, status, date_of_joining.",
     category: "hr",
     inputSchema: {
@@ -80,7 +79,10 @@ export const hrTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Employee ID (e.g. HR-EMP-00001)" },
+        name: {
+          type: "string",
+          description: "Employee ID (e.g. HR-EMP-00001)",
+        },
       },
       required: ["name"],
     },
@@ -113,7 +115,10 @@ export const hrTools: ErpNextTool[] = [
           description: "Filter by status (Present, Absent, Half Day, On Leave)",
           enum: ["Present", "Absent", "Half Day", "On Leave"],
         },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
         date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
@@ -134,7 +139,13 @@ export const hrTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Attendance", {
-        fields: ["name", "employee", "employee_name", "attendance_date", "status"],
+        fields: [
+          "name",
+          "employee",
+          "employee_name",
+          "attendance_date",
+          "status",
+        ],
         filters,
         limit,
         order_by: "attendance_date desc",
@@ -169,7 +180,10 @@ export const hrTools: ErpNextTool[] = [
           description: "Filter by status (Open, Approved, Rejected, Cancelled)",
           enum: ["Open", "Approved", "Rejected", "Cancelled"],
         },
-        leave_type: { type: "string", description: "Filter by leave type (e.g. Sick Leave)" },
+        leave_type: {
+          type: "string",
+          description: "Filter by leave type (e.g. Sick Leave)",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -226,7 +240,10 @@ export const hrTools: ErpNextTool[] = [
       if (!input.name) {
         throw new Error("[erpnext_leave_application_get] 'name' is required");
       }
-      const doc = await ctx.client.get("Leave Application", input.name as string);
+      const doc = await ctx.client.get(
+        "Leave Application",
+        input.name as string,
+      );
       return { data: doc };
     },
   },
@@ -240,8 +257,14 @@ export const hrTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        employee: { type: "string", description: "Employee ID (e.g. HR-EMP-00001)" },
-        leave_type: { type: "string", description: "Leave type (e.g. Sick Leave, Casual Leave)" },
+        employee: {
+          type: "string",
+          description: "Employee ID (e.g. HR-EMP-00001)",
+        },
+        leave_type: {
+          type: "string",
+          description: "Leave type (e.g. Sick Leave, Casual Leave)",
+        },
         from_date: { type: "string", description: "Start date YYYY-MM-DD" },
         to_date: { type: "string", description: "End date YYYY-MM-DD" },
         reason: { type: "string", description: "Reason for leave (optional)" },
@@ -250,16 +273,24 @@ export const hrTools: ErpNextTool[] = [
     },
     handler: async (input, ctx) => {
       if (!input.employee) {
-        throw new Error("[erpnext_leave_application_create] 'employee' is required");
+        throw new Error(
+          "[erpnext_leave_application_create] 'employee' is required",
+        );
       }
       if (!input.leave_type) {
-        throw new Error("[erpnext_leave_application_create] 'leave_type' is required");
+        throw new Error(
+          "[erpnext_leave_application_create] 'leave_type' is required",
+        );
       }
       if (!input.from_date) {
-        throw new Error("[erpnext_leave_application_create] 'from_date' is required");
+        throw new Error(
+          "[erpnext_leave_application_create] 'from_date' is required",
+        );
       }
       if (!input.to_date) {
-        throw new Error("[erpnext_leave_application_create] 'to_date' is required");
+        throw new Error(
+          "[erpnext_leave_application_create] 'to_date' is required",
+        );
       }
 
       const data: Record<string, unknown> = {
@@ -300,8 +331,14 @@ export const hrTools: ErpNextTool[] = [
           description: "Filter by status (Draft, Submitted, Cancelled)",
           enum: ["Draft", "Submitted", "Cancelled"],
         },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD (posting_date >=)" },
-        date_to: { type: "string", description: "End date filter YYYY-MM-DD (posting_date <=)" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD (posting_date >=)",
+        },
+        date_to: {
+          type: "string",
+          description: "End date filter YYYY-MM-DD (posting_date <=)",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -355,7 +392,10 @@ export const hrTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Salary Slip ID (e.g. Salary Slip/HR-EMP-00001/00001)" },
+        name: {
+          type: "string",
+          description: "Salary Slip ID (e.g. Salary Slip/HR-EMP-00001/00001)",
+        },
       },
       required: ["name"],
     },
@@ -374,8 +414,7 @@ export const hrTools: ErpNextTool[] = [
     name: "erpnext_payroll_entry_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List Payroll Entries. Filterable by company, status. " +
+    description: "List Payroll Entries. Filterable by company, status. " +
       "Fields: name, company, posting_date, payroll_frequency, status.",
     category: "hr",
     inputSchema: {
@@ -401,7 +440,13 @@ export const hrTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Payroll Entry", {
-        fields: ["name", "company", "posting_date", "payroll_frequency", "status"],
+        fields: [
+          "name",
+          "company",
+          "posting_date",
+          "payroll_frequency",
+          "status",
+        ],
         filters,
         limit,
         order_by: "posting_date desc",
@@ -438,7 +483,8 @@ export const hrTools: ErpNextTool[] = [
         },
         approval_status: {
           type: "string",
-          description: "Filter by approval status (Pending, Approved, Rejected)",
+          description:
+            "Filter by approval status (Pending, Approved, Rejected)",
           enum: ["Pending", "Approved", "Rejected"],
         },
       },
@@ -489,33 +535,54 @@ export const hrTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        employee: { type: "string", description: "Employee ID (e.g. HR-EMP-00001)" },
+        employee: {
+          type: "string",
+          description: "Employee ID (e.g. HR-EMP-00001)",
+        },
         expenses: {
           type: "array",
           description: "List of expense line items",
           items: {
             type: "object",
             properties: {
-              expense_type: { type: "string", description: "Expense type (e.g. Travel, Food)" },
+              expense_type: {
+                type: "string",
+                description: "Expense type (e.g. Travel, Food)",
+              },
               amount: { type: "number", description: "Claimed amount" },
-              description: { type: "string", description: "Description of the expense (optional)" },
+              description: {
+                type: "string",
+                description: "Description of the expense (optional)",
+              },
             },
             required: ["expense_type", "amount"],
           },
         },
-        posting_date: { type: "string", description: "Posting date YYYY-MM-DD (optional, defaults to today)" },
+        posting_date: {
+          type: "string",
+          description: "Posting date YYYY-MM-DD (optional, defaults to today)",
+        },
       },
       required: ["employee", "expenses"],
     },
     handler: async (input, ctx) => {
       if (!input.employee) {
-        throw new Error("[erpnext_expense_claim_create] 'employee' is required");
+        throw new Error(
+          "[erpnext_expense_claim_create] 'employee' is required",
+        );
       }
-      if (!input.expenses || !Array.isArray(input.expenses) || (input.expenses as unknown[]).length === 0) {
-        throw new Error("[erpnext_expense_claim_create] 'expenses' is required and must be a non-empty array");
+      if (
+        !input.expenses || !Array.isArray(input.expenses) ||
+        (input.expenses as unknown[]).length === 0
+      ) {
+        throw new Error(
+          "[erpnext_expense_claim_create] 'expenses' is required and must be a non-empty array",
+        );
       }
 
-      const expenses = input.expenses as Array<{ expense_type: string; amount: number; description?: string }>;
+      const expenses = input.expenses as Array<
+        { expense_type: string; amount: number; description?: string }
+      >;
 
       const data: Record<string, unknown> = {
         employee: input.employee as string,
@@ -543,14 +610,16 @@ export const hrTools: ErpNextTool[] = [
     name: "erpnext_leave_balance",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "Get leave balance (allocations) for an employee. " +
+    description: "Get leave balance (allocations) for an employee. " +
       "Returns Leave Allocations with leave_type, total_leaves_allocated, new_leaves_allocated.",
     category: "hr",
     inputSchema: {
       type: "object",
       properties: {
-        employee: { type: "string", description: "Employee ID (e.g. HR-EMP-00001)" },
+        employee: {
+          type: "string",
+          description: "Employee ID (e.g. HR-EMP-00001)",
+        },
       },
       required: ["employee"],
     },
@@ -565,7 +634,14 @@ export const hrTools: ErpNextTool[] = [
       ];
 
       const docs = await ctx.client.list("Leave Allocation", {
-        fields: ["name", "leave_type", "total_leaves_allocated", "new_leaves_allocated", "from_date", "to_date"],
+        fields: [
+          "name",
+          "leave_type",
+          "total_leaves_allocated",
+          "new_leaves_allocated",
+          "from_date",
+          "to_date",
+        ],
         filters,
         limit: 50,
         order_by: "leave_type asc",

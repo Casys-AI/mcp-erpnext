@@ -31,17 +31,21 @@
  * @module lib/erpnext/server
  */
 
-import { ConcurrentMCPServer, launchInspector, MCP_APP_MIME_TYPE } from "@casys/mcp-server";
+import {
+  ConcurrentMCPServer,
+  launchInspector,
+  MCP_APP_MIME_TYPE,
+} from "@casys/mcp-server";
 import { ErpNextToolsClient } from "./src/client.ts";
 import { FrappeAPIError } from "./src/api/frappe-client.ts";
 import { UI_VIEWERS } from "./src/ui/viewers.ts";
 import { resolveViewerDistPath } from "./src/ui/viewer-resource-paths.ts";
 import {
-  getArgs,
-  statSync,
-  readTextFile,
-  onSignal,
   exit,
+  getArgs,
+  onSignal,
+  readTextFile,
+  statSync,
 } from "./src/runtime.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
@@ -51,7 +55,11 @@ async function main() {
 
   // Inspector mode — launch MCP Inspector for interactive debugging
   if (args.includes("--inspect")) {
-    await launchInspector("deno", ["run", "--allow-all", import.meta.filename!]);
+    await launchInspector("deno", [
+      "run",
+      "--allow-all",
+      import.meta.filename!,
+    ]);
     return;
   }
 
@@ -64,7 +72,9 @@ async function main() {
   // HTTP mode
   const httpFlag = args.includes("--http");
   const portArg = args.find((arg) => arg.startsWith("--port="));
-  const httpPort = portArg ? parseInt(portArg.split("=")[1], 10) : DEFAULT_HTTP_PORT;
+  const httpPort = portArg
+    ? parseInt(portArg.split("=")[1], 10)
+    : DEFAULT_HTTP_PORT;
   const hostnameArg = args.find((arg) => arg.startsWith("--hostname="));
   const hostname = hostnameArg ? hostnameArg.split("=")[1] : "0.0.0.0";
 
@@ -96,7 +106,11 @@ async function main() {
   // Register UI resources (MCP Apps viewers)
   // Built by: cd lib/erpnext/src/ui && node build-all.mjs
   for (const viewerName of UI_VIEWERS) {
-    const distPath = resolveViewerDistPath(import.meta.url, viewerName, statSync);
+    const distPath = resolveViewerDistPath(
+      import.meta.url,
+      viewerName,
+      statSync,
+    );
 
     const resourceUri = `ui://mcp-erpnext/${viewerName}`;
     const humanName = viewerName

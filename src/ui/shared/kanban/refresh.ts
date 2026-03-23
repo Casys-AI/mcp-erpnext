@@ -30,7 +30,10 @@ export function canRequestBoardRefresh(
     return false;
   }
 
-  if (gate.dragging || gate.processingMove || gate.queuedMoves > 0 || gate.refreshInFlight) {
+  if (
+    gate.dragging || gate.processingMove || gate.queuedMoves > 0 ||
+    gate.refreshInFlight
+  ) {
     return false;
   }
 

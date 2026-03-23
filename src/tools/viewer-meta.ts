@@ -9,7 +9,8 @@
 
 import { uiMeta } from "@casys/mcp-server";
 
-const viewer = (name: string) => uiMeta({ resourceUri: `ui://mcp-erpnext/${name}` })._meta;
+const viewer = (name: string) =>
+  uiMeta({ resourceUri: `ui://mcp-erpnext/${name}` })._meta;
 
 export const DOCLIST_META = viewer("doclist-viewer");
 export const INVOICE_META = viewer("invoice-viewer");

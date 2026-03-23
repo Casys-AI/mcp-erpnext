@@ -51,7 +51,8 @@ Deno.test("erpnext_supplier_create - exists in purchasing tools", () => {
 Deno.test("erpnext_supplier_create - throws if supplier_name missing", async () => {
   const tool = getTool("erpnext_supplier_create");
   await assertRejects(
-    () => tool.handler({ supplier_group: "Hardware" }, makeCtx(makeMockClient())),
+    () =>
+      tool.handler({ supplier_group: "Hardware" }, makeCtx(makeMockClient())),
     Error,
     "supplier_name",
   );
@@ -132,7 +133,11 @@ Deno.test("erpnext_supplier_list - has _meta.ui", () => {
 Deno.test("erpnext_purchase_order_create - throws if supplier missing", async () => {
   const tool = getTool("erpnext_purchase_order_create");
   await assertRejects(
-    () => tool.handler({ items: [{ item_code: "X", qty: 1, rate: 10 }] }, makeCtx(makeMockClient())),
+    () =>
+      tool.handler(
+        { items: [{ item_code: "X", qty: 1, rate: 10 }] },
+        makeCtx(makeMockClient()),
+      ),
     Error,
     "supplier",
   );

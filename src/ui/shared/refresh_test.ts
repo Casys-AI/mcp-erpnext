@@ -32,7 +32,10 @@ Deno.test("shared ui refresh - allows visible idle refresh after interval", () =
 });
 
 Deno.test("shared ui refresh - blocks hidden or in-flight refreshes", () => {
-  assertEquals(canRequestUiRefresh(makeGate({ visibilityState: "hidden" })), false);
+  assertEquals(
+    canRequestUiRefresh(makeGate({ visibilityState: "hidden" })),
+    false,
+  );
   assertEquals(canRequestUiRefresh(makeGate({ refreshInFlight: true })), false);
 });
 
@@ -67,7 +70,9 @@ Deno.test("shared ui refresh - falls back to host request when payload has none"
 
 Deno.test("shared ui refresh - normalizes timeout failures for passive viewers", () => {
   assertEquals(
-    normalizeUiRefreshFailureMessage(new Error("Tool call timed out after 10000ms")),
+    normalizeUiRefreshFailureMessage(
+      new Error("Tool call timed out after 10000ms"),
+    ),
     "Refresh timed out",
   );
   assertEquals(
@@ -81,10 +86,10 @@ Deno.test("shared ui refresh - extracts text payloads from tool results", () => 
     extractToolResultText({
       content: [
         { type: "image", text: "ignored" },
-        { type: "text", text: "{\"ok\":true}" },
+        { type: "text", text: '{"ok":true}' },
       ],
     }),
-    "{\"ok\":true}",
+    '{"ok":true}',
   );
   assertEquals(extractToolResultText({ content: [] }), null);
 });

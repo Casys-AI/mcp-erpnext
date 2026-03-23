@@ -7,9 +7,16 @@ import type {
   KanbanMoveResult,
   KanbanTransition,
 } from "../types.ts";
-import { formatShortDate, isDateOverdue, parseFirstAssignee, priorityTone } from "../field-utils.ts";
+import {
+  formatShortDate,
+  isDateOverdue,
+  parseFirstAssignee,
+  priorityTone,
+} from "../field-utils.ts";
 
-const ISSUE_COLUMNS: Array<{ id: string; label: string; color: string; status: string }> = [
+const ISSUE_COLUMNS: Array<
+  { id: string; label: string; color: string; status: string }
+> = [
   { id: "open", label: "Open", color: "#60a5fa", status: "Open" },
   { id: "replied", label: "Replied", color: "#f59e0b", status: "Replied" },
   { id: "on-hold", label: "On Hold", color: "#a78bfa", status: "On Hold" },
@@ -17,8 +24,12 @@ const ISSUE_COLUMNS: Array<{ id: string; label: string; color: string; status: s
   { id: "closed", label: "Closed", color: "#64748b", status: "Closed" },
 ];
 
-const STATUS_BY_COLUMN = new Map(ISSUE_COLUMNS.map((column) => [column.id, column.status]));
-const COLUMN_BY_STATUS = new Map(ISSUE_COLUMNS.map((column) => [column.status, column.id]));
+const STATUS_BY_COLUMN = new Map(
+  ISSUE_COLUMNS.map((column) => [column.id, column.status]),
+);
+const COLUMN_BY_STATUS = new Map(
+  ISSUE_COLUMNS.map((column) => [column.status, column.id]),
+);
 
 const ISSUE_LIST_FIELDS = [
   "name",
@@ -36,19 +47,44 @@ const ISSUE_LIST_FIELDS = [
 
 const ISSUE_ALLOWED_TRANSITIONS: KanbanTransition[] = [
   { fromColumn: "open", toColumn: "replied", allowed: true, label: "Reply" },
-  { fromColumn: "open", toColumn: "on-hold", allowed: true, label: "Put on hold" },
+  {
+    fromColumn: "open",
+    toColumn: "on-hold",
+    allowed: true,
+    label: "Put on hold",
+  },
   { fromColumn: "open", toColumn: "resolved", allowed: true, label: "Resolve" },
   { fromColumn: "open", toColumn: "closed", allowed: true, label: "Close" },
   { fromColumn: "replied", toColumn: "open", allowed: true, label: "Reopen" },
-  { fromColumn: "replied", toColumn: "on-hold", allowed: true, label: "Put on hold" },
-  { fromColumn: "replied", toColumn: "resolved", allowed: true, label: "Resolve" },
+  {
+    fromColumn: "replied",
+    toColumn: "on-hold",
+    allowed: true,
+    label: "Put on hold",
+  },
+  {
+    fromColumn: "replied",
+    toColumn: "resolved",
+    allowed: true,
+    label: "Resolve",
+  },
   { fromColumn: "replied", toColumn: "closed", allowed: true, label: "Close" },
   { fromColumn: "on-hold", toColumn: "open", allowed: true, label: "Resume" },
   { fromColumn: "on-hold", toColumn: "replied", allowed: true, label: "Reply" },
-  { fromColumn: "on-hold", toColumn: "resolved", allowed: true, label: "Resolve" },
+  {
+    fromColumn: "on-hold",
+    toColumn: "resolved",
+    allowed: true,
+    label: "Resolve",
+  },
   { fromColumn: "on-hold", toColumn: "closed", allowed: true, label: "Close" },
   { fromColumn: "resolved", toColumn: "open", allowed: true, label: "Reopen" },
-  { fromColumn: "resolved", toColumn: "replied", allowed: true, label: "Reply" },
+  {
+    fromColumn: "resolved",
+    toColumn: "replied",
+    allowed: true,
+    label: "Reply",
+  },
   { fromColumn: "resolved", toColumn: "closed", allowed: true, label: "Close" },
   { fromColumn: "closed", toColumn: "open", allowed: true, label: "Reopen" },
   { fromColumn: "closed", toColumn: "replied", allowed: true, label: "Reply" },
@@ -72,7 +108,9 @@ function buildIssueCard(row: Record<string, unknown>): KanbanCard {
   const badges: KanbanCard["badges"] = [];
   if (priority) badges.push({ label: priority, tone: priorityTone(priority) });
   const slaDate = row.resolution_by;
-  if (isDateOverdue(slaDate) && columnId !== "resolved" && columnId !== "closed") {
+  if (
+    isDateOverdue(slaDate) && columnId !== "resolved" && columnId !== "closed"
+  ) {
     badges.push({ label: "SLA breach", tone: "error" });
   }
 
@@ -85,7 +123,9 @@ function buildIssueCard(row: Record<string, unknown>): KanbanCard {
   const openedDisplay = formatShortDate(row.opening_date);
   if (openedDisplay) metrics.push({ label: "Opened", value: openedDisplay });
   const resolvedDisplay = formatShortDate(row.resolution_date);
-  if (resolvedDisplay) metrics.push({ label: "Resolved", value: resolvedDisplay });
+  if (resolvedDisplay) {
+    metrics.push({ label: "Resolved", value: resolvedDisplay });
+  }
 
   const assignee = parseFirstAssignee(row._assign);
 
@@ -151,7 +191,10 @@ export const issueKanbanAdapter: KanbanAdapter = {
     return { allowed: true };
   },
   async executeMove(move: KanbanMoveRequest, ctx): Promise<KanbanMoveResult> {
-    const currentIssue = await ctx.client.get("Issue", move.cardId) as Record<string, unknown>;
+    const currentIssue = await ctx.client.get("Issue", move.cardId) as Record<
+      string,
+      unknown
+    >;
     const serverColumn = columnIdForIssueStatus(currentIssue.status);
 
     if (serverColumn !== move.fromColumn) {
@@ -188,7 +231,9 @@ export const issueKanbanAdapter: KanbanAdapter = {
       };
     }
 
-    const serverIssue = await ctx.client.update("Issue", move.cardId, { status }) as Record<string, unknown>;
+    const serverIssue = await ctx.client.update("Issue", move.cardId, {
+      status,
+    }) as Record<string, unknown>;
 
     return {
       ok: true,

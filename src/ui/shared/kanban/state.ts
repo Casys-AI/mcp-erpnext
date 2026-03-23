@@ -47,7 +47,12 @@ export function kanbanStateReducer(
     case "tool-input":
       return { ...state, loading: true, error: null };
     case "hydrate-board":
-      return { board: action.board, loading: false, error: null, detail: state.detail };
+      return {
+        board: action.board,
+        loading: false,
+        error: null,
+        detail: state.detail,
+      };
     case "tool-error":
       return { ...state, loading: false, error: action.message };
     case "select-card":

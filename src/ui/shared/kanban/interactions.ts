@@ -24,7 +24,10 @@ function recalculateColumns(
   }));
 }
 
-export function applyOptimisticMove(board: KanbanBoardData, move: QueuedKanbanMove): {
+export function applyOptimisticMove(
+  board: KanbanBoardData,
+  move: QueuedKanbanMove,
+): {
   board: KanbanBoardData;
   snapshot: KanbanBoardData;
 } {

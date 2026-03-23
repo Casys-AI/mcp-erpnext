@@ -25,7 +25,10 @@ export const salesTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        customer_group: { type: "string", description: "Filter by customer group" },
+        customer_group: {
+          type: "string",
+          description: "Filter by customer group",
+        },
         territory: { type: "string", description: "Filter by territory" },
         include_disabled: {
           type: "boolean",
@@ -47,7 +50,14 @@ export const salesTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Customer", {
-        fields: ["name", "customer_name", "customer_group", "territory", "email_id", "disabled"],
+        fields: [
+          "name",
+          "customer_name",
+          "customer_group",
+          "territory",
+          "email_id",
+          "disabled",
+        ],
         filters,
         limit,
         order_by: "modified desc",
@@ -86,8 +96,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_customer_create",
-    description:
-      "Create a new Customer. Requires customer_name. " +
+    description: "Create a new Customer. Requires customer_name. " +
       "Optionally set customer_group, territory, email_id.",
     category: "sales",
     inputSchema: {
@@ -98,11 +107,15 @@ export const salesTools: ErpNextTool[] = [
           type: "string",
           description: "Customer group (default: 'Commercial')",
         },
-        territory: { type: "string", description: "Territory (default: 'All Territories')" },
+        territory: {
+          type: "string",
+          description: "Territory (default: 'All Territories')",
+        },
         email_id: { type: "string", description: "Primary email address" },
         customer_type: {
           type: "string",
-          description: "Customer type: Company or Individual (default: Company)",
+          description:
+            "Customer type: Company or Individual (default: Company)",
           enum: ["Company", "Individual"],
         },
       },
@@ -110,16 +123,22 @@ export const salesTools: ErpNextTool[] = [
     },
     handler: async (input, ctx) => {
       if (!input.customer_name) {
-        throw new Error("[erpnext_customer_create] 'customer_name' is required");
+        throw new Error(
+          "[erpnext_customer_create] 'customer_name' is required",
+        );
       }
 
       const data: Record<string, unknown> = {
         customer_name: input.customer_name as string,
       };
-      if (input.customer_group) data.customer_group = input.customer_group as string;
+      if (input.customer_group) {
+        data.customer_group = input.customer_group as string;
+      }
       if (input.territory) data.territory = input.territory as string;
       if (input.email_id) data.email_id = input.email_id as string;
-      if (input.customer_type) data.customer_type = input.customer_type as string;
+      if (input.customer_type) {
+        data.customer_type = input.customer_type as string;
+      }
 
       const doc = await ctx.client.create("Customer", data);
       return {
@@ -161,7 +180,9 @@ export const salesTools: ErpNextTool[] = [
       }
 
       if (Object.keys(data).length === 0) {
-        throw new Error("[erpnext_customer_update] At least one field to update is required");
+        throw new Error(
+          "[erpnext_customer_update] At least one field to update is required",
+        );
       }
 
       const doc = await ctx.client.update("Customer", name as string, data);
@@ -189,9 +210,13 @@ export const salesTools: ErpNextTool[] = [
         customer: { type: "string", description: "Filter by customer" },
         status: {
           type: "string",
-          description: "Filter by status (Draft, To Deliver and Bill, Completed, Cancelled, etc.)",
+          description:
+            "Filter by status (Draft, To Deliver and Bill, Completed, Cancelled, etc.)",
         },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
         date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
@@ -212,7 +237,14 @@ export const salesTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Sales Order", {
-        fields: ["name", "customer", "transaction_date", "status", "grand_total", "currency"],
+        fields: [
+          "name",
+          "customer",
+          "transaction_date",
+          "status",
+          "grand_total",
+          "currency",
+        ],
         filters,
         limit,
         order_by: "modified desc",
@@ -237,7 +269,10 @@ export const salesTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Sales Order name (e.g. SO-00001)" },
+        name: {
+          type: "string",
+          description: "Sales Order name (e.g. SO-00001)",
+        },
       },
       required: ["name"],
     },
@@ -270,7 +305,10 @@ export const salesTools: ErpNextTool[] = [
               item_code: { type: "string" },
               qty: { type: "number" },
               rate: { type: "number" },
-              warehouse: { type: "string", description: "Item warehouse (e.g. 'Stores - CI')" },
+              warehouse: {
+                type: "string",
+                description: "Item warehouse (e.g. 'Stores - CI')",
+              },
             },
             required: ["item_code", "qty", "rate"],
           },
@@ -285,11 +323,13 @@ export const salesTools: ErpNextTool[] = [
         },
         selling_price_list: {
           type: "string",
-          description: "Price list name (e.g. 'Standard Selling'). Required if no default is set.",
+          description:
+            "Price list name (e.g. 'Standard Selling'). Required if no default is set.",
         },
         currency: {
           type: "string",
-          description: "Transaction currency (e.g. 'EUR', 'USD'). Defaults to company currency.",
+          description:
+            "Transaction currency (e.g. 'EUR', 'USD'). Defaults to company currency.",
         },
         set_warehouse: {
           type: "string",
@@ -302,12 +342,18 @@ export const salesTools: ErpNextTool[] = [
       if (!input.customer) {
         throw new Error("[erpnext_sales_order_create] 'customer' is required");
       }
-      if (!input.items || !Array.isArray(input.items) || input.items.length === 0) {
-        throw new Error("[erpnext_sales_order_create] 'items' must be a non-empty array");
+      if (
+        !input.items || !Array.isArray(input.items) || input.items.length === 0
+      ) {
+        throw new Error(
+          "[erpnext_sales_order_create] 'items' must be a non-empty array",
+        );
       }
 
       const items = (
-        input.items as Array<{ item_code: string; qty: number; rate: number; warehouse?: string }>
+        input.items as Array<
+          { item_code: string; qty: number; rate: number; warehouse?: string }
+        >
       ).map((item) => {
         if (!item.item_code || item.qty == null || item.rate == null) {
           throw new Error(
@@ -328,15 +374,21 @@ export const salesTools: ErpNextTool[] = [
         customer: input.customer as string,
         items,
       };
-      if (input.delivery_date) data.delivery_date = input.delivery_date as string;
+      if (input.delivery_date) {
+        data.delivery_date = input.delivery_date as string;
+      }
       if (input.company) data.company = input.company as string;
-      if (input.selling_price_list) data.selling_price_list = input.selling_price_list as string;
+      if (input.selling_price_list) {
+        data.selling_price_list = input.selling_price_list as string;
+      }
       if (input.currency) {
         data.currency = input.currency as string;
         data.price_list_currency = input.currency as string;
         data.plc_conversion_rate = 1;
       }
-      if (input.set_warehouse) data.set_warehouse = input.set_warehouse as string;
+      if (input.set_warehouse) {
+        data.set_warehouse = input.set_warehouse as string;
+      }
 
       const doc = await ctx.client.create("Sales Order", data);
 
@@ -349,15 +401,20 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_order_update",
-    description:
-      "Update an existing Sales Order (only in Draft status). " +
+    description: "Update an existing Sales Order (only in Draft status). " +
       "Pass only the fields you want to change (e.g. delivery_date, items).",
     category: "sales",
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Sales Order name (e.g. SO-00001)" },
-        delivery_date: { type: "string", description: "New delivery date YYYY-MM-DD" },
+        name: {
+          type: "string",
+          description: "Sales Order name (e.g. SO-00001)",
+        },
+        delivery_date: {
+          type: "string",
+          description: "New delivery date YYYY-MM-DD",
+        },
         items: {
           type: "array",
           description: "Replacement item list: [{item_code, qty, rate}]",
@@ -379,14 +436,22 @@ export const salesTools: ErpNextTool[] = [
       }
 
       const data: Record<string, unknown> = {};
-      if (input.delivery_date) data.delivery_date = input.delivery_date as string;
+      if (input.delivery_date) {
+        data.delivery_date = input.delivery_date as string;
+      }
       if (input.items) data.items = input.items;
 
       if (Object.keys(data).length === 0) {
-        throw new Error("[erpnext_sales_order_update] At least one field to update is required");
+        throw new Error(
+          "[erpnext_sales_order_update] At least one field to update is required",
+        );
       }
 
-      const doc = await ctx.client.update("Sales Order", input.name as string, data);
+      const doc = await ctx.client.update(
+        "Sales Order",
+        input.name as string,
+        data,
+      );
       return {
         data: doc,
         message: `Sales Order ${input.name} updated successfully`,
@@ -405,7 +470,10 @@ export const salesTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Sales Order name (e.g. SO-00001)" },
+        name: {
+          type: "string",
+          description: "Sales Order name (e.g. SO-00001)",
+        },
       },
       required: ["name"],
     },
@@ -437,7 +505,10 @@ export const salesTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Sales Order name (e.g. SO-00001)" },
+        name: {
+          type: "string",
+          description: "Sales Order name (e.g. SO-00001)",
+        },
       },
       required: ["name"],
     },
@@ -475,9 +546,13 @@ export const salesTools: ErpNextTool[] = [
         customer: { type: "string", description: "Filter by customer" },
         status: {
           type: "string",
-          description: "Filter by status (Draft, Unpaid, Paid, Overdue, Cancelled, etc.)",
+          description:
+            "Filter by status (Draft, Unpaid, Paid, Overdue, Cancelled, etc.)",
         },
-        date_from: { type: "string", description: "Start date filter YYYY-MM-DD" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
         date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
@@ -531,7 +606,10 @@ export const salesTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Sales Invoice name (e.g. SINV-00001)" },
+        name: {
+          type: "string",
+          description: "Sales Invoice name (e.g. SINV-00001)",
+        },
       },
       required: ["name"],
     },
@@ -567,7 +645,10 @@ export const salesTools: ErpNextTool[] = [
               item_code: { type: "string" },
               qty: { type: "number" },
               rate: { type: "number" },
-              warehouse: { type: "string", description: "Item warehouse (e.g. 'Stores - CI')" },
+              warehouse: {
+                type: "string",
+                description: "Item warehouse (e.g. 'Stores - CI')",
+              },
             },
             required: ["item_code", "qty", "rate"],
           },
@@ -586,11 +667,13 @@ export const salesTools: ErpNextTool[] = [
         },
         selling_price_list: {
           type: "string",
-          description: "Price list name (e.g. 'Standard Selling'). Required if no default is set.",
+          description:
+            "Price list name (e.g. 'Standard Selling'). Required if no default is set.",
         },
         currency: {
           type: "string",
-          description: "Transaction currency (e.g. 'EUR', 'USD'). Defaults to company currency.",
+          description:
+            "Transaction currency (e.g. 'EUR', 'USD'). Defaults to company currency.",
         },
         set_warehouse: {
           type: "string",
@@ -601,14 +684,22 @@ export const salesTools: ErpNextTool[] = [
     },
     handler: async (input, ctx) => {
       if (!input.customer) {
-        throw new Error("[erpnext_sales_invoice_create] 'customer' is required");
+        throw new Error(
+          "[erpnext_sales_invoice_create] 'customer' is required",
+        );
       }
-      if (!input.items || !Array.isArray(input.items) || input.items.length === 0) {
-        throw new Error("[erpnext_sales_invoice_create] 'items' must be a non-empty array");
+      if (
+        !input.items || !Array.isArray(input.items) || input.items.length === 0
+      ) {
+        throw new Error(
+          "[erpnext_sales_invoice_create] 'items' must be a non-empty array",
+        );
       }
 
       const items = (
-        input.items as Array<{ item_code: string; qty: number; rate: number; warehouse?: string }>
+        input.items as Array<
+          { item_code: string; qty: number; rate: number; warehouse?: string }
+        >
       ).map((item) => {
         if (!item.item_code || item.qty == null || item.rate == null) {
           throw new Error(
@@ -631,13 +722,17 @@ export const salesTools: ErpNextTool[] = [
       if (input.posting_date) data.posting_date = input.posting_date as string;
       if (input.due_date) data.due_date = input.due_date as string;
       if (input.company) data.company = input.company as string;
-      if (input.selling_price_list) data.selling_price_list = input.selling_price_list as string;
+      if (input.selling_price_list) {
+        data.selling_price_list = input.selling_price_list as string;
+      }
       if (input.currency) {
         data.currency = input.currency as string;
         data.price_list_currency = input.currency as string;
         data.plc_conversion_rate = 1;
       }
-      if (input.set_warehouse) data.set_warehouse = input.set_warehouse as string;
+      if (input.set_warehouse) {
+        data.set_warehouse = input.set_warehouse as string;
+      }
 
       const doc = await ctx.client.create("Sales Invoice", data);
       return {
@@ -690,8 +785,7 @@ export const salesTools: ErpNextTool[] = [
     name: "erpnext_quotation_list",
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
-    description:
-      "List Quotations. Filterable by party_name, status. " +
+    description: "List Quotations. Filterable by party_name, status. " +
       "Fields: name, party_name, transaction_date, status, grand_total.",
     category: "sales",
     inputSchema: {
@@ -701,7 +795,8 @@ export const salesTools: ErpNextTool[] = [
         party_name: { type: "string", description: "Filter by party name" },
         status: {
           type: "string",
-          description: "Filter by status (Draft, Open, Replied, Ordered, Lost, Cancelled)",
+          description:
+            "Filter by status (Draft, Open, Replied, Ordered, Lost, Cancelled)",
         },
       },
     },
@@ -716,7 +811,13 @@ export const salesTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Quotation", {
-        fields: ["name", "party_name", "transaction_date", "status", "grand_total"],
+        fields: [
+          "name",
+          "party_name",
+          "transaction_date",
+          "status",
+          "grand_total",
+        ],
         filters,
         limit,
         order_by: "modified desc",
@@ -741,7 +842,10 @@ export const salesTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Quotation name (e.g. QTN-00001)" },
+        name: {
+          type: "string",
+          description: "Quotation name (e.g. QTN-00001)",
+        },
       },
       required: ["name"],
     },
@@ -757,8 +861,7 @@ export const salesTools: ErpNextTool[] = [
   {
     name: "erpnext_quotation_create",
     _meta: INVOICE_META,
-    description:
-      "Create a new Quotation for a customer or lead. " +
+    description: "Create a new Quotation for a customer or lead. " +
       "Requires quotation_to (Customer or Lead), party_name, and at least one item.",
     category: "sales",
     inputSchema: {
@@ -811,35 +914,51 @@ export const salesTools: ErpNextTool[] = [
     },
     handler: async (input, ctx) => {
       if (!input.quotation_to) {
-        throw new Error("[erpnext_quotation_create] 'quotation_to' is required");
+        throw new Error(
+          "[erpnext_quotation_create] 'quotation_to' is required",
+        );
       }
       if (!input.party_name) {
         throw new Error("[erpnext_quotation_create] 'party_name' is required");
       }
-      if (!input.items || !Array.isArray(input.items) || input.items.length === 0) {
-        throw new Error("[erpnext_quotation_create] 'items' must be a non-empty array");
+      if (
+        !input.items || !Array.isArray(input.items) || input.items.length === 0
+      ) {
+        throw new Error(
+          "[erpnext_quotation_create] 'items' must be a non-empty array",
+        );
       }
 
-      const items = (input.items as Array<{ item_code: string; qty: number; rate: number }>).map(
-        (item) => {
-          if (!item.item_code || item.qty == null || item.rate == null) {
-            throw new Error(
-              "[erpnext_quotation_create] Each item must have item_code, qty, and rate",
-            );
-          }
-          return { item_code: item.item_code, qty: item.qty, rate: item.rate };
-        },
-      );
+      const items =
+        (input.items as Array<{ item_code: string; qty: number; rate: number }>)
+          .map(
+            (item) => {
+              if (!item.item_code || item.qty == null || item.rate == null) {
+                throw new Error(
+                  "[erpnext_quotation_create] Each item must have item_code, qty, and rate",
+                );
+              }
+              return {
+                item_code: item.item_code,
+                qty: item.qty,
+                rate: item.rate,
+              };
+            },
+          );
 
       const data: Record<string, unknown> = {
         quotation_to: input.quotation_to as string,
         party_name: input.party_name as string,
         items,
       };
-      if (input.transaction_date) data.transaction_date = input.transaction_date as string;
+      if (input.transaction_date) {
+        data.transaction_date = input.transaction_date as string;
+      }
       if (input.valid_till) data.valid_till = input.valid_till as string;
       if (input.company) data.company = input.company as string;
-      if (input.selling_price_list) data.selling_price_list = input.selling_price_list as string;
+      if (input.selling_price_list) {
+        data.selling_price_list = input.selling_price_list as string;
+      }
       if (input.currency) {
         data.currency = input.currency as string;
         data.price_list_currency = input.currency as string;

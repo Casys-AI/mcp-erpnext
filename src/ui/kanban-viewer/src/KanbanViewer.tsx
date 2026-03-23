@@ -1,4 +1,13 @@
-import { useEffect, useRef, useState, useCallback, type CSSProperties, type DragEvent, type ReactNode, type HTMLAttributes } from "react";
+import {
+  type CSSProperties,
+  type DragEvent,
+  type HTMLAttributes,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles } from "~/shared/theme";
 import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
@@ -8,24 +17,28 @@ import {
   normalizeMoveFailureMessage,
 } from "~/shared/kanban/presentation";
 import { useKanbanBoard } from "~/shared/kanban/useKanbanBoard";
-import type { KanbanBoardData, KanbanCardData, KanbanColumnData } from "~/shared/kanban/types";
+import type {
+  KanbanBoardData,
+  KanbanCardData,
+  KanbanColumnData,
+} from "~/shared/kanban/types";
 import {
   applyOptimisticMove,
   canDropCardInColumn,
   enqueueMove,
+  type QueuedKanbanMove,
   reconcileMoveSuccess,
   rollbackMoveFailure,
   takeNextQueuedMove,
-  type QueuedKanbanMove,
 } from "~/shared/kanban/interactions";
 import {
   canRequestBoardRefresh,
-  resolveKanbanRefreshRequest,
   type KanbanRefreshRequestData,
+  resolveKanbanRefreshRequest,
 } from "~/shared/kanban/refresh";
 import {
-  shouldUseKanbanColumnFocus,
   clampKanbanFocusIndex,
+  shouldUseKanbanColumnFocus,
 } from "~/shared/kanban/layout";
 import { extractToolResultText } from "~/shared/refresh";
 import { CardDetailModal } from "./DetailModal";
@@ -53,7 +66,10 @@ const extractTextContent = extractToolResultText;
 
 /** Unwrap Frappe-style `{ data: { ... } }` envelope, falling back to the raw object. */
 function unwrapDoc(payload: Record<string, unknown>): Record<string, unknown> {
-  if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
+  if (
+    payload.data && typeof payload.data === "object" &&
+    !Array.isArray(payload.data)
+  ) {
     return payload.data as Record<string, unknown>;
   }
   return payload;
@@ -70,7 +86,9 @@ export function getAvailableTargets(
       transition.toColumn !== columnId
     )
     .map((transition) => {
-      const targetCol = board.columns.find((column) => column.id === transition.toColumn);
+      const targetCol = board.columns.find((column) =>
+        column.id === transition.toColumn
+      );
       return {
         columnId: transition.toColumn,
         label: transition.label ?? targetCol?.label ?? transition.toColumn,
@@ -83,7 +101,9 @@ function DragScrollContainer({
   children,
   style,
   ...rest
-}: { children: ReactNode; style?: CSSProperties } & HTMLAttributes<HTMLDivElement>) {
+}:
+  & { children: ReactNode; style?: CSSProperties }
+  & HTMLAttributes<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
   const dragState = useRef({ active: false, startX: 0, scrollLeft: 0 });
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -108,7 +128,11 @@ function DragScrollContainer({
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     const el = ref.current;
     if (!el) return;
-    dragState.current = { active: true, startX: e.clientX, scrollLeft: el.scrollLeft };
+    dragState.current = {
+      active: true,
+      startX: e.clientX,
+      scrollLeft: el.scrollLeft,
+    };
     el.style.cursor = "grabbing";
     el.style.userSelect = "none";
   }, []);
@@ -166,7 +190,14 @@ function DragScrollContainer({
 function LoadingSkeleton() {
   return (
     <div style={{ padding: 20 }}>
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", overflowX: "auto" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "flex-start",
+          overflowX: "auto",
+        }}
+      >
         {[1, 2, 3].map((column) => (
           <div
             key={column}
@@ -179,7 +210,11 @@ function LoadingSkeleton() {
           >
             <div className="skeleton" style={{ height: 36, width: "100%" }} />
             {[1, 2, 3].map((card) => (
-              <div key={card} className="skeleton" style={{ height: 72, width: "100%" }} />
+              <div
+                key={card}
+                className="skeleton"
+                style={{ height: 72, width: "100%" }}
+              />
             ))}
           </div>
         ))}
@@ -258,7 +293,15 @@ function AssigneeBadge({ email }: { email: string }) {
       >
         {initial}
       </span>
-      <span style={{ fontSize: 10, color: colors.text.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span
+        style={{
+          fontSize: 10,
+          color: colors.text.muted,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
         {displayName}
       </span>
     </span>
@@ -320,7 +363,9 @@ function KanbanCard({
     <article
       style={cardStyle}
       draggable={isDraggable}
-      onDragStart={isDraggable ? (event) => onDragStart(card, event) : undefined}
+      onDragStart={isDraggable
+        ? (event) => onDragStart(card, event)
+        : undefined}
       onDragEnd={isDraggable ? onDragEnd : undefined}
       className={card.pending ? "animate-pulse" : undefined}
       aria-busy={card.pending}
@@ -337,26 +382,40 @@ function KanbanCard({
       />
 
       {/* Card body */}
-      <div style={{ padding: "10px 12px 0", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div
+        style={{
+          padding: "10px 12px 0",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}
+      >
         {/* Header row: title + badges */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            {onTitleClick ? (
-              <span
-                className="kanban-card-title-link"
-                role="button"
-                tabIndex={0}
-                onClick={(e) => { e.stopPropagation(); onTitleClick(card); }}
-                onKeyDown={(e) => { if (e.key === "Enter") onTitleClick(card); }}
-                style={titleStyle}
-              >
-                {card.title}
-              </span>
-            ) : (
-              <div style={titleStyle}>
-                {card.title}
-              </div>
-            )}
+            {onTitleClick
+              ? (
+                <span
+                  className="kanban-card-title-link"
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTitleClick(card);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onTitleClick(card);
+                  }}
+                  style={titleStyle}
+                >
+                  {card.title}
+                </span>
+              )
+              : (
+                <div style={titleStyle}>
+                  {card.title}
+                </div>
+              )}
             {card.subtitle && (
               <div
                 style={{
@@ -373,7 +432,14 @@ function KanbanCard({
             )}
           </div>
           {hasBadges && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, flexShrink: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 4,
+                flexShrink: 0,
+              }}
+            >
               {card.badges?.map((badge) => {
                 const tone = badgeToneColors(badge.tone);
                 return (
@@ -576,8 +642,12 @@ function KanbanColumn({
           display: "flex",
           alignItems: "center",
           gap: 8,
-          borderColor: activeDropColumn === column.id ? colors.accent : colors.border,
-          background: activeDropColumn === column.id ? colors.accentDim : colors.bg.surface,
+          borderColor: activeDropColumn === column.id
+            ? colors.accent
+            : colors.border,
+          background: activeDropColumn === column.id
+            ? colors.accentDim
+            : colors.bg.surface,
         }}
       >
         <span
@@ -590,10 +660,19 @@ function KanbanColumn({
             flexShrink: 0,
           }}
         />
-        <span style={{ fontSize: 12, fontWeight: 700, color: colors.text.primary, flex: 1 }}>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: colors.text.primary,
+            flex: 1,
+          }}
+        >
           {column.label}
         </span>
-        <span style={{ ...styles.badge(column.color, `${column.color}20`) }}>{column.count}</span>
+        <span style={{ ...styles.badge(column.color, `${column.color}20`) }}>
+          {column.count}
+        </span>
       </header>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {cards.map((card) => (
@@ -612,7 +691,9 @@ function KanbanColumn({
   );
 }
 
-function ScrollArrow({ direction, onClick }: { direction: "left" | "right"; onClick: () => void }) {
+function ScrollArrow(
+  { direction, onClick }: { direction: "left" | "right"; onClick: () => void },
+) {
   return (
     <button
       type="button"
@@ -652,7 +733,9 @@ function ColumnTabs({
     const container = first?.parentElement;
     if (!container || !first || !last) return;
     setShowLeft(container.scrollLeft > 0);
-    setShowRight(container.scrollLeft < container.scrollWidth - container.clientWidth - 1);
+    setShowRight(
+      container.scrollLeft < container.scrollWidth - container.clientWidth - 1,
+    );
   }, [columns.length]);
 
   useEffect(updateArrows, [updateArrows]);
@@ -668,7 +751,12 @@ function ColumnTabs({
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
-      {showLeft && <ScrollArrow direction="left" onClick={() => onSelect(Math.max(0, focusIndex - 1))} />}
+      {showLeft && (
+        <ScrollArrow
+          direction="left"
+          onClick={() => onSelect(Math.max(0, focusIndex - 1))}
+        />
+      )}
       <DragScrollContainer
         onScroll={updateArrows}
         style={{
@@ -687,7 +775,9 @@ function ColumnTabs({
           return (
             <button
               key={column.id}
-              ref={(el) => { tabRefs.current[index] = el; }}
+              ref={(el) => {
+                tabRefs.current[index] = el;
+              }}
               type="button"
               role="tab"
               aria-selected={isActive}
@@ -726,7 +816,7 @@ function ColumnTabs({
                 style={{
                   ...styles.badge(
                     isActive ? colors.text.primary : colors.text.muted,
-                    isActive ? `${column.color}30` : `${colors.text.muted}15`
+                    isActive ? `${column.color}30` : `${colors.text.muted}15`,
                   ),
                   fontSize: 10,
                 }}
@@ -737,7 +827,12 @@ function ColumnTabs({
           );
         })}
       </DragScrollContainer>
-      {showRight && <ScrollArrow direction="right" onClick={() => onSelect(Math.min(columns.length - 1, focusIndex + 1))} />}
+      {showRight && (
+        <ScrollArrow
+          direction="right"
+          onClick={() => onSelect(Math.min(columns.length - 1, focusIndex + 1))}
+        />
+      )}
     </div>
   );
 }
@@ -758,13 +853,19 @@ function BoardView({
   activeDropColumn: string | null;
   onMove: (card: KanbanCardData, toColumn: string, label: string) => void;
   onDropCard: (toColumn: string, event: React.DragEvent<HTMLElement>) => void;
-  onDragStart: (card: KanbanCardData, event: React.DragEvent<HTMLElement>) => void;
+  onDragStart: (
+    card: KanbanCardData,
+    event: React.DragEvent<HTMLElement>,
+  ) => void;
   onDragEnd: () => void;
-  onDragOverColumn: (columnId: string, event: React.DragEvent<HTMLElement>) => void;
+  onDragOverColumn: (
+    columnId: string,
+    event: React.DragEvent<HTMLElement>,
+  ) => void;
   onTitleClick?: (card: KanbanCardData) => void;
 }) {
   const [viewportWidth, setViewportWidth] = useState(
-    typeof window !== "undefined" ? window.innerWidth : 1200
+    typeof window !== "undefined" ? window.innerWidth : 1200,
   );
   const [focusIndex, setFocusIndex] = useState(0);
 
@@ -776,16 +877,45 @@ function BoardView({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const useFocusMode = shouldUseKanbanColumnFocus(viewportWidth, board.columns.length);
-  const safeFocusIndex = clampKanbanFocusIndex(focusIndex, board.columns.length);
+  const useFocusMode = shouldUseKanbanColumnFocus(
+    viewportWidth,
+    board.columns.length,
+  );
+  const safeFocusIndex = clampKanbanFocusIndex(
+    focusIndex,
+    board.columns.length,
+  );
   const focusedColumn = useFocusMode ? board.columns[safeFocusIndex] : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 600, background: colors.bg.root, overflowX: "hidden", width: "100%" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 600,
+        background: colors.bg.root,
+        overflowX: "hidden",
+        width: "100%",
+      }}
+    >
       <ErpNextBrandHeader />
-      <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+      <div
+        style={{
+          padding: "14px 16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+          minWidth: 0,
+        }}
+      >
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: colors.text.primary }}>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: colors.text.primary,
+            }}
+          >
             {board.title}
           </div>
           <div style={{ fontSize: 11, color: colors.text.muted }}>
@@ -795,68 +925,90 @@ function BoardView({
 
         {inlineError && <ErrorState message={inlineError} />}
 
-        {useFocusMode ? (
-          <>
-            <ColumnTabs
-              columns={board.columns}
-              focusIndex={safeFocusIndex}
-              onSelect={setFocusIndex}
-            />
-            {focusedColumn && (
-              <div
-                id={`kanban-panel-${focusedColumn.id}`}
-                role="tabpanel"
-                aria-label={focusedColumn.label}
-                style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}
-              >
-                {board.cards
-                  .filter((card) => card.columnId === focusedColumn.id)
-                  .map((card) => (
-                    <KanbanCard
-                      key={card.id}
-                      card={card}
-                      allowedTargets={getAvailableTargets(board, card.columnId)}
-                      onMove={onMove}
-                      onDragStart={onDragStart}
-                      onDragEnd={onDragEnd}
-                      onTitleClick={onTitleClick}
-                      enableDrag={false}
-                    />
-                  ))}
-                {board.cards.filter((card) => card.columnId === focusedColumn.id).length === 0 && (
-                  <div
-                    style={{
-                      padding: "20px 12px",
-                      textAlign: "center",
-                      fontSize: 12,
-                      color: colors.text.muted,
-                    }}
-                  >
-                    No cards in {focusedColumn.label}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        ) : (
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", overflowX: "auto", paddingBottom: 8 }}>
-            {board.columns.map((column) => (
-              <KanbanColumn
-                key={column.id}
-                column={column}
-                board={board}
-                cards={board.cards.filter((card) => card.columnId === column.id)}
-                activeDropColumn={activeDropColumn}
-                onMove={onMove}
-                onDropCard={onDropCard}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-                onDragOverColumn={onDragOverColumn}
-                onTitleClick={onTitleClick}
+        {useFocusMode
+          ? (
+            <>
+              <ColumnTabs
+                columns={board.columns}
+                focusIndex={safeFocusIndex}
+                onSelect={setFocusIndex}
               />
-            ))}
-          </div>
-        )}
+              {focusedColumn && (
+                <div
+                  id={`kanban-panel-${focusedColumn.id}`}
+                  role="tabpanel"
+                  aria-label={focusedColumn.label}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    minWidth: 0,
+                  }}
+                >
+                  {board.cards
+                    .filter((card) => card.columnId === focusedColumn.id)
+                    .map((card) => (
+                      <KanbanCard
+                        key={card.id}
+                        card={card}
+                        allowedTargets={getAvailableTargets(
+                          board,
+                          card.columnId,
+                        )}
+                        onMove={onMove}
+                        onDragStart={onDragStart}
+                        onDragEnd={onDragEnd}
+                        onTitleClick={onTitleClick}
+                        enableDrag={false}
+                      />
+                    ))}
+                  {board.cards.filter((card) =>
+                        card.columnId === focusedColumn.id
+                      ).length === 0 && (
+                    <div
+                      style={{
+                        padding: "20px 12px",
+                        textAlign: "center",
+                        fontSize: 12,
+                        color: colors.text.muted,
+                      }}
+                    >
+                      No cards in {focusedColumn.label}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )
+          : (
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+                overflowX: "auto",
+                paddingBottom: 8,
+              }}
+            >
+              {board.columns.map((column) => (
+                <KanbanColumn
+                  key={column.id}
+                  column={column}
+                  board={board}
+                  cards={board.cards.filter((card) =>
+                    card.columnId === column.id
+                  )}
+                  activeDropColumn={activeDropColumn}
+                  onMove={onMove}
+                  onDropCard={onDropCard}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDragOverColumn={onDragOverColumn}
+                  onTitleClick={onTitleClick}
+                />
+              ))}
+            </div>
+          )}
       </div>
     </div>
   );
@@ -872,7 +1024,16 @@ type ToolResultPayload = {
 };
 
 export function KanbanViewer() {
-  const { state, hydrateBoard, setError, startLoading, selectCard, hydrateDetail, closeDetail, setDetailError } = useKanbanBoard();
+  const {
+    state,
+    hydrateBoard,
+    setError,
+    startLoading,
+    selectCard,
+    hydrateDetail,
+    closeDetail,
+    setDetailError,
+  } = useKanbanBoard();
   const [liveMessage, setLiveMessage] = useState("");
   const [activeDropColumn, setActiveDropColumn] = useState<string | null>(null);
   const queueRef = useRef<QueuedKanbanMove[]>([]);
@@ -892,7 +1053,9 @@ export function KanbanViewer() {
     hydrateBoard(board);
   }
 
-  function parseToolCallResult(result: ToolResultPayload): Record<string, unknown> {
+  function parseToolCallResult(
+    result: ToolResultPayload,
+  ): Record<string, unknown> {
     const text = extractTextContent(result);
     if (!text) {
       throw new Error("No text payload returned by tool call");
@@ -911,22 +1074,31 @@ export function KanbanViewer() {
     }
   }
 
-  async function requestBoardRefresh(options: { ignoreInterval?: boolean } = {}) {
+  async function requestBoardRefresh(
+    options: { ignoreInterval?: boolean } = {},
+  ) {
     const board = boardRef.current;
-    const request = resolveKanbanRefreshRequest(board, refreshRequestRef.current);
-
-    if (!canRequestBoardRefresh({
+    const request = resolveKanbanRefreshRequest(
       board,
-      request,
-      visibilityState: typeof document === "undefined" ? "visible" : document.visibilityState,
-      dragging: draggingRef.current,
-      processingMove: processingRef.current,
-      queuedMoves: queueRef.current.length,
-      refreshInFlight: refreshInFlightRef.current,
-      now: Date.now(),
-      lastRefreshStartedAt: lastRefreshStartedAtRef.current,
-      minIntervalMs: AUTO_REFRESH_INTERVAL_MS,
-    }, options)) {
+      refreshRequestRef.current,
+    );
+
+    if (
+      !canRequestBoardRefresh({
+        board,
+        request,
+        visibilityState: typeof document === "undefined"
+          ? "visible"
+          : document.visibilityState,
+        dragging: draggingRef.current,
+        processingMove: processingRef.current,
+        queuedMoves: queueRef.current.length,
+        refreshInFlight: refreshInFlightRef.current,
+        now: Date.now(),
+        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+        minIntervalMs: AUTO_REFRESH_INTERVAL_MS,
+      }, options)
+    ) {
       return false;
     }
 
@@ -1009,9 +1181,13 @@ export function KanbanViewer() {
         const ok = parsed.ok !== false;
         if (!ok) {
           const snapshot = snapshotsRef.current[queueId];
-          const message = normalizeMoveFailureMessage(String(parsed.errorMessage ?? "Move failed"));
+          const message = normalizeMoveFailureMessage(
+            String(parsed.errorMessage ?? "Move failed"),
+          );
           if (snapshot) {
-            updateBoard(rollbackMoveFailure(snapshot, { errorMessage: message }));
+            updateBoard(
+              rollbackMoveFailure(snapshot, { errorMessage: message }),
+            );
           }
           setError(message);
           setLiveMessage(message);
@@ -1023,8 +1199,9 @@ export function KanbanViewer() {
           });
           updateBoard(reconciled);
           refreshAfterMutationRef.current = true;
-          const destinationLabel =
-            reconciled.columns.find((column) => column.id === nextMove.toColumn)?.label ??
+          const destinationLabel = reconciled.columns.find((column) =>
+            column.id === nextMove.toColumn
+          )?.label ??
             nextMove.toColumn;
           setLiveMessage(`Moved ${nextMove.cardId} to ${destinationLabel}`);
         }
@@ -1077,10 +1254,12 @@ export function KanbanViewer() {
       toColumn,
     };
 
-    const shouldStartImmediately = !processingRef.current && queueRef.current.length === 0;
+    const shouldStartImmediately = !processingRef.current &&
+      queueRef.current.length === 0;
     if (shouldStartImmediately) {
       const optimistic = applyOptimisticMove(board, queuedMove);
-      snapshotsRef.current[queuedMove.queueId ?? queuedMove.cardId] = optimistic.snapshot;
+      snapshotsRef.current[queuedMove.queueId ?? queuedMove.cardId] =
+        optimistic.snapshot;
       updateBoard(optimistic.board);
       setLiveMessage(`Moving ${card.title} to ${label}`);
     } else {
@@ -1120,7 +1299,11 @@ export function KanbanViewer() {
       try {
         updateBoard(parseBoard(text));
       } catch (error) {
-        setError(error instanceof Error ? error.message : "Failed to parse kanban payload");
+        setError(
+          error instanceof Error
+            ? error.message
+            : "Failed to parse kanban payload",
+        );
       }
     };
 
@@ -1129,7 +1312,7 @@ export function KanbanViewer() {
         startLoading();
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1155,22 +1338,28 @@ export function KanbanViewer() {
       window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     boardRef.current = state.board;
   }, [state.board]);
 
-  function handleDragStart(card: KanbanCardData, event: DragEvent<HTMLElement>) {
+  function handleDragStart(
+    card: KanbanCardData,
+    event: DragEvent<HTMLElement>,
+  ) {
     draggedCardIdRef.current = card.id;
     draggingRef.current = true;
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("application/json", JSON.stringify({
-      cardId: card.id,
-      fromColumn: card.columnId,
-      title: card.title,
-    }));
+    event.dataTransfer.setData(
+      "application/json",
+      JSON.stringify({
+        cardId: card.id,
+        fromColumn: card.columnId,
+        title: card.title,
+      }),
+    );
   }
 
   function handleDragEnd() {
@@ -1179,10 +1368,16 @@ export function KanbanViewer() {
     setActiveDropColumn(null);
   }
 
-  function handleDragOverColumn(columnId: string, event: DragEvent<HTMLElement>) {
+  function handleDragOverColumn(
+    columnId: string,
+    event: DragEvent<HTMLElement>,
+  ) {
     const board = boardRef.current;
     const draggedCardId = draggedCardIdRef.current;
-    if (!board || !draggedCardId || !canDropCardInColumn(board, draggedCardId, columnId)) {
+    if (
+      !board || !draggedCardId ||
+      !canDropCardInColumn(board, draggedCardId, columnId)
+    ) {
       setActiveDropColumn(null);
       return;
     }
@@ -1198,9 +1393,12 @@ export function KanbanViewer() {
       const raw = event.dataTransfer.getData("application/json");
       if (!raw || !boardRef.current) return;
       const payload = JSON.parse(raw) as { cardId: string; fromColumn: string };
-      const card = boardRef.current.cards.find((candidate) => candidate.id === payload.cardId);
-      const label =
-        boardRef.current.columns.find((column) => column.id === toColumn)?.label ??
+      const card = boardRef.current.cards.find((candidate) =>
+        candidate.id === payload.cardId
+      );
+      const label = boardRef.current.columns.find((column) =>
+        column.id === toColumn
+      )?.label ??
         toColumn;
       if (card) {
         requestMove(card, toColumn, label);
@@ -1239,20 +1437,29 @@ export function KanbanViewer() {
         hydrateDetail(unwrapDoc(JSON.parse(text) as Record<string, unknown>));
       } catch (error) {
         if (detailFetchCardIdRef.current !== cardId) return;
-        setDetailError(error instanceof Error ? error.message : "Failed to fetch detail");
+        setDetailError(
+          error instanceof Error ? error.message : "Failed to fetch detail",
+        );
       }
     })();
   }
 
   async function handleNavigate(message: string): Promise<void> {
     try {
-      await app.sendMessage({ role: "user", content: [{ type: "text", text: message }] });
+      await app.sendMessage({
+        role: "user",
+        content: [{ type: "text", text: message }],
+      });
     } catch {
       // Best-effort: host may not support sendMessage
     }
   }
 
-  async function handleSaveDetail(doctype: string, name: string, data: Record<string, string>) {
+  async function handleSaveDetail(
+    doctype: string,
+    name: string,
+    data: Record<string, string>,
+  ) {
     // Coerce types: if original value was a number, convert back
     const coerced: Record<string, unknown> = {};
     const originalDetail = state.detail.cardDetail;

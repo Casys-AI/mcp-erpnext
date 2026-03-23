@@ -7,7 +7,7 @@
  * @module lib/erpnext/tests/tools/analytics_test
  */
 
-import { assertEquals, assert } from "jsr:@std/assert";
+import { assert, assertEquals } from "jsr:@std/assert";
 import { analyticsTools } from "./analytics.ts";
 import { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
@@ -49,8 +49,14 @@ function assertChartMeta(result: any, viewerName = "chart-viewer") {
 // ── Legacy pipeline surface removed ─────────────────────────────────────────
 
 Deno.test("analytics tools no longer expose legacy order/purchase pipeline viewers", () => {
-  assertEquals(analyticsTools.some((tool) => tool.name === "erpnext_order_pipeline"), false);
-  assertEquals(analyticsTools.some((tool) => tool.name === "erpnext_purchase_pipeline"), false);
+  assertEquals(
+    analyticsTools.some((tool) => tool.name === "erpnext_order_pipeline"),
+    false,
+  );
+  assertEquals(
+    analyticsTools.some((tool) => tool.name === "erpnext_purchase_pipeline"),
+    false,
+  );
 });
 
 // ── erpnext_stock_chart ─────────────────────────────────────────────────────
@@ -58,9 +64,24 @@ Deno.test("analytics tools no longer expose legacy order/purchase pipeline viewe
 Deno.test("erpnext_stock_chart - returns bar chart data", async () => {
   const mockClient = makeMockClient({
     list: async () => [
-      { item_code: "ITEM-A", warehouse: "W1", actual_qty: 50, stock_value: 5000 },
-      { item_code: "ITEM-B", warehouse: "W1", actual_qty: 30, stock_value: 3000 },
-      { item_code: "ITEM-A", warehouse: "W2", actual_qty: 20, stock_value: 2000 },
+      {
+        item_code: "ITEM-A",
+        warehouse: "W1",
+        actual_qty: 50,
+        stock_value: 5000,
+      },
+      {
+        item_code: "ITEM-B",
+        warehouse: "W1",
+        actual_qty: 30,
+        stock_value: 3000,
+      },
+      {
+        item_code: "ITEM-A",
+        warehouse: "W2",
+        actual_qty: 20,
+        stock_value: 2000,
+      },
     ],
   });
 
@@ -77,7 +98,10 @@ Deno.test("erpnext_stock_chart - returns bar chart data", async () => {
 
 Deno.test("erpnext_stock_chart - uses horizontal-bar for many items", async () => {
   const items = Array.from({ length: 10 }, (_, i) => ({
-    item_code: `ITEM-${i}`, warehouse: "W1", actual_qty: 100 - i * 10, stock_value: 1000,
+    item_code: `ITEM-${i}`,
+    warehouse: "W1",
+    actual_qty: 100 - i * 10,
+    stock_value: 1000,
   }));
 
   const mockClient = makeMockClient({ list: async () => items });
@@ -102,7 +126,10 @@ Deno.test("erpnext_sales_chart - status grouping returns donut", async () => {
 
   const tool = getTool("erpnext_sales_chart");
   // deno-lint-ignore no-explicit-any
-  const result = await tool.handler({ group_by: "status" }, makeCtx(mockClient)) as any;
+  const result = await tool.handler(
+    { group_by: "status" },
+    makeCtx(mockClient),
+  ) as any;
 
   assertEquals(result.type, "donut");
   assertEquals(result.labels[0], "Paid"); // highest value first
@@ -120,7 +147,10 @@ Deno.test("erpnext_sales_chart - customer grouping returns horizontal-bar", asyn
 
   const tool = getTool("erpnext_sales_chart");
   // deno-lint-ignore no-explicit-any
-  const result = await tool.handler({ group_by: "customer" }, makeCtx(mockClient)) as any;
+  const result = await tool.handler(
+    { group_by: "customer" },
+    makeCtx(mockClient),
+  ) as any;
 
   assertEquals(result.type, "horizontal-bar");
   assertEquals(result.labels[0], "Customer One");
@@ -132,14 +162,25 @@ Deno.test("erpnext_sales_chart - customer grouping returns horizontal-bar", asyn
 Deno.test("erpnext_revenue_trend - returns line chart with monthly data", async () => {
   const mockClient = makeMockClient({
     list: async () => [
-      { customer_name: "Acme", grand_total: 5000, transaction_date: "2026-02-10" },
-      { customer_name: "Acme", grand_total: 3000, transaction_date: "2026-01-15" },
+      {
+        customer_name: "Acme",
+        grand_total: 5000,
+        transaction_date: "2026-02-10",
+      },
+      {
+        customer_name: "Acme",
+        grand_total: 3000,
+        transaction_date: "2026-01-15",
+      },
     ],
   });
 
   const tool = getTool("erpnext_revenue_trend");
   // deno-lint-ignore no-explicit-any
-  const result = await tool.handler({ months: 3, type: "line" }, makeCtx(mockClient)) as any;
+  const result = await tool.handler(
+    { months: 3, type: "line" },
+    makeCtx(mockClient),
+  ) as any;
 
   assertEquals(result.type, "line");
   assertEquals(result.labels.length, 3);
@@ -150,14 +191,25 @@ Deno.test("erpnext_revenue_trend - returns line chart with monthly data", async 
 Deno.test("erpnext_revenue_trend - customer grouping produces multiple datasets", async () => {
   const mockClient = makeMockClient({
     list: async () => [
-      { customer_name: "Acme", grand_total: 5000, transaction_date: "2026-02-10" },
-      { customer_name: "Globex", grand_total: 3000, transaction_date: "2026-02-15" },
+      {
+        customer_name: "Acme",
+        grand_total: 5000,
+        transaction_date: "2026-02-10",
+      },
+      {
+        customer_name: "Globex",
+        grand_total: 3000,
+        transaction_date: "2026-02-15",
+      },
     ],
   });
 
   const tool = getTool("erpnext_revenue_trend");
   // deno-lint-ignore no-explicit-any
-  const result = await tool.handler({ months: 2, group_by: "customer" }, makeCtx(mockClient)) as any;
+  const result = await tool.handler(
+    { months: 2, group_by: "customer" },
+    makeCtx(mockClient),
+  ) as any;
 
   assert(result.datasets.length >= 2, "Should have dataset per customer");
   assertChartMeta(result);
@@ -169,14 +221,21 @@ Deno.test("erpnext_order_breakdown - stacked-bar groups by customer and status",
   const mockClient = makeMockClient({
     list: async () => [
       { customer_name: "Acme", status: "Draft", grand_total: 1000 },
-      { customer_name: "Acme", status: "To Deliver and Bill", grand_total: 2000 },
+      {
+        customer_name: "Acme",
+        status: "To Deliver and Bill",
+        grand_total: 2000,
+      },
       { customer_name: "Globex", status: "Draft", grand_total: 500 },
     ],
   });
 
   const tool = getTool("erpnext_order_breakdown");
   // deno-lint-ignore no-explicit-any
-  const result = await tool.handler({ type: "stacked-bar" }, makeCtx(mockClient)) as any;
+  const result = await tool.handler(
+    { type: "stacked-bar" },
+    makeCtx(mockClient),
+  ) as any;
 
   assertEquals(result.type, "stacked-bar");
   assertEquals(result.labels[0], "Acme"); // highest total first
@@ -195,7 +254,10 @@ Deno.test("erpnext_order_breakdown - pie mode returns single dataset", async () 
 
   const tool = getTool("erpnext_order_breakdown");
   // deno-lint-ignore no-explicit-any
-  const result = await tool.handler({ type: "pie" }, makeCtx(mockClient)) as any;
+  const result = await tool.handler(
+    { type: "pie" },
+    makeCtx(mockClient),
+  ) as any;
 
   assertEquals(result.type, "pie");
   assertEquals(result.datasets.length, 1);
@@ -261,7 +323,10 @@ Deno.test("erpnext_stock_treemap - group by warehouse aggregates", async () => {
 
   const tool = getTool("erpnext_stock_treemap");
   // deno-lint-ignore no-explicit-any
-  const result = await tool.handler({ group_by: "warehouse" }, makeCtx(mockClient)) as any;
+  const result = await tool.handler(
+    { group_by: "warehouse" },
+    makeCtx(mockClient),
+  ) as any;
 
   assertEquals(result.treeData.length, 2);
   const w1 = result.treeData.find((t: { name: string }) => t.name === "W1");
@@ -336,8 +401,13 @@ Deno.test("erpnext_price_vs_qty - falls back to Bin data when no Item Price", as
 
 Deno.test("erpnext_kpi_revenue - returns KPI with sparkline (single API call)", async () => {
   const now = new Date();
-  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-15`;
-  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15).toISOString().split("T")[0];
+  const thisMonth = `${now.getFullYear()}-${
+    String(now.getMonth() + 1).padStart(2, "0")
+  }-15`;
+  const lastMonth =
+    new Date(now.getFullYear(), now.getMonth() - 1, 15).toISOString().split(
+      "T",
+    )[0];
 
   const mockClient = makeMockClient({
     list: async () => [
@@ -457,10 +527,19 @@ Deno.test("erpnext_kpi_overdue - counts overdue invoices", async () => {
 Deno.test("erpnext_sales_funnel - returns 4-stage funnel with conversion rates", async () => {
   const mockClient = makeMockClient({
     list: async (doctype: string) => {
-      if (doctype === "Lead") return [{ name: "L1" }, { name: "L2" }, { name: "L3" }, { name: "L4" }];
-      if (doctype === "Opportunity") return [{ name: "O1", opportunity_amount: 5000 }, { name: "O2", opportunity_amount: 3000 }];
+      if (doctype === "Lead") {
+        return [{ name: "L1" }, { name: "L2" }, { name: "L3" }, { name: "L4" }];
+      }
+      if (doctype === "Opportunity") {
+        return [{ name: "O1", opportunity_amount: 5000 }, {
+          name: "O2",
+          opportunity_amount: 3000,
+        }];
+      }
       if (doctype === "Quotation") return [{ name: "Q1", grand_total: 4000 }];
-      if (doctype === "Sales Order") return [{ name: "SO1", grand_total: 3500 }];
+      if (doctype === "Sales Order") {
+        return [{ name: "SO1", grand_total: 3500 }];
+      }
       return [];
     },
   });
@@ -485,15 +564,33 @@ Deno.test("erpnext_sales_funnel - returns 4-stage funnel with conversion rates",
 
 Deno.test("erpnext_ar_aging - groups invoices into aging buckets", async () => {
   const today = new Date();
-  const d10 = new Date(today); d10.setDate(today.getDate() - 10);
-  const d45 = new Date(today); d45.setDate(today.getDate() - 45);
-  const d100 = new Date(today); d100.setDate(today.getDate() - 100);
+  const d10 = new Date(today);
+  d10.setDate(today.getDate() - 10);
+  const d45 = new Date(today);
+  d45.setDate(today.getDate() - 45);
+  const d100 = new Date(today);
+  d100.setDate(today.getDate() - 100);
 
   const mockClient = makeMockClient({
     list: async () => [
-      { customer_name: "Acme", outstanding_amount: 1000, due_date: d10.toISOString().split("T")[0], posting_date: d10.toISOString().split("T")[0] },
-      { customer_name: "Acme", outstanding_amount: 2000, due_date: d45.toISOString().split("T")[0], posting_date: d45.toISOString().split("T")[0] },
-      { customer_name: "Globex", outstanding_amount: 3000, due_date: d100.toISOString().split("T")[0], posting_date: d100.toISOString().split("T")[0] },
+      {
+        customer_name: "Acme",
+        outstanding_amount: 1000,
+        due_date: d10.toISOString().split("T")[0],
+        posting_date: d10.toISOString().split("T")[0],
+      },
+      {
+        customer_name: "Acme",
+        outstanding_amount: 2000,
+        due_date: d45.toISOString().split("T")[0],
+        posting_date: d45.toISOString().split("T")[0],
+      },
+      {
+        customer_name: "Globex",
+        outstanding_amount: 3000,
+        due_date: d100.toISOString().split("T")[0],
+        posting_date: d100.toISOString().split("T")[0],
+      },
     ],
   });
 
@@ -572,8 +669,14 @@ Deno.test("all analytics tools have name, description, category, handler", () =>
   for (const tool of analyticsTools) {
     assert(tool.name, `Tool should have name`);
     assert(tool.description, `${tool.name} should have description`);
-    assert(tool.category === "analytics", `${tool.name} should have category "analytics"`);
-    assert(typeof tool.handler === "function", `${tool.name} should have handler function`);
+    assert(
+      tool.category === "analytics",
+      `${tool.name} should have category "analytics"`,
+    );
+    assert(
+      typeof tool.handler === "function",
+      `${tool.name} should have handler function`,
+    );
     assert(tool.inputSchema, `${tool.name} should have inputSchema`);
   }
 });
@@ -584,7 +687,10 @@ Deno.test("all analytics tools have _meta with resourceUri", () => {
     const meta = (tool as any)._meta;
     assert(meta, `${tool.name} should have _meta`);
     assert(meta.ui, `${tool.name} should have _meta.ui`);
-    assert(meta.ui.resourceUri, `${tool.name} should have _meta.ui.resourceUri`);
+    assert(
+      meta.ui.resourceUri,
+      `${tool.name} should have _meta.ui.resourceUri`,
+    );
     assert(
       meta.ui.resourceUri.startsWith("ui://mcp-erpnext/"),
       `${tool.name} resourceUri should start with ui://mcp-erpnext/`,

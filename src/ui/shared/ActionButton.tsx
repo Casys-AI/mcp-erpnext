@@ -1,6 +1,6 @@
 /** Button with optional confirm (double-click) pattern for destructive actions */
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { colors, styles } from "./theme";
 
 const VARIANT_COLORS: Record<string, { color: string; bg: string }> = {
@@ -10,14 +10,16 @@ const VARIANT_COLORS: Record<string, { color: string; bg: string }> = {
   default: { color: colors.text.secondary, bg: colors.bg.elevated },
 };
 
-export function ActionButton({ label, variant = "default", disabled, loading, confirm, onClick }: {
-  label: string;
-  variant?: "success" | "error" | "info" | "default";
-  disabled?: boolean;
-  loading?: boolean;
-  confirm?: boolean;
-  onClick: () => void;
-}) {
+export function ActionButton(
+  { label, variant = "default", disabled, loading, confirm, onClick }: {
+    label: string;
+    variant?: "success" | "error" | "info" | "default";
+    disabled?: boolean;
+    loading?: boolean;
+    confirm?: boolean;
+    onClick: () => void;
+  },
+) {
   const [confirming, setConfirming] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => () => clearTimeout(timerRef.current), []);

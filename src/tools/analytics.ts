@@ -32,21 +32,37 @@ export const analyticsTools: ErpNextTool[] = [
       properties: {
         warehouse: { type: "string", description: "Filter by warehouse name" },
         item_group: { type: "string", description: "Filter by item group" },
-        limit: { type: "number", description: "Max items to show (default 20)" },
+        limit: {
+          type: "number",
+          description: "Max items to show (default 20)",
+        },
         type: {
           type: "string",
           enum: ["bar", "horizontal-bar"],
-          description: "Chart type (default: horizontal-bar for many items, bar for few)",
+          description:
+            "Chart type (default: horizontal-bar for many items, bar for few)",
         },
-        min_qty: { type: "number", description: "Only show items with qty >= this value (filters out zeros)" },
+        min_qty: {
+          type: "number",
+          description:
+            "Only show items with qty >= this value (filters out zeros)",
+        },
       },
     },
     handler: async (input, ctx) => {
       const limit = (input.limit as number) ?? 20;
-      const filters: FrappeFilter[] = [["actual_qty", ">", (input.min_qty as number) ?? 0]];
+      const filters: FrappeFilter[] = [[
+        "actual_qty",
+        ">",
+        (input.min_qty as number) ?? 0,
+      ]];
 
-      if (input.warehouse) filters.push(["warehouse", "=", input.warehouse as string]);
-      if (input.item_group) filters.push(["item_group", "=", input.item_group as string]);
+      if (input.warehouse) {
+        filters.push(["warehouse", "=", input.warehouse as string]);
+      }
+      if (input.item_group) {
+        filters.push(["item_group", "=", input.item_group as string]);
+      }
 
       const bins = await ctx.client.list("Bin", {
         fields: ["item_code", "warehouse", "actual_qty", "stock_value"],
@@ -69,7 +85,8 @@ export const analyticsTools: ErpNextTool[] = [
         .slice(0, limit);
 
       const warehouseLabel = (input.warehouse as string) ?? "All Warehouses";
-      const chartType = (input.type as string) ?? (sorted.length > 6 ? "horizontal-bar" : "bar");
+      const chartType = (input.type as string) ??
+        (sorted.length > 6 ? "horizontal-bar" : "bar");
 
       return {
         title: "Stock Levels",
@@ -96,8 +113,7 @@ export const analyticsTools: ErpNextTool[] = [
     name: "erpnext_sales_chart",
     annotations: { readOnlyHint: true },
     _meta: CHART_META,
-    description:
-      "Analyze sales revenue as a chart. " +
+    description: "Analyze sales revenue as a chart. " +
       "group_by='customer' → bar chart of top customers by revenue. " +
       "group_by='item' → bar chart of top items sold. " +
       "group_by='status' → donut chart of invoice status breakdown. " +
@@ -112,7 +128,10 @@ export const analyticsTools: ErpNextTool[] = [
           description: "Dimension to group by (default: customer)",
         },
         limit: { type: "number", description: "Top N results (default 10)" },
-        include_drafts: { type: "boolean", description: "Include Draft invoices (default false)" },
+        include_drafts: {
+          type: "boolean",
+          description: "Include Draft invoices (default false)",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -164,7 +183,12 @@ export const analyticsTools: ErpNextTool[] = [
         const byItem: Record<string, { name: string; total: number }> = {};
         for (const row of items) {
           const code = (row.item_code as string) ?? "Unknown";
-          if (!byItem[code]) byItem[code] = { name: (row.item_name as string) ?? code, total: 0 };
+          if (!byItem[code]) {
+            byItem[code] = {
+              name: (row.item_name as string) ?? code,
+              total: 0,
+            };
+          }
           byItem[code].total += Number(row.amount) || 0;
         }
 
@@ -177,7 +201,11 @@ export const analyticsTools: ErpNextTool[] = [
           subtitle: `Top ${sorted.length} items`,
           type: "horizontal-bar",
           labels: sorted.map(([, { name }]) => name),
-          datasets: [{ label: "Revenue", values: sorted.map(([, { total }]) => total), color: "#c084fc" }],
+          datasets: [{
+            label: "Revenue",
+            values: sorted.map(([, { total }]) => total),
+            color: "#c084fc",
+          }],
           currency: "EUR",
           generatedAt: new Date().toISOString(),
           _meta: CHART_META,
@@ -195,7 +223,12 @@ export const analyticsTools: ErpNextTool[] = [
       const byCustomer: Record<string, { name: string; total: number }> = {};
       for (const inv of invoices) {
         const code = (inv.customer as string) ?? "Unknown";
-        if (!byCustomer[code]) byCustomer[code] = { name: (inv.customer_name as string) ?? code, total: 0 };
+        if (!byCustomer[code]) {
+          byCustomer[code] = {
+            name: (inv.customer_name as string) ?? code,
+            total: 0,
+          };
+        }
         byCustomer[code].total += Number(inv.grand_total) || 0;
       }
 
@@ -208,7 +241,11 @@ export const analyticsTools: ErpNextTool[] = [
         subtitle: `Top ${sorted.length} customers`,
         type: "horizontal-bar",
         labels: sorted.map(([, { name }]) => name),
-        datasets: [{ label: "Revenue", values: sorted.map(([, { total }]) => total), color: "#4ade80" }],
+        datasets: [{
+          label: "Revenue",
+          values: sorted.map(([, { total }]) => total),
+          color: "#4ade80",
+        }],
         currency: "EUR",
         generatedAt: new Date().toISOString(),
         _meta: CHART_META,
@@ -231,7 +268,10 @@ export const analyticsTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        months: { type: "number", description: "How many months back to include (default 6)" },
+        months: {
+          type: "number",
+          description: "How many months back to include (default 6)",
+        },
         type: {
           type: "string",
           enum: ["line", "area", "stacked-area"],
@@ -251,7 +291,11 @@ export const analyticsTools: ErpNextTool[] = [
 
       // Build date range
       const now = new Date();
-      const startDate = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 1);
+      const startDate = new Date(
+        now.getFullYear(),
+        now.getMonth() - monthsBack + 1,
+        1,
+      );
       const startStr = startDate.toISOString().split("T")[0];
 
       const orders = await ctx.client.list("Sales Order", {
@@ -264,8 +308,16 @@ export const analyticsTools: ErpNextTool[] = [
       // Build month labels
       const months: string[] = [];
       for (let m = 0; m < monthsBack; m++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1 + m, 1);
-        months.push(`${d.toLocaleString("en", { month: "short" })} ${d.getFullYear().toString().slice(2)}`);
+        const d = new Date(
+          now.getFullYear(),
+          now.getMonth() - monthsBack + 1 + m,
+          1,
+        );
+        months.push(
+          `${d.toLocaleString("en", { month: "short" })} ${
+            d.getFullYear().toString().slice(2)
+          }`,
+        );
       }
 
       if (groupBy === "customer") {
@@ -273,16 +325,21 @@ export const analyticsTools: ErpNextTool[] = [
         const byCustomerMonth: Record<string, number[]> = {};
         for (const order of orders) {
           const d = new Date(order.transaction_date as string);
-          const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 + d.getMonth() - startDate.getMonth();
+          const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
+            d.getMonth() - startDate.getMonth();
           if (mIdx < 0 || mIdx >= monthsBack) continue;
           const cust = (order.customer_name as string) ?? "Unknown";
-          if (!byCustomerMonth[cust]) byCustomerMonth[cust] = new Array(monthsBack).fill(0);
+          if (!byCustomerMonth[cust]) {
+            byCustomerMonth[cust] = new Array(monthsBack).fill(0);
+          }
           byCustomerMonth[cust][mIdx] += Number(order.grand_total) || 0;
         }
 
         // Top 5 customers by total
         const sorted = Object.entries(byCustomerMonth)
-          .sort(([, a], [, b]) => b.reduce((s, v) => s + v, 0) - a.reduce((s, v) => s + v, 0))
+          .sort(([, a], [, b]) =>
+            b.reduce((s, v) => s + v, 0) - a.reduce((s, v) => s + v, 0)
+          )
           .slice(0, 5);
 
         const COLORS = ["#60a5fa", "#4ade80", "#fbbf24", "#c084fc", "#f472b6"];
@@ -308,7 +365,8 @@ export const analyticsTools: ErpNextTool[] = [
       const monthlyTotals = new Array(monthsBack).fill(0);
       for (const order of orders) {
         const d = new Date(order.transaction_date as string);
-        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 + d.getMonth() - startDate.getMonth();
+        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
+          d.getMonth() - startDate.getMonth();
         if (mIdx >= 0 && mIdx < monthsBack) {
           monthlyTotals[mIdx] += Number(order.grand_total) || 0;
         }
@@ -372,7 +430,8 @@ export const analyticsTools: ErpNextTool[] = [
           const c = (o.customer_name as string) ?? "Unknown";
           byCustomer[c] = (byCustomer[c] ?? 0) + (Number(o.grand_total) || 0);
         }
-        const sorted = Object.entries(byCustomer).sort(([, a], [, b]) => b - a).slice(0, limit);
+        const sorted = Object.entries(byCustomer).sort(([, a], [, b]) => b - a)
+          .slice(0, limit);
 
         return {
           title: "Orders by Customer",
@@ -385,10 +444,19 @@ export const analyticsTools: ErpNextTool[] = [
       }
 
       // Stacked bar: customers on X, stacked by status
-      const STATUS_ORDER = ["Draft", "To Deliver and Bill", "To Bill", "Completed", "Cancelled"];
+      const STATUS_ORDER = [
+        "Draft",
+        "To Deliver and Bill",
+        "To Bill",
+        "Completed",
+        "Cancelled",
+      ];
       const STATUS_COLORS: Record<string, string> = {
-        Draft: "#78716c", "To Deliver and Bill": "#60a5fa",
-        "To Bill": "#c084fc", Completed: "#4ade80", Cancelled: "#f87171",
+        Draft: "#78716c",
+        "To Deliver and Bill": "#60a5fa",
+        "To Bill": "#c084fc",
+        Completed: "#4ade80",
+        Cancelled: "#f87171",
       };
 
       const byCustomerStatus: Record<string, Record<string, number>> = {};
@@ -396,12 +464,16 @@ export const analyticsTools: ErpNextTool[] = [
         const c = (o.customer_name as string) ?? "Unknown";
         const s = (o.status as string) ?? "Draft";
         if (!byCustomerStatus[c]) byCustomerStatus[c] = {};
-        byCustomerStatus[c][s] = (byCustomerStatus[c][s] ?? 0) + (Number(o.grand_total) || 0);
+        byCustomerStatus[c][s] = (byCustomerStatus[c][s] ?? 0) +
+          (Number(o.grand_total) || 0);
       }
 
       // Top N customers
       const customerTotals = Object.entries(byCustomerStatus)
-        .map(([c, statuses]) => ({ name: c, total: Object.values(statuses).reduce((s, v) => s + v, 0) }))
+        .map(([c, statuses]) => ({
+          name: c,
+          total: Object.values(statuses).reduce((s, v) => s + v, 0),
+        }))
         .sort((a, b) => b.total - a.total)
         .slice(0, limit);
 
@@ -529,7 +601,9 @@ export const analyticsTools: ErpNextTool[] = [
 
       const grouped: Record<string, number> = {};
       for (const bin of bins) {
-        const key = groupBy === "warehouse" ? (bin.warehouse as string) : (bin.item_code as string);
+        const key = groupBy === "warehouse"
+          ? (bin.warehouse as string)
+          : (bin.item_code as string);
         grouped[key] = (grouped[key] ?? 0) + (Number(bin.stock_value) || 0);
       }
 
@@ -537,10 +611,25 @@ export const analyticsTools: ErpNextTool[] = [
         .sort(([, a], [, b]) => b - a)
         .slice(0, limit);
 
-      const COLORS = ["#60a5fa", "#4ade80", "#fbbf24", "#818cf8", "#c084fc", "#fb923c", "#34d399", "#f472b6", "#a78bfa", "#f97316", "#22d3ee", "#e879f9"];
+      const COLORS = [
+        "#60a5fa",
+        "#4ade80",
+        "#fbbf24",
+        "#818cf8",
+        "#c084fc",
+        "#fb923c",
+        "#34d399",
+        "#f472b6",
+        "#a78bfa",
+        "#f97316",
+        "#22d3ee",
+        "#e879f9",
+      ];
 
       return {
-        title: `Stock Value by ${groupBy === "warehouse" ? "Warehouse" : "Item"}`,
+        title: `Stock Value by ${
+          groupBy === "warehouse" ? "Warehouse" : "Item"
+        }`,
         type: "treemap",
         labels: [],
         datasets: [],
@@ -561,8 +650,7 @@ export const analyticsTools: ErpNextTool[] = [
     name: "erpnext_product_radar",
     annotations: { readOnlyHint: true },
     _meta: CHART_META,
-    description:
-      "Radar chart comparing items across multiple dimensions: " +
+    description: "Radar chart comparing items across multiple dimensions: " +
       "stock level, stock value, order frequency, and revenue. " +
       "Pass 2-4 item codes to compare.",
     category: "analytics",
@@ -572,7 +660,8 @@ export const analyticsTools: ErpNextTool[] = [
         items: {
           type: "array",
           items: { type: "string" },
-          description: "2-4 item codes to compare. Leave empty for auto-select top items.",
+          description:
+            "2-4 item codes to compare. Leave empty for auto-select top items.",
         },
       },
     },
@@ -611,8 +700,14 @@ export const analyticsTools: ErpNextTool[] = [
           filters: [["item_code", "=", code]],
           limit: 100,
         });
-        const totalQty = bins.reduce((s, b) => s + (Number(b.actual_qty) || 0), 0);
-        const totalVal = bins.reduce((s, b) => s + (Number(b.stock_value) || 0), 0);
+        const totalQty = bins.reduce(
+          (s, b) => s + (Number(b.actual_qty) || 0),
+          0,
+        );
+        const totalVal = bins.reduce(
+          (s, b) => s + (Number(b.stock_value) || 0),
+          0,
+        );
         raw[code] = [totalQty, totalVal, 0, 0];
       }
 
@@ -645,7 +740,9 @@ export const analyticsTools: ErpNextTool[] = [
         labels: dimensions,
         datasets: itemCodes.map((code, i) => ({
           label: code,
-          values: dimensions.map((_, di) => Math.round(((raw[code]?.[di] ?? 0) / maxPerDim[di]) * 100)),
+          values: dimensions.map((_, di) =>
+            Math.round(((raw[code]?.[di] ?? 0) / maxPerDim[di]) * 100)
+          ),
           color: COLORS[i % COLORS.length],
         })),
         _meta: CHART_META,
@@ -666,7 +763,10 @@ export const analyticsTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max items to show (default 30)" },
+        limit: {
+          type: "number",
+          description: "Max items to show (default 30)",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -759,8 +859,7 @@ export const analyticsTools: ErpNextTool[] = [
     name: "erpnext_kpi_revenue",
     annotations: { readOnlyHint: true },
     _meta: KPI_META,
-    description:
-      "KPI card: total Sales Order revenue for the current month, " +
+    description: "KPI card: total Sales Order revenue for the current month, " +
       "with delta % vs previous month and sparkline of last 6 months.",
     category: "analytics",
     inputSchema: { type: "object", properties: {} },
@@ -784,7 +883,8 @@ export const analyticsTools: ErpNextTool[] = [
       for (const o of allOrders) {
         const d = new Date(o.transaction_date as string);
         // Month index: 0 = oldest (5 months ago), 5 = current month
-        const monthDiff = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+        const monthDiff = (now.getFullYear() - d.getFullYear()) * 12 +
+          (now.getMonth() - d.getMonth());
         const idx = 5 - monthDiff;
         if (idx >= 0 && idx < 6) {
           sparkline[idx] += Number(o.grand_total) || 0;
@@ -835,14 +935,17 @@ export const analyticsTools: ErpNextTool[] = [
       });
 
       const total = invoices.reduce(
-        (sum, inv) => sum + (Number(inv.outstanding_amount) || 0), 0,
+        (sum, inv) => sum + (Number(inv.outstanding_amount) || 0),
+        0,
       );
       const count = invoices.length;
 
       return {
         label: "Outstanding Receivables",
         value: total,
-        formattedValue: `${count} inv. / ${total.toLocaleString("en-US", { style: "currency", currency: "EUR" })}`,
+        formattedValue: `${count} inv. / ${
+          total.toLocaleString("en-US", { style: "currency", currency: "EUR" })
+        }`,
         currency: "EUR",
         trend: total > 0 ? "up" : "flat",
         trendIsGood: false,
@@ -865,7 +968,9 @@ export const analyticsTools: ErpNextTool[] = [
     inputSchema: { type: "object", properties: {} },
     handler: async (_input, ctx) => {
       const now = new Date();
-      const thisMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      const thisMonthStart = `${now.getFullYear()}-${
+        String(now.getMonth() + 1).padStart(2, "0")
+      }-01`;
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
       const lastMonthStartStr = lastMonthStart.toISOString().split("T")[0];
@@ -933,7 +1038,8 @@ export const analyticsTools: ErpNextTool[] = [
       });
 
       const revenue = soItems.reduce(
-        (sum, row) => sum + (Number(row.amount) || 0), 0,
+        (sum, row) => sum + (Number(row.amount) || 0),
+        0,
       );
 
       // Cost from Bin valuation_rate * qty sold
@@ -985,8 +1091,7 @@ export const analyticsTools: ErpNextTool[] = [
     name: "erpnext_kpi_overdue",
     annotations: { readOnlyHint: true },
     _meta: KPI_META,
-    description:
-      "KPI card: count and total value of overdue Sales Invoices " +
+    description: "KPI card: count and total value of overdue Sales Invoices " +
       "(due_date < today, outstanding_amount > 0, submitted).",
     category: "analytics",
     inputSchema: { type: "object", properties: {} },
@@ -1005,13 +1110,16 @@ export const analyticsTools: ErpNextTool[] = [
 
       const count = invoices.length;
       const total = invoices.reduce(
-        (sum, inv) => sum + (Number(inv.outstanding_amount) || 0), 0,
+        (sum, inv) => sum + (Number(inv.outstanding_amount) || 0),
+        0,
       );
 
       return {
         label: "Overdue Invoices",
         value: count,
-        formattedValue: `${count} inv. / ${total.toLocaleString("en-US", { style: "currency", currency: "EUR" })}`,
+        formattedValue: `${count} inv. / ${
+          total.toLocaleString("en-US", { style: "currency", currency: "EUR" })
+        }`,
         trend: count > 0 ? "up" : "flat",
         trendIsGood: false,
         color: "#f87171",
@@ -1045,17 +1153,25 @@ export const analyticsTools: ErpNextTool[] = [
       const now = new Date();
       let sinceDate: string | null = null;
       if (period === "this_month") {
-        sinceDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+        sinceDate = `${now.getFullYear()}-${
+          String(now.getMonth() + 1).padStart(2, "0")
+        }-01`;
       } else if (period === "this_quarter") {
         const qMonth = Math.floor(now.getMonth() / 3) * 3 + 1;
-        sinceDate = `${now.getFullYear()}-${String(qMonth).padStart(2, "0")}-01`;
+        sinceDate = `${now.getFullYear()}-${
+          String(qMonth).padStart(2, "0")
+        }-01`;
       } else if (period === "this_year") {
         sinceDate = `${now.getFullYear()}-01-01`;
       }
 
       // Leads use "creation", the rest use "transaction_date"
-      const leadFilters: FrappeFilter[] = sinceDate ? [["creation", ">=", sinceDate]] : [];
-      const txnFilters: FrappeFilter[] = sinceDate ? [["transaction_date", ">=", sinceDate]] : [];
+      const leadFilters: FrappeFilter[] = sinceDate
+        ? [["creation", ">=", sinceDate]]
+        : [];
+      const txnFilters: FrappeFilter[] = sinceDate
+        ? [["transaction_date", ">=", sinceDate]]
+        : [];
       const submittedTxnFilters: FrappeFilter[] = [
         ...txnFilters,
         ["docstatus", "!=", 2],
@@ -1094,7 +1210,10 @@ export const analyticsTools: ErpNextTool[] = [
         {
           label: "Opportunities",
           count: opps.length,
-          value: opps.reduce((s, o) => s + (Number(o.opportunity_amount) || 0), 0),
+          value: opps.reduce(
+            (s, o) => s + (Number(o.opportunity_amount) || 0),
+            0,
+          ),
           color: "#60a5fa",
           conversionRate: leads.length > 0
             ? Math.round((opps.length / leads.length) * 100)
@@ -1164,7 +1283,12 @@ export const analyticsTools: ErpNextTool[] = [
       const chartType = (input.type as string) ?? "stacked-bar";
 
       const invoices = await ctx.client.list("Sales Invoice", {
-        fields: ["customer_name", "outstanding_amount", "due_date", "posting_date"],
+        fields: [
+          "customer_name",
+          "outstanding_amount",
+          "due_date",
+          "posting_date",
+        ],
         filters: [["outstanding_amount", ">", 0], ["docstatus", "=", 1]],
         limit: 500,
         order_by: "outstanding_amount desc",
@@ -1182,26 +1306,50 @@ export const analyticsTools: ErpNextTool[] = [
       const byCustomer: Record<string, number[]> = {};
       for (const inv of invoices) {
         const customer = (inv.customer_name as string) ?? "Unknown";
-        const dateStr = (inv.due_date as string) ?? (inv.posting_date as string);
+        const dateStr = (inv.due_date as string) ??
+          (inv.posting_date as string);
         const dueDate = dateStr ? new Date(dateStr) : today;
-        const agingDays = Math.max(0, Math.floor((today.getTime() - dueDate.getTime()) / 86400000));
+        const agingDays = Math.max(
+          0,
+          Math.floor((today.getTime() - dueDate.getTime()) / 86400000),
+        );
 
-        if (!byCustomer[customer]) byCustomer[customer] = new Array(BUCKETS.length).fill(0);
+        if (!byCustomer[customer]) {
+          byCustomer[customer] = new Array(BUCKETS.length).fill(0);
+        }
 
-        const bucketIdx = BUCKETS.findIndex((b) => agingDays >= b.min && agingDays <= b.max);
+        const bucketIdx = BUCKETS.findIndex((b) =>
+          agingDays >= b.min && agingDays <= b.max
+        );
         if (bucketIdx >= 0) {
-          byCustomer[customer][bucketIdx] += Number(inv.outstanding_amount) || 0;
+          byCustomer[customer][bucketIdx] += Number(inv.outstanding_amount) ||
+            0;
         }
       }
 
       // Sort by total outstanding, take top N
       const sorted = Object.entries(byCustomer)
-        .map(([name, buckets]) => ({ name, buckets, total: buckets.reduce((s, v) => s + v, 0) }))
+        .map(([name, buckets]) => ({
+          name,
+          buckets,
+          total: buckets.reduce((s, v) => s + v, 0),
+        }))
         .sort((a, b) => b.total - a.total)
         .slice(0, limit);
 
       if (chartType === "treemap") {
-        const COLORS = ["#60a5fa", "#4ade80", "#fbbf24", "#818cf8", "#c084fc", "#fb923c", "#34d399", "#f472b6", "#a78bfa", "#f97316"];
+        const COLORS = [
+          "#60a5fa",
+          "#4ade80",
+          "#fbbf24",
+          "#818cf8",
+          "#c084fc",
+          "#fb923c",
+          "#34d399",
+          "#f472b6",
+          "#a78bfa",
+          "#f97316",
+        ];
         return {
           title: "Accounts Receivable by Customer",
           type: "treemap",
@@ -1282,7 +1430,10 @@ export const analyticsTools: ErpNextTool[] = [
       for (const bin of bins) {
         const code = bin.item_code as string;
         // Keep highest valuation_rate if multiple warehouses
-        costMap[code] = Math.max(costMap[code] ?? 0, Number(bin.valuation_rate) || 0);
+        costMap[code] = Math.max(
+          costMap[code] ?? 0,
+          Number(bin.valuation_rate) || 0,
+        );
       }
 
       if (groupBy === "customer") {
@@ -1295,13 +1446,17 @@ export const analyticsTools: ErpNextTool[] = [
 
         const custMap: Record<string, string> = {};
         for (const inv of invoices) {
-          custMap[inv.name as string] = (inv.customer_name as string) ?? "Unknown";
+          custMap[inv.name as string] = (inv.customer_name as string) ??
+            "Unknown";
         }
 
-        const byCustomer: Record<string, { revenue: number; cost: number }> = {};
+        const byCustomer: Record<string, { revenue: number; cost: number }> =
+          {};
         for (const row of siItems) {
           const customer = custMap[row.parent as string] ?? "Unknown";
-          if (!byCustomer[customer]) byCustomer[customer] = { revenue: 0, cost: 0 };
+          if (!byCustomer[customer]) {
+            byCustomer[customer] = { revenue: 0, cost: 0 };
+          }
           const qty = Number(row.qty) || 0;
           const unitCost = costMap[row.item_code as string] ?? 0;
           byCustomer[customer].revenue += Number(row.amount) || 0;
@@ -1315,7 +1470,9 @@ export const analyticsTools: ErpNextTool[] = [
         const labels = sorted.map(([name]) => name);
         const revenues = sorted.map(([, { revenue }]) => Math.round(revenue));
         const margins = sorted.map(([, { revenue, cost }]) =>
-          revenue > 0 ? Math.round(((revenue - cost) / revenue) * 10000) / 100 : 0
+          revenue > 0
+            ? Math.round(((revenue - cost) / revenue) * 10000) / 100
+            : 0
         );
 
         return {
@@ -1324,8 +1481,20 @@ export const analyticsTools: ErpNextTool[] = [
           type: "composed",
           labels,
           datasets: [
-            { label: "Revenue", values: revenues, color: "#60a5fa", type: "bar" as const },
-            { label: "Margin %", values: margins, color: "#4ade80", type: "line" as const, yAxisId: "right" as const, showDots: true },
+            {
+              label: "Revenue",
+              values: revenues,
+              color: "#60a5fa",
+              type: "bar" as const,
+            },
+            {
+              label: "Margin %",
+              values: margins,
+              color: "#4ade80",
+              type: "line" as const,
+              yAxisId: "right" as const,
+              showDots: true,
+            },
           ],
           showRightAxis: true,
           currency: "EUR",
@@ -1336,10 +1505,19 @@ export const analyticsTools: ErpNextTool[] = [
       }
 
       // Default: group by item
-      const byItem: Record<string, { name: string; revenue: number; cost: number }> = {};
+      const byItem: Record<
+        string,
+        { name: string; revenue: number; cost: number }
+      > = {};
       for (const row of siItems) {
         const code = (row.item_code as string) ?? "Unknown";
-        if (!byItem[code]) byItem[code] = { name: (row.item_name as string) ?? code, revenue: 0, cost: 0 };
+        if (!byItem[code]) {
+          byItem[code] = {
+            name: (row.item_name as string) ?? code,
+            revenue: 0,
+            cost: 0,
+          };
+        }
         const qty = Number(row.qty) || 0;
         const unitCost = costMap[code] ?? 0;
         byItem[code].revenue += Number(row.amount) || 0;
@@ -1362,8 +1540,20 @@ export const analyticsTools: ErpNextTool[] = [
         type: "composed",
         labels,
         datasets: [
-          { label: "Revenue", values: revenues, color: "#60a5fa", type: "bar" as const },
-          { label: "Margin %", values: margins, color: "#4ade80", type: "line" as const, yAxisId: "right" as const, showDots: true },
+          {
+            label: "Revenue",
+            values: revenues,
+            color: "#60a5fa",
+            type: "bar" as const,
+          },
+          {
+            label: "Margin %",
+            values: margins,
+            color: "#4ade80",
+            type: "line" as const,
+            yAxisId: "right" as const,
+            showDots: true,
+          },
         ],
         showRightAxis: true,
         currency: "EUR",
@@ -1388,7 +1578,10 @@ export const analyticsTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        months: { type: "number", description: "How many months back (default 6)" },
+        months: {
+          type: "number",
+          description: "How many months back (default 6)",
+        },
         type: {
           type: "string",
           enum: ["bar", "stacked-bar", "composed"],
@@ -1401,7 +1594,11 @@ export const analyticsTools: ErpNextTool[] = [
       const chartType = (input.type as string) ?? "composed";
 
       const now = new Date();
-      const startDate = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 1);
+      const startDate = new Date(
+        now.getFullYear(),
+        now.getMonth() - monthsBack + 1,
+        1,
+      );
       const startStr = startDate.toISOString().split("T")[0];
 
       // Fetch Sales Orders (income) — submitted only
@@ -1423,8 +1620,16 @@ export const analyticsTools: ErpNextTool[] = [
       // Build month labels
       const months: string[] = [];
       for (let m = 0; m < monthsBack; m++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1 + m, 1);
-        months.push(`${d.toLocaleString("en", { month: "short" })} ${d.getFullYear().toString().slice(2)}`);
+        const d = new Date(
+          now.getFullYear(),
+          now.getMonth() - monthsBack + 1 + m,
+          1,
+        );
+        months.push(
+          `${d.toLocaleString("en", { month: "short" })} ${
+            d.getFullYear().toString().slice(2)
+          }`,
+        );
       }
 
       // Aggregate by month
@@ -1433,7 +1638,8 @@ export const analyticsTools: ErpNextTool[] = [
 
       for (const so of salesOrders) {
         const d = new Date(so.transaction_date as string);
-        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 + d.getMonth() - startDate.getMonth();
+        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
+          d.getMonth() - startDate.getMonth();
         if (mIdx >= 0 && mIdx < monthsBack) {
           income[mIdx] += Number(so.grand_total) || 0;
         }
@@ -1441,7 +1647,8 @@ export const analyticsTools: ErpNextTool[] = [
 
       for (const po of purchaseOrders) {
         const d = new Date(po.transaction_date as string);
-        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 + d.getMonth() - startDate.getMonth();
+        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
+          d.getMonth() - startDate.getMonth();
         if (mIdx >= 0 && mIdx < monthsBack) {
           expenses[mIdx] += Number(po.grand_total) || 0;
         }
@@ -1451,8 +1658,18 @@ export const analyticsTools: ErpNextTool[] = [
 
       // deno-lint-ignore no-explicit-any
       const datasets: any[] = [
-        { label: "Income", values: income.map((v) => Math.round(v)), color: "#4ade80", type: "bar" },
-        { label: "Expenses", values: expenses.map((v) => Math.round(v)), color: "#f87171", type: "bar" },
+        {
+          label: "Income",
+          values: income.map((v) => Math.round(v)),
+          color: "#4ade80",
+          type: "bar",
+        },
+        {
+          label: "Expenses",
+          values: expenses.map((v) => Math.round(v)),
+          color: "#f87171",
+          type: "bar",
+        },
       ];
 
       if (chartType === "composed") {
@@ -1472,12 +1689,13 @@ export const analyticsTools: ErpNextTool[] = [
         type: chartType,
         labels: months,
         datasets,
-        ...(chartType === "composed" ? { showRightAxis: true, rightAxisLabel: "Net Profit" } : {}),
+        ...(chartType === "composed"
+          ? { showRightAxis: true, rightAxisLabel: "Net Profit" }
+          : {}),
         currency: "EUR",
         yAxisLabel: "Amount",
         _meta: CHART_META,
       };
     },
   },
-
 ];

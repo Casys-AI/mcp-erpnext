@@ -1,4 +1,4 @@
-import { assertEquals, assert } from "jsr:@std/assert";
+import { assert, assertEquals } from "jsr:@std/assert";
 import { ErpNextToolsClient } from "./client.ts";
 
 // Note: Error handling previously tested here (isError wrapping) has been moved
@@ -62,8 +62,7 @@ Deno.test("buildHandlersMap - viewer tools return structuredContent", async () =
   };
 
   // The wrapping logic: if result has _meta.ui, wrap with content + structuredContent
-  const hasUiMeta =
-    mockResult._meta !== undefined &&
+  const hasUiMeta = mockResult._meta !== undefined &&
     typeof mockResult._meta === "object" &&
     mockResult._meta.ui !== undefined;
 

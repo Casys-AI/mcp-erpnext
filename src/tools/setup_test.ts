@@ -47,17 +47,28 @@ Deno.test("erpnext_company_list - returns formatted result with _meta.ui", async
     list: async (doctype: string) => {
       assertEquals(doctype, "Company");
       return [
-        { name: "Casys Industries", abbr: "CI", default_currency: "EUR", country: "France" },
+        {
+          name: "Casys Industries",
+          abbr: "CI",
+          default_currency: "EUR",
+          country: "France",
+        },
       ];
     },
   });
 
   const tool = getTool("erpnext_company_list");
-  const result = await tool.handler({}, makeCtx(mockClient)) as Record<string, unknown>;
+  const result = await tool.handler({}, makeCtx(mockClient)) as Record<
+    string,
+    unknown
+  >;
 
   assertEquals(result.count, 1);
   assertEquals((result.data as unknown[]).length, 1);
-  assertEquals((result._meta as { ui: { resourceUri: string } }).ui.resourceUri, "ui://mcp-erpnext/doclist-viewer");
+  assertEquals(
+    (result._meta as { ui: { resourceUri: string } }).ui.resourceUri,
+    "ui://mcp-erpnext/doclist-viewer",
+  );
 });
 
 Deno.test("erpnext_company_list - has _meta.ui on tool definition", () => {
@@ -84,7 +95,11 @@ Deno.test("erpnext_company_list - passes limit", async () => {
 Deno.test("erpnext_company_create - throws if company_name missing", async () => {
   const tool = getTool("erpnext_company_create");
   await assertRejects(
-    () => tool.handler({ abbr: "CI", default_currency: "EUR", country: "France" }, makeCtx(makeMockClient())),
+    () =>
+      tool.handler(
+        { abbr: "CI", default_currency: "EUR", country: "France" },
+        makeCtx(makeMockClient()),
+      ),
     Error,
     "company_name",
   );
@@ -93,7 +108,12 @@ Deno.test("erpnext_company_create - throws if company_name missing", async () =>
 Deno.test("erpnext_company_create - throws if abbr missing", async () => {
   const tool = getTool("erpnext_company_create");
   await assertRejects(
-    () => tool.handler({ company_name: "Test", default_currency: "EUR", country: "France" }, makeCtx(makeMockClient())),
+    () =>
+      tool.handler({
+        company_name: "Test",
+        default_currency: "EUR",
+        country: "France",
+      }, makeCtx(makeMockClient())),
     Error,
     "abbr",
   );
@@ -102,7 +122,11 @@ Deno.test("erpnext_company_create - throws if abbr missing", async () => {
 Deno.test("erpnext_company_create - throws if default_currency missing", async () => {
   const tool = getTool("erpnext_company_create");
   await assertRejects(
-    () => tool.handler({ company_name: "Test", abbr: "T", country: "France" }, makeCtx(makeMockClient())),
+    () =>
+      tool.handler(
+        { company_name: "Test", abbr: "T", country: "France" },
+        makeCtx(makeMockClient()),
+      ),
     Error,
     "default_currency",
   );
@@ -111,7 +135,11 @@ Deno.test("erpnext_company_create - throws if default_currency missing", async (
 Deno.test("erpnext_company_create - throws if country missing", async () => {
   const tool = getTool("erpnext_company_create");
   await assertRejects(
-    () => tool.handler({ company_name: "Test", abbr: "T", default_currency: "EUR" }, makeCtx(makeMockClient())),
+    () =>
+      tool.handler(
+        { company_name: "Test", abbr: "T", default_currency: "EUR" },
+        makeCtx(makeMockClient()),
+      ),
     Error,
     "country",
   );
@@ -165,7 +193,12 @@ Deno.test("erpnext_company_create - domain is optional", async () => {
 
   const tool = getTool("erpnext_company_create");
   await tool.handler(
-    { company_name: "Test Co", abbr: "TC", default_currency: "USD", country: "US" },
+    {
+      company_name: "Test Co",
+      abbr: "TC",
+      default_currency: "USD",
+      country: "US",
+    },
     makeCtx(mockClient),
   );
 

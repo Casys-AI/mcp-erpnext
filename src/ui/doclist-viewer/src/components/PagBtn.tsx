@@ -2,7 +2,13 @@
 
 import { colors, styles } from "~/shared/theme";
 
-export function PagBtn({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
+export function PagBtn(
+  { label, disabled, onClick }: {
+    label: string;
+    disabled: boolean;
+    onClick: () => void;
+  },
+) {
   return (
     <button
       onClick={onClick}
@@ -14,8 +20,13 @@ export function PagBtn({ label, disabled, onClick }: { label: string; disabled: 
         opacity: disabled ? 0.4 : 1,
         cursor: disabled ? "default" : "pointer",
       }}
-      onMouseEnter={(e) => { if (!disabled) { (e.currentTarget as HTMLElement).style.borderColor = colors.accent; } }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = colors.border; }}
+      onMouseEnter={(e) => {
+        if (!disabled) {(e.currentTarget as HTMLElement).style.borderColor =
+            colors.accent;}
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.borderColor = colors.border;
+      }}
     >
       {label}
     </button>

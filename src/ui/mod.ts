@@ -9,7 +9,7 @@
  * @module lib/erpnext/src/ui
  */
 
-import { statSync, readDirSync, readTextFile } from "../runtime.ts";
+import { readDirSync, readTextFile, statSync } from "../runtime.ts";
 
 /**
  * Metadata for UI resources
@@ -45,14 +45,18 @@ function discoverUiResources(): Record<string, UIResourceMeta> {
       }
     }
   } catch (e) {
-    console.error(`[mcp-erpnext/ui] Failed to discover UIs from ${distPath}:`, e);
+    console.error(
+      `[mcp-erpnext/ui] Failed to discover UIs from ${distPath}:`,
+      e,
+    );
   }
 
   return resources;
 }
 
 /** Registry of available UI resources */
-export const UI_RESOURCES: Record<string, UIResourceMeta> = discoverUiResources();
+export const UI_RESOURCES: Record<string, UIResourceMeta> =
+  discoverUiResources();
 
 /** Embedded UI HTML bundles (populated at build time or runtime) */
 const UI_BUNDLES: Record<string, string> = {};
@@ -98,7 +102,8 @@ function uriToPath(uri: string): string | null {
   const match = uri.match(/^ui:\/\/[^/]+\/(.+)$/);
   if (match) {
     const uiName = match[1];
-    const distPath = new URL(`./dist/${uiName}/index.html`, import.meta.url).pathname;
+    const distPath =
+      new URL(`./dist/${uiName}/index.html`, import.meta.url).pathname;
     if (statSync(distPath)) {
       return distPath;
     }
@@ -107,6 +112,8 @@ function uriToPath(uri: string): string | null {
 }
 
 /** List all available UI resources */
-export function listUiResources(): Array<{ uri: string; meta: UIResourceMeta }> {
+export function listUiResources(): Array<
+  { uri: string; meta: UIResourceMeta }
+> {
   return Object.entries(UI_RESOURCES).map(([uri, meta]) => ({ uri, meta }));
 }

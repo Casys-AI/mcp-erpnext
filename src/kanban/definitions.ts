@@ -24,5 +24,7 @@ export const KANBAN_BOARD_DEFINITIONS: KanbanBoardDefinition[] = [
 export function getKanbanBoardDefinition(
   doctype: string,
 ): KanbanBoardDefinition | undefined {
-  return KANBAN_BOARD_DEFINITIONS.find((definition) => definition.doctype === doctype);
+  return KANBAN_BOARD_DEFINITIONS.find((definition) =>
+    definition.doctype === doctype
+  );
 }

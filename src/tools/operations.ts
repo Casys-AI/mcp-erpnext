@@ -27,7 +27,8 @@ export const operationsTools: ErpNextTool[] = [
       properties: {
         doctype: {
           type: "string",
-          description: "ERPNext DocType name (e.g. 'Company', 'Item Group', 'Warehouse Type')",
+          description:
+            "ERPNext DocType name (e.g. 'Company', 'Item Group', 'Warehouse Type')",
         },
         data: {
           type: "object",
@@ -43,7 +44,9 @@ export const operationsTools: ErpNextTool[] = [
         throw new Error("[erpnext_doc_create] 'doctype' is required");
       }
       if (!input.data || typeof input.data !== "object") {
-        throw new Error("[erpnext_doc_create] 'data' must be an object with document fields");
+        throw new Error(
+          "[erpnext_doc_create] 'data' must be an object with document fields",
+        );
       }
 
       const doc = await ctx.client.create(
@@ -72,7 +75,8 @@ export const operationsTools: ErpNextTool[] = [
       properties: {
         doctype: {
           type: "string",
-          description: "ERPNext DocType name (e.g. 'Customer', 'Sales Order', 'Item')",
+          description:
+            "ERPNext DocType name (e.g. 'Customer', 'Sales Order', 'Item')",
         },
         name: {
           type: "string",
@@ -95,7 +99,9 @@ export const operationsTools: ErpNextTool[] = [
         throw new Error("[erpnext_doc_update] 'name' is required");
       }
       if (!input.data || typeof input.data !== "object") {
-        throw new Error("[erpnext_doc_update] 'data' must be an object with fields to update");
+        throw new Error(
+          "[erpnext_doc_update] 'data' must be an object with fields to update",
+        );
       }
 
       const doc = await ctx.client.update(
@@ -187,7 +193,10 @@ export const operationsTools: ErpNextTool[] = [
       }
 
       // Fetch fresh doc first — frappe.client.submit requires `modified` for optimistic locking
-      const doc = await ctx.client.get(input.doctype as string, input.name as string);
+      const doc = await ctx.client.get(
+        input.doctype as string,
+        input.name as string,
+      );
       const result = await ctx.client.callMethod("frappe.client.submit", {
         doc: { ...doc, doctype: input.doctype as string },
       });
@@ -279,7 +288,10 @@ export const operationsTools: ErpNextTool[] = [
         throw new Error("[erpnext_doc_get] 'name' is required");
       }
 
-      const doc = await ctx.client.get(input.doctype as string, input.name as string);
+      const doc = await ctx.client.get(
+        input.doctype as string,
+        input.name as string,
+      );
       return { data: doc };
     },
   },
@@ -299,7 +311,8 @@ export const operationsTools: ErpNextTool[] = [
       properties: {
         doctype: {
           type: "string",
-          description: "ERPNext DocType name (e.g. 'Lead', 'Asset', 'BOM', 'Cost Center')",
+          description:
+            "ERPNext DocType name (e.g. 'Lead', 'Asset', 'BOM', 'Cost Center')",
         },
         fields: {
           type: "array",
@@ -311,7 +324,7 @@ export const operationsTools: ErpNextTool[] = [
           type: "array",
           description:
             "Frappe filters as array of [fieldname, operator, value] tuples. " +
-            "Example: [[\"status\",\"=\",\"Open\"],[\"company\",\"=\",\"Acme\"]]",
+            'Example: [["status","=","Open"],["company","=","Acme"]]',
           items: {
             type: "array",
             items: { type: "string" },

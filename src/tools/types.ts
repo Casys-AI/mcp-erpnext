@@ -77,4 +77,3 @@ export interface MCPToolWireFormat {
   annotations?: ToolAnnotations;
   _meta?: MCPToolMeta;
 }
-

@@ -131,7 +131,10 @@ const DOCTYPE_SEND_MESSAGE_HINTS: Record<string, SendMessageHint[]> = {
  * _drillDown: sendMessage when clicking the big number (exceptions list)
  * _trendDrillDown: sendMessage when clicking the sparkline (trend chart)
  */
-const KPI_DRILL_DOWN: Record<string, { _drillDown?: string; _trendDrillDown?: string }> = {
+const KPI_DRILL_DOWN: Record<
+  string,
+  { _drillDown?: string; _trendDrillDown?: string }
+> = {
   "erpnext_kpi_revenue": {
     _drillDown: "Show all sales invoices for this month",
     _trendDrillDown: "Show revenue trend chart for the last 12 months",
@@ -208,7 +211,10 @@ export function withUiRefreshRequest(
   }
 
   // Inject _rowAction for doclist results that point to the doclist-viewer
-  if (isDoclistResult(enriched) && isDoclistViewer(enriched) && !enriched._rowAction) {
+  if (
+    isDoclistResult(enriched) && isDoclistViewer(enriched) &&
+    !enriched._rowAction
+  ) {
     const dedicatedTool = DOCTYPE_GET_TOOLS[enriched.doctype!];
     if (dedicatedTool) {
       enriched._rowAction = {
@@ -228,7 +234,10 @@ export function withUiRefreshRequest(
   }
 
   // Inject sendMessage hints for known DocTypes
-  if (isDoclistResult(enriched) && isDoclistViewer(enriched) && !enriched._sendMessageHints) {
+  if (
+    isDoclistResult(enriched) && isDoclistViewer(enriched) &&
+    !enriched._sendMessageHints
+  ) {
     const hints = DOCTYPE_SEND_MESSAGE_HINTS[enriched.doctype!];
     if (hints) {
       enriched._sendMessageHints = hints;
@@ -245,8 +254,12 @@ export function withUiRefreshRequest(
   if (isKpiViewer(enriched)) {
     const kpiHints = KPI_DRILL_DOWN[toolName];
     if (kpiHints) {
-      if (kpiHints._drillDown && !enriched._drillDown) enriched._drillDown = kpiHints._drillDown;
-      if (kpiHints._trendDrillDown && !enriched._trendDrillDown) enriched._trendDrillDown = kpiHints._trendDrillDown;
+      if (kpiHints._drillDown && !enriched._drillDown) {
+        enriched._drillDown = kpiHints._drillDown;
+      }
+      if (kpiHints._trendDrillDown && !enriched._trendDrillDown) {
+        enriched._trendDrillDown = kpiHints._trendDrillDown;
+      }
     }
   }
 

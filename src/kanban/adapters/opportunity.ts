@@ -9,17 +9,33 @@ import type {
 } from "../types.ts";
 import { formatShortDate, isDateOverdue } from "../field-utils.ts";
 
-const OPPORTUNITY_COLUMNS: Array<{ id: string; label: string; color: string; status: string }> = [
+const OPPORTUNITY_COLUMNS: Array<
+  { id: string; label: string; color: string; status: string }
+> = [
   { id: "open", label: "Open", color: "#60a5fa", status: "Open" },
   { id: "replied", label: "Replied", color: "#f59e0b", status: "Replied" },
-  { id: "quotation", label: "Quotation", color: "#a78bfa", status: "Quotation" },
-  { id: "converted", label: "Converted", color: "#22c55e", status: "Converted" },
+  {
+    id: "quotation",
+    label: "Quotation",
+    color: "#a78bfa",
+    status: "Quotation",
+  },
+  {
+    id: "converted",
+    label: "Converted",
+    color: "#22c55e",
+    status: "Converted",
+  },
   { id: "closed", label: "Closed", color: "#64748b", status: "Closed" },
   { id: "lost", label: "Lost", color: "#ef4444", status: "Lost" },
 ];
 
-const STATUS_BY_COLUMN = new Map(OPPORTUNITY_COLUMNS.map((column) => [column.id, column.status]));
-const COLUMN_BY_STATUS = new Map(OPPORTUNITY_COLUMNS.map((column) => [column.status, column.id]));
+const STATUS_BY_COLUMN = new Map(
+  OPPORTUNITY_COLUMNS.map((column) => [column.id, column.status]),
+);
+const COLUMN_BY_STATUS = new Map(
+  OPPORTUNITY_COLUMNS.map((column) => [column.status, column.id]),
+);
 
 const OPPORTUNITY_LIST_FIELDS = [
   "name",
@@ -39,22 +55,72 @@ const OPPORTUNITY_LIST_FIELDS = [
 
 const OPPORTUNITY_ALLOWED_TRANSITIONS: KanbanTransition[] = [
   { fromColumn: "open", toColumn: "replied", allowed: true, label: "Reply" },
-  { fromColumn: "open", toColumn: "quotation", allowed: true, label: "Send quotation" },
-  { fromColumn: "open", toColumn: "converted", allowed: true, label: "Convert" },
+  {
+    fromColumn: "open",
+    toColumn: "quotation",
+    allowed: true,
+    label: "Send quotation",
+  },
+  {
+    fromColumn: "open",
+    toColumn: "converted",
+    allowed: true,
+    label: "Convert",
+  },
   { fromColumn: "open", toColumn: "closed", allowed: true, label: "Close" },
   { fromColumn: "open", toColumn: "lost", allowed: true, label: "Mark lost" },
   { fromColumn: "replied", toColumn: "open", allowed: true, label: "Reopen" },
-  { fromColumn: "replied", toColumn: "quotation", allowed: true, label: "Send quotation" },
-  { fromColumn: "replied", toColumn: "converted", allowed: true, label: "Convert" },
+  {
+    fromColumn: "replied",
+    toColumn: "quotation",
+    allowed: true,
+    label: "Send quotation",
+  },
+  {
+    fromColumn: "replied",
+    toColumn: "converted",
+    allowed: true,
+    label: "Convert",
+  },
   { fromColumn: "replied", toColumn: "closed", allowed: true, label: "Close" },
-  { fromColumn: "replied", toColumn: "lost", allowed: true, label: "Mark lost" },
+  {
+    fromColumn: "replied",
+    toColumn: "lost",
+    allowed: true,
+    label: "Mark lost",
+  },
   { fromColumn: "quotation", toColumn: "open", allowed: true, label: "Reopen" },
-  { fromColumn: "quotation", toColumn: "replied", allowed: true, label: "Resume conversation" },
-  { fromColumn: "quotation", toColumn: "converted", allowed: true, label: "Convert" },
-  { fromColumn: "quotation", toColumn: "closed", allowed: true, label: "Close" },
-  { fromColumn: "quotation", toColumn: "lost", allowed: true, label: "Mark lost" },
+  {
+    fromColumn: "quotation",
+    toColumn: "replied",
+    allowed: true,
+    label: "Resume conversation",
+  },
+  {
+    fromColumn: "quotation",
+    toColumn: "converted",
+    allowed: true,
+    label: "Convert",
+  },
+  {
+    fromColumn: "quotation",
+    toColumn: "closed",
+    allowed: true,
+    label: "Close",
+  },
+  {
+    fromColumn: "quotation",
+    toColumn: "lost",
+    allowed: true,
+    label: "Mark lost",
+  },
   { fromColumn: "converted", toColumn: "open", allowed: true, label: "Reopen" },
-  { fromColumn: "converted", toColumn: "closed", allowed: true, label: "Close" },
+  {
+    fromColumn: "converted",
+    toColumn: "closed",
+    allowed: true,
+    label: "Close",
+  },
   { fromColumn: "closed", toColumn: "open", allowed: true, label: "Reopen" },
   { fromColumn: "closed", toColumn: "replied", allowed: true, label: "Resume" },
   { fromColumn: "lost", toColumn: "open", allowed: true, label: "Reopen" },
@@ -65,19 +131,29 @@ function columnIdForOpportunityStatus(status: unknown): string {
   return COLUMN_BY_STATUS.get(String(status ?? "Open")) ?? "open";
 }
 
-function formatOpportunityAmount(amount: unknown, currency: unknown): string | null {
+function formatOpportunityAmount(
+  amount: unknown,
+  currency: unknown,
+): string | null {
   const numeric = Number(amount);
   if (!Number.isFinite(numeric)) return null;
-  const currencyCode = typeof currency === "string" && currency.length > 0 ? currency : "Amount";
+  const currencyCode = typeof currency === "string" && currency.length > 0
+    ? currency
+    : "Amount";
   return `${currencyCode} ${numeric}`;
 }
 
 function buildOpportunityCard(row: Record<string, unknown>): KanbanCard {
   const status = String(row.status ?? "Open");
   const columnId = columnIdForOpportunityStatus(status);
-  const amountValue = formatOpportunityAmount(row.opportunity_amount, row.currency);
+  const amountValue = formatOpportunityAmount(
+    row.opportunity_amount,
+    row.currency,
+  );
   const probability = Number(row.probability);
-  const probabilityValue = Number.isFinite(probability) ? `${probability}%` : null;
+  const probabilityValue = Number.isFinite(probability)
+    ? `${probability}%`
+    : null;
   let title: string;
   if (typeof row.title === "string" && row.title.length > 0) {
     title = row.title;
@@ -88,11 +164,16 @@ function buildOpportunityCard(row: Record<string, unknown>): KanbanCard {
   }
 
   const badges: KanbanCard["badges"] = [];
-  if (typeof row.opportunity_from === "string" && row.opportunity_from.length > 0) {
+  if (
+    typeof row.opportunity_from === "string" && row.opportunity_from.length > 0
+  ) {
     badges.push({ label: row.opportunity_from, tone: "neutral" });
   }
   const closingDate = row.expected_closing;
-  if (isDateOverdue(closingDate) && columnId !== "converted" && columnId !== "closed" && columnId !== "lost") {
+  if (
+    isDateOverdue(closingDate) && columnId !== "converted" &&
+    columnId !== "closed" && columnId !== "lost"
+  ) {
     badges.push({ label: "Overdue", tone: "error" });
   }
 
@@ -102,16 +183,18 @@ function buildOpportunityCard(row: Record<string, unknown>): KanbanCard {
 
   const metrics: KanbanCard["metrics"] = [];
   if (amountValue) metrics.push({ label: "Amount", value: amountValue });
-  if (probabilityValue) metrics.push({ label: "Probability", value: probabilityValue });
+  if (probabilityValue) {
+    metrics.push({ label: "Probability", value: probabilityValue });
+  }
   const closingDisplay = formatShortDate(closingDate);
   if (closingDisplay) metrics.push({ label: "Closing", value: closingDisplay });
   const createdDisplay = formatShortDate(row.transaction_date);
   if (createdDisplay) metrics.push({ label: "Created", value: createdDisplay });
 
-  const assignee = typeof row.opportunity_owner === "string" && row.opportunity_owner.length > 0
+  const assignee = typeof row.opportunity_owner === "string" &&
+      row.opportunity_owner.length > 0
     ? row.opportunity_owner
     : undefined;
-
 
   return {
     id: String(row.name ?? ""),
@@ -147,7 +230,10 @@ export const opportunityKanbanAdapter: KanbanAdapter = {
     if (typeof input.status === "string" && input.status.length > 0) {
       filters.push(["status", "=", input.status]);
     }
-    if (typeof input.opportunity_owner === "string" && input.opportunity_owner.length > 0) {
+    if (
+      typeof input.opportunity_owner === "string" &&
+      input.opportunity_owner.length > 0
+    ) {
       filters.push(["opportunity_owner", "=", input.opportunity_owner]);
     }
     if (typeof input.party_name === "string" && input.party_name.length > 0) {
@@ -166,14 +252,22 @@ export const opportunityKanbanAdapter: KanbanAdapter = {
     );
 
     if (!match) {
-      return { allowed: false, reason: "Opportunity transition is not allowed" };
+      return {
+        allowed: false,
+        reason: "Opportunity transition is not allowed",
+      };
     }
 
     return { allowed: true };
   },
   async executeMove(move: KanbanMoveRequest, ctx): Promise<KanbanMoveResult> {
-    const currentOpportunity = await ctx.client.get("Opportunity", move.cardId) as Record<string, unknown>;
-    const serverColumn = columnIdForOpportunityStatus(currentOpportunity.status);
+    const currentOpportunity = await ctx.client.get(
+      "Opportunity",
+      move.cardId,
+    ) as Record<string, unknown>;
+    const serverColumn = columnIdForOpportunityStatus(
+      currentOpportunity.status,
+    );
 
     if (serverColumn !== move.fromColumn) {
       return {
@@ -209,9 +303,13 @@ export const opportunityKanbanAdapter: KanbanAdapter = {
       };
     }
 
-    const serverOpportunity = await ctx.client.update("Opportunity", move.cardId, {
-      status,
-    }) as Record<string, unknown>;
+    const serverOpportunity = await ctx.client.update(
+      "Opportunity",
+      move.cardId,
+      {
+        status,
+      },
+    ) as Record<string, unknown>;
 
     return {
       ok: true,

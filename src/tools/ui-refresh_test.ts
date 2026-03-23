@@ -33,7 +33,10 @@ Deno.test("ui refresh - leaves non-UI payloads untouched", () => {
 Deno.test("ui refresh - preserves an existing refreshRequest", () => {
   const payload = {
     data: [],
-    refreshRequest: { toolName: "erpnext_kanban_get_board", arguments: { doctype: "Task" } },
+    refreshRequest: {
+      toolName: "erpnext_kanban_get_board",
+      arguments: { doctype: "Task" },
+    },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/kanban-viewer" } },
   };
 
@@ -121,7 +124,9 @@ Deno.test("ui refresh - injects _sendMessageHints for known doctype", () => {
     {},
   ) as Record<string, unknown>;
 
-  const hints = result._sendMessageHints as Array<{ label: string; message: string }>;
+  const hints = result._sendMessageHints as Array<
+    { label: string; message: string }
+  >;
   assertEquals(hints.length, 2);
   assertEquals(hints[0].label, "Orders");
   assertEquals(hints[1].label, "Invoices");
@@ -155,7 +160,10 @@ Deno.test("ui refresh - injects _drillDown and _trendDrillDown for KPI tools", (
   ) as Record<string, unknown>;
 
   assertEquals(result._drillDown, "Show all sales invoices for this month");
-  assertEquals(result._trendDrillDown, "Show revenue trend chart for the last 12 months");
+  assertEquals(
+    result._trendDrillDown,
+    "Show revenue trend chart for the last 12 months",
+  );
 });
 
 Deno.test("ui refresh - no KPI drill-down for non-KPI tools", () => {
@@ -245,6 +253,10 @@ Deno.test("ui refresh - all major doctypes get correct _rowAction", () => {
     ) as Record<string, unknown>;
 
     const rowAction = result._rowAction as { toolName: string };
-    assertEquals(rowAction.toolName, expectedTool, `${doctype} should use ${expectedTool}`);
+    assertEquals(
+      rowAction.toolName,
+      expectedTool,
+      `${doctype} should use ${expectedTool}`,
+    );
   }
 });

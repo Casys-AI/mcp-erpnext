@@ -17,7 +17,12 @@ const ADAPTERS: Record<string, KanbanAdapter> = {
   issue: issueKanbanAdapter,
 };
 
-function getAdapter(doctype: string): { definition: NonNullable<ReturnType<typeof getKanbanBoardDefinition>>; adapter: KanbanAdapter } {
+function getAdapter(
+  doctype: string,
+): {
+  definition: NonNullable<ReturnType<typeof getKanbanBoardDefinition>>;
+  adapter: KanbanAdapter;
+} {
   const definition = getKanbanBoardDefinition(doctype);
   if (!definition) {
     throw new Error(`[erpnext_kanban] Unsupported kanban doctype: ${doctype}`);
@@ -29,7 +34,10 @@ function getAdapter(doctype: string): { definition: NonNullable<ReturnType<typeo
   return { definition, adapter };
 }
 
-function withColumnCounts(columns: KanbanColumn[], cards: KanbanCard[]): KanbanColumn[] {
+function withColumnCounts(
+  columns: KanbanColumn[],
+  cards: KanbanCard[],
+): KanbanColumn[] {
   const counts = new Map<string, number>();
   for (const card of cards) {
     counts.set(card.columnId, (counts.get(card.columnId) ?? 0) + 1);
@@ -58,8 +66,14 @@ export const kanbanTools: ErpNextTool[] = [
           enum: ["Task", "Opportunity", "Issue"],
         },
         limit: { type: "number", description: "Page size (default 50)" },
-        offset: { type: "number", description: "Pagination offset (default 0)" },
-        project: { type: "string", description: "Optional Task project filter" },
+        offset: {
+          type: "number",
+          description: "Pagination offset (default 0)",
+        },
+        project: {
+          type: "string",
+          description: "Optional Task project filter",
+        },
         priority: {
           type: "string",
           description: "Optional Task priority filter",
@@ -135,8 +149,7 @@ export const kanbanTools: ErpNextTool[] = [
   {
     name: "erpnext_kanban_move_card",
     category: "kanban",
-    description:
-      "Move a kanban card for a supported ERPNext DocType. " +
+    description: "Move a kanban card for a supported ERPNext DocType. " +
       "Returns structured success or business error details for MCP App reconciliation.",
     inputSchema: {
       type: "object",
@@ -147,8 +160,14 @@ export const kanbanTools: ErpNextTool[] = [
           enum: ["Task", "Opportunity", "Issue"],
         },
         card_id: { type: "string", description: "Card/document identifier" },
-        from_column: { type: "string", description: "Source column identifier" },
-        to_column: { type: "string", description: "Destination column identifier" },
+        from_column: {
+          type: "string",
+          description: "Source column identifier",
+        },
+        to_column: {
+          type: "string",
+          description: "Destination column identifier",
+        },
       },
       required: ["doctype", "card_id", "from_column", "to_column"],
     },

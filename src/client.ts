@@ -110,9 +110,17 @@ export class ErpNextToolsClient {
     const handlers = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>();
     for (const tool of this.tools) {
       handlers.set(tool.name, async (args: Record<string, unknown>) => {
-        const client = getFrappeClient();
-        const result = await tool.handler(args, { client });
-        return withUiRefreshRequest(result, tool.name, args);
+        try {
+          const client = getFrappeClient();
+          const result = await tool.handler(args, { client });
+          return withUiRefreshRequest(result, tool.name, args);
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error);
+          return {
+            content: [{ type: "text", text: msg }],
+            isError: true,
+          };
+        }
       });
     }
     return handlers;

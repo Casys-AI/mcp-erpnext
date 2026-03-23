@@ -14,34 +14,28 @@ Upgrade from 0.9.2 to 0.12.0. Analysis done 2026-03-23 with Codex.
 
 ## Refactoring items
 
-### P0 — Do now
+### P0 — DONE
 
-#### 1. Widen tool types for annotations + richer _meta
+#### 1. Widen tool types for annotations + richer _meta — DONE
 
-- **What**: Add `annotations?: ToolAnnotations` and allow richer `_meta` in `ErpNextTool` type
-- **Files**: `src/tools/types.ts`, `src/client.ts`
-- **Effort**: M
+- `ErpNextTool._meta` now uses `MCPToolMeta` from `@casys/mcp-server`
+- `ToolAnnotations` added to `ErpNextTool` and wire format
 
-#### 2. Move error wrapping to toolErrorMapper
+#### 2. Move error wrapping to toolErrorMapper — DONE
 
-- **What**: Remove try/catch in `client.ts:buildHandlersMap()`, configure `toolErrorMapper` in `server.ts`
-- **Pattern**: Map FrappeAPIError 4xx → `isError` (user-facing). Let 5xx/timeouts rethrow as JSON-RPC errors.
-- **Files**: `server.ts`, `src/client.ts`, `tests/tools/client_test.ts`
-- **Effort**: M
+- `toolErrorMapper` configured in `server.ts`, try/catch removed from `client.ts`
 
-#### 3. Add ToolAnnotations to all tools
+#### 3. Add ToolAnnotations to all tools — DONE
 
-- **What**: Mark tools with `readOnlyHint` (list, get, analytics) and `destructiveHint` (delete, cancel, submit)
-- **Files**: `src/tools/*.ts`
-- **Effort**: M
+- 95 annotations across 14 tool files (readOnlyHint + destructiveHint)
 
-### P1 — Next session
+### P1 — DONE
 
-#### 4. Normalize UI metadata with uiMeta()
+#### 4. Normalize UI metadata with uiMeta() — DONE
 
-- **What**: Replace 91 inline `_meta: { ui: { resourceUri: "..." } }` with shared constants via `uiMeta()`
-- **Files**: `src/tools/*.ts`, `src/tools/ui-refresh.ts`
-- **Effort**: M/L
+- `src/tools/viewer-meta.ts` uses `uiMeta()` from `@casys/mcp-server`
+- All 14 tool files import from `viewer-meta.ts`
+- `MCPToolMeta` type used throughout instead of inline types
 
 ### P2 — Future
 

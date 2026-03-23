@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import type { FrappeFilter } from "../api/types.ts";
 import type {
   KanbanAdapter,

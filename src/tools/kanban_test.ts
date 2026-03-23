@@ -1,5 +1,5 @@
-import { assert, assertEquals, assertRejects } from "jsr:@std/assert";
-import { FrappeClient } from "../api/frappe-client.ts";
+import { assert, assertEquals, assertRejects } from "@std/assert";
+import type { FrappeClient } from "../api/frappe-client.ts";
 import { kanbanTools } from "./kanban.ts";
 import type { ErpNextToolContext } from "./types.ts";
 

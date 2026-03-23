@@ -1,4 +1,4 @@
-import { assertEquals, assertNotStrictEquals } from "jsr:@std/assert";
+import { assertEquals, assertNotStrictEquals } from "@std/assert";
 import { withUiRefreshRequest } from "./ui-refresh.ts";
 
 // ── refreshRequest injection ─────────────────────────────────────────────────

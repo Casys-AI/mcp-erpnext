@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-erpnext",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "nodeModulesDir": "auto",
   "tasks": {
     "serve": "deno run --allow-all server.ts --http --port=3012",
@@ -28,6 +28,15 @@
       "**/*.bench.ts"
     ]
   },
+  "lint": {
+    "exclude": ["src/ui/**/*.tsx", "src/ui/**/*.mjs", "src/ui/node_modules/"],
+    "rules": {
+      "exclude": ["require-await"]
+    }
+  },
+  "fmt": {
+    "exclude": ["src/ui/node_modules/"]
+  },
   "imports": {
     "@casys/mcp-server": "jsr:@casys/mcp-server@^0.12",
     "ajv": "npm:ajv@^8.17.1",
@@ -35,6 +44,7 @@
     "hono/cors": "npm:hono@^4/cors",
     "jose": "npm:jose@^6.0.0",
     "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
-    "@std/yaml": "jsr:@std/yaml@^1"
+    "@std/yaml": "jsr:@std/yaml@^1",
+    "@std/assert": "jsr:@std/assert@^1"
   }
 }

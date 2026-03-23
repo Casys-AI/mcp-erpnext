@@ -7,7 +7,7 @@
  * @module lib/erpnext/tests/api/frappe-client_test
  */
 
-import { assertEquals, assertRejects } from "jsr:@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { FrappeAPIError, FrappeClient } from "./frappe-client.ts";
 
 // ── Test helpers ──────────────────────────────────────────────────────────────

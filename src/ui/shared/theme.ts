@@ -8,7 +8,7 @@
  * For inline styles (CSSProperties), use `cssVar()` helper.
  */
 
-import { CSSProperties } from "react";
+import type { CSSProperties } from "react";
 
 /** Read a CSS custom property at runtime */
 function cssVar(name: string): string {

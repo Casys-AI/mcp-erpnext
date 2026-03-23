@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-process-global no-node-globals
+// deno-lint-ignore-file no-process-global
 /**
  * Runtime adapter — Node.js implementation
  *

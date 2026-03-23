@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import { resolveViewerDistPath } from "./viewer-resource-paths.ts";
 
 Deno.test("resolveViewerDistPath prefers source dist in repo mode", () => {

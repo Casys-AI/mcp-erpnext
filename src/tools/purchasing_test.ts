@@ -6,9 +6,9 @@
  * @module lib/erpnext/tests/tools/purchasing_test
  */
 
-import { assertEquals, assertRejects } from "jsr:@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { purchasingTools } from "./purchasing.ts";
-import { FrappeClient } from "../api/frappe-client.ts";
+import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
 
 // deno-lint-ignore no-explicit-any

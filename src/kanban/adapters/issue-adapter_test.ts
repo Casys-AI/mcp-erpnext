@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "jsr:@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { issueKanbanAdapter } from "./issue.ts";
 import type { ErpNextToolContext } from "../../tools/types.ts";
 

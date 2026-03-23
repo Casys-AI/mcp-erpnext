@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "jsr:@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { ErpNextToolsClient } from "./client.ts";
 
 // Note: Error handling previously tested here (isError wrapping) has been moved

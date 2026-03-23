@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import type { KanbanViewerState } from "./state.ts";
 import { createKanbanInitialState } from "./state.ts";
 import type { KanbanBoardData } from "./types.ts";

@@ -7,9 +7,9 @@
  * @module lib/erpnext/tests/tools/sales_test
  */
 
-import { assertEquals, assertRejects } from "jsr:@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { salesTools } from "./sales.ts";
-import { FrappeClient } from "../api/frappe-client.ts";
+import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
 
 // ── Mock FrappeClient ─────────────────────────────────────────────────────────

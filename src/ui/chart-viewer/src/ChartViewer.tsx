@@ -122,6 +122,8 @@ interface ChartData {
   /** Height override (default varies by type) */
   height?: number;
   refreshRequest?: UiRefreshRequestData;
+  /** sendMessage template when clicking a data point — {label} is replaced with the clicked label */
+  _drillDown?: string;
 }
 
 // ============================================================================
@@ -163,7 +165,7 @@ function toRows(data: ChartData) {
 }
 
 function fmtValue(v: number, data: ChartData) {
-  if (data.currency) return formatCurrency(v);
+  if (data.currency) return formatCurrency(v, data.currency);
   return `${formatNumber(v, v % 1 === 0 ? 0 : 1)}${data.unit ? " " + data.unit : ""}`;
 }
 
@@ -285,7 +287,7 @@ function SharedYAxis({ data, yAxisId, orientation }: { data: ChartData; yAxisId?
 // Bar Charts (vertical, horizontal, stacked)
 // ============================================================================
 
-function VerticalBarChart({ data }: { data: ChartData }) {
+function VerticalBarChart({ data, onDataClick }: { data: ChartData; onDataClick?: (label: string) => void }) {
   const rows = toRows(data);
   const stacked = data.type === "stacked-bar";
 
@@ -309,6 +311,8 @@ function VerticalBarChart({ data }: { data: ChartData }) {
             stackId={stacked ? (ds.stack ?? "default") : undefined}
             yAxisId={ds.yAxisId}
             animationDuration={0}
+            cursor={onDataClick ? "pointer" : undefined}
+            onClick={onDataClick ? (entry: Record<string, unknown>) => onDataClick(String(entry.name ?? "")) : undefined}
           />
         ))}
       </BarChart>
@@ -316,7 +320,7 @@ function VerticalBarChart({ data }: { data: ChartData }) {
   );
 }
 
-function HorizontalBarChart({ data }: { data: ChartData }) {
+function HorizontalBarChart({ data, onDataClick }: { data: ChartData; onDataClick?: (label: string) => void }) {
   const rows = toRows(data);
 
   return (
@@ -327,7 +331,10 @@ function HorizontalBarChart({ data }: { data: ChartData }) {
         <YAxis type="category" dataKey="name" width={120} tick={TICK_X} axisLine={false} tickLine={false} />
         <Tooltip content={<ChartTooltip data={data} />} cursor={CURSOR} animationDuration={0} />
         {data.datasets.map((ds, i) => (
-          <Bar key={ds.label} dataKey={ds.label} fill={dsColor(ds, i)} radius={[0, 3, 3, 0]} opacity={0.85} animationDuration={0} />
+          <Bar key={ds.label} dataKey={ds.label} fill={dsColor(ds, i)} radius={[0, 3, 3, 0]} opacity={0.85} animationDuration={0}
+            cursor={onDataClick ? "pointer" : undefined}
+            onClick={onDataClick ? (entry: Record<string, unknown>) => onDataClick(String(entry.name ?? "")) : undefined}
+          />
         ))}
       </BarChart>
     </ResponsiveContainer>
@@ -338,12 +345,14 @@ function HorizontalBarChart({ data }: { data: ChartData }) {
 // Line Chart
 // ============================================================================
 
-function LineChartView({ data }: { data: ChartData }) {
+function LineChartView({ data, onDataClick }: { data: ChartData; onDataClick?: (label: string) => void }) {
   const rows = toRows(data);
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={rows} margin={MARGIN}>
+      <LineChart data={rows} margin={MARGIN}
+        onClick={onDataClick ? (e: Record<string, unknown>) => { if (e?.activeLabel) onDataClick(String(e.activeLabel)); } : undefined}
+      >
         <CartesianGrid {...GRID} />
         <SharedXAxis data={data} />
         <SharedYAxis data={data} />
@@ -359,7 +368,7 @@ function LineChartView({ data }: { data: ChartData }) {
             strokeWidth={2}
             strokeDasharray={ds.strokeStyle === "dashed" ? "6 3" : undefined}
             dot={ds.showDots !== false ? { r: 3, fill: dsColor(ds, i) } : false}
-            activeDot={{ r: 5 }}
+            activeDot={onDataClick ? { r: 5, cursor: "pointer" } : { r: 5 }}
             yAxisId={ds.yAxisId}
             animationDuration={0}
           />
@@ -373,13 +382,15 @@ function LineChartView({ data }: { data: ChartData }) {
 // Area Chart
 // ============================================================================
 
-function AreaChartView({ data }: { data: ChartData }) {
+function AreaChartView({ data, onDataClick }: { data: ChartData; onDataClick?: (label: string) => void }) {
   const rows = toRows(data);
   const stacked = data.type === "stacked-area";
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={rows} margin={MARGIN}>
+      <AreaChart data={rows} margin={MARGIN}
+        onClick={onDataClick ? (e: Record<string, unknown>) => { if (e?.activeLabel) onDataClick(String(e.activeLabel)); } : undefined}
+      >
         <defs>
           {data.datasets.map((ds, i) => (
             <linearGradient key={ds.label} id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
@@ -416,12 +427,14 @@ function AreaChartView({ data }: { data: ChartData }) {
 // Composed Chart (mix of bar + line + area per dataset)
 // ============================================================================
 
-function ComposedChartView({ data }: { data: ChartData }) {
+function ComposedChartView({ data, onDataClick }: { data: ChartData; onDataClick?: (label: string) => void }) {
   const rows = toRows(data);
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={rows} margin={MARGIN}>
+      <ComposedChart data={rows} margin={MARGIN}
+        onClick={onDataClick ? (e: Record<string, unknown>) => { if (e?.activeLabel) onDataClick(String(e.activeLabel)); } : undefined}
+      >
         <CartesianGrid {...GRID} />
         <SharedXAxis data={data} />
         <SharedYAxis data={data} />
@@ -471,7 +484,7 @@ function ComposedChartView({ data }: { data: ChartData }) {
 // Pie / Donut
 // ============================================================================
 
-function PieDonutChart({ data, isDonut }: { data: ChartData; isDonut: boolean }) {
+function PieDonutChart({ data, isDonut, onDataClick }: { data: ChartData; isDonut: boolean; onDataClick?: (label: string) => void }) {
   const ds = data.datasets[0];
   if (!ds || ds.values.length === 0 || data.labels.length === 0) {
     return <EmptyChart message="No data for chart" />;
@@ -495,6 +508,8 @@ function PieDonutChart({ data, isDonut }: { data: ChartData; isDonut: boolean })
           label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent * 100).toFixed(0)}%`}
           labelLine={{ stroke: "var(--text-faint)", strokeWidth: 1 }}
           animationDuration={0}
+          cursor={onDataClick ? "pointer" : undefined}
+          onClick={onDataClick ? (entry: Record<string, unknown>) => onDataClick(String(entry.name ?? "")) : undefined}
         >
           {pieData.map((_, i) => (
             <Cell key={i} fill={PALETTE[i % PALETTE.length]} opacity={0.85} />
@@ -514,7 +529,7 @@ function PieDonutChart({ data, isDonut }: { data: ChartData; isDonut: boolean })
               fontSize={11} fill="var(--text-muted)" fontFamily={fonts.sans}>Total</text>
             <text x="50%" y="56%" textAnchor="middle" dominantBaseline="middle"
               fontSize={15} fill="var(--text-primary)" fontFamily={fonts.mono} fontWeight={700}>
-              {data.currency ? formatCurrency(total) : formatNumber(total, 0)}
+              {data.currency ? formatCurrency(total, data.currency) : formatNumber(total, 0)}
             </text>
           </>
         )}
@@ -685,20 +700,30 @@ function DatasetLegend({ datasets }: { datasets: Dataset[] }) {
 
 function ChartRouter({ data }: { data: ChartData }) {
   const type = data.type ?? "bar";
+  const hasServerTools = app.getHostCapabilities()?.serverTools;
+
+  // Drill-down: when user clicks a data point, send a message to explore the underlying data
+  const onDataClick = (hasServerTools && data._drillDown)
+    ? (label: string) => {
+        const msg = data._drillDown!.replace(/\{label\}/g, label);
+        app.sendMessage({ role: "user", content: [{ type: "text", text: msg }] }).catch(() => {});
+      }
+    : undefined;
+
   switch (type) {
-    case "bar":          return <VerticalBarChart data={data} />;
-    case "stacked-bar":  return <VerticalBarChart data={data} />;
-    case "horizontal-bar": return <HorizontalBarChart data={data} />;
-    case "line":         return <LineChartView data={data} />;
-    case "area":         return <AreaChartView data={data} />;
-    case "stacked-area": return <AreaChartView data={data} />;
-    case "composed":     return <ComposedChartView data={data} />;
-    case "pie":          return <PieDonutChart data={data} isDonut={false} />;
-    case "donut":        return <PieDonutChart data={data} isDonut />;
+    case "bar":          return <VerticalBarChart data={data} onDataClick={onDataClick} />;
+    case "stacked-bar":  return <VerticalBarChart data={data} onDataClick={onDataClick} />;
+    case "horizontal-bar": return <HorizontalBarChart data={data} onDataClick={onDataClick} />;
+    case "line":         return <LineChartView data={data} onDataClick={onDataClick} />;
+    case "area":         return <AreaChartView data={data} onDataClick={onDataClick} />;
+    case "stacked-area": return <AreaChartView data={data} onDataClick={onDataClick} />;
+    case "composed":     return <ComposedChartView data={data} onDataClick={onDataClick} />;
+    case "pie":          return <PieDonutChart data={data} isDonut={false} onDataClick={onDataClick} />;
+    case "donut":        return <PieDonutChart data={data} isDonut onDataClick={onDataClick} />;
     case "radar":        return <RadarChartView data={data} />;
     case "scatter":      return <ScatterChartView data={data} />;
     case "treemap":      return <TreemapView data={data} />;
-    default:             return <VerticalBarChart data={data} />;
+    default:             return <VerticalBarChart data={data} onDataClick={onDataClick} />;
   }
 }
 

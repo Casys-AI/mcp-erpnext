@@ -120,71 +120,96 @@ function FunnelEmptyState() {
 // Funnel Stage Component
 // ============================================================================
 
+/** Clip-path polygons for progressive trapezoid narrowing */
+const CLIP_PATHS = [
+  "polygon(0% 0%, 100% 0%, 92% 100%, 8% 100%)",
+  "polygon(8% 0%, 92% 0%, 82% 100%, 18% 100%)",
+  "polygon(18% 0%, 82% 0%, 74% 100%, 26% 100%)",
+  "polygon(26% 0%, 74% 0%, 74% 100%, 26% 100%)",
+];
+
+/** Darker shade for gradient bottom */
+function darken(hex: string): string {
+  const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - 40);
+  const g = Math.max(0, parseInt(hex.slice(3, 5), 16) - 40);
+  const b = Math.max(0, parseInt(hex.slice(5, 7), 16) - 40);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
 function FunnelStageBar({
   stage,
-  widthPercent,
+  stageIndex,
   currency,
   onClick,
 }: {
   stage: FunnelStage;
-  widthPercent: number;
+  stageIndex: number;
   currency: string;
   onClick?: () => void;
 }) {
-  const barStyle: CSSProperties = {
-    width: `${widthPercent}%`,
-    margin: "0 auto",
-    padding: "12px 16px",
-    borderRadius: 6,
-    background: stage.color,
-    opacity: 0.85,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    minHeight: 48,
-    position: "relative",
-    cursor: onClick ? "pointer" : "default",
-    transition: "opacity 0.15s",
-  };
-
-  const labelStyle: CSSProperties = {
-    fontSize: 13,
-    fontWeight: 600,
-    color: "#fff",
-    textShadow: "0 1px 2px rgba(0,0,0,0.3)",
-    whiteSpace: "nowrap",
-  };
-
-  const countStyle: CSSProperties = {
-    fontSize: 22,
-    fontWeight: 700,
-    fontFamily: fonts.mono,
-    color: "#fff",
-    textShadow: "0 1px 3px rgba(0,0,0,0.3)",
-    lineHeight: 1,
-  };
-
-  const valueStyle: CSSProperties = {
-    fontSize: 12,
-    fontWeight: 500,
-    color: "rgba(255,255,255,0.8)",
-    fontFamily: fonts.mono,
-    whiteSpace: "nowrap",
-  };
+  const isEmpty = stage.count === 0;
+  const clipPath = CLIP_PATHS[Math.min(stageIndex, CLIP_PATHS.length - 1)];
+  const bg = isEmpty
+    ? "linear-gradient(180deg, #333 0%, #222 100%)"
+    : `linear-gradient(180deg, ${stage.color} 0%, ${darken(stage.color)} 100%)`;
 
   return (
     <div
-      style={barStyle}
+      style={{
+        clipPath,
+        background: bg,
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+        minHeight: 56,
+        cursor: onClick ? "pointer" : "default",
+        transition: "transform 0.15s, box-shadow 0.15s",
+        opacity: isEmpty ? 0.4 : 1,
+        position: "relative",
+      }}
       onClick={onClick}
-      onMouseEnter={(e) => { if (onClick) (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
+      onMouseEnter={(e) => {
+        if (!onClick || isEmpty) return;
+        (e.currentTarget as HTMLElement).style.transform = "scale(1.02)";
+        (e.currentTarget as HTMLElement).style.boxShadow = `0 0 20px ${stage.color}30`;
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+        (e.currentTarget as HTMLElement).style.boxShadow = "none";
+      }}
       title={onClick ? `Click to see ${stage.label}` : undefined}
     >
-      <span style={labelStyle}>{stage.label}</span>
-      <span style={countStyle}>{formatNumber(stage.count, 0)}</span>
+      <span style={{
+        fontSize: 24,
+        fontWeight: 700,
+        fontFamily: fonts.mono,
+        color: "#fff",
+        textShadow: "0 2px 4px rgba(0,0,0,0.3)",
+        lineHeight: 1,
+      }}>
+        {formatNumber(stage.count, 0)}
+      </span>
+      <span style={{
+        fontSize: 10,
+        fontWeight: 700,
+        color: "rgba(255,255,255,0.85)",
+        textTransform: "uppercase",
+        letterSpacing: "0.1em",
+      }}>
+        {stage.label}
+      </span>
       {stage.value != null && stage.value > 0 && (
-        <span style={valueStyle}>{formatCurrency(stage.value, currency)}</span>
+        <span style={{
+          fontSize: 11,
+          fontFamily: fonts.mono,
+          color: "rgba(255,255,255,0.6)",
+          marginTop: 2,
+        }}>
+          {formatCurrency(stage.value, currency)}
+        </span>
       )}
     </div>
   );
@@ -194,26 +219,24 @@ function FunnelStageBar({
 // Conversion Rate Badge
 // ============================================================================
 
-function ConversionBadge({ rate }: { rate: number }) {
-  const badgeStyle: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "2px 10px",
-    fontSize: 11,
-    fontWeight: 600,
-    fontFamily: fonts.mono,
-    borderRadius: 10,
-    background: colors.bg.elevated,
-    border: `1px solid ${colors.border}`,
-    color: colors.text.secondary,
-    margin: "4px auto",
-  };
-
+function ConversionBadge({ rate, color }: { rate: number; color?: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "center" }}>
-      <span style={badgeStyle}>
-        <span style={{ opacity: 0.5 }}>&#8595;</span>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0, margin: "2px 0" }}>
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.4 }}>
+        <path d="M6 1v10M6 11l-3-3M6 11l3-3" stroke={color ?? colors.text.muted} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "2px 10px",
+        fontSize: 10,
+        fontWeight: 700,
+        fontFamily: fonts.mono,
+        borderRadius: 10,
+        background: colors.bg.elevated,
+        color: color ?? colors.text.secondary,
+        letterSpacing: "0.02em",
+      }}>
         {rate}%
       </span>
     </div>
@@ -399,14 +422,6 @@ function FunnelContent(
     return <FunnelEmptyState />;
   }
 
-  const maxCount = Math.max(...stages.map((s) => s.count), 1);
-
-  // Compute width for each stage: ratio of count to max, with 30% minimum
-  const stageWidths = stages.map((s) => {
-    const ratio = s.count / maxCount;
-    return Math.max(30, ratio * 100);
-  });
-
   // Total conversion: first stage to last stage
   const firstCount = stages[0].count;
   const lastCount = stages[stages.length - 1].count;
@@ -461,13 +476,13 @@ function FunnelContent(
           <div key={stage.label}>
             <FunnelStageBar
               stage={stage}
-              widthPercent={stageWidths[idx]}
+              stageIndex={idx}
               currency={currency}
               onClick={hasServerTools ? () => handleStageDrillDown(stage) : undefined}
             />
             {/* Conversion badge between stages */}
             {idx < stages.length - 1 && stages[idx + 1].conversionRate != null && (
-              <ConversionBadge rate={stages[idx + 1].conversionRate!} />
+              <ConversionBadge rate={stages[idx + 1].conversionRate!} color={stages[idx + 1].color} />
             )}
           </div>
         ))}
@@ -501,6 +516,36 @@ function FunnelContent(
           {totalConversion}%
         </span>
       </div>
+
+      {/* Action buttons */}
+      {hasServerTools && (
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
+          {stages.map((stage) => (
+            <button
+              key={stage.label}
+              onClick={() => handleStageDrillDown(stage)}
+              style={{
+                ...styles.button,
+                fontSize: 11,
+                padding: "4px 12px",
+                borderColor: stage.color + "40",
+                color: colors.text.secondary,
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = stage.color;
+                (e.currentTarget as HTMLElement).style.color = stage.color;
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = stage.color + "40";
+                (e.currentTarget as HTMLElement).style.color = colors.text.secondary;
+              }}
+            >
+              {stage.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

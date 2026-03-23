@@ -2,14 +2,19 @@
 
 MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **120 tools** across **14 categories**, with **7 interactive UI viewers**.
 
-Connect any MCP-compatible AI agent (Claude Desktop, PML, custom) to your ERPNext instance via the standard [Model Context Protocol](https://modelcontextprotocol.io).
+Connect any MCP-compatible AI agent (Claude Desktop, Claude Code, VS Code Copilot, custom) to your ERPNext instance via the [Model Context Protocol](https://modelcontextprotocol.io).
 
-## Current Surface
+Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 
-- `kanban-viewer` is the canonical read-write MCP App viewer
-- kanban is live for `Task`, `Opportunity`, and `Issue`
-- `doclist-viewer`, `stock-viewer`, `invoice-viewer`, `chart-viewer`, `kpi-viewer`, and `funnel-viewer` are refresh-aware MCP Apps
-- `order-pipeline-viewer` and the legacy order/purchase pipeline tools have been removed
+## What's New in v2.1
+
+- **Cross-viewer navigation** — click a row in any list to drill down, click a button to open related documents in another viewer via `sendMessage`
+- **Inline detail panels** — expand any row in doclist/stock viewers to see full document details + action buttons (Submit, Cancel, Payments)
+- **Interactive charts** — click bar/pie/line data points to drill into underlying documents
+- **KPI drill-down** — click the big number or sparkline to explore exceptions or trends
+- **Funnel redesign** — trapezoid stages with gradient fills, conversion badges, click-through navigation
+- **Better error messages** — Frappe API errors are now surfaced with full detail instead of generic "Tool execution failed"
+- **VS Code Copilot fix** — schema validation issue with `erpnext_doc_list` filters resolved (#2)
 
 ## Quick Start
 
@@ -41,6 +46,27 @@ Generate API credentials in ERPNext:
 > **Works with ERPNext Cloud** — set `ERPNEXT_URL` to your Frappe Cloud URL (e.g. `https://mycompany.erpnext.com` or `https://mysite.frappe.cloud`). API key authentication works the same way on self-hosted and cloud instances.
 
 > Zero dependencies — single self-contained bundle. Requires Node >= 20.
+
+### VS Code Copilot
+
+Add to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "erpnext": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@casys/mcp-erpnext"],
+      "env": {
+        "ERPNEXT_URL": "http://localhost:8000",
+        "ERPNEXT_API_KEY": "your-api-key",
+        "ERPNEXT_API_SECRET": "your-api-secret"
+      }
+    }
+  }
+}
+```
 
 ### Deno (stdio)
 
@@ -91,228 +117,34 @@ On a fresh ERPNext instance (no setup wizard), you need to create master data be
 7. Company: requires Warehouse Types to exist first
 ```
 
-## Tools (120)
-
-### Setup (2)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_company_list` | Company | List companies |
-| `erpnext_company_create` | Company | Create (name, abbr, currency, country, domain) |
-
-### Sales (17)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_customer_list` | Customer | List + filters (group, territory, disabled) |
-| `erpnext_customer_get` | Customer | Get by name |
-| `erpnext_customer_create` | Customer | Create (name, group, territory, email, type) |
-| `erpnext_customer_update` | Customer | Update fields |
-| `erpnext_sales_order_list` | Sales Order | List + filters (customer, status, dates) |
-| `erpnext_sales_order_get` | Sales Order | Get with line items |
-| `erpnext_sales_order_create` | Sales Order | Create (customer + items + delivery_date) |
-| `erpnext_sales_order_update` | Sales Order | Update (delivery_date, items) |
-| `erpnext_sales_order_submit` | Sales Order | Submit (Draft → To Deliver and Bill) |
-| `erpnext_sales_order_cancel` | Sales Order | Cancel |
-| `erpnext_sales_invoice_list` | Sales Invoice | List + filters |
-| `erpnext_sales_invoice_get` | Sales Invoice | Get with line items |
-| `erpnext_sales_invoice_create` | Sales Invoice | Create (customer + items + dates) |
-| `erpnext_sales_invoice_submit` | Sales Invoice | Submit (Draft → Unpaid) |
-| `erpnext_quotation_list` | Quotation | List + filters (party, status) |
-| `erpnext_quotation_get` | Quotation | Get with line items |
-| `erpnext_quotation_create` | Quotation | Create (Customer/Lead + items) |
-
-### Inventory (9)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_item_list` | Item | List + filters (group, stock flag, disabled) |
-| `erpnext_item_get` | Item | Get by name/code |
-| `erpnext_item_create` | Item | Create (code, name, group, uom, rate) |
-| `erpnext_item_update` | Item | Update fields |
-| `erpnext_stock_balance` | Bin | Stock balances by item/warehouse |
-| `erpnext_warehouse_list` | Warehouse | List + filters (company, type) |
-| `erpnext_stock_entry_list` | Stock Entry | List + filters (type, dates) |
-| `erpnext_stock_entry_get` | Stock Entry | Get with item details |
-| `erpnext_stock_entry_create` | Stock Entry | Create (type + items + warehouses) |
-
-### Purchasing (11)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_supplier_list` | Supplier | List + filters (group, type, disabled) |
-| `erpnext_supplier_get` | Supplier | Get by name |
-| `erpnext_supplier_create` | Supplier | Create (name, group, type, country, currency) |
-| `erpnext_purchase_order_list` | Purchase Order | List + filters (supplier, status, dates) |
-| `erpnext_purchase_order_get` | Purchase Order | Get with line items |
-| `erpnext_purchase_order_create` | Purchase Order | Create (supplier + items + schedule_date) |
-| `erpnext_purchase_invoice_list` | Purchase Invoice | List + filters |
-| `erpnext_purchase_invoice_get` | Purchase Invoice | Get with line items |
-| `erpnext_purchase_receipt_list` | Purchase Receipt | List + filters |
-| `erpnext_purchase_receipt_get` | Purchase Receipt | Get with received items |
-| `erpnext_supplier_quotation_list` | Supplier Quotation | List + filters |
-
-### Accounting (6)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_account_list` | Account | Chart of accounts + filters (root_type, is_group) |
-| `erpnext_journal_entry_list` | Journal Entry | List + filters (voucher_type, dates) |
-| `erpnext_journal_entry_get` | Journal Entry | Get with accounts |
-| `erpnext_journal_entry_create` | Journal Entry | Create (voucher_type + balanced accounts) |
-| `erpnext_payment_entry_list` | Payment Entry | List + filters (type, party, dates) |
-| `erpnext_payment_entry_get` | Payment Entry | Get with references |
-
-### HR (12)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_employee_list` | Employee | List + filters (department, status, company) |
-| `erpnext_employee_get` | Employee | Get by ID |
-| `erpnext_attendance_list` | Attendance | List + filters (employee, status, dates) |
-| `erpnext_leave_application_list` | Leave Application | List + filters |
-| `erpnext_leave_application_get` | Leave Application | Get by name |
-| `erpnext_leave_application_create` | Leave Application | Create (employee, type, dates, reason) |
-| `erpnext_salary_slip_list` | Salary Slip | List + filters (employee, status, dates) |
-| `erpnext_salary_slip_get` | Salary Slip | Get with earnings/deductions |
-| `erpnext_payroll_entry_list` | Payroll Entry | List + filters (company, status) |
-| `erpnext_expense_claim_list` | Expense Claim | List + filters |
-| `erpnext_expense_claim_create` | Expense Claim | Create (employee + expenses[]) |
-| `erpnext_leave_balance` | Leave Allocation | Get allocations by employee |
-
-### Project (9)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_project_list` | Project | List + filters (status, company) |
-| `erpnext_project_get` | Project | Get by name |
-| `erpnext_project_create` | Project | Create (name, status, dates, budget, company) |
-| `erpnext_task_list` | Task | List + filters (project, status, priority) |
-| `erpnext_task_get` | Task | Get with dependencies |
-| `erpnext_task_create` | Task | Create (project, subject, status, priority, dates) |
-| `erpnext_task_update` | Task | Update (status, priority, progress, dates) |
-| `erpnext_timesheet_list` | Timesheet | List + filters (employee, project, status) |
-| `erpnext_timesheet_get` | Timesheet | Get with time log details |
-
-### Delivery (5)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_delivery_note_list` | Delivery Note | List + filters (customer, status, dates) |
-| `erpnext_delivery_note_get` | Delivery Note | Get with delivered items |
-| `erpnext_delivery_note_create` | Delivery Note | Create (customer + items + against_sales_order) |
-| `erpnext_shipment_list` | Shipment | List + filters (status, carrier, dates) |
-| `erpnext_shipment_get` | Shipment | Get with parcels |
-
-### Manufacturing (7)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_bom_list` | BOM | List + filters (item, is_active, is_default) |
-| `erpnext_bom_get` | BOM | Get with raw materials + operations |
-| `erpnext_work_order_list` | Work Order | List + filters (production_item, status, dates) |
-| `erpnext_work_order_get` | Work Order | Get with operations + materials |
-| `erpnext_work_order_create` | Work Order | Create (production_item, bom_no, qty, dates) |
-| `erpnext_job_card_list` | Job Card | List + filters (work_order, status, operation) |
-| `erpnext_job_card_get` | Job Card | Get with time logs + material transfers |
-
-### CRM (8)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_lead_list` | Lead | List + filters (status, lead_owner, source) |
-| `erpnext_lead_get` | Lead | Get by name |
-| `erpnext_lead_create` | Lead | Create (name, company, email, phone, source) |
-| `erpnext_opportunity_list` | Opportunity | List + filters (status, owner, party) |
-| `erpnext_opportunity_get` | Opportunity | Get with items + competitors |
-| `erpnext_contact_list` | Contact | List + filters (company, status) |
-| `erpnext_contact_get` | Contact | Get by name |
-| `erpnext_campaign_list` | Campaign | List + filters (campaign_type) |
-
-### Assets (8)
-
-| Tool | DocType | Operations |
-|------|---------|-----------|
-| `erpnext_asset_list` | Asset | List + filters (status, category, location) |
-| `erpnext_asset_get` | Asset | Get with depreciation + maintenance |
-| `erpnext_asset_create` | Asset | Create (name, category, company, purchase_date, cost) |
-| `erpnext_asset_movement_list` | Asset Movement | List + filters (purpose, dates) |
-| `erpnext_asset_movement_get` | Asset Movement | Get with assets moved |
-| `erpnext_asset_maintenance_list` | Asset Maintenance | List + filters |
-| `erpnext_asset_maintenance_get` | Asset Maintenance | Get with maintenance tasks |
-| `erpnext_asset_category_list` | Asset Category | List all categories |
-
-### Generic Operations (7)
-
-These tools work with **any** ERPNext DocType:
-
-| Tool | Operation | Notes |
-|------|-----------|-------|
-| `erpnext_doc_create` | Create | Any DocType — essential for master data setup |
-| `erpnext_doc_get` | Get | Any document by DocType + name |
-| `erpnext_doc_list` | List | Any DocType with fields, filters, limit, order_by |
-| `erpnext_doc_update` | Update | Partial patch — pass only fields to change |
-| `erpnext_doc_delete` | Delete | Draft documents only |
-| `erpnext_doc_submit` | Submit | Any submittable document |
-| `erpnext_doc_cancel` | Cancel | Any submitted document |
-
-### Kanban (2)
-
-Tools that power the canonical read-write kanban MCP App.
-
-| Tool | Viewer | Description |
-|------|--------|-------------|
-| `erpnext_kanban_get_board` | `kanban-viewer` | Get a normalized kanban board for `Task`, `Opportunity`, or `Issue` |
-| `erpnext_kanban_move_card` | `kanban-viewer` | Execute a validated card move and return reconciliation data / business errors |
-
-### Analytics (17)
-
-Tools that return shaped data for chart, KPI, and funnel viewers.
-
-| Tool | Viewer | Description |
-|------|--------|-------------|
-| `erpnext_stock_chart` | chart-viewer | Bar chart of stock levels by item/warehouse |
-| `erpnext_sales_chart` | chart-viewer | Revenue by customer, item, or status (bar/donut) |
-| `erpnext_revenue_trend` | chart-viewer | Monthly revenue trend (line/area, per customer) |
-| `erpnext_order_breakdown` | chart-viewer | Orders by customer/status (stacked-bar/pie/donut) |
-| `erpnext_revenue_vs_orders` | chart-viewer | Revenue bars + order count line (dual axis) |
-| `erpnext_stock_treemap` | chart-viewer | Stock value treemap by item or warehouse |
-| `erpnext_product_radar` | chart-viewer | Radar comparing items (stock, value, orders, revenue) |
-| `erpnext_price_vs_qty` | chart-viewer | Scatter: selling price vs quantity ordered |
-| `erpnext_ar_aging` | chart-viewer | AR aging buckets (0-30, 31-60, 61-90, 90+ days) |
-| `erpnext_gross_profit` | chart-viewer | Revenue bars + margin % line by item/customer |
-| `erpnext_profit_loss` | chart-viewer | P&L: income vs expenses per month + net profit |
-| `erpnext_kpi_revenue` | kpi-viewer | Revenue MTD with delta vs previous month + sparkline |
-| `erpnext_kpi_outstanding` | kpi-viewer | Outstanding receivables (count + total) |
-| `erpnext_kpi_orders` | kpi-viewer | Orders this month with delta vs last month |
-| `erpnext_kpi_gross_margin` | kpi-viewer | Gross margin % based on valuation rates |
-| `erpnext_kpi_overdue` | kpi-viewer | Overdue invoices count + value |
-| `erpnext_sales_funnel` | funnel-viewer | Lead → Opportunity → Quotation → Order funnel |
-
 ## UI Viewers
 
 Seven interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) viewers, registered as `ui://mcp-erpnext/{name}`:
 
-| Viewer | Description |
-|--------|-------------|
-| `doclist-viewer` | Generic document table with sort, filter, pagination, CSV export |
-| `invoice-viewer` | Single invoice display (header, items, totals, payment status) |
-| `stock-viewer` | Stock balance table with color-coded qty badges |
-| `chart-viewer` | Universal chart renderer (12 chart types via Recharts) |
-| `kanban-viewer` | Canonical read-write kanban board with accent-colored cards, tone-aware badges, column-colored move actions, optimistic updates, and server reconciliation |
-| `kpi-viewer` | Single metric card with delta, sparkline, trend indicator |
-| `funnel-viewer` | Trapezoid sales funnel with conversion rates between stages |
+| Viewer | Description | Interactive Features |
+|--------|-------------|---------------------|
+| `doclist-viewer` | Generic document table with sort, filter, pagination, CSV export | Row click → inline detail panel with Submit/Cancel + sendMessage navigation. Chip filters for status columns. Max 6 columns, rest in detail panel. |
+| `invoice-viewer` | Sales/Purchase Invoice with parties, items, totals | Item click → stock balance + item info panel. Submit/Cancel/Payment actions. sendMessage to payment entries and customer invoices. |
+| `stock-viewer` | Stock balance table with color-coded qty badges | Row click → item info + recent movements. sendMessage to stock chart, item details, stock entries. |
+| `chart-viewer` | Universal chart renderer (12 types via Recharts) | Click bar/pie/line data points → sendMessage drill-down into underlying documents. |
+| `kanban-viewer` | Read-write kanban for Task, Opportunity, Issue | Drag-and-drop moves, inline edit (priority, progress, dates), sendMessage to Timesheets/Quotations/Related docs. |
+| `kpi-viewer` | Big number card with delta, sparkline, trend | Click number → sendMessage to exception list. Click sparkline → trend chart. |
+| `funnel-viewer` | Trapezoid sales funnel with conversion rates | Click stage → sendMessage to document list at that stage. Stage action buttons. |
 
-### Why not native ERPNext kanban?
+### Cross-viewer navigation
 
-`kanban-viewer` exists because the user is already inside an MCP host conversation. Instead of sending them back into the ERPNext web app, the viewer keeps the context in-chat, reads through MCP tools, and writes back through `app.callServerTool()` with the server as source of truth.
+Viewers communicate via `app.sendMessage()` — clicking a button in one viewer injects a message into the conversation, which triggers the AI to call the right tool and open the appropriate viewer. This creates a seamless drill-down experience without leaving the chat.
+
+The server auto-injects navigation metadata into tool results:
+- `_rowAction` — which tool to call when a row is clicked
+- `_sendMessageHints` — navigation buttons shown in detail panels (e.g. "Orders", "Invoices")
+- `_drillDown` / `_trendDrillDown` — sendMessage templates for KPI and chart click-through
 
 ### Refresh model
 
-Interactive and long-lived viewers carry their own `refreshRequest` payload so they can safely revalidate through MCP without depending on host-provided `tool-input` echoes.
-
-- `kanban-viewer` revalidates after successful mutations and refreshes on focus. In column focus mode (narrow viewports), drag is disabled and cards use button-based moves with column-colored destination indicators
-- `doclist-viewer`, `stock-viewer`, `invoice-viewer`, `chart-viewer`, `kpi-viewer`, and `funnel-viewer` support focus refresh plus a manual fallback refresh action
+All viewers carry a `refreshRequest` payload for safe revalidation via `app.callServerTool()`:
+- `kanban-viewer` revalidates after mutations and on focus
+- All other viewers support focus refresh + manual refresh button
 
 ### Building UI viewers
 
@@ -322,18 +154,28 @@ npm install
 node build-all.mjs
 ```
 
-## npm Package
+## Tools (120)
 
-The npm package (`@casys/mcp-erpnext`) is a single self-contained bundle (1.3MB) with zero runtime dependencies. UI viewers are embedded.
+**14 categories** covering the full ERPNext surface. Each `_list` tool returns interactive results in the doclist-viewer with row click, inline detail, and cross-viewer navigation.
 
-To rebuild for npm from source:
+| Category | Tools | Viewer | Key capabilities |
+|----------|-------|--------|-----------------|
+| **Sales** | 17 | doclist / invoice | Customers, Sales Orders, Invoices, Quotations — CRUD + Submit/Cancel |
+| **Purchasing** | 11 | doclist / invoice | Suppliers, Purchase Orders, Invoices, Receipts |
+| **Inventory** | 9 | doclist / stock | Items, Stock Balance, Warehouses, Stock Entries |
+| **Accounting** | 6 | doclist | Accounts, Journal Entries, Payment Entries |
+| **HR** | 12 | doclist | Employees, Attendance, Leave, Salary, Expenses |
+| **Project** | 9 | doclist | Projects, Tasks, Timesheets |
+| **Delivery** | 5 | doclist | Delivery Notes, Shipments |
+| **Manufacturing** | 7 | doclist | BOMs, Work Orders, Job Cards |
+| **CRM** | 8 | doclist | Leads, Opportunities, Contacts, Campaigns |
+| **Assets** | 8 | doclist | Assets, Movements, Maintenance, Categories |
+| **Operations** | 7 | doclist | Generic CRUD for **any** DocType (`erpnext_doc_*`) |
+| **Kanban** | 2 | kanban | Task/Opportunity/Issue boards with drag-and-drop |
+| **Analytics** | 17 | chart / kpi / funnel | 12 chart types, 5 KPIs, sales funnel |
+| **Setup** | 2 | — | Company creation |
 
-```bash
-cd lib/erpnext
-deno task ui:build           # Build UI viewers
-./scripts/build-node.sh      # Generate dist-node/ and a publishable dist-node/bin/
-cd dist-node/bin && npm publish --access public
-```
+> Full tool reference with all parameters: [`docs/tools.md`](docs/tools.md)
 
 ## Environment Variables
 
@@ -346,18 +188,16 @@ cd dist-node/bin && npm publish --access public
 ## Architecture
 
 ```
+server.ts           # MCP server (stdio + HTTP + inspector)
 mod.ts              # Public API
-server.ts           # MCP server (stdio + HTTP)
 deno.json           # Package config
-scripts/
-  build-node.sh     # Node.js distribution builder
 src/
   api/
-    frappe-client.ts  # Frappe REST HTTP client
-    types.ts          # Type definitions
+    frappe-client.ts  # Frappe REST HTTP client (zero-dependency)
+    types.ts          # Frappe type definitions
   kanban/
-    adapters/         # Per-DocType kanban adapters
-    definitions.ts    # V1 board registry
+    adapters/         # Per-DocType kanban adapters (task, opportunity, issue)
+    definitions.ts    # Board registry
     types.ts          # Shared kanban contracts
   tools/
     sales.ts          # 17 sales tools
@@ -374,33 +214,39 @@ src/
     setup.ts          # 2 company/setup tools
     kanban.ts         # 2 read-write kanban tools
     analytics.ts      # 17 analytics tools (charts, KPIs, funnel)
-    mod.ts            # Registry
+    ui-refresh.ts     # Auto-inject _rowAction, _sendMessageHints, _drillDown
+    mod.ts            # Tool registry
     types.ts          # Tool interface
   client.ts           # ErpNextToolsClient
-  runtime.ts          # Deno runtime shim
-  runtime.node.ts     # Node.js runtime shim
+  runtime.ts          # Deno runtime adapter
+  runtime.node.ts     # Node.js runtime adapter
   ui/
-    doclist-viewer/   # Generic document list
-    invoice-viewer/   # Invoice display
-    stock-viewer/     # Stock balance display
-    chart-viewer/     # Universal chart renderer (Recharts)
-    kanban-viewer/    # Canonical read-write kanban
-    kpi-viewer/       # Single metric card
-    funnel-viewer/    # Sales funnel
-    shared/           # Shared theme + branding
-    viewers.ts        # UI viewer registry
+    shared/           # ActionButton, InfoField, theme, branding, refresh
+    doclist-viewer/   # Generic document list (inline detail, chip filters)
+    invoice-viewer/   # Invoice display (item drill-down, actions)
+    stock-viewer/     # Stock balance (detail panel, sendMessage)
+    chart-viewer/     # Universal chart renderer (12 types, click drill-down)
+    kanban-viewer/    # Read-write kanban (drag, edit, sendMessage)
+    kpi-viewer/       # KPI card (clickable number + sparkline)
+    funnel-viewer/    # Sales funnel (trapezoid stages, click-through)
+    viewers.ts        # Viewer registry
 tests/
-  kanban/             # Kanban domain tests
-  ui/                 # Kanban UI state tests
+  tools/              # Tool + ui-refresh + client tests
+  kanban/             # Kanban adapter tests
+  ui/                 # UI state + refresh tests
 docs/
-  coverage.md         # Full coverage matrix
-  ROADMAP.md          # Viewer & analytics roadmap
+  ROADMAP.md          # Feature roadmap
+  coverage.md         # Test coverage matrix
 ```
+
+## npm Package
+
+The npm package (`@casys/mcp-erpnext`) is a single self-contained bundle with zero runtime dependencies. UI viewers are embedded.
 
 ## Development
 
 ```bash
-# Run tests
+# Run tests (147 tests)
 deno test --allow-all tests/
 
 # Type check
@@ -408,6 +254,15 @@ deno check mod.ts server.ts
 
 # Start HTTP server (dev)
 deno task serve
+
+# Launch MCP Inspector
+deno task inspect
+
+# Build UI viewers
+deno task ui:build
+
+# Dev a specific viewer with HMR
+cd src/ui && npm run dev:kanban
 ```
 
 ## License

@@ -7,7 +7,7 @@
  * @module lib/erpnext/src/ui/stock-viewer
  */
 
-import { useState, useEffect, useMemo, useRef, CSSProperties } from "react";
+import { Fragment, useState, useEffect, useMemo, useRef, CSSProperties } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles, formatNumber, formatCurrency } from "~/shared/theme";
 import { ErpNextBrandHeader, ErpNextBrandFooter } from "~/shared/ErpNextBrand";
@@ -24,8 +24,9 @@ import {
 // MCP App
 // ============================================================================
 
-const app = new App({ name: "Stock Viewer", version: "1.0.0" });
-let appConnected = false;
+import { StockDetailPanel } from "./components/StockDetailPanel";
+
+const app = new App({ name: "Stock Viewer", version: "2.0.0" });
 const STOCK_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
@@ -164,6 +165,12 @@ export function StockViewer() {
   }
 
   function consumeToolResult(result: ToolResultPayload): boolean {
+    if (result.isError) {
+      const text = extractTextContent(result);
+      setError(text ?? "Tool returned an error");
+      setLoading(false);
+      return false;
+    }
     const text = extractTextContent(result);
     if (!text) return false;
 
@@ -173,8 +180,7 @@ export function StockViewer() {
       setError(null);
       setLoading(false);
       return true;
-    } catch (cause) {
-      console.error("Parse error:", cause);
+    } catch {
       setError("Failed to parse stock payload");
       setLoading(false);
       return false;
@@ -229,7 +235,7 @@ export function StockViewer() {
   }
 
   useEffect(() => {
-    app.connect().then(() => { appConnected = true; }).catch(() => {});
+    app.connect().catch(() => {});
 
     app.ontoolresult = (result: ToolResultPayload) => {
       consumeToolResult(result);
@@ -263,7 +269,7 @@ export function StockViewer() {
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }} aria-busy={refreshing}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }} aria-busy={refreshing}>
       <ErpNextBrandHeader />
       <div style={{ flex: 1 }}>
         {loading ? (
@@ -305,6 +311,8 @@ function StockContent(
   const [sortKey, setSortKey] = useState<SortKey>("item_code");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filter, setFilter] = useState("");
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const hasServerTools = app.getHostCapabilities()?.serverTools;
 
   const filtered = useMemo(() => {
     if (!filter) return data.data;
@@ -420,26 +428,39 @@ function StockContent(
                     No matching entries
                   </td>
                 </tr>
-              ) : sorted.map((entry, idx) => (
-                <tr
-                  key={`${entry.item_code}-${entry.warehouse}-${idx}`}
-                  style={{ transition: "background 0.1s" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = colors.bg.hover; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                >
-                  <td style={{ ...styles.tableCell, fontWeight: 500 }}>{entry.item_code}</td>
-                  <td style={{ ...styles.tableCell, color: colors.text.secondary }}>{entry.warehouse}</td>
-                  <td style={{ ...styles.tableCell, textAlign: "right" }}>
-                    <QtyBadge qty={entry.actual_qty} />
-                  </td>
-                  <td style={numCell}>{entry.reserved_qty != null ? formatNumber(entry.reserved_qty, 0) : "—"}</td>
-                  <td style={numCell}>{entry.projected_qty != null ? formatNumber(entry.projected_qty, 0) : "—"}</td>
-                  <td style={numCell}>{entry.valuation_rate != null ? formatNumber(entry.valuation_rate) : "—"}</td>
-                  <td style={{ ...numCell, fontWeight: 500, color: colors.text.primary }}>
-                    {entry.stock_value != null ? formatCurrency(entry.stock_value) : "—"}
-                  </td>
-                </tr>
-              ))}
+              ) : sorted.map((entry, idx) => {
+                const rowKey = `${entry.item_code}::${entry.warehouse}`;
+                const isExpanded = expandedKey === rowKey;
+                return (
+                  <Fragment key={`${rowKey}-${idx}`}>
+                    <tr
+                      style={{ transition: "background 0.1s", cursor: hasServerTools ? "pointer" : "default", background: isExpanded ? colors.bg.hover : "transparent" }}
+                      onClick={hasServerTools ? () => setExpandedKey(isExpanded ? null : rowKey) : undefined}
+                      onMouseEnter={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = colors.bg.hover; }}
+                      onMouseLeave={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                    >
+                      <td style={{ ...styles.tableCell, fontWeight: 500 }}>{entry.item_code}</td>
+                      <td style={{ ...styles.tableCell, color: colors.text.secondary }}>{entry.warehouse}</td>
+                      <td style={{ ...styles.tableCell, textAlign: "right" }}>
+                        <QtyBadge qty={entry.actual_qty} />
+                      </td>
+                      <td style={numCell}>{entry.reserved_qty != null ? formatNumber(entry.reserved_qty, 0) : "—"}</td>
+                      <td style={numCell}>{entry.projected_qty != null ? formatNumber(entry.projected_qty, 0) : "—"}</td>
+                      <td style={numCell}>{entry.valuation_rate != null ? formatNumber(entry.valuation_rate) : "—"}</td>
+                      <td style={{ ...numCell, fontWeight: 500, color: colors.text.primary }}>
+                        {entry.stock_value != null ? formatCurrency(entry.stock_value) : "—"}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={COLUMNS.length} style={{ padding: 0, borderBottom: `1px solid ${colors.border}` }}>
+                          <StockDetailPanel app={app} itemCode={entry.item_code} warehouse={entry.warehouse} onClose={() => setExpandedKey(null)} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

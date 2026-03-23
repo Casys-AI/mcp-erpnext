@@ -31,7 +31,7 @@
  * @module lib/erpnext/server
  */
 
-import { ConcurrentMCPServer, MCP_APP_MIME_TYPE } from "@casys/mcp-server";
+import { ConcurrentMCPServer, launchInspector, MCP_APP_MIME_TYPE } from "@casys/mcp-server";
 import { ErpNextToolsClient } from "./src/client.ts";
 import { UI_VIEWERS } from "./src/ui/viewers.ts";
 import { resolveViewerDistPath } from "./src/ui/viewer-resource-paths.ts";
@@ -47,6 +47,12 @@ const DEFAULT_HTTP_PORT = 3012;
 
 async function main() {
   const args = getArgs();
+
+  // Inspector mode — launch MCP Inspector for interactive debugging
+  if (args.includes("--inspect")) {
+    await launchInspector("deno", ["run", "--allow-all", import.meta.filename!]);
+    return;
+  }
 
   // Category filtering
   const categoriesArg = args.find((arg) => arg.startsWith("--categories="));
@@ -69,7 +75,7 @@ async function main() {
   // Build MCP server
   const server = new ConcurrentMCPServer({
     name: "mcp-erpnext",
-    version: "0.2.0",
+    version: "2.1.0",
     maxConcurrent: 10,
     backpressureStrategy: "queue",
     validateSchema: true,

@@ -8,22 +8,9 @@
  */
 
 import type { FrappeClient } from "../api/frappe-client.ts";
-import type { MCPToolMeta } from "@casys/mcp-server";
+import type { MCPToolMeta, ToolAnnotations } from "@casys/mcp-server";
 
-/**
- * Behavioural hints for model clients (mirrors MCP SDK ToolAnnotations).
- * Passed through in tools/list so hosts can adapt their UI accordingly.
- */
-export interface ToolAnnotations {
-  /** If true, tool has no side-effects and is safe to call speculatively */
-  readOnlyHint?: boolean;
-  /** If true, executing may produce irreversible effects */
-  destructiveHint?: boolean;
-  /** If true, repeated calls with same args produce same result */
-  idempotentHint?: boolean;
-  /** If true, tool may interact with entities outside the MCP system */
-  openWorldHint?: boolean;
-}
+export type { ToolAnnotations };
 
 /** Available tool categories */
 export type ErpNextToolCategory =

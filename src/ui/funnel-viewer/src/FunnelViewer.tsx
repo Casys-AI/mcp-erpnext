@@ -39,6 +39,8 @@ interface FunnelStage {
   value?: number;
   color: string;
   conversionRate?: number;
+  /** sendMessage text when clicking this stage (auto-injected by server) */
+  _drillDown?: string;
 }
 
 interface FunnelData {
@@ -122,10 +124,12 @@ function FunnelStageBar({
   stage,
   widthPercent,
   currency,
+  onClick,
 }: {
   stage: FunnelStage;
   widthPercent: number;
   currency: string;
+  onClick?: () => void;
 }) {
   const barStyle: CSSProperties = {
     width: `${widthPercent}%`,
@@ -140,6 +144,8 @@ function FunnelStageBar({
     gap: 8,
     minHeight: 48,
     position: "relative",
+    cursor: onClick ? "pointer" : "default",
+    transition: "opacity 0.15s",
   };
 
   const labelStyle: CSSProperties = {
@@ -168,7 +174,13 @@ function FunnelStageBar({
   };
 
   return (
-    <div style={barStyle}>
+    <div
+      style={barStyle}
+      onClick={onClick}
+      onMouseEnter={(e) => { if (onClick) (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.85"; }}
+      title={onClick ? `Click to see ${stage.label}` : undefined}
+    >
       <span style={labelStyle}>{stage.label}</span>
       <span style={countStyle}>{formatNumber(stage.count, 0)}</span>
       {stage.value != null && stage.value > 0 && (
@@ -362,6 +374,26 @@ function FunnelContent(
 ) {
   const currency = data.currency ?? "EUR";
   const stages = data.stages ?? [];
+  const hasServerTools = app.getHostCapabilities()?.serverTools;
+
+  // Default drill-down messages by stage label if not provided by server
+  const STAGE_DRILL_DOWN: Record<string, string> = {
+    "Leads": "Show all leads",
+    "Lead": "Show all leads",
+    "Opportunities": "Show all open opportunities",
+    "Opportunity": "Show all open opportunities",
+    "Quotations": "Show all quotations",
+    "Quotation": "Show all quotations",
+    "Sales Orders": "Show all sales orders",
+    "Sales Order": "Show all sales orders",
+    "Orders": "Show all sales orders",
+  };
+
+  function handleStageDrillDown(stage: FunnelStage) {
+    const msg = stage._drillDown ?? STAGE_DRILL_DOWN[stage.label];
+    if (!msg) return;
+    app.sendMessage({ role: "user", content: [{ type: "text", text: msg }] }).catch(() => {});
+  }
 
   if (stages.length === 0) {
     return <FunnelEmptyState />;
@@ -431,6 +463,7 @@ function FunnelContent(
               stage={stage}
               widthPercent={stageWidths[idx]}
               currency={currency}
+              onClick={hasServerTools ? () => handleStageDrillDown(stage) : undefined}
             />
             {/* Conversion badge between stages */}
             {idx < stages.length - 1 && stages[idx + 1].conversionRate != null && (

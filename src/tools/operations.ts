@@ -306,7 +306,10 @@ export const operationsTools: ErpNextTool[] = [
           description:
             "Frappe filters as array of [fieldname, operator, value] tuples. " +
             "Example: [[\"status\",\"=\",\"Open\"],[\"company\",\"=\",\"Acme\"]]",
-          items: { type: "array" },
+          items: {
+            type: "array",
+            items: { type: "string" },
+          },
         },
         limit: { type: "number", description: "Max results (default 20)" },
         order_by: {

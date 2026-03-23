@@ -78,14 +78,3 @@ export interface MCPToolWireFormat {
   _meta?: MCPToolMeta;
 }
 
-/** Convert an ErpNextTool to MCP wire format */
-export function toMCPWireFormat(tool: ErpNextTool): MCPToolWireFormat {
-  const wire: MCPToolWireFormat = {
-    name: tool.name,
-    description: tool.description,
-    inputSchema: tool.inputSchema,
-  };
-  if (tool.annotations) wire.annotations = tool.annotations;
-  if (tool._meta) wire._meta = tool._meta;
-  return wire;
-}

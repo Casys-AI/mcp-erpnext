@@ -121,6 +121,7 @@ export class ErpNextToolsClient {
   buildHandlersMap(): Map<string, (args: Record<string, unknown>) => Promise<unknown>> {
     const handlers = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>();
     for (const tool of this.tools) {
+      const toolMeta = tool._meta;
       handlers.set(tool.name, async (args: Record<string, unknown>) => {
         const client = getFrappeClient();
         const rawResult = await tool.handler(args, { client });
@@ -129,19 +130,18 @@ export class ErpNextToolsClient {
         // For viewer tools, return a pre-formatted MCP result so the server
         // passes it through intact. Viewers receive structuredContent directly;
         // LLMs receive the same data as a JSON text string in content.
-        if (
-          result !== null &&
-          typeof result === "object" &&
-          !Array.isArray(result) &&
-          (result as Record<string, unknown>)._meta !== undefined &&
-          typeof (result as Record<string, unknown>)._meta === "object" &&
-          ((result as Record<string, unknown>)._meta as Record<string, unknown>).ui !== undefined
-        ) {
-          const r = result as Record<string, unknown>;
+        // Check both result._meta.ui (list tools embed it) and tool._meta.ui (get tools don't).
+        const r = result !== null && typeof result === "object" && !Array.isArray(result)
+          ? result as Record<string, unknown>
+          : null;
+        const resultUi = r?._meta && typeof r._meta === "object" && (r._meta as Record<string, unknown>).ui;
+        const hasViewer = resultUi || toolMeta?.ui;
+
+        if (r && hasViewer) {
           return {
             content: [{ type: "text", text: JSON.stringify(result) }],
             structuredContent: r,
-            _meta: r._meta,
+            _meta: r._meta ?? toolMeta,
           };
         }
 

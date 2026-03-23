@@ -111,9 +111,7 @@ function buildOpportunityCard(row: Record<string, unknown>): KanbanCard {
   const assignee = typeof row.opportunity_owner === "string" && row.opportunity_owner.length > 0
     ? row.opportunity_owner
     : undefined;
-  const contactPerson = typeof row.contact_person === "string" && row.contact_person.length > 0
-    ? row.contact_person
-    : undefined;
+
 
   return {
     id: String(row.name ?? ""),

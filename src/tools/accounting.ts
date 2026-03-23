@@ -9,6 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const accountingTools: ErpNextTool[] = [
   // ── Chart of Accounts ─────────────────────────────────────────────────────
@@ -16,7 +17,7 @@ export const accountingTools: ErpNextTool[] = [
   {
     name: "erpnext_account_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Chart of Accounts. Filterable by root_type and is_group. " +
       "Fields: name, account_name, account_type, root_type, parent_account, is_group. " +
@@ -59,7 +60,7 @@ export const accountingTools: ErpNextTool[] = [
         doctype: "Account",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -69,7 +70,7 @@ export const accountingTools: ErpNextTool[] = [
   {
     name: "erpnext_journal_entry_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Journal Entries. Filterable by date range and voucher_type. " +
       "Fields: name, voucher_type, posting_date, total_debit, total_credit, remark.",
@@ -110,7 +111,7 @@ export const accountingTools: ErpNextTool[] = [
         doctype: "Journal Entry",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -142,7 +143,7 @@ export const accountingTools: ErpNextTool[] = [
   {
     name: "erpnext_payment_entry_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Payment Entries. Filterable by payment_type, party_type, date range. " +
       "Fields: name, payment_type, party_type, party, posting_date, paid_amount, currency. " +
@@ -200,7 +201,7 @@ export const accountingTools: ErpNextTool[] = [
         doctype: "Payment Entry",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },

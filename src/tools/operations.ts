@@ -10,6 +10,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const operationsTools: ErpNextTool[] = [
   // ── Generic Create ──────────────────────────────────────────────────────────
@@ -288,7 +289,7 @@ export const operationsTools: ErpNextTool[] = [
   {
     name: "erpnext_doc_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List any ERPNext documents by DocType. Useful for DocTypes not covered " +
       "by dedicated tools. Supports field selection, filters (as JSON array), and limit.",
@@ -345,7 +346,7 @@ export const operationsTools: ErpNextTool[] = [
         doctype: input.doctype as string,
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },

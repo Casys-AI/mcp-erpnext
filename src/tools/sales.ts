@@ -8,6 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META, INVOICE_META } from "./viewer-meta.ts";
 
 export const salesTools: ErpNextTool[] = [
   // ── Customers ─────────────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ export const salesTools: ErpNextTool[] = [
   {
     name: "erpnext_customer_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List ERPNext customers. Returns active customers by default. " +
       "Fields: name, customer_name, customer_group, territory, email_id, disabled.",
@@ -56,7 +57,7 @@ export const salesTools: ErpNextTool[] = [
         doctype: "Customer",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -176,7 +177,7 @@ export const salesTools: ErpNextTool[] = [
   {
     name: "erpnext_sales_order_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Sales Orders. Filterable by customer, status, date range. " +
       "Fields: name, customer, transaction_date, status, grand_total, currency.",
@@ -221,7 +222,7 @@ export const salesTools: ErpNextTool[] = [
         doctype: "Sales Order",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -229,7 +230,7 @@ export const salesTools: ErpNextTool[] = [
   {
     name: "erpnext_sales_order_get",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+    _meta: INVOICE_META,
     description:
       "Get a single Sales Order by name (e.g. SO-00001). Returns full document with line items.",
     category: "sales",
@@ -251,7 +252,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_sales_order_create",
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+    _meta: INVOICE_META,
     description:
       "Create a new Sales Order. Requires customer and at least one item with item_code, qty, rate. " +
       "On a fresh ERPNext instance, you may also need to set company, selling_price_list, and currency.",
@@ -396,7 +397,7 @@ export const salesTools: ErpNextTool[] = [
   {
     name: "erpnext_sales_order_submit",
     annotations: { destructiveHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+    _meta: INVOICE_META,
     description:
       "Submit a Draft Sales Order (changes status to 'To Deliver and Bill'). " +
       "Triggers stock reservation and fulfillment workflow.",
@@ -462,7 +463,7 @@ export const salesTools: ErpNextTool[] = [
   {
     name: "erpnext_sales_invoice_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Sales Invoices. Filterable by customer, status, date range. " +
       "Fields: name, customer, posting_date, due_date, status, grand_total, outstanding_amount.",
@@ -515,7 +516,7 @@ export const salesTools: ErpNextTool[] = [
         doctype: "Sales Invoice",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -523,7 +524,7 @@ export const salesTools: ErpNextTool[] = [
   {
     name: "erpnext_sales_invoice_get",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+    _meta: INVOICE_META,
     description:
       "Get a single Sales Invoice by name (e.g. SINV-00001). Returns full document with line items.",
     category: "sales",
@@ -541,7 +542,7 @@ export const salesTools: ErpNextTool[] = [
       const doc = await ctx.client.get("Sales Invoice", input.name as string);
       return {
         data: doc,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+        _meta: INVOICE_META,
       };
     },
   },
@@ -642,7 +643,7 @@ export const salesTools: ErpNextTool[] = [
       return {
         data: doc,
         message: `Sales Invoice ${doc.name} created successfully`,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+        _meta: INVOICE_META,
       };
     },
   },
@@ -678,7 +679,7 @@ export const salesTools: ErpNextTool[] = [
       return {
         data: result,
         message: `Sales Invoice ${input.name} submitted successfully`,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+        _meta: INVOICE_META,
       };
     },
   },
@@ -688,7 +689,7 @@ export const salesTools: ErpNextTool[] = [
   {
     name: "erpnext_quotation_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Quotations. Filterable by party_name, status. " +
       "Fields: name, party_name, transaction_date, status, grand_total.",
@@ -725,7 +726,7 @@ export const salesTools: ErpNextTool[] = [
         doctype: "Quotation",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -733,7 +734,7 @@ export const salesTools: ErpNextTool[] = [
   {
     name: "erpnext_quotation_get",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+    _meta: INVOICE_META,
     description:
       "Get a single Quotation by name. Returns full document with line items and terms.",
     category: "sales",
@@ -755,7 +756,7 @@ export const salesTools: ErpNextTool[] = [
 
   {
     name: "erpnext_quotation_create",
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+    _meta: INVOICE_META,
     description:
       "Create a new Quotation for a customer or lead. " +
       "Requires quotation_to (Customer or Lead), party_name, and at least one item.",

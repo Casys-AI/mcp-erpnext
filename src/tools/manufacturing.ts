@@ -9,6 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const manufacturingTools: ErpNextTool[] = [
   // ── Bill of Materials ─────────────────────────────────────────────────────
@@ -16,7 +17,7 @@ export const manufacturingTools: ErpNextTool[] = [
   {
     name: "erpnext_bom_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Bills of Materials (BOM). Filterable by item, is_active, is_default. " +
       "Fields: name, item, item_name, quantity, uom, is_active, is_default, total_cost.",
@@ -69,7 +70,7 @@ export const manufacturingTools: ErpNextTool[] = [
         doctype: "BOM",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -101,7 +102,7 @@ export const manufacturingTools: ErpNextTool[] = [
   {
     name: "erpnext_work_order_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Work Orders. Filterable by production_item, status, date range. " +
       "Fields: name, production_item, qty, produced_qty, status, planned_start_date, planned_end_date.",
@@ -155,7 +156,7 @@ export const manufacturingTools: ErpNextTool[] = [
         doctype: "Work Order",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -241,7 +242,7 @@ export const manufacturingTools: ErpNextTool[] = [
   {
     name: "erpnext_job_card_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Job Cards (production operations tracking). Filterable by work_order, status, operation. " +
       "Fields: name, work_order, operation, status, for_quantity, total_completed_qty, workstation.",
@@ -290,7 +291,7 @@ export const manufacturingTools: ErpNextTool[] = [
         doctype: "Job Card",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },

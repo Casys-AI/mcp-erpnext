@@ -9,8 +9,7 @@ import type {
   KanbanColumn,
 } from "../kanban/types.ts";
 import type { ErpNextTool } from "./types.ts";
-
-const KANBAN_UI = { ui: { resourceUri: "ui://mcp-erpnext/kanban-viewer" } };
+import { KANBAN_META } from "./viewer-meta.ts";
 
 const ADAPTERS: Record<string, KanbanAdapter> = {
   task: taskKanbanAdapter,
@@ -46,7 +45,7 @@ export const kanbanTools: ErpNextTool[] = [
     name: "erpnext_kanban_get_board",
     annotations: { readOnlyHint: true },
     category: "kanban",
-    _meta: KANBAN_UI,
+    _meta: KANBAN_META,
     description:
       "Get a normalized kanban board for a supported ERPNext DocType. " +
       "Supports Task, Opportunity, and Issue, with pagination and MCP App metadata.",
@@ -129,7 +128,7 @@ export const kanbanTools: ErpNextTool[] = [
 
       return {
         ...board,
-        _meta: KANBAN_UI,
+        _meta: KANBAN_META,
       };
     },
   },

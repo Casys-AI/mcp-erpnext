@@ -8,6 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META, STOCK_META } from "./viewer-meta.ts";
 
 export const inventoryTools: ErpNextTool[] = [
   // ── Items ─────────────────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ export const inventoryTools: ErpNextTool[] = [
   {
     name: "erpnext_item_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List ERPNext Items. Returns active items by default. " +
       "Fields: name, item_code, item_name, item_group, stock_uom, is_stock_item, standard_rate. " +
@@ -68,7 +69,7 @@ export const inventoryTools: ErpNextTool[] = [
         doctype: "Item",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -191,7 +192,7 @@ export const inventoryTools: ErpNextTool[] = [
   {
     name: "erpnext_stock_balance",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/stock-viewer" } },
+    _meta: STOCK_META,
     description:
       "Get stock balance by item and/or warehouse. Reads from the Bin DocType. " +
       "Fields: item_code, warehouse, actual_qty, reserved_qty, projected_qty, valuation_rate, stock_value. " +
@@ -235,7 +236,7 @@ export const inventoryTools: ErpNextTool[] = [
         doctype: "Bin",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/stock-viewer" } },
+        _meta: STOCK_META,
       };
     },
   },
@@ -245,7 +246,7 @@ export const inventoryTools: ErpNextTool[] = [
   {
     name: "erpnext_warehouse_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List ERPNext Warehouses. " +
       "Fields: name, warehouse_name, warehouse_type, company.",
@@ -279,7 +280,7 @@ export const inventoryTools: ErpNextTool[] = [
         doctype: "Warehouse",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -289,7 +290,7 @@ export const inventoryTools: ErpNextTool[] = [
   {
     name: "erpnext_stock_entry_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Stock Entries (material transfers, receipts, issues). " +
       "Fields: name, stock_entry_type, posting_date, from_warehouse, to_warehouse, total_amount. " +
@@ -339,7 +340,7 @@ export const inventoryTools: ErpNextTool[] = [
         doctype: "Stock Entry",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },

@@ -8,6 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const projectTools: ErpNextTool[] = [
   // ── Projects ──────────────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ export const projectTools: ErpNextTool[] = [
   {
     name: "erpnext_project_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Projects. Filterable by status. " +
       "Fields: name, project_name, status, percent_complete, expected_start_date, " +
@@ -62,7 +63,7 @@ export const projectTools: ErpNextTool[] = [
         doctype: "Project",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -94,7 +95,7 @@ export const projectTools: ErpNextTool[] = [
   {
     name: "erpnext_task_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Tasks. Filterable by project, status, priority. " +
       "Fields: name, subject, project, status, priority, exp_start_date, exp_end_date, progress.",
@@ -148,7 +149,7 @@ export const projectTools: ErpNextTool[] = [
         doctype: "Task",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -283,7 +284,7 @@ export const projectTools: ErpNextTool[] = [
   {
     name: "erpnext_timesheet_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Timesheets. Filterable by employee, project. " +
       "Fields: name, employee, start_date, end_date, status, total_hours.",
@@ -324,7 +325,7 @@ export const projectTools: ErpNextTool[] = [
         doctype: "Timesheet",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },

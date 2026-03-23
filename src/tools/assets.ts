@@ -9,6 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const assetsTools: ErpNextTool[] = [
   // ── Assets ────────────────────────────────────────────────────────────────
@@ -16,7 +17,7 @@ export const assetsTools: ErpNextTool[] = [
   {
     name: "erpnext_asset_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Fixed Assets. Filterable by status, asset_category, location, custodian. " +
       "Fields: name, asset_name, asset_category, status, purchase_date, gross_purchase_amount, " +
@@ -73,7 +74,7 @@ export const assetsTools: ErpNextTool[] = [
         doctype: "Asset",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -160,7 +161,7 @@ export const assetsTools: ErpNextTool[] = [
   {
     name: "erpnext_asset_movement_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Asset Movements (transfers between locations/custodians). " +
       "Fields: name, transaction_date, purpose, company.",
@@ -201,7 +202,7 @@ export const assetsTools: ErpNextTool[] = [
         doctype: "Asset Movement",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -233,7 +234,7 @@ export const assetsTools: ErpNextTool[] = [
   {
     name: "erpnext_asset_maintenance_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Asset Maintenance records. Filterable by asset_name, maintenance_status. " +
       "Fields: name, asset_name, asset_category, maintenance_team, maintenance_status.",
@@ -276,7 +277,7 @@ export const assetsTools: ErpNextTool[] = [
         doctype: "Asset Maintenance",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -308,7 +309,7 @@ export const assetsTools: ErpNextTool[] = [
   {
     name: "erpnext_asset_category_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Asset Categories. " +
       "Fields: name, asset_category_name.",
@@ -333,7 +334,7 @@ export const assetsTools: ErpNextTool[] = [
         doctype: "Asset Category",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },

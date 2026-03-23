@@ -8,6 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const deliveryTools: ErpNextTool[] = [
   // ── Delivery Notes ────────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ export const deliveryTools: ErpNextTool[] = [
   {
     name: "erpnext_delivery_note_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Delivery Notes. Filterable by customer, status, date range. " +
       "Fields: name, customer, posting_date, status, total_qty, grand_total.",
@@ -60,7 +61,7 @@ export const deliveryTools: ErpNextTool[] = [
         doctype: "Delivery Note",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -161,7 +162,7 @@ export const deliveryTools: ErpNextTool[] = [
   {
     name: "erpnext_shipment_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Shipments. Filterable by status, pickup_from date range. " +
       "Fields: name, status, pickup_date, delivery_date, carrier, shipment_amount.",
@@ -213,7 +214,7 @@ export const deliveryTools: ErpNextTool[] = [
         doctype: "Shipment",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },

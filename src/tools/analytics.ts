@@ -13,12 +13,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-
-// ── Chart type → resource URI constant ──────────────────────────────────────
-
-const CHART_UI = { ui: { resourceUri: "ui://mcp-erpnext/chart-viewer" } };
-const KPI_UI = { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } };
-const FUNNEL_UI = { ui: { resourceUri: "ui://mcp-erpnext/funnel-viewer" } };
+import { CHART_META, FUNNEL_META, KPI_META } from "./viewer-meta.ts";
 
 export const analyticsTools: ErpNextTool[] = [
   // ── Stock Chart ───────────────────────────────────────────────────────────
@@ -26,7 +21,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_stock_chart",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Get stock levels as a bar chart. Shows actual_qty per item (optionally filtered by warehouse). " +
       "Groups items and returns chart-ready data. " +
@@ -90,7 +85,7 @@ export const analyticsTools: ErpNextTool[] = [
         ],
         unit: "units",
         generatedAt: new Date().toISOString(),
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },
@@ -100,7 +95,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_sales_chart",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Analyze sales revenue as a chart. " +
       "group_by='customer' → bar chart of top customers by revenue. " +
@@ -153,7 +148,7 @@ export const analyticsTools: ErpNextTool[] = [
           datasets: [{ label: "Revenue", values: sorted.map(([, v]) => v) }],
           currency: "EUR",
           generatedAt: new Date().toISOString(),
-          _meta: CHART_UI,
+          _meta: CHART_META,
         };
       }
 
@@ -185,7 +180,7 @@ export const analyticsTools: ErpNextTool[] = [
           datasets: [{ label: "Revenue", values: sorted.map(([, { total }]) => total), color: "#c084fc" }],
           currency: "EUR",
           generatedAt: new Date().toISOString(),
-          _meta: CHART_UI,
+          _meta: CHART_META,
         };
       }
 
@@ -216,7 +211,7 @@ export const analyticsTools: ErpNextTool[] = [
         datasets: [{ label: "Revenue", values: sorted.map(([, { total }]) => total), color: "#4ade80" }],
         currency: "EUR",
         generatedAt: new Date().toISOString(),
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },
@@ -226,7 +221,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_revenue_trend",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Sales revenue trend over time. Returns a line chart (or area if type='area') " +
       "with monthly revenue from Sales Orders. " +
@@ -305,7 +300,7 @@ export const analyticsTools: ErpNextTool[] = [
           })),
           currency: "EUR",
           yAxisLabel: "Revenue",
-          _meta: CHART_UI,
+          _meta: CHART_META,
         };
       }
 
@@ -332,7 +327,7 @@ export const analyticsTools: ErpNextTool[] = [
         }],
         currency: "EUR",
         yAxisLabel: "Revenue",
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },
@@ -342,7 +337,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_order_breakdown",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Breakdown of Sales Orders by customer (stacked-bar by status) or as a pie chart of totals. " +
       "type='stacked-bar' → orders stacked by status per customer. " +
@@ -385,7 +380,7 @@ export const analyticsTools: ErpNextTool[] = [
           labels: sorted.map(([c]) => c),
           datasets: [{ label: "Total", values: sorted.map(([, v]) => v) }],
           currency: "EUR",
-          _meta: CHART_UI,
+          _meta: CHART_META,
         };
       }
 
@@ -428,7 +423,7 @@ export const analyticsTools: ErpNextTool[] = [
         currency: "EUR",
         xAxisLabel: "Customer",
         yAxisLabel: "Order Value",
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },
@@ -438,7 +433,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_revenue_vs_orders",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Composed chart (bar + line) showing revenue (bars, left axis) vs order count (line, right axis) " +
       "per customer. Demonstrates dual-axis composed chart.",
@@ -495,7 +490,7 @@ export const analyticsTools: ErpNextTool[] = [
         yAxisLabel: "Revenue (€)",
         rightAxisLabel: "# Orders",
         currency: "EUR",
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },
@@ -505,7 +500,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_stock_treemap",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Stock value as a treemap. Each rectangle represents an item, sized by stock value. " +
       "Use group_by='warehouse' to group by warehouse instead.",
@@ -555,7 +550,7 @@ export const analyticsTools: ErpNextTool[] = [
           color: COLORS[i % COLORS.length],
         })),
         currency: "EUR",
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },
@@ -565,7 +560,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_product_radar",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Radar chart comparing items across multiple dimensions: " +
       "stock level, stock value, order frequency, and revenue. " +
@@ -601,7 +596,7 @@ export const analyticsTools: ErpNextTool[] = [
           type: "radar",
           labels: [],
           datasets: [],
-          _meta: CHART_UI,
+          _meta: CHART_META,
         };
       }
 
@@ -653,7 +648,7 @@ export const analyticsTools: ErpNextTool[] = [
           values: dimensions.map((_, di) => Math.round(((raw[code]?.[di] ?? 0) / maxPerDim[di]) * 100)),
           color: COLORS[i % COLORS.length],
         })),
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },
@@ -663,7 +658,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_price_vs_qty",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Scatter chart: item selling price (X) vs total qty ordered (Y). " +
       "Each point is an item. Colored by item group if available.",
@@ -733,7 +728,7 @@ export const analyticsTools: ErpNextTool[] = [
           }],
           xAxisLabel: "Valuation Rate (€/unit)",
           yAxisLabel: "Stock Qty",
-          _meta: CHART_UI,
+          _meta: CHART_META,
         };
       }
 
@@ -753,7 +748,7 @@ export const analyticsTools: ErpNextTool[] = [
         }],
         xAxisLabel: "Selling Price (€)",
         yAxisLabel: "Total Qty Ordered",
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },
@@ -763,7 +758,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_kpi_revenue",
     annotations: { readOnlyHint: true },
-    _meta: KPI_UI,
+    _meta: KPI_META,
     description:
       "KPI card: total Sales Order revenue for the current month, " +
       "with delta % vs previous month and sparkline of last 6 months.",
@@ -813,7 +808,7 @@ export const analyticsTools: ErpNextTool[] = [
         trendIsGood: true,
         sparkline,
         color: "#60a5fa",
-        _meta: KPI_UI,
+        _meta: KPI_META,
       };
     },
   },
@@ -823,7 +818,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_kpi_outstanding",
     annotations: { readOnlyHint: true },
-    _meta: KPI_UI,
+    _meta: KPI_META,
     description:
       "KPI card: total outstanding receivables from submitted Sales Invoices " +
       "with outstanding_amount > 0. Shows count of open invoices.",
@@ -852,7 +847,7 @@ export const analyticsTools: ErpNextTool[] = [
         trend: total > 0 ? "up" : "flat",
         trendIsGood: false,
         color: "#fbbf24",
-        _meta: KPI_UI,
+        _meta: KPI_META,
       };
     },
   },
@@ -862,7 +857,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_kpi_orders",
     annotations: { readOnlyHint: true },
-    _meta: KPI_UI,
+    _meta: KPI_META,
     description:
       "KPI card: count and total value of Sales Orders created this month, " +
       "with delta % vs last month.",
@@ -911,7 +906,7 @@ export const analyticsTools: ErpNextTool[] = [
         trend: delta > 0 ? "up" : delta < 0 ? "down" : "flat",
         trendIsGood: true,
         color: "#4ade80",
-        _meta: KPI_UI,
+        _meta: KPI_META,
       };
     },
   },
@@ -921,7 +916,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_kpi_gross_margin",
     annotations: { readOnlyHint: true },
-    _meta: KPI_UI,
+    _meta: KPI_META,
     description:
       "KPI card: estimated gross margin % based on Sales Order revenue vs " +
       "valuation rate from stock (Bin). Margin = (revenue - cost) / revenue * 100.",
@@ -979,7 +974,7 @@ export const analyticsTools: ErpNextTool[] = [
         trend: margin >= 30 ? "up" : margin >= 15 ? "flat" : "down",
         trendIsGood: true,
         color: "#c084fc",
-        _meta: KPI_UI,
+        _meta: KPI_META,
       };
     },
   },
@@ -989,7 +984,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_kpi_overdue",
     annotations: { readOnlyHint: true },
-    _meta: KPI_UI,
+    _meta: KPI_META,
     description:
       "KPI card: count and total value of overdue Sales Invoices " +
       "(due_date < today, outstanding_amount > 0, submitted).",
@@ -1020,7 +1015,7 @@ export const analyticsTools: ErpNextTool[] = [
         trend: count > 0 ? "up" : "flat",
         trendIsGood: false,
         color: "#f87171",
-        _meta: KPI_UI,
+        _meta: KPI_META,
       };
     },
   },
@@ -1030,7 +1025,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_sales_funnel",
     annotations: { readOnlyHint: true },
-    _meta: FUNNEL_UI,
+    _meta: FUNNEL_META,
     description:
       "Sales funnel from Lead → Opportunity → Quotation → Sales Order. " +
       "Shows count and value at each stage with conversion rates between stages.",
@@ -1137,7 +1132,7 @@ export const analyticsTools: ErpNextTool[] = [
         subtitle: periodLabels[period] ?? "All Time",
         stages,
         currency: "EUR",
-        _meta: FUNNEL_UI,
+        _meta: FUNNEL_META,
       };
     },
   },
@@ -1147,7 +1142,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_ar_aging",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Accounts Receivable Aging — stacked bar showing outstanding invoices by customer, " +
       "grouped into aging buckets (0-30, 31-60, 61-90, 90+ days). " +
@@ -1218,7 +1213,7 @@ export const analyticsTools: ErpNextTool[] = [
             color: COLORS[i % COLORS.length],
           })),
           currency: "EUR",
-          _meta: CHART_UI,
+          _meta: CHART_META,
         };
       }
 
@@ -1238,7 +1233,7 @@ export const analyticsTools: ErpNextTool[] = [
         currency: "EUR",
         xAxisLabel: "Customer",
         yAxisLabel: "Outstanding Amount",
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },
@@ -1248,7 +1243,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_gross_profit",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Gross profit analysis — composed chart showing revenue (bars) vs margin % (line) by item or customer. " +
       "Uses Sales Invoice Item for revenue and Bin valuation_rate for cost estimation.",
@@ -1336,7 +1331,7 @@ export const analyticsTools: ErpNextTool[] = [
           currency: "EUR",
           yAxisLabel: "Revenue",
           rightAxisLabel: "Margin %",
-          _meta: CHART_UI,
+          _meta: CHART_META,
         };
       }
 
@@ -1374,7 +1369,7 @@ export const analyticsTools: ErpNextTool[] = [
         currency: "EUR",
         yAxisLabel: "Revenue",
         rightAxisLabel: "Margin %",
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },
@@ -1384,7 +1379,7 @@ export const analyticsTools: ErpNextTool[] = [
   {
     name: "erpnext_profit_loss",
     annotations: { readOnlyHint: true },
-    _meta: CHART_UI,
+    _meta: CHART_META,
     description:
       "Profit & Loss overview — bar chart comparing total income vs total expenses per month " +
       "from Sales Orders (income) and Purchase Orders (expenses). " +
@@ -1480,7 +1475,7 @@ export const analyticsTools: ErpNextTool[] = [
         ...(chartType === "composed" ? { showRightAxis: true, rightAxisLabel: "Net Profit" } : {}),
         currency: "EUR",
         yAxisLabel: "Amount",
-        _meta: CHART_UI,
+        _meta: CHART_META,
       };
     },
   },

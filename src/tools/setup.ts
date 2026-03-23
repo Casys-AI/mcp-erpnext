@@ -8,6 +8,7 @@
  */
 
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const setupTools: ErpNextTool[] = [
   // ── Companies ──────────────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ export const setupTools: ErpNextTool[] = [
   {
     name: "erpnext_company_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List ERPNext companies. " +
       "Fields: name, abbr, default_currency, country, domain.",
@@ -39,7 +40,7 @@ export const setupTools: ErpNextTool[] = [
         doctype: "Company",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },

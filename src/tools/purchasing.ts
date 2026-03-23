@@ -9,6 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const purchasingTools: ErpNextTool[] = [
   // ── Suppliers ─────────────────────────────────────────────────────────────
@@ -16,7 +17,7 @@ export const purchasingTools: ErpNextTool[] = [
   {
     name: "erpnext_supplier_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List ERPNext suppliers. Returns active suppliers by default. " +
       "Fields: name, supplier_name, supplier_group, supplier_type, email_id, disabled.",
@@ -67,7 +68,7 @@ export const purchasingTools: ErpNextTool[] = [
         doctype: "Supplier",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -144,7 +145,7 @@ export const purchasingTools: ErpNextTool[] = [
   {
     name: "erpnext_purchase_order_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Purchase Orders. Filterable by supplier, status, date range. " +
       "Fields: name, supplier, transaction_date, schedule_date, status, grand_total, currency.",
@@ -198,7 +199,7 @@ export const purchasingTools: ErpNextTool[] = [
         doctype: "Purchase Order",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -297,7 +298,7 @@ export const purchasingTools: ErpNextTool[] = [
   {
     name: "erpnext_purchase_invoice_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Purchase Invoices (bills from suppliers). Filterable by supplier, status, date range. " +
       "Fields: name, supplier, posting_date, due_date, status, grand_total, outstanding_amount.",
@@ -350,7 +351,7 @@ export const purchasingTools: ErpNextTool[] = [
         doctype: "Purchase Invoice",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -382,7 +383,7 @@ export const purchasingTools: ErpNextTool[] = [
   {
     name: "erpnext_purchase_receipt_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Purchase Receipts (goods received notes). Filterable by supplier, status, date range. " +
       "Fields: name, supplier, posting_date, status, total_qty, grand_total.",
@@ -427,7 +428,7 @@ export const purchasingTools: ErpNextTool[] = [
         doctype: "Purchase Receipt",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -459,7 +460,7 @@ export const purchasingTools: ErpNextTool[] = [
   {
     name: "erpnext_supplier_quotation_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Supplier Quotations (RFQ responses from suppliers). Filterable by supplier, status. " +
       "Fields: name, supplier, transaction_date, status, grand_total.",
@@ -496,7 +497,7 @@ export const purchasingTools: ErpNextTool[] = [
         doctype: "Supplier Quotation",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },

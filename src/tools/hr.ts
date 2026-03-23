@@ -8,6 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const hrTools: ErpNextTool[] = [
   // ── Employees ─────────────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ export const hrTools: ErpNextTool[] = [
   {
     name: "erpnext_employee_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Employees. Filterable by department, status. " +
       "Fields: name, employee_name, designation, department, company, status, date_of_joining.",
@@ -65,7 +66,7 @@ export const hrTools: ErpNextTool[] = [
         doctype: "Employee",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -97,7 +98,7 @@ export const hrTools: ErpNextTool[] = [
   {
     name: "erpnext_attendance_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Attendance records. Filterable by employee, date range. " +
       "Fields: name, employee, employee_name, attendance_date, status.",
@@ -143,7 +144,7 @@ export const hrTools: ErpNextTool[] = [
         doctype: "Attendance",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -153,7 +154,7 @@ export const hrTools: ErpNextTool[] = [
   {
     name: "erpnext_leave_application_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Leave Applications. Filterable by employee, status, leave_type. " +
       "Fields: name, employee, employee_name, leave_type, from_date, to_date, status.",
@@ -203,7 +204,7 @@ export const hrTools: ErpNextTool[] = [
         doctype: "Leave Application",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -284,7 +285,7 @@ export const hrTools: ErpNextTool[] = [
   {
     name: "erpnext_salary_slip_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Salary Slips. Filterable by employee, status, date range. " +
       "Fields: name, employee, employee_name, posting_date, start_date, end_date, gross_pay, net_pay, status.",
@@ -340,7 +341,7 @@ export const hrTools: ErpNextTool[] = [
         doctype: "Salary Slip",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -372,7 +373,7 @@ export const hrTools: ErpNextTool[] = [
   {
     name: "erpnext_payroll_entry_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Payroll Entries. Filterable by company, status. " +
       "Fields: name, company, posting_date, payroll_frequency, status.",
@@ -410,7 +411,7 @@ export const hrTools: ErpNextTool[] = [
         doctype: "Payroll Entry",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -420,7 +421,7 @@ export const hrTools: ErpNextTool[] = [
   {
     name: "erpnext_expense_claim_list",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "List Expense Claims. Filterable by employee, status, approval_status. " +
       "Fields: name, employee, employee_name, posting_date, total_claimed_amount, status, approval_status.",
@@ -474,7 +475,7 @@ export const hrTools: ErpNextTool[] = [
         doctype: "Expense Claim",
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },
@@ -541,7 +542,7 @@ export const hrTools: ErpNextTool[] = [
   {
     name: "erpnext_leave_balance",
     annotations: { readOnlyHint: true },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: DOCLIST_META,
     description:
       "Get leave balance (allocations) for an employee. " +
       "Returns Leave Allocations with leave_type, total_leaves_allocated, new_leaves_allocated.",
@@ -575,7 +576,7 @@ export const hrTools: ErpNextTool[] = [
         employee: input.employee as string,
         count: docs.length,
         data: docs,
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: DOCLIST_META,
       };
     },
   },

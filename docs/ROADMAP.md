@@ -1,11 +1,11 @@
 # ERPNext MCP Viewers — Roadmap
 
-## Current State (2026-03-06)
+## Current State (2026-03-23)
 
 ### Viewers
 | Viewer | Description | Status |
 |--------|------------|--------|
-| doclist-viewer | Generic DocType table (sort, filter, pagination, CSV export) | Done |
+| doclist-viewer | Generic DocType table — sort, filter, pagination, CSV, inline detail, row actions, sendMessage cross-viewer, chip filters | Done (v2) |
 | invoice-viewer | Sales/Purchase Invoice detail view | Done |
 | stock-viewer | Stock balance table with color-coded qty badges | Done |
 | chart-viewer | Universal chart renderer (12 types via Recharts) | Done |
@@ -112,11 +112,77 @@ The MCP App exists because the user is already inside a host conversation. Keepi
 - **Column focus mode**: On narrow viewports (≤920px), the board switches to single-column tab navigation. Drag-and-drop is disabled in this mode; cards use button-based moves exclusively with colored destination dots matching target column colors.
 - **Card design**: Accent strip (column color) at top, tone-aware badges (error=red, warning=amber, success=green), vertical metric layout with micro-caps labels, integrated action footer with column-colored destination indicators.
 
+### TIER 1b — Cross-Viewer Navigation & Inline Actions (einvoice pattern)
+
+Pattern ported from `mcp-einvoice`: server-driven `_rowAction` + `InlineDetailPanel` + `sendMessage` for cross-viewer drill-down. Shared atoms (`ActionButton`, `InfoField`) in `~/shared/`.
+
+#### doclist-viewer — DONE
+
+- [x] `_rowAction` support: server injects `{ toolName, idField, argName }` in list payloads
+- [x] Row click → `callServerTool` → `InlineDetailPanel` expands under the row
+- [x] Detail panel shows flattened doc fields + Submit/Cancel actions with confirm pattern
+- [x] `sendMessage` navigation buttons (server-driven via `_sendMessageHints`)
+- [x] Default "Full details" `sendMessage` fallback when no hints provided
+- [x] Chip filters for status/category columns (auto-detected, 2-8 distinct values)
+- [x] Auto-injection of `_rowAction` + `_sendMessageHints` in `ui-refresh.ts` for all known DocTypes
+- [x] Modular architecture: atoms/molecules in `components/`, shared in `~/shared/`
+
+#### invoice-viewer — DONE
+
+- [x] Clic sur item → ItemDetailPanel inline: fiche article + stock dispo (`erpnext_item_get` + `erpnext_stock_balance`)
+- [x] `sendMessage` vers stock-viewer et item details pour drill-down
+- [x] InvoiceActions: Submit, Cancel avec confirm pattern
+- [x] `sendMessage` vers Payment Entry liés
+- [x] Bouton "Customer/Supplier invoices" → `sendMessage` vers doclist-viewer
+- [x] Architecture modulaire: StatusBadge, ItemDetailPanel, InvoiceActions
+
+#### stock-viewer — DONE
+
+- [x] Clic sur ligne → StockDetailPanel inline: item info, mouvements recents (`erpnext_stock_entry_list`)
+- [x] `sendMessage` vers chart-viewer (stock chart), item details, stock entries
+- [x] Architecture modulaire: StockDetailPanel component
+- [ ] Bouton "Replenish" → `callServerTool("erpnext_stock_entry_create")` pour Material Receipt (future)
+
+#### chart-viewer — DONE
+
+- [x] Clic sur barre (vertical/horizontal/stacked) → `sendMessage` avec le label du data point
+- [x] Clic sur segment pie/donut → `sendMessage` avec le nom de la tranche
+- [x] `_drillDown` template auto-injecté par `ui-refresh.ts` pour 7 chart tools (sales, stock, revenue, orders, AR aging, gross profit, P&L)
+- [x] Template `{label}` remplacé dynamiquement par le label cliqué
+- [x] Cursor pointer + host capability check
+
+#### kanban-viewer — DONE
+
+- [x] Edit inline dans le detail modal (priorité, progression, due date, assignee) — existant
+- [x] callServerTool pour moves, save, refresh — existant
+- [x] `handleNavigate` via `sendMessage` remplace l'ancien `handleAction` fire-and-forget
+- [x] Boutons Task: "Timesheets", Opportunity: "Quotations", Issue: "Related tasks"
+- [x] Bouton "Open in doclist" pour tous les doctypes
+- [x] Utilise `ActionButton` partagé
+
+#### kpi-viewer — DONE
+
+- [x] Clic sur le grand chiffre → `sendMessage` drill-down (exceptions: overdue invoices, unpaid, etc.)
+- [x] Clic sur sparkline → `sendMessage` vers chart-viewer pour tendance détaillée
+- [x] `_drillDown` et `_trendDrillDown` auto-injectés par `ui-refresh.ts` pour les 5 KPI tools
+- [x] Hover feedback visuel sur le big number et la sparkline
+
+#### funnel-viewer — DONE
+
+- [x] Clic sur une étape → `sendMessage` vers la liste correspondante (leads, opportunities, quotations, orders)
+- [x] `_drillDown` par stage supporté côté payload serveur
+- [x] Default drill-down mapping par label (Lead→leads, Opportunity→opportunities, etc.)
+- [x] Hover feedback visuel sur les barres
+- [ ] Bouton "Open kanban" → `sendMessage` vers kanban-viewer (future)
+- [ ] Clic sur conversion badge → deals perdus/bloqués à cette transition (future)
+
 ### TIER 2 — New Viewers & Infrastructure (P1)
 
 | Item | Type | Description |
 |------|------|-------------|
 | **HTTP Auth (OAuth/JWT)** | Infrastructure | `@casys/mcp-server` has a full auth pipeline (Bearer/JWT/JWKS, presets for Auth0/Google/GitHub, per-tool scope enforcement, RFC 9728). Needs validation with mcp-erpnext: wire auth config, test scope-per-tool (e.g. `erpnext:read` vs `erpnext:write`), document setup. Prerequisite for multi-user deployment. |
+| Customer 360 viewer | New viewer | All docs for one customer in one view (orders, invoices, payments, contacts) — uses `sendMessage` heavily |
+| Employee Card viewer | New viewer | Fiche employee with attendance, leaves, salary, expenses |
 | BOM Cost Breakdown | chart-viewer (treemap) | Bill of Materials cost hierarchy |
 | Bank Reconciliation Status | New viewer | Match bank transactions to GL entries |
 | HR Overview | kpi-viewer + chart-viewer | Headcount, attendance, leave balance |
@@ -127,7 +193,6 @@ The MCP App exists because the user is already inside a host conversation. Keepi
 
 - Manufacturing dashboard (Work Order status, machine utilization)
 - Multi-currency reconciliation viewer
-- Customer 360 viewer (all docs for one customer in one view)
 - Approval queue viewer (pending approvals across doctypes)
 - Webhook event log viewer
 
@@ -137,8 +202,10 @@ The MCP App exists because the user is already inside a host conversation. Keepi
 
 - Each KPI is a **separate tool call** — NO aggregated dashboard tool
 - PML Feed composes multiple viewer iframes -> user gets a dashboard
-- New viewers follow the pattern: `lib/erpnext/src/ui/{name}/src/{Name}.tsx`
-- Shared: `~/shared/theme.ts` (colors, fonts, styles), `~/shared/ErpNextBrand.tsx`
+- New viewers follow the pattern: `src/ui/{name}/src/{Name}.tsx`
+- Shared atoms: `~/shared/ActionButton.tsx`, `~/shared/InfoField.tsx`, `~/shared/theme.ts`, `~/shared/ErpNextBrand.tsx`
+- Viewer-local molecules in `src/ui/{name}/src/components/` (e.g. `InlineDetailPanel`, `ChipFilters`, `StatusCell`)
+- Server-driven row actions: `_rowAction` and `_sendMessageHints` auto-injected by `ui-refresh.ts` for all known DocTypes
 - MCP App protocol: `new App()`, `app.ontoolresult`, parse JSON from `content[0].text`
 - `animationDuration={0}` on all Recharts components (no fade-in)
 - Register viewer name in `lib/erpnext/server.ts` UI_VIEWERS array

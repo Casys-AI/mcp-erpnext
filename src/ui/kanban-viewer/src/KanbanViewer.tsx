@@ -27,6 +27,7 @@ import {
   shouldUseKanbanColumnFocus,
   clampKanbanFocusIndex,
 } from "~/shared/kanban/layout";
+import { extractToolResultText } from "~/shared/refresh";
 import { CardDetailModal } from "./DetailModal";
 
 const app = new App({ name: "Kanban Viewer", version: "1.0.0" });
@@ -47,9 +48,8 @@ function hiddenLiveRegionStyle(): CSSProperties {
   };
 }
 
-function extractTextContent(result: { content?: Array<{ type: string; text?: string }> }): string | null {
-  return result.content?.find((item) => item.type === "text")?.text ?? null;
-}
+// Use shared extractToolResultText which prefers structuredContent over content[0].text
+const extractTextContent = extractToolResultText;
 
 /** Unwrap Frappe-style `{ data: { ... } }` envelope, falling back to the raw object. */
 function unwrapDoc(payload: Record<string, unknown>): Record<string, unknown> {

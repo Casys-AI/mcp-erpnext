@@ -76,7 +76,7 @@ async function main() {
   // Build MCP server
   const server = new ConcurrentMCPServer({
     name: "mcp-erpnext",
-    version: "2.1.1",
+    version: "2.2.0",
     maxConcurrent: 10,
     backpressureStrategy: "queue",
     validateSchema: true,

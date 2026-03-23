@@ -22,7 +22,7 @@ import {
 } from "~/shared/refresh";
 
 import type { DoclistData, SortDir } from "./types";
-import { isStatusField, formatCell, exportCsv, getNestedValue, HIDDEN_FIELDS, FILTERABLE_COLUMNS } from "./helpers";
+import { isStatusField, formatCell, exportCsv, getNestedValue, HIDDEN_FIELDS, FILTERABLE_COLUMNS, selectVisibleColumns } from "./helpers";
 import { StatusCell } from "./components/StatusCell";
 import { LoadingSkeleton } from "./components/LoadingSkeleton";
 import { DoclistEmptyState } from "./components/EmptyState";
@@ -255,7 +255,7 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
     return candidates;
   }, [rows]);
 
-  // ── Visible columns ──────────────────────────────────────
+  // ── Visible columns (capped at MAX_VISIBLE_COLUMNS) ─────
 
   const columns = useMemo(() => {
     if (rows.length === 0) return [];
@@ -265,13 +265,7 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
         if (!HIDDEN_FIELDS.has(key) && !key.startsWith("_")) allKeys.add(key);
       }
     }
-    return Array.from(allKeys).sort((a, b) => {
-      if (a === "name") return -1;
-      if (b === "name") return 1;
-      if (isStatusField(a)) return -1;
-      if (isStatusField(b)) return 1;
-      return a.localeCompare(b);
-    });
+    return selectVisibleColumns(Array.from(allKeys));
   }, [rows]);
 
   // ── Filter + sort + paginate ─────────────────────────────

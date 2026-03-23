@@ -9,6 +9,21 @@
 
 import type { FrappeClient } from "../api/frappe-client.ts";
 
+/**
+ * Behavioural hints for model clients (mirrors MCP SDK ToolAnnotations).
+ * Passed through in tools/list so hosts can adapt their UI accordingly.
+ */
+export interface ToolAnnotations {
+  /** If true, tool has no side-effects and is safe to call speculatively */
+  readOnlyHint?: boolean;
+  /** If true, executing may produce irreversible effects */
+  destructiveHint?: boolean;
+  /** If true, repeated calls with same args produce same result */
+  idempotentHint?: boolean;
+  /** If true, tool may interact with entities outside the MCP system */
+  openWorldHint?: boolean;
+}
+
 /** Available tool categories */
 export type ErpNextToolCategory =
   | "sales"
@@ -55,8 +70,10 @@ export interface ErpNextTool {
   category: ErpNextToolCategory;
   /** JSON Schema for tool input parameters */
   inputSchema: JSONSchema;
+  /** Behavioural hints for model clients */
+  annotations?: ToolAnnotations;
   /** MCP Apps UI metadata (optional) */
-  _meta?: { ui: { resourceUri: string } };
+  _meta?: { ui: { resourceUri: string; [key: string]: unknown }; [key: string]: unknown };
   /** Execute the tool and return a JSON-serializable result */
   handler: (
     input: Record<string, unknown>,
@@ -69,7 +86,8 @@ export interface MCPToolWireFormat {
   name: string;
   description: string;
   inputSchema: JSONSchema;
-  _meta?: { ui: { resourceUri: string } };
+  annotations?: ToolAnnotations;
+  _meta?: { ui: { resourceUri: string; [key: string]: unknown }; [key: string]: unknown };
 }
 
 /** Convert an ErpNextTool to MCP wire format */
@@ -79,6 +97,7 @@ export function toMCPWireFormat(tool: ErpNextTool): MCPToolWireFormat {
     description: tool.description,
     inputSchema: tool.inputSchema,
   };
+  if (tool.annotations) wire.annotations = tool.annotations;
   if (tool._meta) wire._meta = tool._meta;
   return wire;
 }

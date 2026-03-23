@@ -33,6 +33,7 @@
 
 import { ConcurrentMCPServer, launchInspector, MCP_APP_MIME_TYPE } from "@casys/mcp-server";
 import { ErpNextToolsClient } from "./src/client.ts";
+import { FrappeAPIError } from "./src/api/frappe-client.ts";
 import { UI_VIEWERS } from "./src/ui/viewers.ts";
 import { resolveViewerDistPath } from "./src/ui/viewer-resource-paths.ts";
 import {
@@ -80,6 +81,11 @@ async function main() {
     backpressureStrategy: "queue",
     validateSchema: true,
     logger: (msg: string) => console.error(`[mcp-erpnext] ${msg}`),
+    toolErrorMapper: (error: unknown) => {
+      if (error instanceof FrappeAPIError) return error.message;
+      if (error instanceof Error) return error.message;
+      return String(error);
+    },
   });
 
   // Register all tools with their handlers

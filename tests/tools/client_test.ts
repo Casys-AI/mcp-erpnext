@@ -1,35 +1,28 @@
 import { assertEquals } from "jsr:@std/assert";
 import { ErpNextToolsClient } from "../../src/client.ts";
-import type { FrappeClient } from "../../src/api/frappe-client.ts";
 
-function makeMockClient(overrides = {}): FrappeClient {
-  return {
-    list: async () => [],
-    get: async () => ({}),
-    create: async () => ({}),
-    update: async () => ({}),
-    delete: async () => ({}),
-    callMethod: async () => ({}),
-    ...overrides,
-  } as unknown as FrappeClient;
-}
+// Note: Error handling previously tested here (isError wrapping) has been moved
+// to the server layer via toolErrorMapper in server.ts. Handlers now throw
+// naturally and the server converts errors to isError results.
 
-Deno.test("buildHandlersMap - returns isError result with message on tool failure", async () => {
-  // Temporarily override getFrappeClient to return our mock
+Deno.test("buildHandlersMap - returns a handler for each registered tool", () => {
   const client = new ErpNextToolsClient();
   const handlers = client.buildHandlersMap();
+  const tools = client.listTools();
 
-  // Find a tool that will throw — use a tool that requires specific input
-  const docCreate = handlers.get("erpnext_doc_create");
-  if (!docCreate) return; // skip if not available
+  assertEquals(handlers.size, tools.length);
+  for (const tool of tools) {
+    assertEquals(handlers.has(tool.name), true);
+  }
+});
 
-  // Call without required args — should return isError with message, not throw
-  const result = await docCreate({}) as Record<string, unknown>;
+Deno.test("toMCPFormat - passes through annotations when defined", () => {
+  const client = new ErpNextToolsClient();
+  const mcpTools = client.toMCPFormat();
 
-  assertEquals(result.isError, true);
-  const content = result.content as Array<Record<string, unknown>>;
-  assertEquals(content[0].type, "text");
-  // The error message should contain something useful, not "Tool execution failed"
-  assertEquals(typeof content[0].text, "string");
-  assertEquals((content[0].text as string).length > 0, true);
+  // All tools with annotations should have them in wire format
+  const toolsWithAnnotations = client.listTools().filter((t) => t.annotations);
+  const wireToolsWithAnnotations = mcpTools.filter((t) => t.annotations);
+
+  assertEquals(wireToolsWithAnnotations.length, toolsWithAnnotations.length);
 });

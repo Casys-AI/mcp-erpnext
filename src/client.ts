@@ -47,6 +47,14 @@ export interface JSONSchema {
   [key: string]: unknown;
 }
 
+/** Behavioural hints for model clients (mirrors ToolAnnotations from @casys/mcp-server). */
+export interface ToolAnnotations {
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
+
 /** MCP protocol wire format for tool registration. Sent to MCP clients during `tools/list`. */
 export interface MCPToolWireFormat {
   /** Unique tool name, e.g. "erpnext_list_customers" */
@@ -55,8 +63,10 @@ export interface MCPToolWireFormat {
   description: string;
   /** JSON Schema defining the tool's input parameters */
   inputSchema: JSONSchema;
+  /** Behavioural hints for model clients */
+  annotations?: ToolAnnotations;
   /** Optional MCP metadata for UI rendering (e.g. iframe viewer resource URI) */
-  _meta?: { ui: { resourceUri: string } };
+  _meta?: { ui: { resourceUri: string; [key: string]: unknown }; [key: string]: unknown };
 }
 
 // ============================================================================
@@ -97,6 +107,7 @@ export class ErpNextToolsClient {
         description: t.description,
         inputSchema: t.inputSchema as JSONSchema,
       };
+      if (t.annotations) wire.annotations = t.annotations;
       if (t._meta) wire._meta = t._meta;
       return wire;
     });
@@ -105,22 +116,15 @@ export class ErpNextToolsClient {
   /**
    * Build a handlers Map for ConcurrentMCPServer.registerTools().
    * Each handler wraps the tool to inject the FrappeClient context.
+   * Errors are handled by the server's toolErrorMapper (configured in server.ts).
    */
   buildHandlersMap(): Map<string, (args: Record<string, unknown>) => Promise<unknown>> {
     const handlers = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>();
     for (const tool of this.tools) {
       handlers.set(tool.name, async (args: Record<string, unknown>) => {
-        try {
-          const client = getFrappeClient();
-          const result = await tool.handler(args, { client });
-          return withUiRefreshRequest(result, tool.name, args);
-        } catch (error: unknown) {
-          const msg = error instanceof Error ? error.message : String(error);
-          return {
-            content: [{ type: "text", text: msg }],
-            isError: true,
-          };
-        }
+        const client = getFrappeClient();
+        const result = await tool.handler(args, { client });
+        return withUiRefreshRequest(result, tool.name, args);
       });
     }
     return handlers;

@@ -16,11 +16,20 @@
  * @module lib/erpnext/src/runtime
  */
 
+export type HttpHandler = (req: Request) => Response | Promise<Response>;
+
+export interface ServeHttpOptions {
+  port: number;
+  hostname: string;
+  onListen?: (info: { hostname: string; port: number }) => void;
+}
+
 type RuntimePort = {
   env(key: string): string | undefined;
   readTextFile(path: string): Promise<string>;
   statSync(path: string): boolean;
   readDirSync(path: string): string[];
+  serveHttp(handler: HttpHandler, opts: ServeHttpOptions): Promise<void>;
   getArgs(): string[];
   exit(code: number): never;
   onSignal(signal: string, handler: () => void): void;
@@ -41,6 +50,7 @@ export const env = impl.env;
 export const readTextFile = impl.readTextFile;
 export const statSync = impl.statSync;
 export const readDirSync = impl.readDirSync;
+export const serveHttp = impl.serveHttp;
 export const getArgs = impl.getArgs;
 export const exit = impl.exit;
 export const onSignal = impl.onSignal;

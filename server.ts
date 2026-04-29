@@ -41,8 +41,13 @@ import {
   getArgs,
   onSignal,
   readTextFile,
+  serveHttp,
   statSync,
 } from "./src/runtime.ts";
+import {
+  createAuthProxyApp,
+  loadAuthConfig,
+} from "./src/auth/middleware.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
 
@@ -144,21 +149,74 @@ async function main() {
 
   // Start server
   if (httpFlag) {
-    await server.startHttp({
-      port: httpPort,
-      hostname,
-      cors: true,
-      onListen: (info: { hostname: string; port: number }) => {
-        console.error(
-          `[mcp-erpnext] HTTP server listening on http://${info.hostname}:${info.port}`,
-        );
-      },
-    });
+    const authConfig = loadAuthConfig();
 
     onSignal("SIGINT", () => {
       console.error("[mcp-erpnext] Shutting down...");
       exit(0);
     });
+
+    if (!authConfig) {
+      // No auth configured — warn and fall back to unprotected HTTP.
+      // Set MCP_AUTH_TOKEN, MCP_AUTH_TOKENS, or MCP_OAUTH_JWKS_URL to enable auth.
+      console.error(
+        "[mcp-erpnext] WARNING: No auth configured for HTTP mode. " +
+          "Set MCP_AUTH_TOKEN, MCP_AUTH_TOKENS, or MCP_OAUTH_JWKS_URL to restrict access.",
+      );
+      await server.startHttp({
+        port: httpPort,
+        hostname,
+        cors: true,
+        onListen: (info: { hostname: string; port: number }) => {
+          console.error(
+            `[mcp-erpnext] HTTP server listening (unauthenticated) on http://${info.hostname}:${info.port}`,
+          );
+        },
+      });
+    } else {
+      // Auth enabled — run ConcurrentMCPServer on a loopback-only port,
+      // expose a Hono auth proxy on the public port.
+      const internalPort = httpPort + 1;
+
+      // Start internal MCP server (loopback only, not awaited — runs in background)
+      server.startHttp({
+        port: internalPort,
+        hostname: "127.0.0.1",
+        cors: false,
+        onListen: () => {
+          console.error(
+            `[mcp-erpnext] Internal MCP server on 127.0.0.1:${internalPort} (loopback only)`,
+          );
+        },
+      }).catch((err: unknown) => {
+        console.error("[mcp-erpnext] Internal MCP server error:", err);
+        exit(1);
+      });
+
+      // Log active auth methods
+      const authMethods: string[] = [];
+      if (authConfig.tokens.size > 0) {
+        authMethods.push(`static tokens (${authConfig.tokens.size})`);
+      }
+      if (authConfig.jwksUrl) {
+        authMethods.push(`OAuth JWT JWKS (${authConfig.jwksUrl})`);
+      }
+
+      // Start auth proxy on the public port
+      const app = createAuthProxyApp(authConfig, internalPort);
+      await serveHttp(app.fetch.bind(app), {
+        port: httpPort,
+        hostname,
+        onListen: (info: { hostname: string; port: number }) => {
+          console.error(
+            `[mcp-erpnext] HTTP server listening on http://${info.hostname}:${info.port}`,
+          );
+          console.error(
+            `[mcp-erpnext] Auth: ${authMethods.join(", ")}`,
+          );
+        },
+      });
+    }
   } else {
     await server.start();
     console.error("[mcp-erpnext] stdio mode ready");

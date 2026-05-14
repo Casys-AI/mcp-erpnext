@@ -10,6 +10,58 @@ import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META, INVOICE_META } from "./viewer-meta.ts";
 
+interface LineItemInput {
+  item_code: string;
+  qty: number;
+  rate: number;
+  warehouse?: string;
+}
+
+interface MapLineItemsOptions {
+  /** Tool name for error messages, e.g. "erpnext_sales_order_create". */
+  toolName: string;
+  /** Copied onto every line item (Sales Order semantics). Omit otherwise. */
+  defaultDeliveryDate?: string;
+  /** Pass per-line warehouse through. Default true; set false for Quotation. */
+  includeWarehouse?: boolean;
+}
+
+/**
+ * Validate and shape the `items` array shared across SO / SI / Quotation
+ * create tools. Centralizes the "items must be a non-empty array" and
+ * "each item needs item_code, qty, rate" checks plus the optional
+ * warehouse / delivery_date passthrough.
+ */
+function mapLineItems(
+  items: unknown,
+  options: MapLineItemsOptions,
+): Array<Record<string, unknown>> {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error(
+      `[${options.toolName}] 'items' must be a non-empty array`,
+    );
+  }
+  return (items as LineItemInput[]).map((item) => {
+    if (!item.item_code || item.qty == null || item.rate == null) {
+      throw new Error(
+        `[${options.toolName}] Each item must have item_code, qty, and rate`,
+      );
+    }
+    const mapped: Record<string, unknown> = {
+      item_code: item.item_code,
+      qty: item.qty,
+      rate: item.rate,
+    };
+    if (options.defaultDeliveryDate !== undefined) {
+      mapped.delivery_date = options.defaultDeliveryDate;
+    }
+    if (options.includeWarehouse !== false && item.warehouse) {
+      mapped.warehouse = item.warehouse;
+    }
+    return mapped;
+  });
+}
+
 export const salesTools: ErpNextTool[] = [
   // ── Customers ─────────────────────────────────────────────────────────────
 
@@ -342,32 +394,10 @@ export const salesTools: ErpNextTool[] = [
       if (!input.customer) {
         throw new Error("[erpnext_sales_order_create] 'customer' is required");
       }
-      if (
-        !input.items || !Array.isArray(input.items) || input.items.length === 0
-      ) {
-        throw new Error(
-          "[erpnext_sales_order_create] 'items' must be a non-empty array",
-        );
-      }
 
-      const items = (
-        input.items as Array<
-          { item_code: string; qty: number; rate: number; warehouse?: string }
-        >
-      ).map((item) => {
-        if (!item.item_code || item.qty == null || item.rate == null) {
-          throw new Error(
-            "[erpnext_sales_order_create] Each item must have item_code, qty, and rate",
-          );
-        }
-        const mapped: Record<string, unknown> = {
-          item_code: item.item_code,
-          qty: item.qty,
-          rate: item.rate,
-          delivery_date: (input.delivery_date as string) ?? undefined,
-        };
-        if (item.warehouse) mapped.warehouse = item.warehouse;
-        return mapped;
+      const items = mapLineItems(input.items, {
+        toolName: "erpnext_sales_order_create",
+        defaultDeliveryDate: input.delivery_date as string | undefined,
       });
 
       const data: Record<string, unknown> = {
@@ -688,31 +718,9 @@ export const salesTools: ErpNextTool[] = [
           "[erpnext_sales_invoice_create] 'customer' is required",
         );
       }
-      if (
-        !input.items || !Array.isArray(input.items) || input.items.length === 0
-      ) {
-        throw new Error(
-          "[erpnext_sales_invoice_create] 'items' must be a non-empty array",
-        );
-      }
 
-      const items = (
-        input.items as Array<
-          { item_code: string; qty: number; rate: number; warehouse?: string }
-        >
-      ).map((item) => {
-        if (!item.item_code || item.qty == null || item.rate == null) {
-          throw new Error(
-            "[erpnext_sales_invoice_create] Each item must have item_code, qty, and rate",
-          );
-        }
-        const mapped: Record<string, unknown> = {
-          item_code: item.item_code,
-          qty: item.qty,
-          rate: item.rate,
-        };
-        if (item.warehouse) mapped.warehouse = item.warehouse;
-        return mapped;
+      const items = mapLineItems(input.items, {
+        toolName: "erpnext_sales_invoice_create",
       });
 
       const data: Record<string, unknown> = {
@@ -921,30 +929,10 @@ export const salesTools: ErpNextTool[] = [
       if (!input.party_name) {
         throw new Error("[erpnext_quotation_create] 'party_name' is required");
       }
-      if (
-        !input.items || !Array.isArray(input.items) || input.items.length === 0
-      ) {
-        throw new Error(
-          "[erpnext_quotation_create] 'items' must be a non-empty array",
-        );
-      }
-
-      const items =
-        (input.items as Array<{ item_code: string; qty: number; rate: number }>)
-          .map(
-            (item) => {
-              if (!item.item_code || item.qty == null || item.rate == null) {
-                throw new Error(
-                  "[erpnext_quotation_create] Each item must have item_code, qty, and rate",
-                );
-              }
-              return {
-                item_code: item.item_code,
-                qty: item.qty,
-                rate: item.rate,
-              };
-            },
-          );
+      const items = mapLineItems(input.items, {
+        toolName: "erpnext_quotation_create",
+        includeWarehouse: false,
+      });
 
       const data: Record<string, unknown> = {
         quotation_to: input.quotation_to as string,

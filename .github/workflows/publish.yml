@@ -24,6 +24,14 @@ jobs:
           npm ci
           node build-all.mjs
 
+      - name: Guard against Finder duplicate artifacts in dist
+        run: |
+          if find src/ui/dist -type d -name '* 2' | grep -q .; then
+            echo "::error::Finder duplicate artifacts found in src/ui/dist — refusing to publish"
+            find src/ui/dist -type d -name '* 2'
+            exit 1
+          fi
+
       - name: Publish to JSR
         run: npx jsr publish --allow-dirty
 
@@ -46,6 +54,14 @@ jobs:
           cd src/ui
           npm ci
           node build-all.mjs
+
+      - name: Guard against Finder duplicate artifacts in dist
+        run: |
+          if find src/ui/dist -type d -name '* 2' | grep -q .; then
+            echo "::error::Finder duplicate artifacts found in src/ui/dist — refusing to publish"
+            find src/ui/dist -type d -name '* 2'
+            exit 1
+          fi
 
       - name: Build Node.js bundle
         run: |

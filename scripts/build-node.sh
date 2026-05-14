@@ -19,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist-node"
 VERSION="$(grep '"version"' "$ROOT_DIR/deno.json" | sed 's/.*"version": *"\([^"]*\)".*/\1/')"
+MCP_SERVER_VERSION="$(grep '"@casys/mcp-server"' "$ROOT_DIR/deno.json" | sed 's/.*"@casys\/mcp-server": *"jsr:@casys\/mcp-server@\([^"]*\)".*/\1/')"
 
 echo "[build-node] Building Node.js distribution for @casys/mcp-erpnext..."
 
@@ -45,9 +46,8 @@ if [ -f "$DIST_DIR/src/runtime.node.ts" ]; then
 fi
 
 # Strip .ts extensions from relative imports → .js (Node ESM)
-find "$DIST_DIR" -name "*.ts" -exec sed -i \
-  -e 's/from "\(\.[^"]*\)\.ts"/from "\1.js"/g' \
-  -e 's/import("\(\.[^"]*\)\.ts")/import("\1.js")/g' \
+find "$DIST_DIR" -name "*.ts" -exec perl -pi -e \
+  's/from "(\.[^"]*)\.ts"/from "$1.js"/g; s/import\("(\.[^"]*)\.ts"\)/import("$1.js")/g' \
   {} +
 
 # Generate package.json for the intermediate Node workspace
@@ -83,7 +83,7 @@ cp "$ROOT_DIR/README.md" "$DIST_DIR/README.md" 2>/dev/null || true
 pushd "$DIST_DIR" >/dev/null
 npm install --no-fund --no-audit
 # Install JSR packages via jsr shim (resolves transitive JSR deps like @casys/mcp-compose)
-npx jsr add @casys/mcp-server@^0.12
+npx jsr add "@casys/mcp-server@$MCP_SERVER_VERSION"
 ./node_modules/.bin/esbuild server.ts \
   --bundle \
   --platform=node \
@@ -92,7 +92,10 @@ npx jsr add @casys/mcp-server@^0.12
   --outfile=bin/mcp-erpnext.mjs \
   --external:node:* \
   --banner:js='import { createRequire } from "node:module"; const require = createRequire(import.meta.url);'
-sed -i '1s/^/#!\/usr\/bin\/env node\n/' bin/mcp-erpnext.mjs
+tmp_shebang="$(mktemp)"
+printf '#!/usr/bin/env node\n' > "$tmp_shebang"
+cat bin/mcp-erpnext.mjs >> "$tmp_shebang"
+mv "$tmp_shebang" bin/mcp-erpnext.mjs
 chmod +x bin/mcp-erpnext.mjs
 cp -r src/ui/dist bin/ui-dist
 cp README.md bin/README.md 2>/dev/null || cp ../README.md bin/README.md 2>/dev/null || true

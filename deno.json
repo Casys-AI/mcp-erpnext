@@ -7,7 +7,10 @@
     "compile": "deno compile -A --output mcp-erpnext server.ts",
     "test": "deno test --allow-all src/",
     "ui:build": "cd src/ui && node build-all.mjs",
-    "inspect": "deno run --allow-all server.ts --inspect"
+    "inspect": "deno run --allow-all server.ts --inspect",
+    "check": "deno check mod.ts server.ts",
+    "pre-commit": "deno fmt --check && deno lint && deno task check",
+    "hooks:install": "bash scripts/install-hooks.sh"
   },
   "exports": {
     ".": "./mod.ts",
@@ -37,9 +40,11 @@
   "fmt": {
     "exclude": ["src/ui/node_modules/"]
   },
+  "test": {
+    "exclude": ["src/ui/node_modules/", "src/ui/dist/"]
+  },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.12",
-    "ajv": "npm:ajv@^8.17.1",
+    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.17",
     "hono": "npm:hono@^4",
     "hono/cors": "npm:hono@^4/cors",
     "jose": "npm:jose@^6.0.0",

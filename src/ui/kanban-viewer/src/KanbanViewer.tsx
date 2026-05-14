@@ -1460,6 +1460,10 @@ export function KanbanViewer() {
     name: string,
     data: Record<string, string>,
   ) {
+    if (!app.getHostCapabilities()?.serverTools) {
+      throw new Error("Host does not support proxied server tool calls");
+    }
+
     // Coerce types: if original value was a number, convert back
     const coerced: Record<string, unknown> = {};
     const originalDetail = state.detail.cardDetail;

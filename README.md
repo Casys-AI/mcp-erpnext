@@ -245,6 +245,7 @@ src/
   client.ts           # ErpNextToolsClient
   runtime.ts          # Deno runtime adapter
   runtime.node.ts     # Node.js runtime adapter
+  *_test.ts           # Tests are colocated with source files
   ui/
     shared/           # ActionButton, InfoField, theme, branding, refresh
     doclist-viewer/   # Generic document list (inline detail, chip filters)
@@ -255,10 +256,6 @@ src/
     kpi-viewer/       # KPI card (clickable number + sparkline)
     funnel-viewer/    # Sales funnel (trapezoid stages, click-through)
     viewers.ts        # Viewer registry
-tests/
-  tools/              # Tool + ui-refresh + client tests
-  kanban/             # Kanban adapter tests
-  ui/                 # UI state + refresh tests
 docs/
   ROADMAP.md          # Feature roadmap
   coverage.md         # Test coverage matrix
@@ -272,11 +269,11 @@ zero runtime dependencies. UI viewers are embedded.
 ## Development
 
 ```bash
-# Run tests (147 tests)
-deno test --allow-all tests/
+# Run tests
+deno test --allow-all src/
 
 # Type check
-deno check mod.ts server.ts
+deno task check
 
 # Start HTTP server (dev)
 deno task serve
@@ -287,9 +284,27 @@ deno task inspect
 # Build UI viewers
 deno task ui:build
 
+# Full local release preflight (no publish)
+deno task release:check
+
 # Dev a specific viewer with HMR
 cd src/ui && npm run dev:kanban
 ```
+
+## Release Flow
+
+Release is intentionally GitHub-driven:
+
+1. Run `deno task release:check` locally before publishing work.
+2. Push or merge to `main`.
+3. Release Please opens or updates the release PR with the semver bump,
+   `CHANGELOG.md`, `deno.json`, and `server.ts`.
+4. Merge the Release Please PR.
+5. `.github/workflows/publish.yml` publishes the released version to JSR and
+   npm.
+
+Do not bump versions manually unless bypassing Release Please for an emergency
+release.
 
 ## License
 

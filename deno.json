@@ -10,6 +10,7 @@
     "inspect": "deno run --allow-all server.ts --inspect",
     "check": "deno check mod.ts server.ts",
     "pre-commit": "deno fmt --check && deno lint && deno task check",
+    "release:check": "bash scripts/release-check.sh",
     "hooks:install": "bash scripts/install-hooks.sh"
   },
   "exports": {

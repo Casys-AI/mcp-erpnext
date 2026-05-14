@@ -72,6 +72,9 @@ deno task ui:build                 # or: cd src/ui && npm ci && node build-all.m
 # Build Node.js npm bundle
 deno task ui:build && ./scripts/build-node.sh
 
+# Full local release preflight (does not publish)
+deno task release:check
+
 # Dev a specific UI viewer with HMR
 cd src/ui && npm run dev:kanban    # also: dev:invoice, dev:stock, dev:doclist
 ```
@@ -259,14 +262,23 @@ Utility and UI-shared modules (e.g. `src/ui/shared/refresh_test.ts`,
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/publish.yml`) triggers on push to
-`main`:
+Two GitHub Actions workflows matter:
 
-1. **publish-jsr**: builds UI → `npx jsr publish --allow-dirty`
-2. **publish-npm**: builds UI → `scripts/build-node.sh` →
-   `npm publish --access public` (gracefully skips if version already published)
+1. `.github/workflows/test.yml` runs on pull requests and pushes to `main`:
+   `deno fmt --check`, `deno lint`, `deno task check`, UI build, and
+   `deno test --allow-all src/`.
+2. `.github/workflows/publish.yml` runs on push to `main`:
+   - **publish-jsr**: builds UI → `npx jsr publish --allow-dirty`
+   - **publish-npm**: builds UI → `scripts/build-node.sh` →
+     `npm publish --access public` (skips only if the version is already
+     published)
 
-No test step in CI — tests must be run locally before pushing.
+Release Please (`.github/workflows/release-please.yml`) also runs on push to
+`main`. It opens or updates the release PR that bumps `CHANGELOG.md`,
+`deno.json`, and `server.ts`.
+
+Run `deno task release:check` locally before merging release-sensitive work. It
+performs the local preflight without publishing anything.
 
 ## Versioning
 
@@ -286,9 +298,10 @@ Version locations (both must stay in sync):
 
 Rules:
 
-- Do not bump version during work-in-progress. Bump once at the end, just before
-  the final push.
-- Do not change version numbers without explicit approval.
+- Prefer Release Please for normal version bumps. Do not manually edit version
+  numbers during feature work.
+- Manual version bumps require explicit approval and must update both
+  `deno.json` and `server.ts`.
 - CHANGELOG follows [Keep a Changelog](https://keepachangelog.com/) format. Only
   user-facing changes.
 
@@ -360,10 +373,21 @@ Rules:
 
 ### Release a version
 
-1. Update `version` in `deno.json`
-2. Update `version` in the `ConcurrentMCPServer` constructor in `server.ts`
-3. Update `CHANGELOG.md` with user-facing changes
-4. Commit, push to `main` — CI publishes to JSR and npm automatically
+Normal path:
+
+1. Run `deno task release:check`.
+2. Push or merge feature/fix commits to `main`.
+3. Let Release Please open/update the release PR.
+4. Review the generated version bump and `CHANGELOG.md`.
+5. Merge the Release Please PR. The publish workflow then ships JSR and npm.
+
+Emergency manual path:
+
+1. Get explicit approval for the version.
+2. Update `deno.json` and `server.ts`.
+3. Update `CHANGELOG.md` with user-facing changes.
+4. Run `deno task release:check`.
+5. Commit and push to `main`.
 
 ## Collaboration Notes
 

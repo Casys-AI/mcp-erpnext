@@ -273,11 +273,6 @@ Two GitHub Actions workflows matter:
      `npm publish --access public` (skips only if the version is already
      published)
 
-Release Please (`.github/workflows/release-please.yml`) runs on push to `main`.
-It opens or updates the release PR that bumps `CHANGELOG.md`, `deno.json`, and
-`server.ts`. When the release PR is merged and Release Please creates a release,
-it calls the publish workflow.
-
 Run `deno task release:check` locally before merging release-sensitive work. It
 performs the local preflight without publishing anything.
 
@@ -299,9 +294,8 @@ Version locations (both must stay in sync):
 
 Rules:
 
-- Prefer Release Please for normal version bumps. Do not manually edit version
-  numbers during feature work.
-- Manual version bumps require explicit approval and must update both
+- Do not bump version numbers during feature work.
+- Release version bumps require explicit approval and must update both
   `deno.json` and `server.ts`.
 - CHANGELOG follows [Keep a Changelog](https://keepachangelog.com/) format. Only
   user-facing changes.
@@ -374,24 +368,13 @@ Rules:
 
 ### Release a version
 
-Normal path:
-
-1. Run `deno task release:check`.
-2. Push or merge feature/fix commits to `main`.
-3. Let Release Please open/update the release PR.
-4. Review the generated version bump and `CHANGELOG.md`.
-5. Merge the Release Please PR. The Release Please workflow then creates the
-   release and calls the publish workflow to ship JSR and npm.
-
-Emergency manual path:
-
 1. Get explicit approval for the version.
 2. Update `deno.json` and `server.ts`.
 3. Update `CHANGELOG.md` with user-facing changes.
 4. Run `deno task release:check`.
 5. Commit and push to `main`.
-6. Run the `Publish` workflow manually if Release Please is intentionally
-   bypassed.
+6. Create the GitHub release/tag, for example `v2.3.0`.
+7. Run the `Publish` workflow manually to ship JSR and npm.
 
 ## Collaboration Notes
 

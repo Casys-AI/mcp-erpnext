@@ -293,19 +293,17 @@ cd src/ui && npm run dev:kanban
 
 ## Release Flow
 
-Release is intentionally GitHub-driven:
+Releases are manual and explicit:
 
-1. Run `deno task release:check` locally before publishing work.
-2. Push or merge to `main`.
-3. Release Please opens or updates the release PR with the semver bump,
-   `CHANGELOG.md`, `deno.json`, and `server.ts`.
-4. Merge the Release Please PR.
-5. `.github/workflows/release-please.yml` creates the GitHub release, then calls
-   `.github/workflows/publish.yml` to publish the released version to JSR and
+1. Update `deno.json`, `server.ts`, and `CHANGELOG.md`.
+2. Run `deno task release:check` locally.
+3. Commit and push the release commit to `main`.
+4. Create the GitHub release/tag, for example `v2.3.0`.
+5. Run the `Publish` workflow manually to publish the same version to JSR and
    npm.
 
-Do not bump versions manually unless bypassing Release Please for an emergency
-release.
+The package name stays `@casys/mcp-erpnext`; releases only bump the package
+version.
 
 ## License
 

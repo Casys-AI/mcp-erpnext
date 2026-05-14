@@ -7,15 +7,17 @@
     "build": "node build-all.mjs",
     "dev:invoice": "UI_NAME=invoice-viewer vite --config vite.single.config.mjs",
     "dev:stock": "UI_NAME=stock-viewer vite --config vite.single.config.mjs",
-    "dev:dashboard": "UI_NAME=dashboard-viewer vite --config vite.single.config.mjs",
     "dev:doclist": "UI_NAME=doclist-viewer vite --config vite.single.config.mjs",
-    "dev:kanban": "UI_NAME=kanban-viewer vite --config vite.single.config.mjs"
+    "dev:kanban": "UI_NAME=kanban-viewer vite --config vite.single.config.mjs",
+    "dev:chart": "UI_NAME=chart-viewer vite --config vite.single.config.mjs",
+    "dev:kpi": "UI_NAME=kpi-viewer vite --config vite.single.config.mjs",
+    "dev:funnel": "UI_NAME=funnel-viewer vite --config vite.single.config.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/ext-apps": "^1.2.2",
+    "@modelcontextprotocol/ext-apps": "^1.7.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^3.7.0"
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.1",

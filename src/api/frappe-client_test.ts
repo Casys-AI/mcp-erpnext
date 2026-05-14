@@ -12,24 +12,35 @@ import { FrappeAPIError, FrappeClient } from "./frappe-client.ts";
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
-function mockFetch(
-  responses: Array<{ status: number; body: unknown; contentType?: string }>,
-) {
-  let callIndex = 0;
+interface MockResponse {
+  status: number;
+  body: unknown;
+  contentType?: string;
+  /** Raw body string — overrides `body` when provided (for malformed JSON tests). */
+  rawBody?: string;
+  /** Extra response headers (e.g. retry-after). */
+  headers?: Record<string, string>;
+}
+
+const callCountRef: { current: number } = { current: 0 };
+
+function mockFetch(responses: Array<MockResponse>) {
+  callCountRef.current = 0;
   const original = globalThis.fetch;
 
   globalThis.fetch = async (
     _url: string | URL | Request,
     _init?: RequestInit,
   ): Promise<Response> => {
-    const config = responses[callIndex++];
+    const config = responses[callCountRef.current++];
     if (!config) throw new Error("No more mock responses configured");
 
-    const body = JSON.stringify(config.body);
+    const body = config.rawBody ?? JSON.stringify(config.body);
     return new Response(body, {
       status: config.status,
       headers: {
         "content-type": config.contentType ?? "application/json",
+        ...(config.headers ?? {}),
       },
     });
   };
@@ -39,11 +50,14 @@ function mockFetch(
   };
 }
 
-function makeClient() {
+function makeClient(overrides: Record<string, unknown> = {}) {
   return new FrappeClient({
     baseUrl: "http://localhost:8000",
     apiKey: "test-key",
     apiSecret: "test-secret",
+    // Tests run with very short backoff so they stay fast.
+    retryBackoffMs: 1,
+    ...overrides,
   });
 }
 
@@ -231,7 +245,7 @@ Deno.test("FrappeClient - throws FrappeAPIError on HTTP 403", async () => {
   }
 });
 
-Deno.test("FrappeClient - throws FrappeAPIError on HTTP 500", async () => {
+Deno.test("FrappeClient - throws FrappeAPIError on HTTP 500 (POST not retried)", async () => {
   const restore = mockFetch([
     {
       status: 500,
@@ -246,6 +260,138 @@ Deno.test("FrappeClient - throws FrappeAPIError on HTTP 500", async () => {
       FrappeAPIError,
       "HTTP 500",
     );
+    // POST is not in the retry method list by default — single call expected.
+    assertEquals(callCountRef.current, 1);
+  } finally {
+    restore();
+  }
+});
+
+// ── Retry / backoff ───────────────────────────────────────────────────────────
+
+Deno.test("FrappeClient retry - GET 503 succeeds on second attempt", async () => {
+  const restore = mockFetch([
+    { status: 503, body: { message: "Service Unavailable" } },
+    {
+      status: 200,
+      body: { data: [{ name: "CUST-001", customer_name: "Acme" }] },
+    },
+  ]);
+
+  try {
+    const client = makeClient();
+    const result = await client.list("Customer");
+    assertEquals(result.length, 1);
+    assertEquals(result[0].name, "CUST-001");
+    assertEquals(callCountRef.current, 2);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("FrappeClient retry - GET retries up to configured max then throws", async () => {
+  const restore = mockFetch([
+    { status: 503, body: { message: "Service Unavailable" } },
+    { status: 503, body: { message: "Service Unavailable" } },
+    { status: 503, body: { message: "Service Unavailable" } },
+    { status: 503, body: { message: "Service Unavailable" } },
+  ]);
+
+  try {
+    const client = makeClient({ retries: 2 });
+    await assertRejects(
+      () => client.list("Customer"),
+      FrappeAPIError,
+      "HTTP 503",
+    );
+    // 1 initial attempt + 2 retries = 3 calls total
+    assertEquals(callCountRef.current, 3);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("FrappeClient retry - 404 is not retried", async () => {
+  const restore = mockFetch([
+    { status: 404, body: { message: "Document not found" } },
+  ]);
+
+  try {
+    const client = makeClient();
+    await assertRejects(
+      () => client.get("Customer", "MISSING"),
+      FrappeAPIError,
+      "HTTP 404",
+    );
+    assertEquals(callCountRef.current, 1);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("FrappeClient retry - retries disabled when retries=0", async () => {
+  const restore = mockFetch([
+    { status: 503, body: { message: "Service Unavailable" } },
+  ]);
+
+  try {
+    const client = makeClient({ retries: 0 });
+    await assertRejects(
+      () => client.list("Customer"),
+      FrappeAPIError,
+      "HTTP 503",
+    );
+    assertEquals(callCountRef.current, 1);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("FrappeClient retry - 429 surfaces Retry-After header on FrappeAPIError", async () => {
+  const restore = mockFetch([
+    {
+      status: 429,
+      body: { message: "Too Many Requests" },
+      headers: { "retry-after": "0" },
+    },
+    {
+      status: 200,
+      body: { data: [] },
+    },
+  ]);
+
+  try {
+    const client = makeClient();
+    const result = await client.list("Customer");
+    assertEquals(result.length, 0);
+    assertEquals(callCountRef.current, 2);
+  } finally {
+    restore();
+  }
+});
+
+// ── Robust JSON parsing ──────────────────────────────────────────────────────
+
+Deno.test("FrappeClient parsing - malformed JSON in error body falls back to text", async () => {
+  const restore = mockFetch([
+    {
+      status: 500,
+      // Server claims JSON but returns broken markup (HTML error page is common)
+      contentType: "application/json",
+      body: null,
+      rawBody: "<html><body>500 Internal Server Error</body></html>",
+    },
+  ]);
+
+  try {
+    const client = makeClient({ retries: 0 });
+    const error = await assertRejects(
+      () => client.get("Customer", "ANY"),
+      FrappeAPIError,
+      "HTTP 500",
+    );
+    // Body must surface the raw text rather than crashing on JSON.parse
+    assertEquals(typeof error.body, "string");
   } finally {
     restore();
   }

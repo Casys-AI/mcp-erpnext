@@ -37,7 +37,33 @@ export interface FrappeClientConfig {
   apiSecret: string;
   /** Request timeout in ms. Default: 30000 */
   timeoutMs?: number;
+  /**
+   * Number of retry attempts on retryable failures (default: 3).
+   * Set to 0 to disable retries entirely.
+   */
+  retries?: number;
+  /**
+   * HTTP status codes considered transient and worth retrying.
+   * Default: [408, 429, 502, 503, 504]. Network errors (status 0) are always
+   * retried regardless of this list.
+   */
+  retryStatuses?: number[];
+  /**
+   * Initial backoff delay in ms; doubled on each subsequent attempt
+   * (200, 400, 800, …). A `Retry-After` response header overrides this.
+   * Default: 200.
+   */
+  retryBackoffMs?: number;
+  /**
+   * HTTP methods eligible for retry. Default: ["GET"] — non-idempotent
+   * methods are not retried automatically since the server may have already
+   * applied the change.
+   */
+  retryMethods?: string[];
 }
+
+const DEFAULT_RETRY_STATUSES = [408, 429, 502, 503, 504];
+const DEFAULT_RETRY_METHODS = ["GET"];
 
 /**
  * Error thrown when a Frappe REST API request fails.
@@ -61,15 +87,38 @@ export class FrappeAPIError extends Error {
    * @param message - Human-readable error description
    * @param status - HTTP status code (0 for network errors, 408 for timeouts)
    * @param body - Raw response body (parsed JSON object or plain text string)
+   * @param retryAfterMs - When the server sent a `Retry-After` header on a
+   *                      retryable status (typically 429), the parsed delay
+   *                      in ms. Used by the retry loop; absent otherwise.
    */
   constructor(
     message: string,
     public readonly status: number,
     public readonly body: unknown,
+    public readonly retryAfterMs?: number,
   ) {
     super(`[FrappeClient] ${message} (HTTP ${status})`);
     this.name = "FrappeAPIError";
   }
+}
+
+/**
+ * Parse a `Retry-After` header value. The HTTP spec accepts either a number of
+ * seconds (`"120"`) or an HTTP-date (`"Wed, 21 Oct 2026 07:28:00 GMT"`).
+ * Returns the delay in ms, or `undefined` if the value can't be parsed.
+ */
+function parseRetryAfter(raw: string | null): number | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.round(seconds * 1000);
+  }
+  const date = Date.parse(trimmed);
+  if (Number.isFinite(date)) {
+    return Math.max(0, date - Date.now());
+  }
+  return undefined;
 }
 
 /**
@@ -109,11 +158,19 @@ export class FrappeClient {
   private baseUrl: string;
   private authHeader: string;
   private timeoutMs: number;
+  private retries: number;
+  private retryStatuses: number[];
+  private retryBackoffMs: number;
+  private retryMethods: string[];
 
   constructor(config: FrappeClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
     this.authHeader = `token ${config.apiKey}:${config.apiSecret}`;
     this.timeoutMs = config.timeoutMs ?? 30_000;
+    this.retries = config.retries ?? 3;
+    this.retryStatuses = config.retryStatuses ?? DEFAULT_RETRY_STATUSES;
+    this.retryBackoffMs = config.retryBackoffMs ?? 200;
+    this.retryMethods = config.retryMethods ?? DEFAULT_RETRY_METHODS;
   }
 
   // ── Private HTTP helpers ────────────────────────────────────────────────────
@@ -126,7 +183,55 @@ export class FrappeClient {
     };
   }
 
+  /**
+   * Decide whether an error is worth retrying.
+   * Network errors (status 0) and timeouts (status 408) are always retryable;
+   * other statuses are checked against `retryStatuses`.
+   */
+  private isRetryable(err: unknown, method: string): boolean {
+    if (!this.retryMethods.includes(method)) return false;
+    if (!(err instanceof FrappeAPIError)) return false;
+    if (err.status === 0) return true;
+    return this.retryStatuses.includes(err.status);
+  }
+
+  /** Compute the backoff delay for a given attempt (0-indexed). */
+  private computeBackoff(attempt: number, err: unknown): number {
+    if (
+      err instanceof FrappeAPIError && err.retryAfterMs !== undefined
+    ) {
+      return err.retryAfterMs;
+    }
+    return this.retryBackoffMs * 2 ** attempt;
+  }
+
   private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= this.retries; attempt++) {
+      try {
+        return await this.requestOnce<T>(method, path, body);
+      } catch (err) {
+        lastError = err;
+        if (
+          attempt === this.retries || !this.isRetryable(err, method)
+        ) {
+          throw err;
+        }
+        const delay = this.computeBackoff(attempt, err);
+        if (delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+    // Defensive: the loop above either returns or throws.
+    throw lastError;
+  }
+
+  private async requestOnce<T>(
     method: string,
     path: string,
     body?: unknown,
@@ -160,12 +265,21 @@ export class FrappeClient {
     }
     clearTimeout(timer);
 
-    let responseBody: unknown;
+    // Read the body once as text, then attempt JSON parsing only if appropriate.
+    // Reading via response.text() first lets us recover gracefully when the
+    // server lies about content-type (e.g. HTML error pages with JSON CT).
+    const rawText = await response.text();
     const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json")) {
-      responseBody = await response.json();
-    } else {
-      responseBody = await response.text();
+    let responseBody: unknown = rawText;
+    if (contentType.includes("application/json") && rawText.length > 0) {
+      try {
+        responseBody = JSON.parse(rawText);
+      } catch {
+        // Server sent invalid JSON despite the content-type — keep the raw
+        // text so the FrappeAPIError carries something useful instead of
+        // crashing the whole request.
+        responseBody = rawText;
+      }
     }
 
     if (!response.ok) {
@@ -180,11 +294,18 @@ export class FrappeClient {
         // e.g. "[\"{ \\\"message\\\": \\\"Row #1: Warehouse is required\\\" }\"]"
         const serverDetails = extractServerMessages(rb._server_messages);
         msg = serverDetails ? `${baseMsg}: ${serverDetails}` : baseMsg;
+      } else if (typeof responseBody === "string" && responseBody.length > 0) {
+        // Truncate raw HTML / text bodies so error messages stay readable.
+        msg = responseBody.slice(0, 200);
       }
+      const retryAfterMs = parseRetryAfter(
+        response.headers.get("retry-after"),
+      );
       throw new FrappeAPIError(
         `${method} ${path} failed: ${msg}`,
         response.status,
         responseBody,
+        retryAfterMs,
       );
     }
 

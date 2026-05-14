@@ -2,6 +2,76 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [2.4.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.3.0...v2.4.0) (2026-05-14)
+
+
+### Features
+
+* add missing tests and doclist-viewer component re-exports ([a5f714f](https://github.com/Casys-AI/mcp-erpnext/commit/a5f714fbdc5e2234635f2626fcca615704e965cd))
+* add ToolAnnotations (readOnlyHint, destructiveHint) to all tools ([386e28b](https://github.com/Casys-AI/mcp-erpnext/commit/386e28b9b687f3e99e0593878cdf51abf7a112e0))
+* **chart-viewer:** add data point click drill-down and fix currency ([09b3519](https://github.com/Casys-AI/mcp-erpnext/commit/09b35194ff88b91bc0ba6f708efa8e461cc12824))
+* **doclist-viewer:** add inline detail, row actions, sendMessage, chip filters ([121a723](https://github.com/Casys-AI/mcp-erpnext/commit/121a723edc071e40939b896c5d325171e636731c))
+* **frappe-client:** retry transient reads ([699ecdf](https://github.com/Casys-AI/mcp-erpnext/commit/699ecdf3848e219a8a1a5f093031895d62d63a8a))
+* **funnel-viewer:** add stage click drill-down via sendMessage ([ea7612e](https://github.com/Casys-AI/mcp-erpnext/commit/ea7612e9620c976501e6f4ba1bc350dfa82524e1))
+* **funnel-viewer:** redesign with trapezoid clip-path, gradients, and action buttons ([2b0bc1d](https://github.com/Casys-AI/mcp-erpnext/commit/2b0bc1ddcd7ba9e5d7826ae80f11ea792823930b))
+* **invoice-viewer:** add item drill-down, actions, sendMessage navigation ([ac44542](https://github.com/Casys-AI/mcp-erpnext/commit/ac44542da1baae63106b1a46c4bcb4e3d80688b4))
+* **kanban-viewer:** replace fire-and-forget actions with sendMessage ([cc4e43b](https://github.com/Casys-AI/mcp-erpnext/commit/cc4e43bc3c80b03c7182db82658e109fc3a5df89))
+* **kanban:** enrich card fields for all three doctypes ([4bfbfdd](https://github.com/Casys-AI/mcp-erpnext/commit/4bfbfdd30d7bd40f98f0668263a071e60ec263f0))
+* **kanban:** enrich cards, add detail modal, and improve tab navigation ([0638ce1](https://github.com/Casys-AI/mcp-erpnext/commit/0638ce185457347f7571796c2e6ad46d78fde43a))
+* **kanban:** enrich cards, detail modal, and tab navigation ([cb4a938](https://github.com/Casys-AI/mcp-erpnext/commit/cb4a938be4d787de1c69e241077a70580b819414))
+* **kanban:** integrate column focus layout for narrow viewports ([efbf288](https://github.com/Casys-AI/mcp-erpnext/commit/efbf288274c546606f86200b0cb5ed5a0375aacf))
+* **kanban:** proper form controls for each field type in detail modal ([2f0bd39](https://github.com/Casys-AI/mcp-erpnext/commit/2f0bd39a8d015c1db71e77b3f9de9565ed8ce887))
+* **kanban:** redesign cards, branding, and focus mode UX ([4bf5f20](https://github.com/Casys-AI/mcp-erpnext/commit/4bf5f20ed695d9eb09d484240d3c1b581ebb94d4))
+* **kanban:** redesign detail modal with Jira-style layout ([2c52adf](https://github.com/Casys-AI/mcp-erpnext/commit/2c52adf6f5c8cd8c6383f17d0e99196a68c44a68))
+* **kanban:** redesign detail modal with polished form layout ([c083487](https://github.com/Casys-AI/mcp-erpnext/commit/c0834876f23bf1bfdbb5a27ae6832387dde07ec5))
+* **kpi-viewer:** add drill-down on big number and sparkline click ([6e771d0](https://github.com/Casys-AI/mcp-erpnext/commit/6e771d0aaab7ed2465a24808aefeb36cc1d92224))
+* **stock-viewer:** add stock detail panel with item info and sendMessage ([932e894](https://github.com/Casys-AI/mcp-erpnext/commit/932e894cc5ad21cca001a4524d71c2c3c9138ff9))
+
+
+### Bug Fixes
+
+* add missing items schema for filters array (closes [#2](https://github.com/Casys-AI/mcp-erpnext/issues/2)) ([40b865f](https://github.com/Casys-AI/mcp-erpnext/commit/40b865fd85cf680abf2b3cb7c217876c2f1ca10b))
+* **doclist-viewer:** cap visible columns at 6, prioritize key fields ([37b80bc](https://github.com/Casys-AI/mcp-erpnext/commit/37b80bc3b7d8ab1d7e3f17584328acc5ff31281b))
+* **funnel-viewer:** replace height:100vh with minHeight to prevent content clipping ([76e7d9a](https://github.com/Casys-AI/mcp-erpnext/commit/76e7d9ada4bfcbac4f7440fb437f69154d46a95e))
+* iframe infinite resize in all viewers and remove invalid Lead source field ([25e443e](https://github.com/Casys-AI/mcp-erpnext/commit/25e443e5560d4c95d27b6cdd4353a240ee158b8e))
+* import ToolAnnotations from @casys/mcp-server, add structuredContent tests ([98d2eb1](https://github.com/Casys-AI/mcp-erpnext/commit/98d2eb1fc43ae226e49a7d91d4f56bc8fce65221))
+* **kanban-viewer:** guard detail save tool calls ([b8777d9](https://github.com/Casys-AI/mcp-erpnext/commit/b8777d9a9bbd3b49c9242cca1e2b4a6742026785))
+* **kanban-viewer:** use shared extractToolResultText for structuredContent support ([a66f97b](https://github.com/Casys-AI/mcp-erpnext/commit/a66f97b3530eb57c8ba03b39b5524abc7727e61e))
+* **kanban:** bump min-height to 600px for better modal display ([c591eb1](https://github.com/Casys-AI/mcp-erpnext/commit/c591eb173621b6e4e3002d6de6e9ceaf8dae08bc))
+* **kanban:** redesign detail modal and fix save ([b829df9](https://github.com/Casys-AI/mcp-erpnext/commit/b829df9b0dc83285a5ff84f98cc20cb76b2eae43))
+* **kanban:** remove stale capabilities gate blocking save and actions ([b10d35b](https://github.com/Casys-AI/mcp-erpnext/commit/b10d35b264ade49d3cbd0f9d6e33059dda6861c0))
+* **kanban:** set min-height 480px so detail modal has room to display ([c348cb6](https://github.com/Casys-AI/mcp-erpnext/commit/c348cb6c579f7d89759df62c9025183e8b791d22))
+* **kanban:** unwrap doc_get data envelope and fix modal action buttons ([b67bf0f](https://github.com/Casys-AI/mcp-erpnext/commit/b67bf0f2aa338d7f02eed35af6e7498c3d66aead))
+* pin @casys/mcp-server version constraint for JSR publish ([2782e80](https://github.com/Casys-AI/mcp-erpnext/commit/2782e80a5362602704d7468129b3fecbf481eff7))
+* remove uiMeta() import from viewer-meta (mcp-compose not on npm) ([89d20ff](https://github.com/Casys-AI/mcp-erpnext/commit/89d20ff1a40b344bf9cf14e01fcd9d439b203625))
+* structuredContent for all viewer tools + dead code cleanup ([b9ab6cc](https://github.com/Casys-AI/mcp-erpnext/commit/b9ab6ccebd2c4f4d18c316cac1c480fdbf9c1b64))
+* surface Frappe error messages instead of generic "Tool execution failed" ([b4ef624](https://github.com/Casys-AI/mcp-erpnext/commit/b4ef624818ed8f70a1827ccd4382c04ac58c9c3a))
+* update build-node.sh to use @casys/mcp-server@^0.12.0 ([525a084](https://github.com/Casys-AI/mcp-erpnext/commit/525a084aebcac29bfbfae6820f2262564d8231e9))
+* use npx jsr add for Node build to resolve JSR transitive deps ([fcbaa38](https://github.com/Casys-AI/mcp-erpnext/commit/fcbaa382858e8c15c84021817eb2e970e0b262a6))
+
+
+### Refactoring
+
+* colocate tests with source files (Deno convention) ([35643e9](https://github.com/Casys-AI/mcp-erpnext/commit/35643e9a3622f9fa67c5544ba0d027535dead5cb))
+* replace 91 inline _meta with shared viewer-meta constants ([076ecba](https://github.com/Casys-AI/mcp-erpnext/commit/076ecba75e499eab5aee8a0004a5303da847ee2e))
+* replace 91 inline _meta with shared viewer-meta constants via uiMeta() ([dff32fa](https://github.com/Casys-AI/mcp-erpnext/commit/dff32faaeb2ff93923599d40540247a4ce6a1031))
+* **sales:** dedupe line item mapping ([22774bb](https://github.com/Casys-AI/mcp-erpnext/commit/22774bbc5cf6351327b4f3281c5806c7f528453e))
+* use toolErrorMapper and widen tool types for annotations ([db4b4ba](https://github.com/Casys-AI/mcp-erpnext/commit/db4b4ba44097c0085e697ae1c2b64744555239de))
+* use uiMeta() from @casys/mcp-server in viewer-meta constants ([428bb52](https://github.com/Casys-AI/mcp-erpnext/commit/428bb52812ef0d6c9822e2b3c92837de51e3ca0c))
+
+
+### Documentation
+
+* add v2.1.0 changelog ([15527fc](https://github.com/Casys-AI/mcp-erpnext/commit/15527fcd81843a8190e216d86f62e6937ecf589a))
+* clarify release workflow ([9c3bf88](https://github.com/Casys-AI/mcp-erpnext/commit/9c3bf88796de68f08e2afafbf51fc386eb7a03a8))
+* condense README tools section, add docs/tools.md full reference ([b109860](https://github.com/Casys-AI/mcp-erpnext/commit/b1098603d60a1f19548299f987f354fa356b582f))
+* document ERPNext Cloud compatibility and update env vars ([38e9ba0](https://github.com/Casys-AI/mcp-erpnext/commit/38e9ba019cdaae5f71d2fb23ed67adeedfcc5b96))
+* mark P0 and P1 refactoring as done in refacto plan ([78e57b9](https://github.com/Casys-AI/mcp-erpnext/commit/78e57b98d439f960c8a2a8df1c66936eace543da))
+* move project guidelines to AGENTS.md, add versioning conventions ([b322a5b](https://github.com/Casys-AI/mcp-erpnext/commit/b322a5b8af90b6c5d4a094040a151da6665861de))
+* normalize project documentation ([a9184fe](https://github.com/Casys-AI/mcp-erpnext/commit/a9184feb9937c858343c39673567f5e065804245))
+* update ROADMAP with TIER 1b cross-viewer navigation (all 7 viewers done) ([995a0f1](https://github.com/Casys-AI/mcp-erpnext/commit/995a0f11f8e5ffb5a1a5692d9aee979d4960764c))
+* wrap Claude entrypoint ([377947c](https://github.com/Casys-AI/mcp-erpnext/commit/377947cc42a9df716c72af1199dfb3369c2b7f85))
+
 ## [2.3.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.2.2...v2.3.0) (2026-05-14)
 
 ### Features

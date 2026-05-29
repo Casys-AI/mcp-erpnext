@@ -1,0 +1,78 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for mcp-erpnext
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      options:
+        - label: I have searched existing issues and confirmed this feature has not already been requested.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which area of the project does this feature relate to?
+      options:
+        - Sales (quotations, orders, invoices)
+        - Purchasing (purchase orders, receipts, invoices)
+        - Inventory / Stock
+        - Manufacturing (BOM, work orders, job cards)
+        - HR & Payroll (employees, leave, attendance, salary)
+        - Accounting & Finance (journal entries, payments, reports)
+        - CRM (leads, opportunities, campaigns)
+        - Projects & Tasks
+        - Assets & Maintenance
+        - Analytics & KPI tools
+        - UI / Dashboard viewer
+        - Infrastructure / Build / CI
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Motivation
+      description: >
+        Describe the problem you are trying to solve or the use case that motivates
+        this request. Be as specific as possible.
+      placeholder: "As a user I need to … because …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: >
+        Describe the feature or change you would like to see. Include expected
+        inputs, outputs, and any relevant API or tool names.
+      placeholder: "Add a tool `erpnext_foo` that …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: >
+        Describe any alternative solutions or features you have considered, and
+        why you prefer the proposed solution.
+      placeholder: "I considered … but it does not work because …"
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: >
+        Any other context, screenshots, links to ERPNext / Frappe documentation,
+        or examples that might help.
+    validations:
+      required: false

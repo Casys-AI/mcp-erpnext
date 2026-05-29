@@ -2,6 +2,23 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [2.3.1](https://github.com/Casys-AI/mcp-erpnext/compare/v2.3.0...v2.3.1) (2026-05-29)
+
+### Bug Fixes
+
+- **analytics:** `erpnext_stock_chart` no longer fails (HTTP 417) when filtering
+  by `item_group`. `Bin` has no `item_group` field, so the group is resolved to
+  item codes via `Item` and filtered in memory.
+
+### Documentation
+
+- **readme:** add status badges (JSR, npm, CI, MCP, license) and a Screenshots
+  gallery of the 7 interactive viewers.
+- add community health files: `SECURITY.md`, `CONTRIBUTING.md`,
+  `CODE_OF_CONDUCT.md`, issue forms, and a pull request template.
+- **roadmap:** add the "NEXT — Platform integration" milestone (MCP bridge,
+  ERP-agnostic core, Zitadel OIDC auth).
+
 ## [2.3.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.2.2...v2.3.0) (2026-05-14)
 
 ### Features

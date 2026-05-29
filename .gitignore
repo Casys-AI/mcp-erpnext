@@ -7,3 +7,6 @@ src/ui/node_modules/
 .vscode/
 .mcp.json
 .stitch
+.serena/
+.DS_Store
+**/.DS_Store

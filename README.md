@@ -1,5 +1,11 @@
 # @casys/mcp-erpnext
 
+[![JSR](https://jsr.io/badges/@casys/mcp-erpnext)](https://jsr.io/@casys/mcp-erpnext)
+[![npm](https://img.shields.io/npm/v/@casys/mcp-erpnext?logo=npm&color=cb3837)](https://www.npmjs.com/package/@casys/mcp-erpnext)
+[![CI](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml)
+[![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **120 tools**
 across **14 categories**, with **7 interactive UI viewers**.
 
@@ -9,22 +15,59 @@ Copilot, custom) to your ERPNext instance via the
 
 Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 
-## What's New in v2.1
+## Screenshots
 
-- **Cross-viewer navigation** — click a row in any list to drill down, click a
-  button to open related documents in another viewer via `sendMessage`
-- **Inline detail panels** — expand any row in doclist/stock viewers to see full
-  document details + action buttons (Submit, Cancel, Payments)
-- **Interactive charts** — click bar/pie/line data points to drill into
-  underlying documents
-- **KPI drill-down** — click the big number or sparkline to explore exceptions
-  or trends
-- **Funnel redesign** — trapezoid stages with gradient fills, conversion badges,
-  click-through navigation
-- **Better error messages** — Frappe API errors are now surfaced with full
-  detail instead of generic "Tool execution failed"
-- **VS Code Copilot fix** — schema validation issue with `erpnext_doc_list`
-  filters resolved (#2)
+Interactive viewers rendered inside an MCP host, driven entirely by tool
+results.
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/assets/doclist-viewer.png" alt="Document list viewer with chip filters and inline detail" width="100%"><br>
+      <sub><b>doclist-viewer</b> — any DocType as a sortable table with chip filters and an inline detail panel</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/assets/invoice-viewer.png" alt="Invoice viewer with line items and actions" width="100%"><br>
+      <sub><b>invoice-viewer</b> — invoice with parties, line items, item drill-down and Submit/Cancel/Payments</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/assets/funnel-viewer.png" alt="Sales funnel viewer" width="100%"><br>
+      <sub><b>funnel-viewer</b> — Lead → Opportunity → Quotation → Order with conversion rates</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/assets/kpi-viewer.png" alt="KPI viewer with sparkline" width="100%"><br>
+      <sub><b>kpi-viewer</b> — big-number KPI with delta vs last period and a sparkline</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/assets/chart-viewer.png" alt="Chart viewer" width="100%"><br>
+      <sub><b>chart-viewer</b> — universal Recharts renderer (here: stock levels)</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/assets/stock-viewer.png" alt="Stock balance viewer" width="100%"><br>
+      <sub><b>stock-viewer</b> — stock balance with color-coded quantity badges</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/assets/kanban-viewer.png" alt="Read-write kanban board" width="100%"><br>
+      <sub><b>kanban-viewer</b> — read-write board (Task / Opportunity / Issue) with inline edit</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/assets/profit-loss.png" alt="Profit and loss composed chart" width="100%"><br>
+      <sub><b>chart-viewer</b> — composed dual-axis chart (here: profit &amp; loss)</sub>
+    </td>
+  </tr>
+</table>
+
+## What's New
+
+See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
+[latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for
+the current version's highlights.
 
 ## Quick Start
 

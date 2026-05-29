@@ -60,14 +60,24 @@ export const analyticsTools: ErpNextTool[] = [
       if (input.warehouse) {
         filters.push(["warehouse", "=", input.warehouse as string]);
       }
+
+      // Bin has no item_group field — resolve the group to its item codes and
+      // filter in memory (FrappeFilter doesn't support "in" arrays).
+      let allowedItems: Set<string> | null = null;
       if (input.item_group) {
-        filters.push(["item_group", "=", input.item_group as string]);
+        const groupItems = await ctx.client.list("Item", {
+          fields: ["name"],
+          filters: [["item_group", "=", input.item_group as string]],
+          limit: 1000,
+        });
+        allowedItems = new Set(groupItems.map((i) => i.name as string));
       }
 
       const bins = await ctx.client.list("Bin", {
         fields: ["item_code", "warehouse", "actual_qty", "stock_value"],
         filters,
-        limit,
+        // widen the fetch when filtering by group in memory, then slice below
+        limit: allowedItems ? 1000 : limit,
         order_by: "actual_qty desc",
       });
 
@@ -75,6 +85,7 @@ export const analyticsTools: ErpNextTool[] = [
       const byItem: Record<string, { qty: number; value: number }> = {};
       for (const bin of bins) {
         const item = bin.item_code as string;
+        if (allowedItems && !allowedItems.has(item)) continue;
         if (!byItem[item]) byItem[item] = { qty: 0, value: 0 };
         byItem[item].qty += Number(bin.actual_qty) || 0;
         byItem[item].value += Number(bin.stock_value) || 0;

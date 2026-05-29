@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: ERPNext Community & Documentation
+    url: https://discuss.frappe.io/
+    about: For questions about ERPNext/Frappe itself (not this MCP server), please use the official ERPNext community forum.
+  - name: Report a Security Vulnerability
+    url: https://github.com/Casys-AI/mcp-erpnext/security/advisories/new
+    about: Please do NOT open a public issue for security vulnerabilities. Report them privately via GitHub Security Advisories as described in SECURITY.md.

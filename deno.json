@@ -56,7 +56,7 @@
     ]
   },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.17",
+    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.18",
     "hono": "npm:hono@^4",
     "hono/cors": "npm:hono@^4/cors",
     "jose": "npm:jose@^6.0.0",

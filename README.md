@@ -151,6 +151,21 @@ ERPNEXT_API_SECRET=xxx \
 npx -y @casys/mcp-erpnext --http --port=3012
 ```
 
+### Deno (HTTP mode)
+
+```bash
+ERPNEXT_URL=http://localhost:8000 \
+ERPNEXT_API_KEY=xxx \
+ERPNEXT_API_SECRET=xxx \
+deno run -A npm:@casys/mcp-erpnext --http --port=3012
+```
+
+> **Note:** The npm bundle embeds `@casys/mcp-server` which references
+> `Deno.*` APIs in its auth config loader. If you get
+> `ReferenceError: Deno is not defined`, use the Deno runner above
+> until the transitive dependency is patched.
+> See [`docs/known-issues.md`](docs/known-issues.md).
+
 ### Category filtering
 
 Load only the categories you need:

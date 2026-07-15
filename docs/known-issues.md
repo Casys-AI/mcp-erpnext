@@ -100,6 +100,28 @@ le champ est `None`, soit documenter que le setup wizard ERPNext est requis.
 
 ---
 
+### RuntimeError: `Deno is not defined` on Node.js
+
+**Symptom**: Running the npm bundle (`npx @casys/mcp-erpnext --http`) crashes
+with `ReferenceError: Deno is not defined` at `loadYamlAuth`.
+
+**Cause**: The transitive dependency `@casys/mcp-server` (v0.18.x) contains
+`Deno.readTextFile` calls that esbuild inlines into the bundle. The project's
+own runtime adapter (`src/runtime.ts` / `src/runtime.node.ts`) handles the
+swap correctly, but `@casys/mcp-server`'s internal auth-config loader bypasses
+it.
+
+**Workaround**: Run with the Deno runtime instead:
+
+```bash
+deno run -A npm:@casys/mcp-erpnext --http --port=3012
+```
+
+**Fix needed**: Patch the upstream `@casys/mcp-server` to use a runtime adapter
+or a pure-Node YAML reader.
+
+---
+
 ## Améliorations souhaitées
 
 ### Setup wizard automation

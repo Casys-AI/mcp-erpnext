@@ -160,11 +160,11 @@ ERPNEXT_API_SECRET=xxx \
 deno run -A npm:@casys/mcp-erpnext --http --port=3012
 ```
 
-> **Note:** The npm bundle embeds `@casys/mcp-server` which references
-> `Deno.*` APIs in its auth config loader. If you get
-> `ReferenceError: Deno is not defined`, use the Deno runner above
-> until the transitive dependency is patched.
-> See [`docs/known-issues.md`](docs/known-issues.md).
+> **Note:** Versions ≤ 2.3.1 of the npm bundle crashed with
+> `ReferenceError: Deno is not defined` in HTTP mode — fixed in 2.4.0
+> (`@casys/mcp-server` ≥ 0.21.1). If you hit this error, upgrade with
+> `npx -y @casys/mcp-erpnext@latest`, or use the Deno runner above. See
+> [`docs/known-issues.md`](docs/known-issues.md).
 
 ### Category filtering
 

@@ -100,25 +100,31 @@ le champ est `None`, soit documenter que le setup wizard ERPNext est requis.
 
 ---
 
-### RuntimeError: `Deno is not defined` on Node.js
+### ~~RuntimeError: `Deno is not defined` on Node.js~~ — fixed in 2.4.0
 
-**Symptom**: Running the npm bundle (`npx @casys/mcp-erpnext --http`) crashes
-with `ReferenceError: Deno is not defined` at `loadYamlAuth`.
+**Status**: ✅ **Fixed in 2.4.0** (`@casys/mcp-server` ≥ 0.21.1). The npm bundle
+now consumes `@casys/mcp-server`'s own Node-clean npm build, and both packages
+select their runtime adapter at load time (`runtime.ts` selector) instead of a
+build-time file swap. `build-node.sh` fails fast if the resolved
+`@casys/mcp-server` predates 0.21.1. Reported by
+[@dennypradipta](https://github.com/dennypradipta) in
+[#4](https://github.com/Casys-AI/mcp-erpnext/pull/4).
 
-**Cause**: The transitive dependency `@casys/mcp-server` (v0.18.x) contains
-`Deno.readTextFile` calls that esbuild inlines into the bundle. The project's
-own runtime adapter (`src/runtime.ts` / `src/runtime.node.ts`) handles the
-swap correctly, but `@casys/mcp-server`'s internal auth-config loader bypasses
-it.
+**Symptom** (≤ 2.3.1): Running the npm bundle (`npx @casys/mcp-erpnext
+--http`)
+crashes with `ReferenceError: Deno is not defined` at `loadYamlAuth`.
 
-**Workaround**: Run with the Deno runtime instead:
+**Cause**: The transitive dependency `@casys/mcp-server` (≤ 0.21.0 as bundled
+from JSR source) contained `Deno.readTextFile` calls that esbuild inlined into
+the bundle. The project's own runtime adapter handled the swap correctly, but
+`@casys/mcp-server`'s internal auth-config loader bypassed it.
+
+**Workaround on old versions**: upgrade to ≥ 2.4.0, or run with the Deno runtime
+instead:
 
 ```bash
 deno run -A npm:@casys/mcp-erpnext --http --port=3012
 ```
-
-**Fix needed**: Patch the upstream `@casys/mcp-server` to use a runtime adapter
-or a pure-Node YAML reader.
 
 ---
 

@@ -69,7 +69,7 @@ export interface ErpNextTool {
   ) => Promise<unknown>;
 }
 
-/** MCP wire-format tool (for ConcurrentMCPServer registration) */
+/** MCP wire-format tool (for McpApp registration) */
 export interface MCPToolWireFormat {
   name: string;
   description: string;

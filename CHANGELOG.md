@@ -2,6 +2,34 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [2.4.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.3.1...v2.4.0) (2026-07-16)
+
+### Bug Fixes
+
+- **npm/HTTP:** `npx @casys/mcp-erpnext --http` no longer crashes on Node.js
+  with `ReferenceError: Deno is not defined`. The npm bundle now consumes
+  `@casys/mcp-server`'s own npm build (Node-clean) instead of re-bundling its
+  Deno/JSR source, and both packages select their runtime adapter at load time
+  instead of a build-time file swap. `build-node.sh` fails fast if the resolved
+  `@casys/mcp-server` predates 0.21.1 (first Node-clean release). Thanks
+  [@dennypradipta](https://github.com/dennypradipta) for the report and the
+  workaround docs ([#4](https://github.com/Casys-AI/mcp-erpnext/pull/4)).
+
+### Features
+
+- **native Frappe assignment across doctypes.** `erpnext_doc_assign` assigns any
+  document via `frappe.desk.form.assign_to.add` (permissions, ToDo, realtime
+  notifications, and assignment emails preserved), with assignee validation and
+  native ToDo IDs in the response. `erpnext_user_list` lists enabled users. The
+  kanban detail modal gains an assignee section with a user dropdown
+  ([#5](https://github.com/Casys-AI/mcp-erpnext/pull/5)). Based on
+  [@mateotiedra](https://github.com/mateotiedra)'s Task-assignment
+  implementation ([#3](https://github.com/Casys-AI/mcp-erpnext/pull/3)) — thanks
+  Mateo!
+- migrate to `@casys/mcp-server` ^0.21 and the `McpApp` API (the deprecated
+  `ConcurrentMCPServer` alias is no longer used); audited the deprecated
+  Sampling / Logging / Roots capabilities — none used (migration plan §1–2).
+
 ## [2.3.1](https://github.com/Casys-AI/mcp-erpnext/compare/v2.3.0...v2.3.1) (2026-05-29)
 
 ### Bug Fixes

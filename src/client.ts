@@ -113,13 +113,13 @@ export class ErpNextToolsClient {
   }
 
   /**
-   * Build a handlers Map for ConcurrentMCPServer.registerTools().
+   * Build a handlers Map for McpApp.registerTools().
    * Each handler wraps the tool to inject the FrappeClient context.
    * Errors are handled by the server's toolErrorMapper (configured in server.ts).
    *
    * For viewer tools (result has _meta.ui), the return value is a pre-formatted
    * MCP result with both `content` (text JSON for LLM) and `structuredContent`
-   * (object for the UI viewer). ConcurrentMCPServer passes pre-formatted results
+   * (object for the UI viewer). McpApp passes pre-formatted results
    * through unchanged.
    */
   buildHandlersMap(): Map<

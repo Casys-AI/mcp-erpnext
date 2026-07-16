@@ -1,32 +1,28 @@
-// deno-lint-ignore-file no-process-global
 /**
- * Runtime adapter — Node.js implementation
+ * Runtime adapter — Deno implementation
  *
- * Selected automatically by runtime.ts (the selector) when running under
- * Node.js.
+ * Abstracts Deno-specific APIs behind platform-agnostic functions.
+ * Selected automatically by runtime.ts (the selector) when running under Deno.
  *
- * @see runtime.deno.ts for the Deno implementation
- * @module lib/erpnext/src/runtime.node
+ * @see runtime.node.ts for the Node.js implementation
+ * @module lib/erpnext/src/runtime.deno
  */
-
-import { readdirSync, statSync as fsStatSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 
 // ─── Environment ─────────────────────────────────────────
 
 export function env(key: string): string | undefined {
-  return process.env[key];
+  return Deno.env.get(key);
 }
 
 // ─── File System ─────────────────────────────────────────
 
 export async function readTextFile(path: string): Promise<string> {
-  return await readFile(path, "utf-8");
+  return await Deno.readTextFile(path);
 }
 
 export function statSync(path: string): boolean {
   try {
-    fsStatSync(path);
+    Deno.statSync(path);
     return true;
   } catch {
     return false;
@@ -35,8 +31,8 @@ export function statSync(path: string): boolean {
 
 export function readDirSync(path: string): string[] {
   const entries: string[] = [];
-  for (const entry of readdirSync(path, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
+  for (const entry of Deno.readDirSync(path)) {
+    if (entry.isDirectory) {
       entries.push(entry.name);
     }
   }
@@ -46,13 +42,13 @@ export function readDirSync(path: string): string[] {
 // ─── Process ─────────────────────────────────────────────
 
 export function getArgs(): string[] {
-  return process.argv.slice(2);
+  return Deno.args;
 }
 
 export function exit(code: number): never {
-  process.exit(code);
+  Deno.exit(code);
 }
 
 export function onSignal(signal: string, handler: () => void): void {
-  process.on(signal, handler);
+  Deno.addSignalListener(signal as Deno.Signal, handler);
 }

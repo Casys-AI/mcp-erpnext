@@ -3,10 +3,13 @@
 #
 # What this does:
 # 1. Copies src/ and server.ts to dist-node/
-# 2. Replaces runtime.ts with runtime.node.ts (node:fs instead of Deno.*)
-# 3. Strips .ts extensions from relative imports (Node ESM convention)
-# 4. Installs the Node build dependencies in dist-node/
-# 5. Produces a publishable npm package in dist-node/bin/
+#    (runtime selection is handled at load time by src/runtime.ts, which
+#    picks runtime.deno.ts or runtime.node.ts — no build-time swap)
+# 2. Strips .ts extensions from relative imports (Node ESM convention)
+# 3. Installs the Node build dependencies in dist-node/
+#    (@casys/mcp-server comes from npm — its own npm build — not from a
+#    re-bundle of its Deno/JSR source)
+# 4. Produces a publishable npm package in dist-node/bin/
 #
 # Usage:
 #   cd lib/erpnext && ./scripts/build-node.sh
@@ -27,7 +30,7 @@ echo "[build-node] Building Node.js distribution for @casys/mcp-erpnext..."
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
-# Copy source files (exclude tests, UI source, and runtime.node.ts)
+# Copy source files (exclude tests and UI source)
 cp -r "$ROOT_DIR/src" "$DIST_DIR/src"
 cp "$ROOT_DIR/server.ts" "$DIST_DIR/server.ts"
 cp "$ROOT_DIR/mod.ts" "$DIST_DIR/mod.ts" 2>/dev/null || true
@@ -38,12 +41,6 @@ rm -rf "$DIST_DIR/src/ui/node_modules" 2>/dev/null || true
 # Keep src/ui/dist/ (built HTML) but remove source viewer folders
 find "$DIST_DIR/src/ui" -maxdepth 1 -type d ! -name "ui" ! -name "dist" ! -name "shared" ! -name "node_modules" -exec rm -rf {} + 2>/dev/null || true
 rm -f "$DIST_DIR/src/ui/build-all.mjs" "$DIST_DIR/src/ui/vite.single.config.mjs" "$DIST_DIR/src/ui/package.json" "$DIST_DIR/src/ui/package-lock.json" 2>/dev/null || true
-
-# Replace runtime.ts with runtime.node.ts
-if [ -f "$DIST_DIR/src/runtime.node.ts" ]; then
-  cp "$DIST_DIR/src/runtime.node.ts" "$DIST_DIR/src/runtime.ts"
-  rm "$DIST_DIR/src/runtime.node.ts"
-fi
 
 # Strip .ts extensions from relative imports → .js (Node ESM)
 find "$DIST_DIR" -name "*.ts" -exec perl -pi -e \
@@ -82,8 +79,23 @@ cp "$ROOT_DIR/README.md" "$DIST_DIR/README.md" 2>/dev/null || true
 
 pushd "$DIST_DIR" >/dev/null
 npm install --no-fund --no-audit
-# Install JSR packages via jsr shim (resolves transitive JSR deps like @casys/mcp-compose)
-npx jsr add "@casys/mcp-server@$MCP_SERVER_VERSION"
+# Install @casys/mcp-server from npm: its npm build ships the same runtime
+# selector as the JSR source, so the bundle stays Node-clean (no Deno.*).
+# MCP_SERVER_OVERRIDE lets CI/local builds point at a tarball for pre-release
+# end-to-end validation.
+npm install --no-fund --no-audit "${MCP_SERVER_OVERRIDE:-@casys/mcp-server@$MCP_SERVER_VERSION}"
+# Fail fast if npm resolved a version older than 0.21.1 — the first release
+# whose npm build is fully Node-clean (runtime selector + launcher). An older
+# resolution would silently re-embed Deno.* calls in the published bundle.
+node -e '
+  const v = require("@casys/mcp-server/package.json").version;
+  const [ma, mi, pa] = v.split(".").map(Number);
+  if (ma === 0 && (mi < 21 || (mi === 21 && pa < 1))) {
+    console.error(`[build-node] @casys/mcp-server ${v} predates the runtime-selector fix (need >=0.21.1)`);
+    process.exit(1);
+  }
+  console.log(`[build-node] @casys/mcp-server ${v} OK (>=0.21.1)`);
+'
 ./node_modules/.bin/esbuild server.ts \
   --bundle \
   --platform=node \

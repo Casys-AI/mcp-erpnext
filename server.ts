@@ -31,11 +31,7 @@
  * @module lib/erpnext/server
  */
 
-import {
-  ConcurrentMCPServer,
-  launchInspector,
-  MCP_APP_MIME_TYPE,
-} from "@casys/mcp-server";
+import { launchInspector, MCP_APP_MIME_TYPE, McpApp } from "@casys/mcp-server";
 import { ErpNextToolsClient } from "./src/client.ts";
 import { FrappeAPIError } from "./src/api/frappe-client.ts";
 import { UI_VIEWERS } from "./src/ui/viewers.ts";
@@ -84,9 +80,9 @@ async function main() {
   );
 
   // Build MCP server
-  const server = new ConcurrentMCPServer({
+  const server = new McpApp({
     name: "mcp-erpnext",
-    version: "2.3.1",
+    version: "2.4.0",
     maxConcurrent: 10,
     backpressureStrategy: "queue",
     validateSchema: true,

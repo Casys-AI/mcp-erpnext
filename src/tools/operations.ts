@@ -21,6 +21,103 @@ import {
 } from "./assignment.ts";
 
 export const operationsTools: ErpNextTool[] = [
+  // ── File Attachments ───────────────────────────────────────────────────────
+
+  {
+    name: "erpnext_file_upload",
+    description:
+      "Upload base64-encoded file content and attach it to any ERPNext document. " +
+      "Files are private by default.",
+    category: "operations",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_name: {
+          type: "string",
+          description: "Filename only, without a path.",
+          minLength: 1,
+        },
+        content_base64: {
+          type: "string",
+          description: "File content as standard base64 (not a data URL).",
+          minLength: 1,
+        },
+        attached_to_doctype: {
+          type: "string",
+          description: "DocType of the document to attach the file to.",
+          minLength: 1,
+        },
+        attached_to_name: {
+          type: "string",
+          description: "Name/ID of the document to attach the file to.",
+          minLength: 1,
+        },
+        attached_to_field: {
+          type: "string",
+          description:
+            "Optional document field associated with this attachment.",
+        },
+        is_private: {
+          type: "boolean",
+          description: "Whether the attachment is private. Defaults to true.",
+          default: true,
+        },
+      },
+      required: [
+        "file_name",
+        "content_base64",
+        "attached_to_doctype",
+        "attached_to_name",
+      ],
+    },
+    handler: async (input, ctx) => {
+      const requiredStrings = [
+        "file_name",
+        "content_base64",
+        "attached_to_doctype",
+        "attached_to_name",
+      ] as const;
+      for (const field of requiredStrings) {
+        if (typeof input[field] !== "string" || !input[field].trim()) {
+          throw new Error(
+            `[erpnext_file_upload] '${field}' must be a non-empty string`,
+          );
+        }
+      }
+
+      const fileName = input.file_name as string;
+      if (/[\\/\0]/.test(fileName)) {
+        throw new Error(
+          "[erpnext_file_upload] 'file_name' must be a filename without a path",
+        );
+      }
+      if (
+        input.is_private !== undefined && typeof input.is_private !== "boolean"
+      ) {
+        throw new Error("[erpnext_file_upload] 'is_private' must be a boolean");
+      }
+
+      const file = await ctx.client.uploadFile({
+        fileName,
+        contentBase64: input.content_base64 as string,
+        attachedToDoctype: input.attached_to_doctype as string,
+        attachedToName: input.attached_to_name as string,
+        ...(input.attached_to_field !== undefined
+          ? { attachedToField: input.attached_to_field as string }
+          : {}),
+        isPrivate: input.is_private === undefined
+          ? true
+          : input.is_private as boolean,
+      });
+
+      return {
+        data: file,
+        message:
+          `${fileName} attached to ${input.attached_to_doctype} ${input.attached_to_name}`,
+      };
+    },
+  },
+
   // ── Generic Create ──────────────────────────────────────────────────────────
 
   {

@@ -78,6 +78,8 @@ export type {
   ErpSalesOrder,
   ErpTask,
   FrappeDoc,
+  FrappeFile,
+  FrappeFileUploadInput,
   FrappeFilter,
   FrappeListOptions,
 } from "./src/api/types.ts";

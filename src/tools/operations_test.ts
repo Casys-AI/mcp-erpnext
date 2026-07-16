@@ -191,6 +191,70 @@ Deno.test("erpnext_doc_cancel - invalidates cache after cancel", async () => {
   assertEquals(invalidatedName, "SO-001");
 });
 
+// ── erpnext_file_upload ────────────────────────────────────────────────────
+
+Deno.test("erpnext_file_upload - validates input and delegates to the client", async () => {
+  const tool = getTool("erpnext_file_upload");
+  await assertRejects(
+    () =>
+      tool.handler({
+        file_name: "nested/report.pdf",
+        content_base64: "YQ==",
+        attached_to_doctype: "Task",
+        attached_to_name: "TASK-001",
+      }, makeCtx(makeMockClient())),
+    Error,
+    "filename without a path",
+  );
+
+  let captured: Record<string, unknown> = {};
+  const result = await tool.handler(
+    {
+      file_name: "report.pdf",
+      content_base64: "YQ==",
+      attached_to_doctype: "Task",
+      attached_to_name: "TASK-001",
+      attached_to_field: "attachment",
+      is_private: false,
+    },
+    makeCtx(makeMockClient({
+      uploadFile: async (input: Record<string, unknown>) => {
+        captured = input;
+        return { name: "FILE-001" };
+      },
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(captured, {
+    fileName: "report.pdf",
+    contentBase64: "YQ==",
+    attachedToDoctype: "Task",
+    attachedToName: "TASK-001",
+    attachedToField: "attachment",
+    isPrivate: false,
+  });
+  assertEquals(result.message, "report.pdf attached to Task TASK-001");
+});
+
+Deno.test("erpnext_file_upload - defaults to private", async () => {
+  let isPrivate: boolean | undefined;
+  await getTool("erpnext_file_upload").handler(
+    {
+      file_name: "report.pdf",
+      content_base64: "YQ==",
+      attached_to_doctype: "Task",
+      attached_to_name: "TASK-001",
+    },
+    makeCtx(makeMockClient({
+      uploadFile: async (input: { isPrivate: boolean }) => {
+        isPrivate = input.isPrivate;
+        return { name: "FILE-001" };
+      },
+    })),
+  );
+  assertEquals(isPrivate, true);
+});
+
 // ── erpnext_doc_list ────────────────────────────────────────────────────────
 
 Deno.test("erpnext_doc_list - has _meta.ui for doclist-viewer", () => {

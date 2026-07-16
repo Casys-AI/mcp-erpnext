@@ -2,6 +2,14 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## Unreleased
+
+### Features
+
+- **`erpnext_file_upload`** attaches base64-supplied bytes to any DocType as a
+  native Frappe `File`, with private-by-default uploads and a configurable
+  decoded-size limit. Tool count 123 → 124.
+
 ## [2.5.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.4.2...v2.5.0) (2026-07-21)
 
 ### Features

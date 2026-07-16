@@ -1,6 +1,6 @@
 # ERPNext MCP Library - Coverage
 
-## Covered (120 tools, 14 categories)
+## Covered (122 tools, 14 categories)
 
 ### Sales (17 tools)
 
@@ -80,14 +80,15 @@
 | `erpnext_timesheet_list` | Timesheet | List + filters (employee, project, status)           | doclist-viewer |
 | `erpnext_timesheet_get`  | Timesheet | Get by name (with time log details)                  | -              |
 
-### Setup (2 tools)
+### Setup (3 tools)
 
 | Tool                     | DocType | Operations                                             | UI Viewer      |
 | ------------------------ | ------- | ------------------------------------------------------ | -------------- |
+| `erpnext_user_list`      | User    | List assignable users (enabled System Users, search)   | doclist-viewer |
 | `erpnext_company_list`   | Company | List companies (name, abbr, currency, country)         | doclist-viewer |
 | `erpnext_company_create` | Company | Create company (name, abbr, currency, country, domain) | -              |
 
-### Generic Operations (7 tools)
+### Generic Operations (8 tools)
 
 | Tool                 | DocType | Operations                                       | UI Viewer      |
 | -------------------- | ------- | ------------------------------------------------ | -------------- |
@@ -98,6 +99,7 @@
 | `erpnext_doc_cancel` | Any     | Cancel any submitted document                    | -              |
 | `erpnext_doc_get`    | Any     | Get any document by DocType + name               | -              |
 | `erpnext_doc_list`   | Any     | List any DocType with field/filter/limit control | doclist-viewer |
+| `erpnext_doc_assign` | Any     | Native assignment (ToDo + notification) to users | -              |
 
 ### Kanban (2 tools)
 

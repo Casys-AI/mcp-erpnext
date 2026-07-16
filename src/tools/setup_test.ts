@@ -1,7 +1,8 @@
 /**
  * Setup Tools Tests
  *
- * Tests for erpnext_company_list and erpnext_company_create.
+ * Tests for erpnext_user_list, erpnext_company_list, and
+ * erpnext_company_create.
  *
  * @module lib/erpnext/tests/tools/setup_test
  */
@@ -203,4 +204,75 @@ Deno.test("erpnext_company_create - domain is optional", async () => {
   );
 
   assertEquals(capturedData.domain, undefined);
+});
+
+// ── erpnext_user_list ───────────────────────────────────────────────────────
+
+Deno.test("erpnext_user_list - defaults to enabled System Users without system accounts", async () => {
+  let capturedFilters: unknown[][] = [];
+  let capturedLimit = 0;
+  const result = await getTool("erpnext_user_list").handler(
+    {},
+    makeCtx(makeMockClient({
+      list: async (
+        doctype: string,
+        options: { filters?: unknown[][]; limit?: number },
+      ) => {
+        assertEquals(doctype, "User");
+        capturedFilters = options.filters ?? [];
+        capturedLimit = options.limit ?? 0;
+        return [{
+          name: "user@example.com",
+          full_name: "User One",
+          enabled: 1,
+        }];
+      },
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(capturedFilters, [
+    ["user_type", "=", "System User"],
+    ["name", "not in", ["Administrator", "Guest"]],
+    ["enabled", "=", 1],
+  ]);
+  assertEquals(capturedLimit, 50);
+  assertEquals(result.doctype, "User");
+  assertEquals(result.count, 1);
+});
+
+Deno.test("erpnext_user_list - supports search and include_disabled", async () => {
+  let capturedFilters: unknown[][] = [];
+  await getTool("erpnext_user_list").handler(
+    { search: "Marie", include_disabled: true, limit: 10 },
+    makeCtx(makeMockClient({
+      list: async (_doctype: string, options: { filters?: unknown[][] }) => {
+        capturedFilters = options.filters ?? [];
+        return [];
+      },
+    })),
+  );
+
+  assertEquals(capturedFilters, [
+    ["user_type", "=", "System User"],
+    ["name", "not in", ["Administrator", "Guest"]],
+    ["full_name", "like", "%Marie%"],
+  ]);
+});
+
+Deno.test("erpnext_user_list - escapes LIKE wildcards in search", async () => {
+  let capturedFilters: unknown[][] = [];
+  await getTool("erpnext_user_list").handler(
+    { search: "100%_done\\x" },
+    makeCtx(makeMockClient({
+      list: async (_doctype: string, options: { filters?: unknown[][] }) => {
+        capturedFilters = options.filters ?? [];
+        return [];
+      },
+    })),
+  );
+
+  assertEquals(
+    capturedFilters.find((filter) => filter[0] === "full_name"),
+    ["full_name", "like", "%100\\%\\_done\\\\x%"],
+  );
 });

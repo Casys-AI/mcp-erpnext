@@ -11,6 +11,13 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
+import {
+  applyAssignment,
+  ASSIGNMENT_INPUT_PROPERTIES,
+  fetchDocAfterAssignment,
+  prepareAssignment,
+  validateAssignees,
+} from "./assignment.ts";
 
 export const operationsTools: ErpNextTool[] = [
   // ── Generic Create ──────────────────────────────────────────────────────────
@@ -360,6 +367,73 @@ export const operationsTools: ErpNextTool[] = [
         count: docs.length,
         data: docs,
         _meta: DOCLIST_META,
+      };
+    },
+  },
+
+  // ── Generic Assign ────────────────────────────────────────────────────────
+
+  {
+    name: "erpnext_doc_assign",
+    description:
+      "Assign any ERPNext document to one or more users through Frappe's native " +
+      "assignment workflow (per-assignee ToDo, _assign sync, permission sharing, " +
+      "native notifications). Works on any DocType (e.g. 'Task', 'Issue', 'Opportunity'). " +
+      "Idempotent: re-assigning an already-assigned user returns the existing ToDo without re-notifying.",
+    category: "operations",
+    inputSchema: {
+      type: "object",
+      properties: {
+        doctype: {
+          type: "string",
+          description:
+            "ERPNext DocType name (e.g. 'Task', 'Issue', 'Opportunity')",
+        },
+        name: {
+          type: "string",
+          description: "Document name/ID (e.g. 'TASK-2026-00001')",
+        },
+        ...ASSIGNMENT_INPUT_PROPERTIES,
+      },
+      required: ["doctype", "name", "assign_to"],
+    },
+    handler: async (input, ctx) => {
+      if (!input.doctype) {
+        throw new Error("[erpnext_doc_assign] 'doctype' is required");
+      }
+      if (!input.name) {
+        throw new Error("[erpnext_doc_assign] 'name' is required");
+      }
+      const assignment = prepareAssignment(input, "erpnext_doc_assign");
+      if (!assignment) {
+        throw new Error("[erpnext_doc_assign] 'assign_to' is required");
+      }
+
+      const doctype = input.doctype as string;
+      const name = input.name as string;
+      // Fast-fail on a missing document before touching users or ToDos.
+      await ctx.client.get(doctype, name);
+      await validateAssignees(assignment.assignees, "erpnext_doc_assign", ctx);
+
+      const assignmentInfo = await applyAssignment(
+        doctype,
+        name,
+        assignment,
+        ctx,
+        `[erpnext_doc_assign] ${doctype} ${name} assignment failed`,
+      );
+      const doc = await fetchDocAfterAssignment(
+        doctype,
+        name,
+        ctx,
+        "erpnext_doc_assign",
+      );
+      return {
+        data: doc,
+        message: `${doctype} ${name} is now assigned to ${
+          assignment.assignees.join(", ")
+        }`,
+        assignment: assignmentInfo,
       };
     },
   },

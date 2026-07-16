@@ -7,10 +7,71 @@
  * @module lib/erpnext/tools/setup
  */
 
+import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const setupTools: ErpNextTool[] = [
+  // ── Users ──────────────────────────────────────────────────────────────────
+
+  {
+    name: "erpnext_user_list",
+    annotations: { readOnlyHint: true },
+    _meta: DOCLIST_META,
+    description:
+      "List assignable ERPNext users. Defaults to enabled System Users, " +
+      "excluding Administrator and Guest — the population valid for document " +
+      "assignment (erpnext_doc_assign, task assign_to). " +
+      "Fields: name (email), full_name, enabled.",
+    category: "setup",
+    inputSchema: {
+      type: "object",
+      properties: {
+        search: {
+          type: "string",
+          description: "Substring match on full name",
+        },
+        include_disabled: {
+          type: "boolean",
+          description: "Include disabled users (default false)",
+        },
+        limit: { type: "number", description: "Max results (default 50)" },
+      },
+    },
+    handler: async (input, ctx) => {
+      const limit = (input.limit as number) ?? 50;
+      const filters: FrappeFilter[] = [
+        ["user_type", "=", "System User"],
+        ["name", "not in", ["Administrator", "Guest"]],
+      ];
+      if (!input.include_disabled) {
+        filters.push(["enabled", "=", 1]);
+      }
+      if (input.search) {
+        // Escape LIKE wildcards so search is a literal substring match.
+        const literal = (input.search as string).replace(
+          /[\\%_]/g,
+          (match) => `\\${match}`,
+        );
+        filters.push(["full_name", "like", `%${literal}%`]);
+      }
+
+      const docs = await ctx.client.list("User", {
+        fields: ["name", "full_name", "enabled"],
+        filters,
+        limit,
+        order_by: "full_name asc",
+      });
+
+      return {
+        doctype: "User",
+        count: docs.length,
+        data: docs,
+        _meta: DOCLIST_META,
+      };
+    },
+  },
+
   // ── Companies ──────────────────────────────────────────────────────────────
 
   {

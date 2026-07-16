@@ -1,12 +1,13 @@
-# Tools Reference (120)
+# Tools Reference (122)
 
 Full reference for all ERPNext MCP tools. See [README](../README.md) for
 overview.
 
-## Setup (2)
+## Setup (3)
 
 | Tool                     | DocType | Operations                                     |
 | ------------------------ | ------- | ---------------------------------------------- |
+| `erpnext_user_list`      | User    | List assignable users (enabled System Users)   |
 | `erpnext_company_list`   | Company | List companies                                 |
 | `erpnext_company_create` | Company | Create (name, abbr, currency, country, domain) |
 
@@ -152,7 +153,7 @@ overview.
 | `erpnext_asset_maintenance_get`  | Asset Maintenance | Get with maintenance tasks                            |
 | `erpnext_asset_category_list`    | Asset Category    | List all categories                                   |
 
-## Generic Operations (7) → doclist-viewer
+## Generic Operations (8) → doclist-viewer
 
 | Tool                 | Operation | Notes                                             |
 | -------------------- | --------- | ------------------------------------------------- |
@@ -163,6 +164,7 @@ overview.
 | `erpnext_doc_delete` | Delete    | Draft documents only                              |
 | `erpnext_doc_submit` | Submit    | Any submittable document                          |
 | `erpnext_doc_cancel` | Cancel    | Any submitted document                            |
+| `erpnext_doc_assign` | Assign    | Native assignment (ToDo + notification) to users  |
 
 ## Kanban (2) → kanban-viewer
 

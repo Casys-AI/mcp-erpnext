@@ -6,7 +6,7 @@
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **120 tools**
+MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **122 tools**
 across **14 categories**, with **7 interactive UI viewers**.
 
 Connect any MCP-compatible AI agent (Claude Desktop, Claude Code, VS Code
@@ -220,28 +220,28 @@ npm install
 node build-all.mjs
 ```
 
-## Tools (120)
+## Tools (122)
 
 **14 categories** covering the full ERPNext surface. Each `_list` tool returns
 interactive results in the doclist-viewer with row click, inline detail, and
 cross-viewer navigation.
 
-| Category          | Tools | Viewer               | Key capabilities                                                     |
-| ----------------- | ----- | -------------------- | -------------------------------------------------------------------- |
-| **Sales**         | 17    | doclist / invoice    | Customers, Sales Orders, Invoices, Quotations — CRUD + Submit/Cancel |
-| **Purchasing**    | 11    | doclist / invoice    | Suppliers, Purchase Orders, Invoices, Receipts                       |
-| **Inventory**     | 9     | doclist / stock      | Items, Stock Balance, Warehouses, Stock Entries                      |
-| **Accounting**    | 6     | doclist              | Accounts, Journal Entries, Payment Entries                           |
-| **HR**            | 12    | doclist              | Employees, Attendance, Leave, Salary, Expenses                       |
-| **Project**       | 9     | doclist              | Projects, Tasks, Timesheets                                          |
-| **Delivery**      | 5     | doclist              | Delivery Notes, Shipments                                            |
-| **Manufacturing** | 7     | doclist              | BOMs, Work Orders, Job Cards                                         |
-| **CRM**           | 8     | doclist              | Leads, Opportunities, Contacts, Campaigns                            |
-| **Assets**        | 8     | doclist              | Assets, Movements, Maintenance, Categories                           |
-| **Operations**    | 7     | doclist              | Generic CRUD for **any** DocType (`erpnext_doc_*`)                   |
-| **Kanban**        | 2     | kanban               | Task/Opportunity/Issue boards with drag-and-drop                     |
-| **Analytics**     | 17    | chart / kpi / funnel | 12 chart types, 5 KPIs, sales funnel                                 |
-| **Setup**         | 2     | —                    | Company creation                                                     |
+| Category          | Tools | Viewer               | Key capabilities                                                       |
+| ----------------- | ----- | -------------------- | ---------------------------------------------------------------------- |
+| **Sales**         | 17    | doclist / invoice    | Customers, Sales Orders, Invoices, Quotations — CRUD + Submit/Cancel   |
+| **Purchasing**    | 11    | doclist / invoice    | Suppliers, Purchase Orders, Invoices, Receipts                         |
+| **Inventory**     | 9     | doclist / stock      | Items, Stock Balance, Warehouses, Stock Entries                        |
+| **Accounting**    | 6     | doclist              | Accounts, Journal Entries, Payment Entries                             |
+| **HR**            | 12    | doclist              | Employees, Attendance, Leave, Salary, Expenses                         |
+| **Project**       | 9     | doclist              | Projects, Tasks, Timesheets                                            |
+| **Delivery**      | 5     | doclist              | Delivery Notes, Shipments                                              |
+| **Manufacturing** | 7     | doclist              | BOMs, Work Orders, Job Cards                                           |
+| **CRM**           | 8     | doclist              | Leads, Opportunities, Contacts, Campaigns                              |
+| **Assets**        | 8     | doclist              | Assets, Movements, Maintenance, Categories                             |
+| **Operations**    | 8     | doclist              | Generic CRUD + native assignment for **any** DocType (`erpnext_doc_*`) |
+| **Kanban**        | 2     | kanban               | Task/Opportunity/Issue boards with drag-and-drop                       |
+| **Analytics**     | 17    | chart / kpi / funnel | 12 chart types, 5 KPIs, sales funnel                                   |
+| **Setup**         | 3     | —                    | Company creation, assignable user listing                              |
 
 > Full tool reference with all parameters: [`docs/tools.md`](docs/tools.md)
 

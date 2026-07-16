@@ -173,3 +173,106 @@ Deno.test("erpnext_doc_delete - calls client.delete", async () => {
   assertEquals(deletedName, "CUST-001");
   assertEquals(result.deleted, true);
 });
+
+// ── erpnext_doc_assign ──────────────────────────────────────────────────────
+
+Deno.test("erpnext_doc_assign - assigns through the native API and returns the fresh doc", async () => {
+  let assignmentArgs: Record<string, unknown> = {};
+  const result = await getTool("erpnext_doc_assign").handler(
+    {
+      doctype: "Issue",
+      name: "ISS-001",
+      assign_to: "user@example.com",
+      assignment_priority: "High",
+    },
+    makeCtx(makeMockClient({
+      list: async () => [{ name: "user@example.com", enabled: 1 }],
+      get: async (_doctype: string, name: string) => ({
+        name,
+        status: "Open",
+      }),
+      callMethod: async (method: string, args: Record<string, unknown>) => {
+        assertEquals(method, "frappe.desk.form.assign_to.add");
+        assignmentArgs = args;
+        return [{ owner: "user@example.com", name: "TODO-001" }];
+      },
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(assignmentArgs, {
+    doctype: "Issue",
+    name: "ISS-001",
+    assign_to: ["user@example.com"],
+    priority: "High",
+  });
+  assertEquals(result.data, { name: "ISS-001", status: "Open" });
+  assertEquals(
+    result.message,
+    "Issue ISS-001 is now assigned to user@example.com",
+  );
+  assertEquals(result.assignment, {
+    notify_user: true,
+    assignees: ["user@example.com"],
+    todos: [{ owner: "user@example.com", name: "TODO-001" }],
+  });
+});
+
+Deno.test("erpnext_doc_assign - fails fast on a missing document before validating users", async () => {
+  let listCalls = 0;
+  let callMethodCalls = 0;
+  await assertRejects(
+    () =>
+      getTool("erpnext_doc_assign").handler(
+        { doctype: "Issue", name: "MISSING", assign_to: "user@example.com" },
+        makeCtx(makeMockClient({
+          get: async () => {
+            throw new Error("Issue MISSING not found");
+          },
+          list: async () => {
+            listCalls++;
+            return [{ name: "user@example.com", enabled: 1 }];
+          },
+          callMethod: async () => {
+            callMethodCalls++;
+            return [];
+          },
+        })),
+      ),
+    Error,
+    "not found",
+  );
+  assertEquals(listCalls, 0);
+  assertEquals(callMethodCalls, 0);
+});
+
+Deno.test("erpnext_doc_assign - rejects unknown assignees before mutation", async () => {
+  let callMethodCalls = 0;
+  await assertRejects(
+    () =>
+      getTool("erpnext_doc_assign").handler(
+        { doctype: "Task", name: "TASK-001", assign_to: "ghost@example.com" },
+        makeCtx(makeMockClient({
+          list: async () => [],
+          callMethod: async () => {
+            callMethodCalls++;
+            return [];
+          },
+        })),
+      ),
+    Error,
+    "does not exist",
+  );
+  assertEquals(callMethodCalls, 0);
+});
+
+Deno.test("erpnext_doc_assign - requires assign_to", async () => {
+  await assertRejects(
+    () =>
+      getTool("erpnext_doc_assign").handler(
+        { doctype: "Task", name: "TASK-001" },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "'assign_to' is required",
+  );
+});

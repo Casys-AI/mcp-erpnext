@@ -2,6 +2,24 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [2.4.1](https://github.com/Casys-AI/mcp-erpnext/compare/v2.4.0...v2.4.1) (2026-07-16)
+
+### Features
+
+- **`erpnext_doc_unassign`** removes one user's native assignment on any DocType
+  via `frappe.desk.form.assign_to.remove` (closes the ToDo, resyncs `_assign`)
+  and returns the remaining open assignments. Idempotent on the Frappe side.
+  Tool count 122 → 123.
+- **kanban-viewer:** per-assignee unassign (×) button in the detail modal, with
+  busy/error states.
+
+### Bug Fixes
+
+- **kanban-viewer:** Frappe v16 omits `_assign` from single-doc GET responses —
+  the detail modal now rebuilds it from the authoritative assignment result
+  (assign and unassign), and treats an explicit empty `_assign` as truly
+  unassigned so a just-removed assignee no longer reappears.
+
 ## [2.4.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.3.1...v2.4.0) (2026-07-16)
 
 ### Bug Fixes

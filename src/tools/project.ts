@@ -9,121 +9,13 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
-
-const ASSIGNMENT_METHOD = "frappe.desk.form.assign_to.add";
-
-type TaskAssignment = {
-  assignees: string[];
-  args: Record<string, unknown>;
-};
-
-function prepareTaskAssignment(
-  input: Record<string, unknown>,
-  toolName: string,
-): TaskAssignment | undefined {
-  if (input.assign_to === undefined) return undefined;
-
-  if (input.notify_user === false) {
-    throw new Error(
-      `[${toolName}] 'notify_user=false' is not supported for native Task assignments`,
-    );
-  }
-  if (
-    input.notify_user !== undefined && typeof input.notify_user !== "boolean"
-  ) {
-    throw new Error(`[${toolName}] 'notify_user' must be a boolean`);
-  }
-
-  const rawAssignees = typeof input.assign_to === "string"
-    ? [input.assign_to]
-    : Array.isArray(input.assign_to)
-    ? input.assign_to
-    : undefined;
-  if (!rawAssignees || rawAssignees.length === 0) {
-    throw new Error(
-      `[${toolName}] 'assign_to' must be a non-empty string or array of non-empty strings`,
-    );
-  }
-
-  const assignees = [
-    ...new Set(rawAssignees.map((assignee) => {
-      if (typeof assignee !== "string" || !assignee.trim()) {
-        throw new Error(
-          `[${toolName}] 'assign_to' must be a non-empty string or array of non-empty strings`,
-        );
-      }
-      return assignee.trim();
-    })),
-  ];
-
-  const args: Record<string, unknown> = { assign_to: assignees };
-  if (input.assignment_description !== undefined) {
-    if (typeof input.assignment_description !== "string") {
-      throw new Error(
-        `[${toolName}] 'assignment_description' must be a string`,
-      );
-    }
-    args.description = input.assignment_description;
-  }
-  if (input.assignment_priority !== undefined) {
-    if (
-      input.assignment_priority !== "Low" &&
-      input.assignment_priority !== "Medium" &&
-      input.assignment_priority !== "High"
-    ) {
-      throw new Error(
-        `[${toolName}] 'assignment_priority' must be ToDo Low, Medium, or High`,
-      );
-    }
-    args.priority = input.assignment_priority;
-  }
-  if (input.assignment_date !== undefined) {
-    if (
-      typeof input.assignment_date !== "string" ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(input.assignment_date)
-    ) {
-      throw new Error(`[${toolName}] 'assignment_date' must be YYYY-MM-DD`);
-    }
-    args.date = input.assignment_date;
-  }
-
-  return { assignees, args };
-}
-
-async function validateTaskAssignees(
-  assignees: string[],
-  toolName: string,
-  ctx: Parameters<ErpNextTool["handler"]>[1],
-): Promise<void> {
-  for (const assignee of assignees) {
-    const users = await ctx.client.list("User", {
-      fields: ["name", "enabled"],
-      filters: [["name", "=", assignee]],
-      limit: 1,
-    });
-    if (users.length === 0) {
-      throw new Error(
-        `[${toolName}] User '${assignee}' does not exist or is not accessible`,
-      );
-    }
-    if (!users[0].enabled) {
-      throw new Error(`[${toolName}] User '${assignee}' is disabled`);
-    }
-  }
-}
-
-function assignmentResult(
-  assignees: string[],
-  nativeResult: unknown,
-): Record<string, unknown> {
-  const todos = Array.isArray(nativeResult)
-    ? nativeResult.map((todo) => {
-      const record = todo as Record<string, unknown>;
-      return { owner: record.owner, name: record.name };
-    })
-    : [];
-  return { notify_user: true, assignees, todos };
-}
+import {
+  applyAssignment,
+  ASSIGNMENT_INPUT_PROPERTIES,
+  fetchDocAfterAssignment,
+  prepareAssignment,
+  validateAssignees,
+} from "./assignment.ts";
 
 export const projectTools: ErpNextTool[] = [
   // ── Projects ──────────────────────────────────────────────────────────────
@@ -304,32 +196,7 @@ export const projectTools: ErpNextTool[] = [
           type: "string",
           description: "Expected end date YYYY-MM-DD",
         },
-        assign_to: {
-          type: ["string", "array"],
-          description: "User email or non-empty array of user emails to assign",
-          minLength: 1,
-          minItems: 1,
-          items: { type: "string", minLength: 1 },
-        },
-        notify_user: {
-          type: "boolean",
-          description: "Notify assigned users (must be true; default true)",
-          default: true,
-        },
-        assignment_description: {
-          type: "string",
-          description: "Description for the native ToDo assignment",
-        },
-        assignment_priority: {
-          type: "string",
-          description: "Native ToDo priority",
-          enum: ["Low", "Medium", "High"],
-        },
-        assignment_date: {
-          type: "string",
-          description: "Native ToDo date YYYY-MM-DD",
-          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
-        },
+        ...ASSIGNMENT_INPUT_PROPERTIES,
       },
       required: ["project", "subject"],
     },
@@ -341,9 +208,9 @@ export const projectTools: ErpNextTool[] = [
         throw new Error("[erpnext_task_create] 'subject' is required");
       }
 
-      const assignment = prepareTaskAssignment(input, "erpnext_task_create");
+      const assignment = prepareAssignment(input, "erpnext_task_create");
       if (assignment) {
-        await validateTaskAssignees(
+        await validateAssignees(
           assignment.assignees,
           "erpnext_task_create",
           ctx,
@@ -369,16 +236,23 @@ export const projectTools: ErpNextTool[] = [
         };
       }
 
-      const nativeResult = await ctx.client.callMethod(ASSIGNMENT_METHOD, {
-        doctype: "Task",
-        name: doc.name,
-        ...assignment.args,
-      });
-      const freshDoc = await ctx.client.get("Task", doc.name);
+      const assignmentInfo = await applyAssignment(
+        "Task",
+        doc.name as string,
+        assignment,
+        ctx,
+        `[erpnext_task_create] Task ${doc.name} was created, but assignment failed`,
+      );
+      const freshDoc = await fetchDocAfterAssignment(
+        "Task",
+        doc.name as string,
+        ctx,
+        "erpnext_task_create",
+      );
       return {
         data: freshDoc,
         message: `Task ${doc.name} created successfully`,
-        assignment: assignmentResult(assignment.assignees, nativeResult),
+        assignment: assignmentInfo,
       };
     },
   },
@@ -441,32 +315,7 @@ export const projectTools: ErpNextTool[] = [
           description: "New expected end date YYYY-MM-DD",
         },
         description: { type: "string", description: "New task description" },
-        assign_to: {
-          type: ["string", "array"],
-          description: "User email or non-empty array of user emails to assign",
-          minLength: 1,
-          minItems: 1,
-          items: { type: "string", minLength: 1 },
-        },
-        notify_user: {
-          type: "boolean",
-          description: "Notify assigned users (must be true; default true)",
-          default: true,
-        },
-        assignment_description: {
-          type: "string",
-          description: "Description for the native ToDo assignment",
-        },
-        assignment_priority: {
-          type: "string",
-          description: "Native ToDo priority",
-          enum: ["Low", "Medium", "High"],
-        },
-        assignment_date: {
-          type: "string",
-          description: "Native ToDo date YYYY-MM-DD",
-          pattern: "^\\d{4}-\\d{2}-\\d{2}$",
-        },
+        ...ASSIGNMENT_INPUT_PROPERTIES,
       },
       required: ["name"],
     },
@@ -475,9 +324,9 @@ export const projectTools: ErpNextTool[] = [
         throw new Error("[erpnext_task_update] 'name' is required");
       }
 
-      const assignment = prepareTaskAssignment(input, "erpnext_task_update");
+      const assignment = prepareAssignment(input, "erpnext_task_update");
       if (assignment) {
-        await validateTaskAssignees(
+        await validateAssignees(
           assignment.assignees,
           "erpnext_task_update",
           ctx,
@@ -512,19 +361,30 @@ export const projectTools: ErpNextTool[] = [
         };
       }
 
-      if (Object.keys(data).length > 0) {
+      const fieldsUpdated = Object.keys(data).length > 0;
+      if (fieldsUpdated) {
         await ctx.client.update("Task", name, data);
       }
-      const nativeResult = await ctx.client.callMethod(ASSIGNMENT_METHOD, {
-        doctype: "Task",
+      const failureContext = fieldsUpdated
+        ? `[erpnext_task_update] Task ${name} was updated, but assignment failed`
+        : `[erpnext_task_update] Task ${name} assignment failed`;
+      const assignmentInfo = await applyAssignment(
+        "Task",
         name,
-        ...assignment.args,
-      });
-      const freshDoc = await ctx.client.get("Task", name);
+        assignment,
+        ctx,
+        failureContext,
+      );
+      const freshDoc = await fetchDocAfterAssignment(
+        "Task",
+        name,
+        ctx,
+        "erpnext_task_update",
+      );
       return {
         data: freshDoc,
         message: `Task ${name} updated successfully`,
-        assignment: assignmentResult(assignment.assignees, nativeResult),
+        assignment: assignmentInfo,
       };
     },
   },

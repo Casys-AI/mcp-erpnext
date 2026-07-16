@@ -62,7 +62,7 @@ export const analyticsTools: ErpNextTool[] = [
       }
 
       // Bin has no item_group field — resolve the group to its item codes and
-      // filter in memory (FrappeFilter doesn't support "in" arrays).
+      // filter in memory (the code set can exceed a sane "in" filter size).
       let allowedItems: Set<string> | null = null;
       if (input.item_group) {
         const groupItems = await ctx.client.list("Item", {
@@ -722,7 +722,7 @@ export const analyticsTools: ErpNextTool[] = [
         raw[code] = [totalQty, totalVal, 0, 0];
       }
 
-      // Order data — fetch all, filter in memory (FrappeFilter doesn't support "in" arrays)
+      // Order data — fetch all, filter in memory (the item set can exceed a sane "in" filter size)
       const soItems = await ctx.client.list("Sales Order Item", {
         fields: ["item_code", "qty", "amount"],
         filters: [["docstatus", "!=", 2]],

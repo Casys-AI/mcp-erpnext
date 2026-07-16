@@ -138,10 +138,11 @@ Deno.test("erpnext_task_update deduplicates assignees and returns an existing na
       assign_to: ["a@example.com", " a@example.com "],
     },
     makeCtx(makeMockClient({
-      list: async (_doctype: string, options: { filters?: unknown[][] }) => [{
-        name: options.filters?.[0][2],
-        enabled: 1,
-      }],
+      list: async (_doctype: string, options: { filters?: unknown[][] }) =>
+        (options.filters?.[0][2] as string[]).map((name) => ({
+          name,
+          enabled: 1,
+        })),
       update: async () => {
         updateCalls++;
         return { name: "TASK-001" };
@@ -280,6 +281,77 @@ Deno.test("erpnext_task_update accepts assignment-only input and refreshes the T
 
   assertEquals(updateCalls, 0);
   assertEquals(result.data, { name: "TASK-001", subject: "Fresh task" });
+});
+
+Deno.test("erpnext_task_create reports the created Task when assignment fails", async () => {
+  await assertRejects(
+    () =>
+      getTool("erpnext_task_create").handler(
+        {
+          project: "PROJ-001",
+          subject: "Plan release",
+          assign_to: "user@example.com",
+        },
+        makeCtx(makeMockClient({
+          callMethod: async () => {
+            throw new Error("Assignment permission denied");
+          },
+        })),
+      ),
+    Error,
+    "Task TASK-001 was created, but assignment failed: Assignment permission denied",
+  );
+});
+
+Deno.test("erpnext_task_update reports updated fields when assignment fails", async () => {
+  let updateCalls = 0;
+  await assertRejects(
+    () =>
+      getTool("erpnext_task_update").handler(
+        {
+          name: "TASK-001",
+          status: "Working",
+          assign_to: "user@example.com",
+        },
+        makeCtx(makeMockClient({
+          update: async () => {
+            updateCalls++;
+            return { name: "TASK-001" };
+          },
+          callMethod: async () => {
+            throw new Error("Assignment permission denied");
+          },
+        })),
+      ),
+    Error,
+    "Task TASK-001 was updated, but assignment failed: Assignment permission denied",
+  );
+  assertEquals(updateCalls, 1);
+});
+
+Deno.test("assignee validation issues a single User query with an 'in' filter", async () => {
+  const listCalls: { doctype: string; filters?: unknown[][] }[] = [];
+  await getTool("erpnext_task_update").handler(
+    { name: "TASK-001", assign_to: ["a@example.com", "b@example.com"] },
+    makeCtx(makeMockClient({
+      list: async (doctype: string, options: { filters?: unknown[][] }) => {
+        listCalls.push({ doctype, filters: options.filters });
+        return [
+          { name: "a@example.com", enabled: 1 },
+          { name: "b@example.com", enabled: 1 },
+        ];
+      },
+      callMethod: async () => [],
+      get: async () => ({ name: "TASK-001" }),
+    })),
+  );
+
+  assertEquals(listCalls.length, 1);
+  assertEquals(listCalls[0].doctype, "User");
+  assertEquals(listCalls[0].filters, [["name", "in", [
+    "a@example.com",
+    "b@example.com",
+  ]]]);
 });
 
 Deno.test("erpnext_task_update propagates native assignment errors", async () => {

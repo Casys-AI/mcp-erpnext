@@ -62,8 +62,12 @@ export interface FrappeErrorResponse {
   message?: string;
 }
 
-/** Frappe list filter: [field, operator, value] */
-export type FrappeFilter = [string, string, string | number | boolean | null];
+/** Frappe list filter: [field, operator, value]. Array values pair with the "in"/"not in" operators. */
+export type FrappeFilter = [
+  string,
+  string,
+  string | number | boolean | null | (string | number)[],
+];
 
 /** Options for Frappe list queries (`GET /api/resource/{doctype}`). */
 export interface FrappeListOptions {

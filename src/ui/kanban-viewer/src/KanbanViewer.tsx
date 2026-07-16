@@ -1503,6 +1503,63 @@ export function KanbanViewer() {
     void requestBoardRefresh({ ignoreInterval: true });
   }
 
+  async function handleLoadAssignableUsers(): Promise<
+    Array<{ name: string; full_name?: string }>
+  > {
+    if (!app.getHostCapabilities()?.serverTools) {
+      throw new Error("Host does not support proxied server tool calls");
+    }
+    const result = await app.callServerTool({
+      name: "erpnext_user_list",
+      arguments: { limit: 100 },
+    }, { timeout: TOOL_CALL_TIMEOUT_MS });
+    if (result.isError) {
+      throw new Error(extractToolError(result));
+    }
+    const text = extractTextContent(result);
+    if (!text) return [];
+    let payload: { data?: Array<{ name: string; full_name?: string }> };
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      throw new Error("Could not read the user list returned by the server");
+    }
+    return payload.data ?? [];
+  }
+
+  async function handleAssignDetail(
+    doctype: string,
+    name: string,
+    assignTo: string,
+  ) {
+    if (!app.getHostCapabilities()?.serverTools) {
+      throw new Error("Host does not support proxied server tool calls");
+    }
+    const result = await app.callServerTool({
+      name: "erpnext_doc_assign",
+      arguments: { doctype, name, assign_to: assignTo },
+    }, { timeout: TOOL_CALL_TIMEOUT_MS });
+    if (result.isError) {
+      throw new Error(extractToolError(result));
+    }
+
+    // erpnext_doc_assign returns the fresh doc — no extra fetch needed.
+    // The assignment is committed at this point: a hydration hiccup must not
+    // block the board refresh or read as an assignment failure.
+    const text = extractTextContent(result);
+    if (text) {
+      try {
+        hydrateDetail(unwrapDoc(JSON.parse(text) as Record<string, unknown>));
+      } catch (error) {
+        console.warn(
+          "[handleAssignDetail] Could not hydrate the assigned doc:",
+          error,
+        );
+      }
+    }
+    void requestBoardRefresh({ ignoreInterval: true });
+  }
+
   if (state.loading) {
     return (
       <div style={{ minHeight: 600, background: colors.bg.root }}>
@@ -1555,6 +1612,8 @@ export function KanbanViewer() {
           onClose={closeDetail}
           onMove={requestMove}
           onSave={handleSaveDetail}
+          onAssign={handleAssignDetail}
+          onLoadUsers={handleLoadAssignableUsers}
           onNavigate={handleNavigate}
         />
       )}

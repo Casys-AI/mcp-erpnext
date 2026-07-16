@@ -720,6 +720,183 @@ function DetailMetadataGrid({
 }
 
 // ---------------------------------------------------------------------------
+// Assignees section
+// ---------------------------------------------------------------------------
+
+export type AssignableUser = { name: string; full_name?: string };
+
+/** Parse Frappe's `_assign` meta field (JSON-encoded array of user emails). */
+function parseAssignees(value: unknown): string[] {
+  if (typeof value !== "string" || !value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is string => typeof entry === "string")
+      : [];
+  } catch (error) {
+    // Malformed _assign must not break the modal — treat as unassigned.
+    console.warn("[parseAssignees] Could not parse _assign:", error, value);
+    return [];
+  }
+}
+
+function AssigneesSection({
+  assignees,
+  onAssign,
+  onLoadUsers,
+}: {
+  assignees: string[];
+  onAssign: (assignTo: string) => Promise<void>;
+  onLoadUsers: () => Promise<AssignableUser[]>;
+}) {
+  const [users, setUsers] = useState<AssignableUser[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selected, setSelected] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+
+  // Mount-only: the assignable-user list is card-independent, and onLoadUsers
+  // gets a fresh identity on every parent render (board auto-refresh).
+  useEffect(() => {
+    let cancelled = false;
+    onLoadUsers()
+      .then((loaded) => {
+        if (!cancelled) setUsers(loaded);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLoadError(
+            error instanceof Error ? error.message : "Failed to load users",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const options = (users ?? []).filter(
+    (user) => !assignees.includes(user.name),
+  );
+
+  async function handleAssign() {
+    if (!selected || assigning) return;
+    setAssigning(true);
+    setAssignError(null);
+    try {
+      await onAssign(selected);
+      setSelected("");
+    } catch (error) {
+      setAssignError(
+        error instanceof Error ? error.message : "Assignment failed",
+      );
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        padding: "8px 16px 10px",
+        borderBottom: `1px solid ${colors.borderSubtle}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          color: colors.text.faint,
+          textTransform: "uppercase" as const,
+          letterSpacing: "0.08em",
+        }}
+      >
+        Assigned to
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 6,
+          alignItems: "center",
+        }}
+      >
+        {assignees.length === 0 && (
+          <span style={{ fontSize: 11, color: colors.text.faint }}>
+            Unassigned
+          </span>
+        )}
+        {assignees.map((email) => (
+          <span
+            key={email}
+            style={{
+              ...styles.badge(colors.accent, colors.accentDim),
+              fontSize: 10,
+            }}
+          >
+            {email}
+          </span>
+        ))}
+        <select
+          aria-label="Assign to user"
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          disabled={assigning || (users === null && !loadError)}
+          style={{
+            ...styles.input,
+            padding: "3px 8px",
+            fontSize: 11,
+            width: "auto",
+            maxWidth: 220,
+            cursor: "pointer",
+          }}
+        >
+          <option value="">
+            {users === null
+              ? (loadError ? "Users unavailable" : "Loading users…")
+              : "Assign to…"}
+          </option>
+          {options.map((user) => (
+            <option key={user.name} value={user.name}>
+              {user.full_name ? `${user.full_name} (${user.name})` : user.name}
+            </option>
+          ))}
+        </select>
+        {selected && (
+          <button
+            type="button"
+            onClick={handleAssign}
+            disabled={assigning}
+            style={{
+              ...styles.button,
+              padding: "3px 12px",
+              fontSize: 11,
+              fontWeight: 600,
+              background: colors.accent,
+              color: "#fff",
+              borderColor: colors.accent,
+              opacity: assigning ? 0.6 : 1,
+              borderRadius: 5,
+            }}
+          >
+            {assigning ? "Assigning…" : "Assign"}
+          </button>
+        )}
+      </div>
+      {(assignError ?? loadError) && (
+        <div style={{ fontSize: 10, color: colors.error }}>
+          {assignError ?? loadError}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main modal component
 // ---------------------------------------------------------------------------
 
@@ -729,6 +906,8 @@ export function CardDetailModal({
   onClose,
   onMove,
   onSave,
+  onAssign,
+  onLoadUsers,
   onNavigate,
 }: {
   detail: CardDetailState;
@@ -740,6 +919,12 @@ export function CardDetailModal({
     name: string,
     data: Record<string, string>,
   ) => void;
+  onAssign?: (
+    doctype: string,
+    name: string,
+    assignTo: string,
+  ) => Promise<void>;
+  onLoadUsers?: () => Promise<AssignableUser[]>;
   onNavigate?: (message: string) => void;
 }) {
   const [editedFields, setEditedFields] = useState<Record<string, string>>({});
@@ -766,6 +951,7 @@ export function CardDetailModal({
 
   if (!detail.selectedCardId) return null;
 
+  const selectedCardId = detail.selectedCardId;
   const card = board.cards.find((c) => c.id === detail.selectedCardId);
   const cardTitle = card?.title ?? detail.selectedCardId;
   const availableTargets = card
@@ -1056,6 +1242,16 @@ export function CardDetailModal({
             >
               {detail.detailError}
             </div>
+          )}
+
+          {!detail.detailLoading && detail.cardDetail && onAssign &&
+            onLoadUsers && (
+            <AssigneesSection
+              assignees={parseAssignees(detail.cardDetail._assign)}
+              onAssign={(assignTo) =>
+                onAssign(board.doctype, selectedCardId, assignTo)}
+              onLoadUsers={onLoadUsers}
+            />
           )}
 
           {classified?.descriptionField && (

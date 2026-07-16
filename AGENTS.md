@@ -8,7 +8,7 @@ Repository guidelines for AI coding agents working on this codebase.
 
 ## Project Overview
 
-MCP server for ERPNext/Frappe ERP — 122 tools across 14 categories with 7
+MCP server for ERPNext/Frappe ERP — 123 tools across 14 categories with 7
 interactive UI viewers. Connects MCP-compatible AI agents to ERPNext via the
 Model Context Protocol. Published as `@casys/mcp-erpnext` on npm (Node bundle)
 and JSR (Deno).

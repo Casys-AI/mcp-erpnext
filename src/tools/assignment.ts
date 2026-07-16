@@ -13,6 +13,7 @@
 import type { ErpNextToolContext, JSONSchema } from "./types.ts";
 
 const ASSIGNMENT_METHOD = "frappe.desk.form.assign_to.add";
+const UNASSIGNMENT_METHOD = "frappe.desk.form.assign_to.remove";
 
 // Keeps the validation query well under Frappe's result cap (500) and the
 // native per-assignee ToDo/notification fan-out within a sane request.
@@ -201,6 +202,39 @@ export async function applyAssignment(
 }
 
 /**
+ * Remove one user's native assignment (closes their ToDo, resyncs _assign).
+ * Returns the remaining open assignments in the same shape as
+ * `applyAssignment`.
+ */
+export async function removeAssignment(
+  doctype: string,
+  name: string,
+  assignee: string,
+  ctx: ErpNextToolContext,
+  failureContext: string,
+): Promise<Record<string, unknown>> {
+  let nativeResult: unknown;
+  try {
+    nativeResult = await ctx.client.callMethod(UNASSIGNMENT_METHOD, {
+      doctype,
+      name,
+      assign_to: assignee,
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`${failureContext}: ${reason}`, { cause: error });
+  }
+
+  const todos = Array.isArray(nativeResult)
+    ? nativeResult.map((todo) => {
+      const record = todo as Record<string, unknown>;
+      return { owner: record.owner, name: record.name };
+    })
+    : [];
+  return { removed: assignee, remaining: todos };
+}
+
+/**
  * Re-fetch a document after a committed assignment. A failure here must not
  * read like an assignment failure — the mutation already succeeded.
  */
@@ -209,13 +243,14 @@ export async function fetchDocAfterAssignment(
   name: string,
   ctx: ErpNextToolContext,
   toolName: string,
+  action = "assignment",
 ): Promise<Record<string, unknown>> {
   try {
     return await ctx.client.get(doctype, name);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `[${toolName}] ${doctype} ${name} assignment succeeded, but re-fetching the document failed: ${reason}`,
+      `[${toolName}] ${doctype} ${name} ${action} succeeded, but re-fetching the document failed: ${reason}`,
       { cause: error },
     );
   }

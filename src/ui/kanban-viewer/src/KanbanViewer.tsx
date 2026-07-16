@@ -1549,10 +1549,66 @@ export function KanbanViewer() {
     const text = extractTextContent(result);
     if (text) {
       try {
-        hydrateDetail(unwrapDoc(JSON.parse(text) as Record<string, unknown>));
+        const payload = JSON.parse(text) as Record<string, unknown>;
+        const doc = unwrapDoc(payload);
+        // Frappe v16 omits _assign from single-doc GET responses; the
+        // assignment result is authoritative, so synthesize it.
+        if (!doc._assign) {
+          const assignment = payload.assignment as
+            | { assignees?: string[] }
+            | undefined;
+          if (assignment?.assignees?.length) {
+            doc._assign = JSON.stringify(assignment.assignees);
+          }
+        }
+        hydrateDetail(doc);
       } catch (error) {
         console.warn(
           "[handleAssignDetail] Could not hydrate the assigned doc:",
+          error,
+        );
+      }
+    }
+    void requestBoardRefresh({ ignoreInterval: true });
+  }
+
+  async function handleUnassignDetail(
+    doctype: string,
+    name: string,
+    assignee: string,
+  ) {
+    if (!app.getHostCapabilities()?.serverTools) {
+      throw new Error("Host does not support proxied server tool calls");
+    }
+    const result = await app.callServerTool({
+      name: "erpnext_doc_unassign",
+      arguments: { doctype, name, assign_to: assignee },
+    }, { timeout: TOOL_CALL_TIMEOUT_MS });
+    if (result.isError) {
+      throw new Error(extractToolError(result));
+    }
+
+    const text = extractTextContent(result);
+    if (text) {
+      try {
+        const payload = JSON.parse(text) as Record<string, unknown>;
+        const doc = unwrapDoc(payload);
+        // Frappe v16 omits _assign from single-doc GET responses; rebuild it
+        // from the authoritative remaining-assignment list (may be empty).
+        if (!doc._assign) {
+          const assignment = payload.assignment as
+            | { remaining?: Array<{ owner?: string }> }
+            | undefined;
+          doc._assign = JSON.stringify(
+            (assignment?.remaining ?? [])
+              .map((todo) => todo.owner)
+              .filter(Boolean),
+          );
+        }
+        hydrateDetail(doc);
+      } catch (error) {
+        console.warn(
+          "[handleUnassignDetail] Could not hydrate the doc:",
           error,
         );
       }
@@ -1613,6 +1669,7 @@ export function KanbanViewer() {
           onMove={requestMove}
           onSave={handleSaveDetail}
           onAssign={handleAssignDetail}
+          onUnassign={handleUnassignDetail}
           onLoadUsers={handleLoadAssignableUsers}
           onNavigate={handleNavigate}
         />

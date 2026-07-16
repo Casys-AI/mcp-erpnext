@@ -276,3 +276,62 @@ Deno.test("erpnext_doc_assign - requires assign_to", async () => {
     "'assign_to' is required",
   );
 });
+
+// ── erpnext_doc_unassign ────────────────────────────────────────────────────
+
+Deno.test("erpnext_doc_unassign - removes through the native API and returns remaining", async () => {
+  let removeArgs: Record<string, unknown> = {};
+  const result = await getTool("erpnext_doc_unassign").handler(
+    { doctype: "Task", name: "TASK-001", assign_to: " user@example.com " },
+    makeCtx(makeMockClient({
+      callMethod: async (method: string, args: Record<string, unknown>) => {
+        assertEquals(method, "frappe.desk.form.assign_to.remove");
+        removeArgs = args;
+        return [{ owner: "other@example.com", name: "TODO-002" }];
+      },
+      get: async (_doctype: string, name: string) => ({ name }),
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(removeArgs, {
+    doctype: "Task",
+    name: "TASK-001",
+    assign_to: "user@example.com",
+  });
+  assertEquals(
+    result.message,
+    "user@example.com unassigned from Task TASK-001",
+  );
+  assertEquals(result.assignment, {
+    removed: "user@example.com",
+    remaining: [{ owner: "other@example.com", name: "TODO-002" }],
+  });
+});
+
+Deno.test("erpnext_doc_unassign - contextualizes native errors", async () => {
+  await assertRejects(
+    () =>
+      getTool("erpnext_doc_unassign").handler(
+        { doctype: "Task", name: "TASK-001", assign_to: "user@example.com" },
+        makeCtx(makeMockClient({
+          callMethod: async () => {
+            throw new Error("No assignment found");
+          },
+        })),
+      ),
+    Error,
+    "Task TASK-001 unassignment failed: No assignment found",
+  );
+});
+
+Deno.test("erpnext_doc_unassign - rejects a missing or empty assign_to", async () => {
+  await assertRejects(
+    () =>
+      getTool("erpnext_doc_unassign").handler(
+        { doctype: "Task", name: "TASK-001", assign_to: "  " },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "non-empty user email",
+  );
+});

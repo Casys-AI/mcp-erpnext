@@ -6,7 +6,7 @@
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **122 tools**
+MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **123 tools**
 across **14 categories**, with **7 interactive UI viewers**.
 
 Connect any MCP-compatible AI agent (Claude Desktop, Claude Code, VS Code
@@ -235,7 +235,7 @@ npm install
 node build-all.mjs
 ```
 
-## Tools (122)
+## Tools (123)
 
 **14 categories** covering the full ERPNext surface. Each `_list` tool returns
 interactive results in the doclist-viewer with row click, inline detail, and
@@ -253,7 +253,7 @@ cross-viewer navigation.
 | **Manufacturing** | 7     | doclist              | BOMs, Work Orders, Job Cards                                           |
 | **CRM**           | 8     | doclist              | Leads, Opportunities, Contacts, Campaigns                              |
 | **Assets**        | 8     | doclist              | Assets, Movements, Maintenance, Categories                             |
-| **Operations**    | 8     | doclist              | Generic CRUD + native assignment for **any** DocType (`erpnext_doc_*`) |
+| **Operations**    | 9     | doclist              | Generic CRUD + native assignment for **any** DocType (`erpnext_doc_*`) |
 | **Kanban**        | 2     | kanban               | Task/Opportunity/Issue boards with drag-and-drop                       |
 | **Analytics**     | 17    | chart / kpi / funnel | 12 chart types, 5 KPIs, sales funnel                                   |
 | **Setup**         | 3     | —                    | Company creation, assignable user listing                              |

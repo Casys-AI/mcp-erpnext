@@ -16,6 +16,7 @@ import {
   ASSIGNMENT_INPUT_PROPERTIES,
   fetchDocAfterAssignment,
   prepareAssignment,
+  removeAssignment,
   validateAssignees,
 } from "./assignment.ts";
 
@@ -434,6 +435,74 @@ export const operationsTools: ErpNextTool[] = [
           assignment.assignees.join(", ")
         }`,
         assignment: assignmentInfo,
+      };
+    },
+  },
+
+  // ── Generic Unassign ──────────────────────────────────────────────────────
+
+  {
+    name: "erpnext_doc_unassign",
+    description:
+      "Remove one user's assignment from any ERPNext document through Frappe's " +
+      "native workflow (closes the user's ToDo and resyncs _assign). " +
+      "Works on any DocType. Pass one user per call. Idempotent: removing " +
+      "a user who is not assigned is a no-op on the Frappe side.",
+    category: "operations",
+    inputSchema: {
+      type: "object",
+      properties: {
+        doctype: {
+          type: "string",
+          description:
+            "ERPNext DocType name (e.g. 'Task', 'Issue', 'Opportunity')",
+        },
+        name: {
+          type: "string",
+          description: "Document name/ID (e.g. 'TASK-2026-00001')",
+        },
+        assign_to: {
+          type: "string",
+          description: "User email whose assignment should be removed",
+          minLength: 1,
+        },
+      },
+      required: ["doctype", "name", "assign_to"],
+    },
+    handler: async (input, ctx) => {
+      if (!input.doctype) {
+        throw new Error("[erpnext_doc_unassign] 'doctype' is required");
+      }
+      if (!input.name) {
+        throw new Error("[erpnext_doc_unassign] 'name' is required");
+      }
+      if (typeof input.assign_to !== "string" || !input.assign_to.trim()) {
+        throw new Error(
+          "[erpnext_doc_unassign] 'assign_to' must be a non-empty user email",
+        );
+      }
+
+      const doctype = input.doctype as string;
+      const name = input.name as string;
+      const assignee = input.assign_to.trim();
+      const unassignment = await removeAssignment(
+        doctype,
+        name,
+        assignee,
+        ctx,
+        `[erpnext_doc_unassign] ${doctype} ${name} unassignment failed`,
+      );
+      const doc = await fetchDocAfterAssignment(
+        doctype,
+        name,
+        ctx,
+        "erpnext_doc_unassign",
+        "unassignment",
+      );
+      return {
+        data: doc,
+        message: `${assignee} unassigned from ${doctype} ${name}`,
+        assignment: unassignment,
       };
     },
   },

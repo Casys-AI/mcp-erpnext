@@ -1,4 +1,4 @@
-# Tools Reference (122)
+# Tools Reference (123)
 
 Full reference for all ERPNext MCP tools. See [README](../README.md) for
 overview.
@@ -153,18 +153,19 @@ overview.
 | `erpnext_asset_maintenance_get`  | Asset Maintenance | Get with maintenance tasks                            |
 | `erpnext_asset_category_list`    | Asset Category    | List all categories                                   |
 
-## Generic Operations (8) → doclist-viewer
+## Generic Operations (9) → doclist-viewer
 
-| Tool                 | Operation | Notes                                             |
-| -------------------- | --------- | ------------------------------------------------- |
-| `erpnext_doc_create` | Create    | Any DocType — essential for master data setup     |
-| `erpnext_doc_get`    | Get       | Any document by DocType + name                    |
-| `erpnext_doc_list`   | List      | Any DocType with fields, filters, limit, order_by |
-| `erpnext_doc_update` | Update    | Partial patch — pass only fields to change        |
-| `erpnext_doc_delete` | Delete    | Draft documents only                              |
-| `erpnext_doc_submit` | Submit    | Any submittable document                          |
-| `erpnext_doc_cancel` | Cancel    | Any submitted document                            |
-| `erpnext_doc_assign` | Assign    | Native assignment (ToDo + notification) to users  |
+| Tool                   | Operation | Notes                                             |
+| ---------------------- | --------- | ------------------------------------------------- |
+| `erpnext_doc_create`   | Create    | Any DocType — essential for master data setup     |
+| `erpnext_doc_get`      | Get       | Any document by DocType + name                    |
+| `erpnext_doc_list`     | List      | Any DocType with fields, filters, limit, order_by |
+| `erpnext_doc_update`   | Update    | Partial patch — pass only fields to change        |
+| `erpnext_doc_delete`   | Delete    | Draft documents only                              |
+| `erpnext_doc_submit`   | Submit    | Any submittable document                          |
+| `erpnext_doc_cancel`   | Cancel    | Any submitted document                            |
+| `erpnext_doc_assign`   | Assign    | Native assignment (ToDo + notification) to users  |
+| `erpnext_doc_unassign` | Unassign  | Remove one user's native assignment               |
 
 ## Kanban (2) → kanban-viewer
 

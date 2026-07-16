@@ -1,6 +1,6 @@
 # ERPNext MCP Library - Coverage
 
-## Covered (122 tools, 14 categories)
+## Covered (123 tools, 14 categories)
 
 ### Sales (17 tools)
 
@@ -88,18 +88,19 @@
 | `erpnext_company_list`   | Company | List companies (name, abbr, currency, country)         | doclist-viewer |
 | `erpnext_company_create` | Company | Create company (name, abbr, currency, country, domain) | -              |
 
-### Generic Operations (8 tools)
+### Generic Operations (9 tools)
 
-| Tool                 | DocType | Operations                                       | UI Viewer      |
-| -------------------- | ------- | ------------------------------------------------ | -------------- |
-| `erpnext_doc_create` | Any     | Create any document (doctype + data object)      | -              |
-| `erpnext_doc_update` | Any     | Update any document (partial patch)              | -              |
-| `erpnext_doc_delete` | Any     | Delete any document (Draft only)                 | -              |
-| `erpnext_doc_submit` | Any     | Submit any submittable document                  | -              |
-| `erpnext_doc_cancel` | Any     | Cancel any submitted document                    | -              |
-| `erpnext_doc_get`    | Any     | Get any document by DocType + name               | -              |
-| `erpnext_doc_list`   | Any     | List any DocType with field/filter/limit control | doclist-viewer |
-| `erpnext_doc_assign` | Any     | Native assignment (ToDo + notification) to users | -              |
+| Tool                   | DocType | Operations                                       | UI Viewer      |
+| ---------------------- | ------- | ------------------------------------------------ | -------------- |
+| `erpnext_doc_create`   | Any     | Create any document (doctype + data object)      | -              |
+| `erpnext_doc_update`   | Any     | Update any document (partial patch)              | -              |
+| `erpnext_doc_delete`   | Any     | Delete any document (Draft only)                 | -              |
+| `erpnext_doc_submit`   | Any     | Submit any submittable document                  | -              |
+| `erpnext_doc_cancel`   | Any     | Cancel any submitted document                    | -              |
+| `erpnext_doc_get`      | Any     | Get any document by DocType + name               | -              |
+| `erpnext_doc_list`     | Any     | List any DocType with field/filter/limit control | doclist-viewer |
+| `erpnext_doc_assign`   | Any     | Native assignment (ToDo + notification) to users | -              |
+| `erpnext_doc_unassign` | Any     | Remove one user's native assignment              | -              |
 
 ### Kanban (2 tools)
 

@@ -743,16 +743,19 @@ function parseAssignees(value: unknown): string[] {
 function AssigneesSection({
   assignees,
   onAssign,
+  onUnassign,
   onLoadUsers,
 }: {
   assignees: string[];
   onAssign: (assignTo: string) => Promise<void>;
+  onUnassign?: (assignee: string) => Promise<void>;
   onLoadUsers: () => Promise<AssignableUser[]>;
 }) {
   const [users, setUsers] = useState<AssignableUser[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState("");
   const [assigning, setAssigning] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
 
   // Mount-only: the assignable-user list is card-independent, and onLoadUsers
@@ -796,6 +799,21 @@ function AssigneesSection({
     }
   }
 
+  async function handleUnassign(assignee: string) {
+    if (!onUnassign || removing) return;
+    setRemoving(assignee);
+    setAssignError(null);
+    try {
+      await onUnassign(assignee);
+    } catch (error) {
+      setAssignError(
+        error instanceof Error ? error.message : "Unassignment failed",
+      );
+    } finally {
+      setRemoving(null);
+    }
+  }
+
   return (
     <div
       style={{
@@ -836,9 +854,33 @@ function AssigneesSection({
             style={{
               ...styles.badge(colors.accent, colors.accentDim),
               fontSize: 10,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
             }}
           >
             {email}
+            {onUnassign && (
+              <button
+                type="button"
+                aria-label={`Unassign ${email}`}
+                title={`Unassign ${email}`}
+                onClick={() => handleUnassign(email)}
+                disabled={removing !== null}
+                style={{
+                  background: "transparent",
+                  border: 0,
+                  color: "inherit",
+                  cursor: "pointer",
+                  padding: 0,
+                  fontSize: 12,
+                  lineHeight: 1,
+                  opacity: removing === email ? 0.5 : 0.7,
+                }}
+              >
+                {removing === email ? "…" : "×"}
+              </button>
+            )}
           </span>
         ))}
         <select
@@ -907,6 +949,7 @@ export function CardDetailModal({
   onMove,
   onSave,
   onAssign,
+  onUnassign,
   onLoadUsers,
   onNavigate,
 }: {
@@ -923,6 +966,11 @@ export function CardDetailModal({
     doctype: string,
     name: string,
     assignTo: string,
+  ) => Promise<void>;
+  onUnassign?: (
+    doctype: string,
+    name: string,
+    assignee: string,
   ) => Promise<void>;
   onLoadUsers?: () => Promise<AssignableUser[]>;
   onNavigate?: (message: string) => void;
@@ -1247,9 +1295,23 @@ export function CardDetailModal({
           {!detail.detailLoading && detail.cardDetail && onAssign &&
             onLoadUsers && (
             <AssigneesSection
-              assignees={parseAssignees(detail.cardDetail._assign)}
+              assignees={(() => {
+                const raw = detail.cardDetail._assign;
+                const fromDetail = parseAssignees(raw);
+                if (fromDetail.length) return fromDetail;
+                // An explicit empty _assign ("[]") means truly unassigned —
+                // do not fall back, or a just-removed assignee reappears.
+                if (typeof raw === "string" && raw) return [];
+                // Frappe v16 omits _assign from single-doc GET responses —
+                // fall back to the board card's assignee (list data has it).
+                return card?.assignee ? [card.assignee] : [];
+              })()}
               onAssign={(assignTo) =>
                 onAssign(board.doctype, selectedCardId, assignTo)}
+              onUnassign={onUnassign
+                ? (assignee) =>
+                  onUnassign(board.doctype, selectedCardId, assignee)
+                : undefined}
               onLoadUsers={onLoadUsers}
             />
           )}

@@ -43,6 +43,7 @@ import {
   readTextFile,
   statSync,
 } from "./src/runtime.ts";
+import { warmCache } from "./src/cache/warm.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
 
@@ -141,6 +142,11 @@ async function main() {
       categories ? ` (categories: ${categories.join(", ")})` : ""
     }`,
   );
+
+  // Fire-and-forget — must never block or fail startup (see warmCache() docs).
+  warmCache().catch((err) => {
+    console.error("[mcp-erpnext] Cache warm failed (non-fatal):", err);
+  });
 
   // Start server
   if (httpFlag) {

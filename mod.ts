@@ -55,6 +55,7 @@ export { getCache, setCache } from "./src/cache/cache.ts";
 export { MemoryCache } from "./src/cache/memory.ts";
 export { NoopCache } from "./src/cache/noop.ts";
 export type { Cache } from "./src/cache/types.ts";
+export { warmCache } from "./src/cache/warm.ts";
 
 // Re-export API types
 export type {

@@ -157,6 +157,15 @@ in-process implementation — a hand-rolled TTL `Map`, zero dependencies;
   `ctx.client.invalidate(doctype, name)` itself afterward.
 - **Config**: `MCP_CACHE_ENABLED` (`"false"` disables caching entirely,
   default enabled) and `MCP_CACHE_TTL_MS` (default `15000`).
+- **Warming**: `src/cache/warm.ts`'s `warmCache()` optionally pre-populates
+  the cache on startup by calling a configured set of read-only `_list` tool
+  handlers with no filters — matching the exact cache key a real unfiltered
+  call would use (fields/limit/order_by come from the tool itself, not a
+  hand-rolled `client.list()` guess). Configured via `MCP_CACHE_WARM_TOOLS`
+  (comma-separated tool names; unset/empty = disabled). Refuses to call
+  unknown or non-read-only tools, and never lets one tool's failure abort the
+  rest or the server — see the fire-and-forget call in `server.ts` right
+  after tool registration.
 
 ### Kanban system
 
@@ -344,7 +353,8 @@ Rules:
 - Environment variables: `ERPNEXT_URL`, `ERPNEXT_API_KEY`, `ERPNEXT_API_SECRET`
   (all required at runtime).
 - Caching (optional): `MCP_CACHE_ENABLED` (default enabled), `MCP_CACHE_TTL_MS`
-  (default `15000`). See [Caching](#caching).
+  (default `15000`), `MCP_CACHE_WARM_TOOLS` (comma-separated tool names to
+  warm on startup, default disabled). See [Caching](#caching).
 - Never commit `.env` files, API keys, or credentials. The `.gitignore` already
   covers `.env*`.
 - `FrappeClient` authenticates via API key/secret headers. No OAuth or

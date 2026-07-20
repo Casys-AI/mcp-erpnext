@@ -175,6 +175,11 @@ start/end fields (Timesheet, Project, Task, Leave Application, Campaign) filter
 the start field with `date_from` and the end field with `date_to` — not both
 bounds on one column. Master-data lists (Customer, Item, Warehouse, etc.)
 intentionally have no date filter.
+### Link-field resolution
+
+`src/api/resolve.ts`'s `resolveLink(client, doctype, identifier, searchField)` lets a tool filter accept either a document's real ID or a human-readable identifier (name, email) and resolves it server-side in the same call: try `get(doctype, identifier)` first (fast path if it's already a valid ID), then fall back to an exact then partial (`like`) match on `searchField`. Wrapped as `resolveEmployee`/`resolveCustomer`/`resolveSupplier`/`resolveItem` for the common targets. Use this instead of asking the agent to call a `_list` tool first to look up an ID before calling the tool that actually needs it — see `erpnext_timesheet_list` in `src/tools/project.ts` for the pattern. Not yet applied to dynamic-link fields where the target DocType varies by a companion field (e.g. `payment_entry_list`'s `party`/`party_type`, `party_name` on Quotation/Opportunity) — those need an extra type-routing step first.
+
+The fast-path `get()` always 404s when `identifier` is a human name rather than a real ID, and `FrappeClient` only caches successful reads — so that 404 would otherwise be re-probed over the network on every call to the same name. `resolveLink` remembers confirmed 404s itself, in the app-wide `getCache()` singleton under `resolve:miss:{doctype}:{identifier}` (15s TTL), so repeat resolution of a known-not-an-ID name skips straight to the `list()` fallback.
 
 ### Kanban system
 
@@ -383,6 +388,11 @@ Rules:
 - `structuredContent` in tool responses: tools that bind to a UI viewer return
   `structuredContent` with the viewer's MIME type so MCP clients can render the
   viewer.
+- Link-field list filters (e.g. `employee`, `customer`, `supplier`, `item`)
+  should accept either the document's ID or its human-readable name and
+  resolve via `resolveLink`/`resolveEmployee`/etc. from `src/api/resolve.ts`
+  — see [Link-field resolution](#link-field-resolution). Mention "ID or name"
+  in the param's `inputSchema` description when you do this.
 
 ## Known Issues & Frappe Gotchas
 

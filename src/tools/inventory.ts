@@ -9,6 +9,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META, STOCK_META } from "./viewer-meta.ts";
+import { resolveItem } from "../api/resolve.ts";
 
 export const inventoryTools: ErpNextTool[] = [
   // ── Items ─────────────────────────────────────────────────────────────────
@@ -220,7 +221,11 @@ export const inventoryTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 50)" },
-        item_code: { type: "string", description: "Filter by item code" },
+        item_code: {
+          type: "string",
+          description:
+            "Filter by item code or name (e.g. 'ITEM-001' or 'Widget A')",
+        },
         warehouse: { type: "string", description: "Filter by warehouse" },
       },
     },
@@ -228,7 +233,11 @@ export const inventoryTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 50;
       const filters: FrappeFilter[] = [];
       if (input.item_code) {
-        filters.push(["item_code", "=", input.item_code as string]);
+        filters.push([
+          "item_code",
+          "=",
+          await resolveItem(ctx.client, input.item_code as string),
+        ]);
       }
       if (input.warehouse) {
         filters.push(["warehouse", "=", input.warehouse as string]);

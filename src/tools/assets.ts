@@ -10,6 +10,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
+import { resolveEmployee } from "../api/resolve.ts";
 
 export const assetsTools: ErpNextTool[] = [
   // ── Assets ────────────────────────────────────────────────────────────────
@@ -39,7 +40,8 @@ export const assetsTools: ErpNextTool[] = [
         location: { type: "string", description: "Filter by location" },
         custodian: {
           type: "string",
-          description: "Filter by custodian (employee)",
+          description:
+            "Filter by custodian — employee ID or name (e.g. 'HR-EMP-00001' or 'John Doe')",
         },
         date_from: {
           type: "string",
@@ -64,7 +66,11 @@ export const assetsTools: ErpNextTool[] = [
         filters.push(["location", "=", input.location as string]);
       }
       if (input.custodian) {
-        filters.push(["custodian", "=", input.custodian as string]);
+        filters.push([
+          "custodian",
+          "=",
+          await resolveEmployee(ctx.client, input.custodian as string),
+        ]);
       }
       if (input.date_from) {
         filters.push(["purchase_date", ">=", input.date_from as string]);

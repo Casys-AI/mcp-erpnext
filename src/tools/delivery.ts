@@ -9,6 +9,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
+import { resolveCustomer } from "../api/resolve.ts";
 
 export const deliveryTools: ErpNextTool[] = [
   // ── Delivery Notes ────────────────────────────────────────────────────────
@@ -25,7 +26,11 @@ export const deliveryTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        customer: { type: "string", description: "Filter by customer" },
+        customer: {
+          type: "string",
+          description:
+            "Filter by customer ID or name (e.g. 'CUST-00001' or 'Acme Corp')",
+        },
         status: {
           type: "string",
           description:
@@ -42,7 +47,11 @@ export const deliveryTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.customer) {
-        filters.push(["customer", "=", input.customer as string]);
+        filters.push([
+          "customer",
+          "=",
+          await resolveCustomer(ctx.client, input.customer as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);

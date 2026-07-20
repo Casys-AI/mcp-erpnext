@@ -16,6 +16,7 @@ import {
   prepareAssignment,
   validateAssignees,
 } from "./assignment.ts";
+import { resolveEmployee } from "../api/resolve.ts";
 
 export const projectTools: ErpNextTool[] = [
   // ── Projects ──────────────────────────────────────────────────────────────
@@ -424,7 +425,11 @@ export const projectTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        employee: { type: "string", description: "Filter by employee ID" },
+        employee: {
+          type: "string",
+          description:
+            "Filter by employee ID or name (e.g. 'HR-EMP-00001' or 'John Doe')",
+        },
         project: { type: "string", description: "Filter by project name" },
         status: {
           type: "string",
@@ -441,7 +446,11 @@ export const projectTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.employee) {
-        filters.push(["employee", "=", input.employee as string]);
+        filters.push([
+          "employee",
+          "=",
+          await resolveEmployee(ctx.client, input.employee as string),
+        ]);
       }
       if (input.project) {
         filters.push(["project", "=", input.project as string]);

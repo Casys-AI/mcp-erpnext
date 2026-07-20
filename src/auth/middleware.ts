@@ -29,6 +29,23 @@ export interface AuthConfig {
 }
 
 /**
+ * Strip a single layer of matching surrounding quotes (single or double).
+ * `env_file:` parsing is inconsistent across Docker Compose versions about
+ * whether quotes in `KEY="value"` are stripped or kept as literal characters
+ * — stripping them here ourselves makes auth config immune to that either way.
+ */
+function unquote(value: string): string {
+  if (
+    value.length >= 2 &&
+    ((value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'")))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+/**
  * Read auth config from environment variables.
  * Returns null if no auth is configured (HTTP mode will warn).
  */
@@ -38,11 +55,11 @@ export function loadAuthConfig(): AuthConfig | null {
   const jwksUrl = env("MCP_OAUTH_JWKS_URL");
 
   const tokens = new Set<string>();
-  if (single?.trim()) tokens.add(single.trim());
+  if (single?.trim()) tokens.add(unquote(single.trim()));
   if (multi) {
     for (const t of multi.split(",")) {
       const trimmed = t.trim();
-      if (trimmed) tokens.add(trimmed);
+      if (trimmed) tokens.add(unquote(trimmed));
     }
   }
 
@@ -50,7 +67,7 @@ export function loadAuthConfig(): AuthConfig | null {
 
   return {
     tokens,
-    jwksUrl: jwksUrl?.trim(),
+    jwksUrl: jwksUrl?.trim() ? unquote(jwksUrl.trim()) : undefined,
     audience: env("MCP_OAUTH_AUDIENCE")?.trim(),
     issuer: env("MCP_OAUTH_ISSUER")?.trim(),
   };
@@ -121,8 +138,11 @@ export function createAuthProxyApp(
 
   app.use("*", cors());
 
-  // Auth guard
+  // Auth guard — /health is exempt so Docker/orchestrator healthchecks (which
+  // don't and shouldn't send credentials) still work; it's still proxied
+  // through to the internal server below, so it reflects real backend health.
   app.use("*", async (c, next) => {
+    if (c.req.path === "/health") return next();
     const authHeader = c.req.header("authorization");
     const ok = await validateToken(authHeader, config);
     if (!ok) {

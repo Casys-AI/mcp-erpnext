@@ -1,6 +1,7 @@
 import { assertEquals } from "@std/assert";
 import {
   type AuthConfig,
+  createAuthProxyApp,
   loadAuthConfig,
   validateToken,
 } from "./middleware.ts";
@@ -111,6 +112,84 @@ Deno.test("loadAuthConfig: ignores blank tokens in list", () => {
   using _ = withEnv({ MCP_AUTH_TOKENS: "tok,,  ,tok2" });
   const config = loadAuthConfig();
   assertEquals(config?.tokens.size, 2);
+});
+
+Deno.test("loadAuthConfig: strips surrounding double quotes from MCP_AUTH_TOKEN", () => {
+  // Regression: Docker Compose's env_file quote-handling is inconsistent
+  // across versions — a value quoted in .env (MCP_AUTH_TOKEN="abc") must not
+  // silently become part of the token itself.
+  using _ = withEnv({ MCP_AUTH_TOKEN: '"abc123"' });
+  const config = loadAuthConfig();
+  assertEquals(config?.tokens.has("abc123"), true);
+  assertEquals(config?.tokens.has('"abc123"'), false);
+});
+
+Deno.test("loadAuthConfig: strips surrounding single quotes from MCP_AUTH_TOKENS entries", () => {
+  using _ = withEnv({ MCP_AUTH_TOKENS: "'tok-a','tok-b'" });
+  const config = loadAuthConfig();
+  assertEquals(config?.tokens.has("tok-a"), true);
+  assertEquals(config?.tokens.has("tok-b"), true);
+  assertEquals(config?.tokens.size, 2);
+});
+
+Deno.test("loadAuthConfig: strips quotes from MCP_OAUTH_JWKS_URL", () => {
+  using _ = withEnv({
+    MCP_OAUTH_JWKS_URL: '"https://auth.example.com/.well-known/jwks.json"',
+  });
+  const config = loadAuthConfig();
+  assertEquals(
+    config?.jwksUrl,
+    "https://auth.example.com/.well-known/jwks.json",
+  );
+});
+
+// ── createAuthProxyApp ───────────────────────────────────────────────────────
+
+Deno.test("createAuthProxyApp: /health is reachable without a token and reflects backend health", async () => {
+  const internal = Deno.serve(
+    { port: 0, onListen: () => {} },
+    (req) => {
+      const url = new URL(req.url);
+      if (url.pathname === "/health") {
+        return new Response(JSON.stringify({ status: "ok" }), {
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("internal", { status: 200 });
+    },
+  );
+  try {
+    const internalPort = internal.addr.port;
+    const app = createAuthProxyApp(makeConfig(), internalPort);
+
+    const res = await app.request("/health");
+    assertEquals(res.status, 200);
+    const body = await res.json();
+    assertEquals(body.status, "ok");
+  } finally {
+    await internal.shutdown();
+  }
+});
+
+Deno.test("createAuthProxyApp: non-health paths still require auth", async () => {
+  const internal = Deno.serve(
+    { port: 0, onListen: () => {} },
+    () => new Response("internal", { status: 200 }),
+  );
+  try {
+    const internalPort = internal.addr.port;
+    const app = createAuthProxyApp(makeConfig(), internalPort);
+
+    const unauthed = await app.request("/mcp");
+    assertEquals(unauthed.status, 401);
+
+    const authed = await app.request("/mcp", {
+      headers: { authorization: "Bearer secret-token-1" },
+    });
+    assertEquals(authed.status, 200);
+  } finally {
+    await internal.shutdown();
+  }
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

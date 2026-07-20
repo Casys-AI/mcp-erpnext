@@ -27,6 +27,29 @@ import type {
   FrappeMethodResponse,
 } from "./types.ts";
 import { env } from "../runtime.ts";
+import type { Cache } from "../cache/types.ts";
+import { MemoryCache } from "../cache/memory.ts";
+import { getCache, getCacheTtlMs } from "../cache/cache.ts";
+
+/** Deterministic JSON.stringify — sorts object keys so equivalent options produce the same cache key. */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>).sort();
+    return `{${
+      keys
+        .map((k) =>
+          `${JSON.stringify(k)}:${
+            stableStringify((value as Record<string, unknown>)[k])
+          }`
+        )
+        .join(",")
+    }}`;
+  }
+  return JSON.stringify(value);
+}
 
 export interface FrappeClientConfig {
   /** ERPNext base URL, e.g. http://localhost:8000 */
@@ -60,6 +83,14 @@ export interface FrappeClientConfig {
    * applied the change.
    */
   retryMethods?: string[];
+  /**
+   * Cache used for list()/get() reads. Defaults to a fresh, unshared
+   * MemoryCache per client instance — NOT the app-wide singleton — so
+   * multiple FrappeClient instances (e.g. one per test) never leak cached
+   * data into each other. Pass `getCache()` explicitly to share the
+   * app-wide cache (see getFrappeClient()).
+   */
+  cache?: Cache;
 }
 
 const DEFAULT_RETRY_STATUSES = [408, 429, 502, 503, 504];
@@ -162,6 +193,7 @@ export class FrappeClient {
   private retryStatuses: number[];
   private retryBackoffMs: number;
   private retryMethods: string[];
+  private cache: Cache;
 
   constructor(config: FrappeClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
@@ -171,6 +203,7 @@ export class FrappeClient {
     this.retryStatuses = config.retryStatuses ?? DEFAULT_RETRY_STATUSES;
     this.retryBackoffMs = config.retryBackoffMs ?? 200;
     this.retryMethods = config.retryMethods ?? DEFAULT_RETRY_METHODS;
+    this.cache = config.cache ?? new MemoryCache();
   }
 
   // ── Private HTTP helpers ────────────────────────────────────────────────────
@@ -322,6 +355,10 @@ export class FrappeClient {
     doctype: string,
     options: FrappeListOptions = {},
   ): Promise<T[]> {
+    const cacheKey = `list:${doctype}:${stableStringify(options)}`;
+    const cached = this.cache.get<T[]>(cacheKey);
+    if (cached !== undefined) return cached;
+
     const params = new URLSearchParams();
 
     if (options.fields && options.fields.length > 0) {
@@ -346,24 +383,50 @@ export class FrappeClient {
       "GET",
       `/api/resource/${encodeURIComponent(doctype)}${query}`,
     );
-    return res.data ?? [];
+    const docs = res.data ?? [];
+    this.cache.set(cacheKey, docs, getCacheTtlMs());
+    return docs;
   }
 
   /**
    * Get a single document by name.
    * GET /api/resource/{doctype}/{name}
+   *
+   * Pass `{ skipCache: true }` to force a fresh read — required before any
+   * operation relying on the doc's `modified` timestamp for optimistic
+   * locking (see erpnext_doc_submit/erpnext_doc_cancel in operations.ts).
+   * The fresh result still refreshes the cache for subsequent normal reads.
    */
   async get<T extends FrappeDoc = FrappeDoc>(
     doctype: string,
     name: string,
+    opts: { skipCache?: boolean } = {},
   ): Promise<T> {
+    const cacheKey = `get:${doctype}:${name}`;
+    if (!opts.skipCache) {
+      const cached = this.cache.get<T>(cacheKey);
+      if (cached !== undefined) return cached;
+    }
+
     const res = await this.request<FrappeDocResponse<T>>(
       "GET",
       `/api/resource/${encodeURIComponent(doctype)}/${
         encodeURIComponent(name)
       }`,
     );
+    this.cache.set(cacheKey, res.data, getCacheTtlMs());
     return res.data;
+  }
+
+  /**
+   * Clear cached entries for a doctype (list results) and, if `name` is
+   * given, the cached single-document read too. Called automatically after
+   * create/update/delete; call explicitly after any mutation that bypasses
+   * those methods (e.g. frappe.client.submit/cancel via callMethod).
+   */
+  invalidate(doctype: string, name?: string): void {
+    this.cache.deleteByPrefix(`list:${doctype}:`);
+    if (name) this.cache.delete(`get:${doctype}:${name}`);
   }
 
   /**
@@ -379,6 +442,7 @@ export class FrappeClient {
       `/api/resource/${encodeURIComponent(doctype)}`,
       { data: { ...data, doctype } },
     );
+    this.invalidate(doctype, res.data.name as string | undefined);
     return res.data;
   }
 
@@ -398,6 +462,7 @@ export class FrappeClient {
       }`,
       { data },
     );
+    this.invalidate(doctype, name);
     return res.data;
   }
 
@@ -412,6 +477,7 @@ export class FrappeClient {
         encodeURIComponent(name)
       }`,
     );
+    this.invalidate(doctype, name);
   }
 
   /**
@@ -462,7 +528,12 @@ export function getFrappeClient(): FrappeClient {
     );
   }
 
-  _client = new FrappeClient({ baseUrl: url, apiKey, apiSecret });
+  _client = new FrappeClient({
+    baseUrl: url,
+    apiKey,
+    apiSecret,
+    cache: getCache(),
+  });
   return _client;
 }
 

@@ -200,14 +200,17 @@ export const operationsTools: ErpNextTool[] = [
         throw new Error("[erpnext_doc_submit] 'name' is required");
       }
 
-      // Fetch fresh doc first — frappe.client.submit requires `modified` for optimistic locking
+      // Fetch fresh doc first — frappe.client.submit requires `modified` for optimistic
+      // locking, so this read must bypass the cache even if a recent copy is cached.
       const doc = await ctx.client.get(
         input.doctype as string,
         input.name as string,
+        { skipCache: true },
       );
       const result = await ctx.client.callMethod("frappe.client.submit", {
         doc: { ...doc, doctype: input.doctype as string },
       });
+      ctx.client.invalidate(input.doctype as string, input.name as string);
 
       return {
         data: result,
@@ -255,6 +258,7 @@ export const operationsTools: ErpNextTool[] = [
         doctype: input.doctype as string,
         name: input.name as string,
       });
+      ctx.client.invalidate(input.doctype as string, input.name as string);
 
       return {
         data: result,

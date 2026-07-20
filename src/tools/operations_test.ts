@@ -25,6 +25,7 @@ function makeMockClient(overrides: Record<string, AnyFn> = {}): FrappeClient {
     update: async () => ({ name: "TEST-001" }),
     delete: async () => {},
     callMethod: async () => null,
+    invalidate: () => {},
     ...overrides,
   };
   return mock as unknown as FrappeClient;
@@ -130,6 +131,64 @@ Deno.test("erpnext_doc_create - works with Item Group (tree doctype)", async () 
   const doc = result.data as Record<string, unknown>;
   assertEquals(doc.name, "Products");
   assertEquals(doc.parent_item_group, "All Item Groups");
+});
+
+// ── erpnext_doc_submit ───────────────────────────────────────────────────────
+
+Deno.test("erpnext_doc_submit - skips cache on the pre-submit get and invalidates after", async () => {
+  let getSkipCache: boolean | undefined;
+  let invalidatedDoctype = "";
+  let invalidatedName = "";
+
+  const mockClient = makeMockClient({
+    get: async (
+      _doctype: string,
+      _name: string,
+      opts?: { skipCache?: boolean },
+    ) => {
+      getSkipCache = opts?.skipCache;
+      return { name: "SO-001", modified: "2026-01-01 00:00:00" };
+    },
+    callMethod: async () => ({ name: "SO-001", docstatus: 1 }),
+    invalidate: (doctype: string, name?: string) => {
+      invalidatedDoctype = doctype;
+      invalidatedName = name ?? "";
+    },
+  });
+
+  const tool = getTool("erpnext_doc_submit");
+  await tool.handler(
+    { doctype: "Sales Order", name: "SO-001" },
+    makeCtx(mockClient),
+  );
+
+  assertEquals(getSkipCache, true);
+  assertEquals(invalidatedDoctype, "Sales Order");
+  assertEquals(invalidatedName, "SO-001");
+});
+
+// ── erpnext_doc_cancel ───────────────────────────────────────────────────────
+
+Deno.test("erpnext_doc_cancel - invalidates cache after cancel", async () => {
+  let invalidatedDoctype = "";
+  let invalidatedName = "";
+
+  const mockClient = makeMockClient({
+    callMethod: async () => ({ name: "SO-001", docstatus: 2 }),
+    invalidate: (doctype: string, name?: string) => {
+      invalidatedDoctype = doctype;
+      invalidatedName = name ?? "";
+    },
+  });
+
+  const tool = getTool("erpnext_doc_cancel");
+  await tool.handler(
+    { doctype: "Sales Order", name: "SO-001" },
+    makeCtx(mockClient),
+  );
+
+  assertEquals(invalidatedDoctype, "Sales Order");
+  assertEquals(invalidatedName, "SO-001");
 });
 
 // ── erpnext_doc_list ────────────────────────────────────────────────────────

@@ -396,3 +396,131 @@ Deno.test("FrappeClient parsing - malformed JSON in error body falls back to tex
     restore();
   }
 });
+
+// ── Caching ──────────────────────────────────────────────────────────────────
+
+Deno.test("FrappeClient.get() - caches result, second call skips fetch", async () => {
+  let fetchCount = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => {
+    fetchCount++;
+    return new Response(
+      JSON.stringify({ data: { name: "CUST-001" } }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const client = makeClient();
+    await client.get("Customer", "CUST-001");
+    await client.get("Customer", "CUST-001");
+    assertEquals(fetchCount, 1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.get() - skipCache bypasses the cached read", async () => {
+  let fetchCount = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => {
+    fetchCount++;
+    return new Response(
+      JSON.stringify({ data: { name: "CUST-001" } }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const client = makeClient();
+    await client.get("Customer", "CUST-001");
+    await client.get("Customer", "CUST-001", { skipCache: true });
+    assertEquals(fetchCount, 2);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.list() - caches result for identical options", async () => {
+  let fetchCount = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => {
+    fetchCount++;
+    return new Response(
+      JSON.stringify({ data: [{ name: "CUST-001" }] }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const client = makeClient();
+    await client.list("Customer", { limit: 10 });
+    await client.list("Customer", { limit: 10 });
+    assertEquals(fetchCount, 1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.update() - invalidates the cached get() for that name", async () => {
+  let fetchCount = 0;
+  let updated = false;
+  const original = globalThis.fetch;
+  globalThis.fetch = async (_url, init?: RequestInit) => {
+    fetchCount++;
+    if (init?.method === "PUT") {
+      updated = true;
+      return new Response(
+        JSON.stringify({
+          data: { name: "CUST-001", customer_name: "Updated" },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        data: {
+          name: "CUST-001",
+          customer_name: updated ? "Updated" : "Original",
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const client = makeClient();
+    const before = await client.get("Customer", "CUST-001");
+    assertEquals(before.customer_name, "Original");
+
+    await client.update("Customer", "CUST-001", { customer_name: "Updated" });
+
+    const after = await client.get("Customer", "CUST-001");
+    assertEquals(after.customer_name, "Updated");
+    assertEquals(fetchCount, 3); // initial get, update, refreshed get
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.invalidate() - clears list cache for a doctype", async () => {
+  let fetchCount = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => {
+    fetchCount++;
+    return new Response(
+      JSON.stringify({ data: [{ name: "CUST-001" }] }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const client = makeClient();
+    await client.list("Customer", { limit: 10 });
+    client.invalidate("Customer");
+    await client.list("Customer", { limit: 10 });
+    assertEquals(fetchCount, 2);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

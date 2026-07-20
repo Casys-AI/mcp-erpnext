@@ -4,9 +4,9 @@
  * @module lib/erpnext/tests/tools/crm_test
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { crmTools } from "./crm.ts";
-import type { FrappeClient } from "../api/frappe-client.ts";
+import { FrappeAPIError, type FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -59,4 +59,35 @@ Deno.test("erpnext_campaign_list - filters by date range", async () => {
   );
   assertEquals(hasStart, true);
   assertEquals(hasEnd, true);
+});
+
+Deno.test("erpnext_opportunity_list - throws if party_name set without opportunity_from", async () => {
+  const tool = getTool("erpnext_opportunity_list");
+  await assertRejects(
+    () => tool.handler({ party_name: "Acme Corp" }, makeCtx(makeMockClient())),
+    Error,
+    "opportunity_from",
+  );
+});
+
+Deno.test("erpnext_opportunity_list - resolves party_name against the opportunity_from doctype", async () => {
+  let resolvedDoctype = "";
+  const client = makeMockClient({
+    get: async () => {
+      throw new FrappeAPIError("not found", 404, null);
+    },
+    list: async (doctype: string) => {
+      if (doctype === "Opportunity") return [];
+      resolvedDoctype = doctype;
+      return [{ name: "LEAD-099" }];
+    },
+  });
+
+  const tool = getTool("erpnext_opportunity_list");
+  await tool.handler(
+    { party_name: "Jane Prospect", opportunity_from: "Lead" },
+    makeCtx(client),
+  );
+
+  assertEquals(resolvedDoctype, "Lead");
 });

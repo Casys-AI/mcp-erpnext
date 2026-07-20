@@ -5,7 +5,7 @@
  */
 
 import { assertEquals, assertRejects } from "@std/assert";
-import { resolveEmployee, resolveLink } from "./resolve.ts";
+import { resolveDynamicLink, resolveEmployee, resolveLink } from "./resolve.ts";
 import { FrappeAPIError, type FrappeClient } from "./frappe-client.ts";
 import { setCache } from "../cache/cache.ts";
 import { MemoryCache } from "../cache/memory.ts";
@@ -123,4 +123,55 @@ Deno.test("resolveLink - caches a confirmed 404 so repeat calls skip the get() p
     2,
     "list() fallback still runs each call (not memoized itself)",
   );
+});
+
+Deno.test("resolveDynamicLink - resolves against the target doctype's search field", async () => {
+  setCache(new MemoryCache());
+  const client = makeMockClient({
+    list: async (doctype: string, options: { filters?: unknown[] }) => {
+      const [field, , value] =
+        (options.filters?.[0] as [string, string, string]) ?? [];
+      if (
+        doctype === "Supplier" && field === "supplier_name" &&
+        value === "Acme Supplies"
+      ) {
+        return [{ name: "SUPP-00042" }];
+      }
+      return [];
+    },
+  });
+  const result = await resolveDynamicLink(client, "Supplier", "Acme Supplies");
+  assertEquals(result, "SUPP-00042");
+});
+
+Deno.test("resolveDynamicLink - throws for an unsupported target doctype", async () => {
+  const client = makeMockClient();
+  await assertRejects(
+    () => resolveDynamicLink(client, "Not A Real Doctype", "whatever"),
+    Error,
+    'Unsupported dynamic-link target doctype "Not A Real Doctype"',
+  );
+});
+
+Deno.test("resolveDynamicLink - supports Customer, Employee, and Lead targets", async () => {
+  setCache(new MemoryCache());
+  const searchFieldByDoctype: Record<string, string> = {
+    Customer: "customer_name",
+    Employee: "employee_name",
+    Lead: "lead_name",
+  };
+  for (const [doctype, searchField] of Object.entries(searchFieldByDoctype)) {
+    const client = makeMockClient({
+      list: async (dt: string, options: { filters?: unknown[] }) => {
+        const [field] = (options.filters?.[0] as [string, string, string]) ??
+          [];
+        if (dt === doctype && field === searchField) {
+          return [{ name: `${doctype}-ID` }];
+        }
+        return [];
+      },
+    });
+    const result = await resolveDynamicLink(client, doctype, "some name");
+    assertEquals(result, `${doctype}-ID`);
+  }
 });

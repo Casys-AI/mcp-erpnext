@@ -10,6 +10,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
+import { resolveDynamicLink } from "../api/resolve.ts";
 
 export const accountingTools: ErpNextTool[] = [
   // ── Chart of Accounts ─────────────────────────────────────────────────────
@@ -186,9 +187,15 @@ export const accountingTools: ErpNextTool[] = [
         },
         party_type: {
           type: "string",
-          description: "Filter by party type (Customer, Supplier, Employee)",
+          description: "Filter by party type (Customer, Supplier, Employee). " +
+            "Required when 'party' is set, so the party name/ID can be resolved against the right doctype.",
+          enum: ["Customer", "Supplier", "Employee"],
         },
-        party: { type: "string", description: "Filter by party name" },
+        party: {
+          type: "string",
+          description:
+            "Filter by party — ID or name (e.g. 'CUST-00001' or 'Acme Corp'). Requires 'party_type'.",
+        },
         date_from: {
           type: "string",
           description: "Start date filter YYYY-MM-DD",
@@ -205,7 +212,20 @@ export const accountingTools: ErpNextTool[] = [
         filters.push(["party_type", "=", input.party_type as string]);
       }
       if (input.party) {
-        filters.push(["party", "=", input.party as string]);
+        if (!input.party_type) {
+          throw new Error(
+            "[erpnext_payment_entry_list] 'party_type' is required when filtering by 'party'",
+          );
+        }
+        filters.push([
+          "party",
+          "=",
+          await resolveDynamicLink(
+            ctx.client,
+            input.party_type as string,
+            input.party as string,
+          ),
+        ]);
       }
       if (input.date_from) {
         filters.push(["posting_date", ">=", input.date_from as string]);

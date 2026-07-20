@@ -96,3 +96,32 @@ export function resolveItem(
 ): Promise<string> {
   return resolveLink(client, "Item", identifier, "item_name");
 }
+
+/** Human-readable name field per doctype, for dynamic-link resolution. */
+const DYNAMIC_LINK_SEARCH_FIELDS: Record<string, string> = {
+  Customer: "customer_name",
+  Supplier: "supplier_name",
+  Employee: "employee_name",
+  Lead: "lead_name",
+};
+
+/**
+ * Resolve a dynamic-link field, e.g. Payment Entry's `party` (target doctype
+ * given by `party_type`) or Quotation/Opportunity's `party_name` (target
+ * doctype given by `quotation_to`/`opportunity_from`). Unlike the fixed
+ * wrappers above, the target doctype isn't known until the companion field's
+ * value is read at the call site.
+ */
+export async function resolveDynamicLink(
+  client: FrappeClient,
+  targetDoctype: string,
+  identifier: string,
+): Promise<string> {
+  const searchField = DYNAMIC_LINK_SEARCH_FIELDS[targetDoctype];
+  if (!searchField) {
+    throw new Error(
+      `[resolveDynamicLink] Unsupported dynamic-link target doctype "${targetDoctype}"`,
+    );
+  }
+  return resolveLink(client, targetDoctype, identifier, searchField);
+}

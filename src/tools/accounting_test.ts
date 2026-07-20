@@ -4,14 +4,14 @@
  * Tests for ERPNext accounting MCP tools (accounts, journal entries,
  * payment entries). Injects a mock FrappeClient to avoid real network calls.
  *
- * @module lib/erpnext/src/tools/accounting_test
+ * @module lib/erpnext/tests/tools/accounting_test
  */
 
 // deno-lint-ignore-file no-explicit-any
 
 import { assertEquals, assertRejects } from "@std/assert";
 import { accountingTools } from "./accounting.ts";
-import type { FrappeClient } from "../api/frappe-client.ts";
+import { FrappeAPIError, type FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
 
 type AnyFn = (...args: any[]) => any;
@@ -20,10 +20,11 @@ function makeMockClient(overrides: Record<string, AnyFn> = {}): FrappeClient {
   const mock: Record<string, AnyFn> = {
     list: async () => [],
     get: async () => ({ name: "TEST-001" }),
-    create: async () => ({ name: "JE-NEW-001" }),
+    create: async () => ({ name: "NEW-001" }),
     update: async () => ({ name: "TEST-001" }),
     delete: async () => {},
     callMethod: async () => null,
+    invalidate: () => {},
     ...overrides,
   };
   return mock as unknown as FrappeClient;
@@ -38,6 +39,48 @@ function getTool(name: string) {
   if (!tool) throw new Error(`Tool not found: ${name}`);
   return tool;
 }
+
+// ── erpnext_payment_entry_list ───────────────────────────────────────────────
+
+Deno.test("erpnext_payment_entry_list - throws if party set without party_type", async () => {
+  const tool = getTool("erpnext_payment_entry_list");
+  await assertRejects(
+    () => tool.handler({ party: "Acme Corp" }, makeCtx(makeMockClient())),
+    Error,
+    "party_type",
+  );
+});
+
+Deno.test("erpnext_payment_entry_list - resolves party against the party_type doctype", async () => {
+  let resolvedDoctype = "";
+  const client = makeMockClient({
+    get: async () => {
+      throw new FrappeAPIError("not found", 404, null);
+    },
+    list: async (doctype: string) => {
+      if (doctype === "Payment Entry") return [];
+      resolvedDoctype = doctype;
+      return [{ name: "SUPP-007" }];
+    },
+  });
+
+  const tool = getTool("erpnext_payment_entry_list");
+  await tool.handler(
+    { party: "Acme Supplies", party_type: "Supplier" },
+    makeCtx(client),
+  );
+
+  assertEquals(resolvedDoctype, "Supplier");
+});
+
+Deno.test("erpnext_payment_entry_list - works without party/party_type at all", async () => {
+  const tool = getTool("erpnext_payment_entry_list");
+  const result = await tool.handler({}, makeCtx(makeMockClient())) as Record<
+    string,
+    unknown
+  >;
+  assertEquals(result.doctype, "Payment Entry");
+});
 
 // ── erpnext_account_list ─────────────────────────────────────────────────────
 

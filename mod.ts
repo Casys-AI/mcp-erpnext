@@ -60,6 +60,7 @@ export { warmCache } from "./src/cache/warm.ts";
 // Re-export link resolution helpers
 export {
   resolveCustomer,
+  resolveDynamicLink,
   resolveEmployee,
   resolveItem,
   resolveLink,

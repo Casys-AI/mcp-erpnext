@@ -91,7 +91,20 @@ async function main() {
     maxConcurrent: 10,
     backpressureStrategy: "queue",
     validateSchema: true,
-    logger: (msg: string) => console.error(`[mcp-erpnext] ${msg}`),
+    logger: (msg: string) => {
+      // @casys/mcp-server's own [WARN] about missing requireAuth/authProvider
+      // refers to the *internal* MCP server, which always binds to
+      // 127.0.0.1 only (see startHttp() below) — it's never reachable
+      // outside this process. Real auth enforcement is our own Hono proxy
+      // in front of it (see src/auth/middleware.ts), which deliberately
+      // strips the Authorization header before forwarding here, so wiring
+      // this framework's own auth into the internal listener would either
+      // do nothing (header never arrives) or require reversing that. The
+      // warning is accurate about the internal listener but misleading
+      // about overall security posture, so it's suppressed here.
+      if (msg.includes("HTTP auth is disabled")) return;
+      console.error(`[mcp-erpnext] ${msg}`);
+    },
     toolErrorMapper: (error: unknown) => {
       if (error instanceof FrappeAPIError) return error.message;
       if (error instanceof Error) return error.message;

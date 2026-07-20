@@ -203,6 +203,23 @@ strips it before forwarding upstream. If neither env var is set, HTTP mode
 starts unauthenticated with a startup warning — never assume auth is on without
 checking.
 
+`/health` is exempt from the auth guard (still proxied through to the internal
+server, so it reflects real backend health) — Docker/orchestrator healthchecks
+don't send credentials, and requiring them would eventually mark a
+correctly-configured container unhealthy.
+
+`@casys/mcp-server` itself logs its own `[WARN] HTTP auth is disabled`,
+referring to the _internal_ loopback-only listener's own unrelated auth concept
+(a different `AuthProvider` mechanism, configured via `MCP_AUTH_*` env vars —
+note the missing `O`, distinct from our `MCP_OAUTH_*`). That listener is never
+reachable outside this process, and our proxy deliberately strips the
+`Authorization` header before forwarding to it, so wiring the framework's own
+auth into it would do nothing useful. The `logger` passed to `McpApp` in
+`server.ts` filters that specific line out — don't be alarmed if you don't see
+it in production logs; the auth enforcement that matters is the Hono proxy
+layer, confirmed by the `Auth: static tokens (N)` / OAuth log line right above
+it.
+
 ## Coding Style & Naming Conventions
 
 - Language: TypeScript (Deno-flavored ESM). Prefer strict typing; avoid `any`.

@@ -130,6 +130,10 @@ body — no silent fallbacks.
 **Submit handlers must GET the doc first** to pass `modified` for Frappe's
 optimistic locking (see `docs/known-issues.md`). Cancel does not need this.
 
+### Date-range filters
+
+List tools whose DocType has a natural date field accept `date_from`/`date_to` (`"Start date filter YYYY-MM-DD"` / `"End date filter YYYY-MM-DD"`), filtering `[field, ">=", date_from]` / `[field, "<=", date_to]`. Doctypes with distinct start/end fields (Timesheet, Project, Task, Leave Application, Campaign) filter the start field with `date_from` and the end field with `date_to` — not both bounds on one column. Master-data lists (Customer, Item, Warehouse, etc.) intentionally have no date filter.
+
 ### Kanban system
 
 The kanban viewer is the canonical read-write MCP App. Architecture:

@@ -38,6 +38,11 @@ export const projectTools: ErpNextTool[] = [
           enum: ["Open", "Completed", "Cancelled"],
         },
         company: { type: "string", description: "Filter by company" },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
@@ -48,6 +53,12 @@ export const projectTools: ErpNextTool[] = [
       }
       if (input.company) {
         filters.push(["company", "=", input.company as string]);
+      }
+      if (input.date_from) {
+        filters.push(["expected_start_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["expected_end_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Project", {
@@ -120,6 +131,11 @@ export const projectTools: ErpNextTool[] = [
           description: "Filter by priority (Low, Medium, High, Urgent)",
           enum: ["Low", "Medium", "High", "Urgent"],
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
@@ -133,6 +149,12 @@ export const projectTools: ErpNextTool[] = [
       }
       if (input.priority) {
         filters.push(["priority", "=", input.priority as string]);
+      }
+      if (input.date_from) {
+        filters.push(["exp_start_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["exp_end_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Task", {
@@ -408,6 +430,11 @@ export const projectTools: ErpNextTool[] = [
           type: "string",
           description: "Filter by status (Draft, Submitted, Cancelled)",
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
@@ -421,6 +448,12 @@ export const projectTools: ErpNextTool[] = [
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
+      }
+      if (input.date_from) {
+        filters.push(["start_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["end_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Timesheet", {

@@ -325,6 +325,11 @@ export const crmTools: ErpNextTool[] = [
           type: "string",
           description: "Filter by campaign type",
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
@@ -332,6 +337,12 @@ export const crmTools: ErpNextTool[] = [
       const filters: FrappeFilter[] = [];
       if (input.campaign_type) {
         filters.push(["campaign_type", "=", input.campaign_type as string]);
+      }
+      if (input.date_from) {
+        filters.push(["start_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["end_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Campaign", {

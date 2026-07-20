@@ -184,6 +184,11 @@ export const hrTools: ErpNextTool[] = [
           type: "string",
           description: "Filter by leave type (e.g. Sick Leave)",
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
@@ -197,6 +202,12 @@ export const hrTools: ErpNextTool[] = [
       }
       if (input.leave_type) {
         filters.push(["leave_type", "=", input.leave_type as string]);
+      }
+      if (input.date_from) {
+        filters.push(["from_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["to_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Leave Application", {
@@ -427,6 +438,11 @@ export const hrTools: ErpNextTool[] = [
           description: "Filter by status (Draft, Submitted, Cancelled)",
           enum: ["Draft", "Submitted", "Cancelled"],
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
@@ -437,6 +453,12 @@ export const hrTools: ErpNextTool[] = [
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
+      }
+      if (input.date_from) {
+        filters.push(["posting_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["posting_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Payroll Entry", {
@@ -487,6 +509,11 @@ export const hrTools: ErpNextTool[] = [
             "Filter by approval status (Pending, Approved, Rejected)",
           enum: ["Pending", "Approved", "Rejected"],
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
@@ -500,6 +527,12 @@ export const hrTools: ErpNextTool[] = [
       }
       if (input.approval_status) {
         filters.push(["approval_status", "=", input.approval_status as string]);
+      }
+      if (input.date_from) {
+        filters.push(["posting_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["posting_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Expense Claim", {

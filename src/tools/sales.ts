@@ -806,6 +806,11 @@ export const salesTools: ErpNextTool[] = [
           description:
             "Filter by status (Draft, Open, Replied, Ordered, Lost, Cancelled)",
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
@@ -816,6 +821,12 @@ export const salesTools: ErpNextTool[] = [
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
+      }
+      if (input.date_from) {
+        filters.push(["transaction_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["transaction_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Quotation", {

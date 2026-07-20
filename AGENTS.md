@@ -363,9 +363,23 @@ Rules:
 
 ## Docker
 
-`Dockerfile` builds on `denoland/deno:2.3.3`, pre-caches deps with
-`deno
-cache --allow-import server.ts`, and runs `server.ts --http --port=7654`.
+`Dockerfile` is a two-stage build:
+
+1. **`ui-builder`** (`node:20-slim`) — `npm ci` + `node build-all.mjs` in
+   `src/ui/`, producing `src/ui/dist/{viewer-name}/index.html` for all 7
+   viewers.
+2. **Runtime** (`denoland/deno:2.3.3`) — copies the app source plus the built
+   `src/ui/dist/` from stage 1, pre-caches deps with
+   `deno cache --allow-import server.ts`, and runs
+   `server.ts --http --port=7654`.
+
+Skipping the UI build stage (e.g. a naive single-stage Dockerfile that never
+runs `npm ci && node build-all.mjs`) silently degrades every viewer — tools
+still work, but `resolveViewerDistPath` finds nothing, each viewer logs
+`Warning: UI not built for ui://mcp-erpnext/{name}` at startup, and
+`Resources: 0` instead of `7`. Check for that count in the startup log after any
+Dockerfile change.
+
 `docker-compose.yml` reads config from `.env` (not baked into the image) and
 exposes port 7654 for a standalone deployment. To make the server reachable by
 name from another container stack (e.g. a chat client running in its own compose

@@ -1,20 +1,18 @@
-# ~/mcp-erpnext/docker-compose.yml
+# Minimal standalone deployment. If this server needs to be reachable by name
+# from another container stack (e.g. a chat client running in its own
+# compose project), join that stack's network instead: replace the top-level
+# `networks:` block below with a reference to the existing external network,
+# and list it under `services.mcp-erpnext.networks`.
 services:
   mcp-erpnext:
     build: .
     container_name: mcp-erpnext
     restart: unless-stopped
     ports:
-      - "7654:7654"        # exposes on host:7654 for nginx/direct access
+      - "7654:7654" # host:container — adjust the host side if 7654 is taken
     env_file: .env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7654/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - librechat_default      # JOIN LibreChat's network so it can reach this by name
-
-networks:
-  librechat_default:
-    external: true         # reference existing network — see Step 4

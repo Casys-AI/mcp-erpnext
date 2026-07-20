@@ -187,11 +187,21 @@ registers all tools + UI resources, and starts in stdio or HTTP mode. Supports
 
 ### HTTP authentication
 
-`src/auth/middleware.ts` guards HTTP mode with bearer-token auth, combinable across two modes:
-- **Static tokens** — `MCP_AUTH_TOKEN` (single) or `MCP_AUTH_TOKENS` (comma-separated), checked via O(1) `Set` lookup.
-- **OAuth 2.0 JWT** — `MCP_OAUTH_JWKS_URL` (+ optional `MCP_OAUTH_AUDIENCE` / `MCP_OAUTH_ISSUER`), validated with `jose`'s `createRemoteJWKSet`/`jwtVerify`. See `docs/oauth-setup.md`.
+`src/auth/middleware.ts` guards HTTP mode with bearer-token auth, combinable
+across two modes:
 
-When auth is configured, `server.ts` runs `ConcurrentMCPServer` on a loopback-only internal port and exposes a Hono (`createAuthProxyApp`) reverse proxy on the public port that validates `Authorization: Bearer <token>` and strips it before forwarding upstream. If neither env var is set, HTTP mode starts unauthenticated with a startup warning — never assume auth is on without checking.
+- **Static tokens** — `MCP_AUTH_TOKEN` (single) or `MCP_AUTH_TOKENS`
+  (comma-separated), checked via O(1) `Set` lookup.
+- **OAuth 2.0 JWT** — `MCP_OAUTH_JWKS_URL` (+ optional `MCP_OAUTH_AUDIENCE` /
+  `MCP_OAUTH_ISSUER`), validated with `jose`'s `createRemoteJWKSet`/`jwtVerify`.
+  See `docs/oauth-setup.md`.
+
+When auth is configured, `server.ts` runs `ConcurrentMCPServer` on a
+loopback-only internal port and exposes a Hono (`createAuthProxyApp`) reverse
+proxy on the public port that validates `Authorization: Bearer <token>` and
+strips it before forwarding upstream. If neither env var is set, HTTP mode
+starts unauthenticated with a startup warning — never assume auth is on without
+checking.
 
 ## Coding Style & Naming Conventions
 
@@ -329,14 +339,21 @@ Rules:
 - Never commit `.env` files, API keys, or credentials. The `.gitignore` already
   covers `.env*`.
 - `FrappeClient` (talking to ERPNext) authenticates via API key/secret headers
-  only — no OAuth or session-based auth on that side. The MCP server's own
-  HTTP endpoint is a separate auth layer (see above).
+  only — no OAuth or session-based auth on that side. The MCP server's own HTTP
+  endpoint is a separate auth layer (see above).
 - All errors throw `FrappeAPIError` — no silent fallbacks or swallowed errors.
   Do not introduce `try/catch` blocks that hide errors.
 
 ## Docker
 
-`Dockerfile` builds on `denoland/deno:2.3.3`, pre-caches deps with `deno cache --allow-import server.ts`, and runs `server.ts --http --port=7654`. `docker-compose.yml` reads config from `.env` (not baked into the image), exposes port 7654, and expects an external `librechat_default` network for same-host reverse-proxy integration — adjust or remove that network if deploying standalone.
+`Dockerfile` builds on `denoland/deno:2.3.3`, pre-caches deps with
+`deno
+cache --allow-import server.ts`, and runs `server.ts --http --port=7654`.
+`docker-compose.yml` reads config from `.env` (not baked into the image) and
+exposes port 7654 for a standalone deployment. To make the server reachable by
+name from another container stack (e.g. a chat client running in its own compose
+project), join that stack's external network instead — see the comment at the
+top of `docker-compose.yml`.
 
 ## Key Conventions
 

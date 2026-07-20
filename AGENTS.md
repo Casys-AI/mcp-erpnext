@@ -177,11 +177,35 @@ bounds on one column. Master-data lists (Customer, Item, Warehouse, etc.)
 intentionally have no date filter.
 ### Link-field resolution
 
-`src/api/resolve.ts`'s `resolveLink(client, doctype, identifier, searchField)` lets a tool filter accept either a document's real ID or a human-readable identifier (name, email) and resolves it server-side in the same call: try `get(doctype, identifier)` first (fast path if it's already a valid ID), then fall back to an exact then partial (`like`) match on `searchField`. Wrapped as `resolveEmployee`/`resolveCustomer`/`resolveSupplier`/`resolveItem` for the common fixed-target cases; `erpnext_timesheet_list` in `src/tools/project.ts` shows the pattern. Use this instead of asking the agent to call a `_list` tool first to look up an ID before calling the tool that actually needs it.
+`src/api/resolve.ts`'s `resolveLink(client, doctype, identifier, searchField)`
+lets a tool filter accept either a document's real ID or a human-readable
+identifier (name, email) and resolves it server-side in the same call: try
+`get(doctype, identifier)` first (fast path if it's already a valid ID), then
+fall back to an exact then partial (`like`) match on `searchField`. Wrapped as
+`resolveEmployee`/`resolveCustomer`/`resolveSupplier`/`resolveItem` for the
+common fixed-target cases; `erpnext_timesheet_list` in `src/tools/project.ts`
+shows the pattern. Use this instead of asking the agent to call a `_list` tool
+first to look up an ID before calling the tool that actually needs it.
 
-The fast-path `get()` always 404s when `identifier` is a human name rather than a real ID, and `FrappeClient` only caches successful reads — so that 404 would otherwise be re-probed over the network on every call to the same name. `resolveLink` remembers confirmed 404s itself, in the app-wide `getCache()` singleton under `resolve:miss:{doctype}:{identifier}` (15s TTL), so repeat resolution of a known-not-an-ID name skips straight to the `list()` fallback.
+The fast-path `get()` always 404s when `identifier` is a human name rather than
+a real ID, and `FrappeClient` only caches successful reads — so that 404 would
+otherwise be re-probed over the network on every call to the same name.
+`resolveLink` remembers confirmed 404s itself, in the app-wide `getCache()`
+singleton under `resolve:miss:{doctype}:{identifier}` (15s TTL), so repeat
+resolution of a known-not-an-ID name skips straight to the `list()` fallback.
 
-**Dynamic-link fields** — where the target DocType isn't fixed but comes from a companion field (Payment Entry's `party`, target given by `party_type`; Quotation/Opportunity's `party_name`, target given by `quotation_to`/`opportunity_from`) — use `resolveDynamicLink(client, targetDoctype, identifier)` instead, a thin dispatch table over `resolveLink` keyed by the resolved doctype. The convention: if the identifier field is set but its companion type field isn't, throw a validation error (`'{type_field}' is required when filtering by '{identifier_field}'`) rather than guessing or passing the raw value through unresolved. See `erpnext_payment_entry_list` (`src/tools/accounting.ts`), `erpnext_quotation_list`/`erpnext_quotation_create` (`src/tools/sales.ts`), and `erpnext_opportunity_list` (`src/tools/crm.ts`).
+**Dynamic-link fields** — where the target DocType isn't fixed but comes from a
+companion field (Payment Entry's `party`, target given by `party_type`;
+Quotation/Opportunity's `party_name`, target given by
+`quotation_to`/`opportunity_from`) — use
+`resolveDynamicLink(client, targetDoctype, identifier)` instead, a thin dispatch
+table over `resolveLink` keyed by the resolved doctype. The convention: if the
+identifier field is set but its companion type field isn't, throw a validation
+error (`'{type_field}' is required when filtering by '{identifier_field}'`)
+rather than guessing or passing the raw value through unresolved. See
+`erpnext_payment_entry_list` (`src/tools/accounting.ts`),
+`erpnext_quotation_list`/`erpnext_quotation_create` (`src/tools/sales.ts`), and
+`erpnext_opportunity_list` (`src/tools/crm.ts`).
 
 ### Kanban system
 
@@ -391,10 +415,10 @@ Rules:
   `structuredContent` with the viewer's MIME type so MCP clients can render the
   viewer.
 - Link-field list filters (e.g. `employee`, `customer`, `supplier`, `item`)
-  should accept either the document's ID or its human-readable name and
-  resolve via `resolveLink`/`resolveEmployee`/etc. from `src/api/resolve.ts`
-  — see [Link-field resolution](#link-field-resolution). Mention "ID or name"
-  in the param's `inputSchema` description when you do this.
+  should accept either the document's ID or its human-readable name and resolve
+  via `resolveLink`/`resolveEmployee`/etc. from `src/api/resolve.ts` — see
+  [Link-field resolution](#link-field-resolution). Mention "ID or name" in the
+  param's `inputSchema` description when you do this.
 
 ## Known Issues & Frappe Gotchas
 

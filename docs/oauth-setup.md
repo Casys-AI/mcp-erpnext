@@ -2,12 +2,13 @@
 
 This server supports two auth modes that can be used together:
 
-| Mode | Best for |
-|---|---|
-| **Static Bearer token** | Same-network deployments (Docker, VPN, LAN) |
-| **OAuth 2.0 JWT** | External/public access, team SSO, fine-grained scopes |
+| Mode                    | Best for                                              |
+| ----------------------- | ----------------------------------------------------- |
+| **Static Bearer token** | Same-network deployments (Docker, VPN, LAN)           |
+| **OAuth 2.0 JWT**       | External/public access, team SSO, fine-grained scopes |
 
-OAuth works with any provider that exposes a **JWKS endpoint** — Auth0, Keycloak, Google, Authentik, Zitadel, Azure AD, Okta, etc.
+OAuth works with any provider that exposes a **JWKS endpoint** — Auth0,
+Keycloak, Google, Authentik, Zitadel, Azure AD, Okta, etc.
 
 ---
 
@@ -26,7 +27,8 @@ LibreChat  ──Bearer JWT──►  Hono proxy (port 7654)
                            (127.0.0.1:7655)
 ```
 
-The proxy fetches your provider's public keys once and caches them. No credentials are stored — only the token's signature and claims are verified.
+The proxy fetches your provider's public keys once and caches them. No
+credentials are stored — only the token's signature and claims are verified.
 
 ---
 
@@ -63,7 +65,8 @@ MCP_OAUTH_ISSUER=https://your-idp
    https://YOUR_DOMAIN.auth0.com/.well-known/jwks.json
    ```
 
-3. To issue tokens (for testing or service accounts), go to **Applications → Machine to Machine** and authorize the API.
+3. To issue tokens (for testing or service accounts), go to **Applications →
+   Machine to Machine** and authorize the API.
 
 4. `.env`:
    ```env
@@ -129,11 +132,13 @@ MCP_OAUTH_ISSUER=https://your-idp
 ### Option D — Google (for Google Workspace teams)
 
 Google's JWKS URL is public:
+
 ```
 https://www.googleapis.com/oauth2/v3/certs
 ```
 
-1. Go to **Google Cloud Console → APIs & Services → Credentials → Create OAuth 2.0 Client ID** (type: Web application)
+1. Go to **Google Cloud Console → APIs & Services → Credentials → Create OAuth
+   2.0 Client ID** (type: Web application)
 
 2. `.env`:
    ```env
@@ -142,7 +147,8 @@ https://www.googleapis.com/oauth2/v3/certs
    MCP_OAUTH_ISSUER=https://accounts.google.com
    ```
 
-> **Note**: Google issues short-lived tokens. This works for user-delegated access but not for automated/service-account flows.
+> **Note**: Google issues short-lived tokens. This works for user-delegated
+> access but not for automated/service-account flows.
 
 ---
 
@@ -209,7 +215,8 @@ mcpServers:
 
 ### OAuth — service account JWT (for external IdPs)
 
-Issue a long-lived service account token from your IdP and treat it like a static token in LibreChat:
+Issue a long-lived service account token from your IdP and treat it like a
+static token in LibreChat:
 
 ```yaml
 mcpServers:
@@ -224,7 +231,9 @@ mcpServers:
       Authorization: "Bearer SERVICE_ACCOUNT_JWT_FROM_YOUR_IDP"
 ```
 
-> LibreChat does not currently support automatic OAuth token refresh for MCP connections. Use a service account with a long-lived token or rotate it via your CI/CD pipeline.
+> LibreChat does not currently support automatic OAuth token refresh for MCP
+> connections. Use a service account with a long-lived token or rotate it via
+> your CI/CD pipeline.
 
 ---
 
@@ -248,10 +257,10 @@ A request is accepted if it passes **either** check.
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `401` with a valid-looking token | Wrong audience or issuer claim | Check `MCP_OAUTH_AUDIENCE` matches the `aud` claim in the JWT (decode at jwt.io) |
-| `401` with `JWTExpired` in logs | Token has expired | Re-issue a fresh token; for service accounts use a longer expiry |
-| `401` on every request | JWKS URL unreachable from container | Run `docker exec mcp-erpnext curl YOUR_JWKS_URL` to verify network access |
-| Server logs show no auth mode | Env vars not loaded | Check `.env` file path and `docker compose logs` for startup message |
-| Both static + OAuth returning 401 | Whitespace in token | Trim leading/trailing spaces in `.env` values |
+| Symptom                           | Likely cause                        | Fix                                                                              |
+| --------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------- |
+| `401` with a valid-looking token  | Wrong audience or issuer claim      | Check `MCP_OAUTH_AUDIENCE` matches the `aud` claim in the JWT (decode at jwt.io) |
+| `401` with `JWTExpired` in logs   | Token has expired                   | Re-issue a fresh token; for service accounts use a longer expiry                 |
+| `401` on every request            | JWKS URL unreachable from container | Run `docker exec mcp-erpnext curl YOUR_JWKS_URL` to verify network access        |
+| Server logs show no auth mode     | Env vars not loaded                 | Check `.env` file path and `docker compose logs` for startup message             |
+| Both static + OAuth returning 401 | Whitespace in token                 | Trim leading/trailing spaces in `.env` values                                    |

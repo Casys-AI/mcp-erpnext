@@ -147,7 +147,10 @@ export function createAuthProxyApp(
     const ok = await validateToken(authHeader, config);
     if (!ok) {
       return c.json(
-        { error: "Unauthorized", message: "Valid Authorization: Bearer <token> required" },
+        {
+          error: "Unauthorized",
+          message: "Valid Authorization: Bearer <token> required",
+        },
         401,
         { "WWW-Authenticate": 'Bearer realm="mcp-erpnext"' },
       );

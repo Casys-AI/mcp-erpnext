@@ -44,10 +44,7 @@ import {
   serveHttp,
   statSync,
 } from "./src/runtime.ts";
-import {
-  createAuthProxyApp,
-  loadAuthConfig,
-} from "./src/auth/middleware.ts";
+import { createAuthProxyApp, loadAuthConfig } from "./src/auth/middleware.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
 

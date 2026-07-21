@@ -142,3 +142,32 @@ Deno.test("erpnext_purchase_order_create - throws if supplier missing", async ()
     "supplier",
   );
 });
+
+// ── erpnext_supplier_quotation_list ─────────────────────────────────────────
+
+Deno.test("erpnext_supplier_quotation_list - filters by date range", async () => {
+  let capturedFilters: unknown[][] = [];
+  const client = makeMockClient({
+    list: async (_doctype: string, opts: { filters?: unknown[][] }) => {
+      capturedFilters = opts?.filters ?? [];
+      return [];
+    },
+  });
+
+  const tool = getTool("erpnext_supplier_quotation_list");
+  await tool.handler(
+    { date_from: "2026-01-01", date_to: "2026-01-31" },
+    makeCtx(client),
+  );
+
+  const hasStart = capturedFilters.some(
+    (f) =>
+      f[0] === "transaction_date" && f[1] === ">=" && f[2] === "2026-01-01",
+  );
+  const hasEnd = capturedFilters.some(
+    (f) =>
+      f[0] === "transaction_date" && f[1] === "<=" && f[2] === "2026-01-31",
+  );
+  assertEquals(hasStart, true);
+  assertEquals(hasEnd, true);
+});

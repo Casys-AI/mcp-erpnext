@@ -41,6 +41,14 @@ export const assetsTools: ErpNextTool[] = [
           type: "string",
           description: "Filter by custodian (employee)",
         },
+        date_from: {
+          type: "string",
+          description: "Purchase date start filter YYYY-MM-DD",
+        },
+        date_to: {
+          type: "string",
+          description: "Purchase date end filter YYYY-MM-DD",
+        },
       },
     },
     handler: async (input, ctx) => {
@@ -57,6 +65,12 @@ export const assetsTools: ErpNextTool[] = [
       }
       if (input.custodian) {
         filters.push(["custodian", "=", input.custodian as string]);
+      }
+      if (input.date_from) {
+        filters.push(["purchase_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["purchase_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Asset", {

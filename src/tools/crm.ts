@@ -10,6 +10,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
+import { resolveDynamicLink } from "../api/resolve.ts";
 
 export const crmTools: ErpNextTool[] = [
   // ── Leads ─────────────────────────────────────────────────────────────────
@@ -163,9 +164,17 @@ export const crmTools: ErpNextTool[] = [
           type: "string",
           description: "Filter by assigned sales rep (user)",
         },
+        opportunity_from: {
+          type: "string",
+          description:
+            "Party type: Customer or Lead. Required when 'party_name' is set, " +
+            "so the party name/ID can be resolved against the right doctype.",
+          enum: ["Customer", "Lead"],
+        },
         party_name: {
           type: "string",
-          description: "Filter by customer or lead name",
+          description:
+            "Filter by party — ID or name (e.g. customer/lead name). Requires 'opportunity_from'.",
         },
       },
     },
@@ -183,7 +192,20 @@ export const crmTools: ErpNextTool[] = [
         ]);
       }
       if (input.party_name) {
-        filters.push(["party_name", "=", input.party_name as string]);
+        if (!input.opportunity_from) {
+          throw new Error(
+            "[erpnext_opportunity_list] 'opportunity_from' is required when filtering by 'party_name'",
+          );
+        }
+        filters.push([
+          "party_name",
+          "=",
+          await resolveDynamicLink(
+            ctx.client,
+            input.opportunity_from as string,
+            input.party_name as string,
+          ),
+        ]);
       }
 
       const docs = await ctx.client.list("Opportunity", {
@@ -325,6 +347,11 @@ export const crmTools: ErpNextTool[] = [
           type: "string",
           description: "Filter by campaign type",
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
@@ -332,6 +359,12 @@ export const crmTools: ErpNextTool[] = [
       const filters: FrappeFilter[] = [];
       if (input.campaign_type) {
         filters.push(["campaign_type", "=", input.campaign_type as string]);
+      }
+      if (input.date_from) {
+        filters.push(["start_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["end_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Campaign", {

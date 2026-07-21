@@ -9,6 +9,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
+import { resolveEmployee } from "../api/resolve.ts";
 
 export const hrTools: ErpNextTool[] = [
   // ── Employees ─────────────────────────────────────────────────────────────
@@ -109,7 +110,11 @@ export const hrTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        employee: { type: "string", description: "Filter by employee ID" },
+        employee: {
+          type: "string",
+          description:
+            "Filter by employee ID or name (e.g. 'HR-EMP-00001' or 'John Doe')",
+        },
         status: {
           type: "string",
           description: "Filter by status (Present, Absent, Half Day, On Leave)",
@@ -126,7 +131,11 @@ export const hrTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.employee) {
-        filters.push(["employee", "=", input.employee as string]);
+        filters.push([
+          "employee",
+          "=",
+          await resolveEmployee(ctx.client, input.employee as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -174,7 +183,11 @@ export const hrTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        employee: { type: "string", description: "Filter by employee ID" },
+        employee: {
+          type: "string",
+          description:
+            "Filter by employee ID or name (e.g. 'HR-EMP-00001' or 'John Doe')",
+        },
         status: {
           type: "string",
           description: "Filter by status (Open, Approved, Rejected, Cancelled)",
@@ -184,19 +197,34 @@ export const hrTools: ErpNextTool[] = [
           type: "string",
           description: "Filter by leave type (e.g. Sick Leave)",
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.employee) {
-        filters.push(["employee", "=", input.employee as string]);
+        filters.push([
+          "employee",
+          "=",
+          await resolveEmployee(ctx.client, input.employee as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
       }
       if (input.leave_type) {
         filters.push(["leave_type", "=", input.leave_type as string]);
+      }
+      if (input.date_from) {
+        filters.push(["from_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["to_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Leave Application", {
@@ -325,7 +353,11 @@ export const hrTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        employee: { type: "string", description: "Filter by employee ID" },
+        employee: {
+          type: "string",
+          description:
+            "Filter by employee ID or name (e.g. 'HR-EMP-00001' or 'John Doe')",
+        },
         status: {
           type: "string",
           description: "Filter by status (Draft, Submitted, Cancelled)",
@@ -345,7 +377,11 @@ export const hrTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.employee) {
-        filters.push(["employee", "=", input.employee as string]);
+        filters.push([
+          "employee",
+          "=",
+          await resolveEmployee(ctx.client, input.employee as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -427,6 +463,11 @@ export const hrTools: ErpNextTool[] = [
           description: "Filter by status (Draft, Submitted, Cancelled)",
           enum: ["Draft", "Submitted", "Cancelled"],
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
@@ -437,6 +478,12 @@ export const hrTools: ErpNextTool[] = [
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
+      }
+      if (input.date_from) {
+        filters.push(["posting_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["posting_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Payroll Entry", {
@@ -475,7 +522,11 @@ export const hrTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        employee: { type: "string", description: "Filter by employee ID" },
+        employee: {
+          type: "string",
+          description:
+            "Filter by employee ID or name (e.g. 'HR-EMP-00001' or 'John Doe')",
+        },
         status: {
           type: "string",
           description: "Filter by status (Draft, Submitted, Cancelled)",
@@ -487,19 +538,34 @@ export const hrTools: ErpNextTool[] = [
             "Filter by approval status (Pending, Approved, Rejected)",
           enum: ["Pending", "Approved", "Rejected"],
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.employee) {
-        filters.push(["employee", "=", input.employee as string]);
+        filters.push([
+          "employee",
+          "=",
+          await resolveEmployee(ctx.client, input.employee as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
       }
       if (input.approval_status) {
         filters.push(["approval_status", "=", input.approval_status as string]);
+      }
+      if (input.date_from) {
+        filters.push(["posting_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["posting_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Expense Claim", {
@@ -618,7 +684,8 @@ export const hrTools: ErpNextTool[] = [
       properties: {
         employee: {
           type: "string",
-          description: "Employee ID (e.g. HR-EMP-00001)",
+          description:
+            "Employee ID or name (e.g. 'HR-EMP-00001' or 'John Doe')",
         },
       },
       required: ["employee"],
@@ -629,7 +696,11 @@ export const hrTools: ErpNextTool[] = [
       }
 
       const filters: FrappeFilter[] = [
-        ["employee", "=", input.employee as string],
+        [
+          "employee",
+          "=",
+          await resolveEmployee(ctx.client, input.employee as string),
+        ],
         ["docstatus", "=", 1],
       ];
 

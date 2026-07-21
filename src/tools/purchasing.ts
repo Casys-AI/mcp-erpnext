@@ -10,6 +10,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
+import { resolveSupplier } from "../api/resolve.ts";
 
 export const purchasingTools: ErpNextTool[] = [
   // ── Suppliers ─────────────────────────────────────────────────────────────
@@ -172,7 +173,11 @@ export const purchasingTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        supplier: { type: "string", description: "Filter by supplier" },
+        supplier: {
+          type: "string",
+          description:
+            "Filter by supplier ID or name (e.g. 'SUPP-00001' or 'Acme Supplies')",
+        },
         status: {
           type: "string",
           description:
@@ -189,7 +194,11 @@ export const purchasingTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.supplier) {
-        filters.push(["supplier", "=", input.supplier as string]);
+        filters.push([
+          "supplier",
+          "=",
+          await resolveSupplier(ctx.client, input.supplier as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -339,7 +348,11 @@ export const purchasingTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        supplier: { type: "string", description: "Filter by supplier" },
+        supplier: {
+          type: "string",
+          description:
+            "Filter by supplier ID or name (e.g. 'SUPP-00001' or 'Acme Supplies')",
+        },
         status: {
           type: "string",
           description:
@@ -356,7 +369,11 @@ export const purchasingTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.supplier) {
-        filters.push(["supplier", "=", input.supplier as string]);
+        filters.push([
+          "supplier",
+          "=",
+          await resolveSupplier(ctx.client, input.supplier as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -434,7 +451,11 @@ export const purchasingTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        supplier: { type: "string", description: "Filter by supplier" },
+        supplier: {
+          type: "string",
+          description:
+            "Filter by supplier ID or name (e.g. 'SUPP-00001' or 'Acme Supplies')",
+        },
         status: {
           type: "string",
           description:
@@ -451,7 +472,11 @@ export const purchasingTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.supplier) {
-        filters.push(["supplier", "=", input.supplier as string]);
+        filters.push([
+          "supplier",
+          "=",
+          await resolveSupplier(ctx.client, input.supplier as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -528,22 +553,41 @@ export const purchasingTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        supplier: { type: "string", description: "Filter by supplier" },
+        supplier: {
+          type: "string",
+          description:
+            "Filter by supplier ID or name (e.g. 'SUPP-00001' or 'Acme Supplies')",
+        },
         status: {
           type: "string",
           description:
             "Filter by status (Draft, Submitted, Ordered, Lost, Cancelled)",
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.supplier) {
-        filters.push(["supplier", "=", input.supplier as string]);
+        filters.push([
+          "supplier",
+          "=",
+          await resolveSupplier(ctx.client, input.supplier as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
+      }
+      if (input.date_from) {
+        filters.push(["transaction_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["transaction_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Supplier Quotation", {

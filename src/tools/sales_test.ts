@@ -216,3 +216,66 @@ Deno.test("erpnext_sales_invoice_list - returns invoices with _meta.ui", async (
     "ui://mcp-erpnext/doclist-viewer",
   );
 });
+
+// ── erpnext_quotation_list (dynamic-link resolution) ──────────────────────────
+
+Deno.test("erpnext_quotation_list - throws if party_name set without quotation_to", async () => {
+  const tool = getTool("erpnext_quotation_list");
+  await assertRejects(
+    () => tool.handler({ party_name: "Acme Corp" }, makeCtx(makeMockClient())),
+    Error,
+    "quotation_to",
+  );
+});
+
+Deno.test("erpnext_quotation_list - resolves party_name against the quotation_to doctype", async () => {
+  const { FrappeAPIError } = await import("../api/frappe-client.ts");
+  let resolvedDoctype = "";
+  const client = makeMockClient({
+    get: async () => {
+      throw new FrappeAPIError("not found", 404, null);
+    },
+    list: async (doctype: string) => {
+      if (doctype === "Quotation") return [];
+      resolvedDoctype = doctype;
+      return [{ name: "CUST-042" }];
+    },
+  });
+
+  const tool = getTool("erpnext_quotation_list");
+  await tool.handler(
+    { party_name: "Acme Corp", quotation_to: "Customer" },
+    makeCtx(client),
+  );
+
+  assertEquals(resolvedDoctype, "Customer");
+});
+
+// ── erpnext_quotation_create (dynamic-link resolution) ────────────────────────
+
+Deno.test("erpnext_quotation_create - resolves party_name before building the create payload", async () => {
+  const { FrappeAPIError } = await import("../api/frappe-client.ts");
+  let createdData: Record<string, unknown> = {};
+  const client = makeMockClient({
+    get: async () => {
+      throw new FrappeAPIError("not found", 404, null);
+    },
+    list: async () => [{ name: "CUST-042" }],
+    create: async (_doctype: string, data: Record<string, unknown>) => {
+      createdData = data;
+      return { name: "QTN-NEW-001", ...data };
+    },
+  });
+
+  const tool = getTool("erpnext_quotation_create");
+  await tool.handler(
+    {
+      quotation_to: "Customer",
+      party_name: "Acme Corp",
+      items: [{ item_code: "ITEM-001", qty: 1, rate: 100 }],
+    },
+    makeCtx(client),
+  );
+
+  assertEquals(createdData.party_name, "CUST-042");
+});

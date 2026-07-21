@@ -10,6 +10,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
+import { resolveItem } from "../api/resolve.ts";
 
 export const manufacturingTools: ErpNextTool[] = [
   // ── Bill of Materials ─────────────────────────────────────────────────────
@@ -28,7 +29,8 @@ export const manufacturingTools: ErpNextTool[] = [
         limit: { type: "number", description: "Max results (default 20)" },
         item: {
           type: "string",
-          description: "Filter by finished goods item code",
+          description:
+            "Filter by finished goods item code or name (e.g. 'ITEM-001' or 'Widget A')",
         },
         is_active: {
           type: "boolean",
@@ -44,7 +46,11 @@ export const manufacturingTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.item) {
-        filters.push(["item", "=", input.item as string]);
+        filters.push([
+          "item",
+          "=",
+          await resolveItem(ctx.client, input.item as string),
+        ]);
       }
       if (input.is_active !== undefined) {
         filters.push(["is_active", "=", (input.is_active as boolean) ? 1 : 0]);
@@ -120,7 +126,8 @@ export const manufacturingTools: ErpNextTool[] = [
         limit: { type: "number", description: "Max results (default 20)" },
         production_item: {
           type: "string",
-          description: "Filter by item being produced",
+          description:
+            "Filter by item being produced — item code or name (e.g. 'ITEM-001' or 'Widget A')",
         },
         status: {
           type: "string",
@@ -141,7 +148,11 @@ export const manufacturingTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.production_item) {
-        filters.push(["production_item", "=", input.production_item as string]);
+        filters.push([
+          "production_item",
+          "=",
+          await resolveItem(ctx.client, input.production_item as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);

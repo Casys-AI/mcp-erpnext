@@ -9,6 +9,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META, INVOICE_META } from "./viewer-meta.ts";
+import { resolveCustomer, resolveDynamicLink } from "../api/resolve.ts";
 
 interface LineItemInput {
   item_code: string;
@@ -259,7 +260,11 @@ export const salesTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        customer: { type: "string", description: "Filter by customer" },
+        customer: {
+          type: "string",
+          description:
+            "Filter by customer ID or name (e.g. 'CUST-00001' or 'Acme Corp')",
+        },
         status: {
           type: "string",
           description:
@@ -276,7 +281,11 @@ export const salesTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.customer) {
-        filters.push(["customer", "=", input.customer as string]);
+        filters.push([
+          "customer",
+          "=",
+          await resolveCustomer(ctx.client, input.customer as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -573,7 +582,11 @@ export const salesTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        customer: { type: "string", description: "Filter by customer" },
+        customer: {
+          type: "string",
+          description:
+            "Filter by customer ID or name (e.g. 'CUST-00001' or 'Acme Corp')",
+        },
         status: {
           type: "string",
           description:
@@ -590,7 +603,11 @@ export const salesTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.customer) {
-        filters.push(["customer", "=", input.customer as string]);
+        filters.push([
+          "customer",
+          "=",
+          await resolveCustomer(ctx.client, input.customer as string),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -800,22 +817,57 @@ export const salesTools: ErpNextTool[] = [
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
-        party_name: { type: "string", description: "Filter by party name" },
+        quotation_to: {
+          type: "string",
+          description:
+            "Party type: Customer or Lead. Required when 'party_name' is set, " +
+            "so the party name/ID can be resolved against the right doctype.",
+          enum: ["Customer", "Lead"],
+        },
+        party_name: {
+          type: "string",
+          description:
+            "Filter by party — ID or name (e.g. customer/lead name). Requires 'quotation_to'.",
+        },
         status: {
           type: "string",
           description:
             "Filter by status (Draft, Open, Replied, Ordered, Lost, Cancelled)",
         },
+        date_from: {
+          type: "string",
+          description: "Start date filter YYYY-MM-DD",
+        },
+        date_to: { type: "string", description: "End date filter YYYY-MM-DD" },
       },
     },
     handler: async (input, ctx) => {
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
       if (input.party_name) {
-        filters.push(["party_name", "=", input.party_name as string]);
+        if (!input.quotation_to) {
+          throw new Error(
+            "[erpnext_quotation_list] 'quotation_to' is required when filtering by 'party_name'",
+          );
+        }
+        filters.push([
+          "party_name",
+          "=",
+          await resolveDynamicLink(
+            ctx.client,
+            input.quotation_to as string,
+            input.party_name as string,
+          ),
+        ]);
       }
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
+      }
+      if (input.date_from) {
+        filters.push(["transaction_date", ">=", input.date_from as string]);
+      }
+      if (input.date_to) {
+        filters.push(["transaction_date", "<=", input.date_to as string]);
       }
 
       const docs = await ctx.client.list("Quotation", {
@@ -882,7 +934,7 @@ export const salesTools: ErpNextTool[] = [
         },
         party_name: {
           type: "string",
-          description: "Customer or Lead name",
+          description: "Customer or Lead — ID or name",
         },
         items: {
           type: "array",
@@ -936,7 +988,12 @@ export const salesTools: ErpNextTool[] = [
 
       const data: Record<string, unknown> = {
         quotation_to: input.quotation_to as string,
-        party_name: input.party_name as string,
+        party_name: await resolveDynamicLink(
+          ctx.client,
+          input.quotation_to as string,
+          input.party_name as string,
+          { allowPartialMatch: false },
+        ),
         items,
       };
       if (input.transaction_date) {

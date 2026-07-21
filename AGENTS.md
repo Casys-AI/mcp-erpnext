@@ -32,6 +32,8 @@ and JSR (Deno).
   publish config).
 - **Kanban**: `src/kanban/` contains types, definitions, field-utils, and
   per-DocType adapters in `adapters/`.
+- **Cache**: `src/cache/` — pluggable `Cache` interface, `MemoryCache`/
+  `NoopCache` implementations, app-wide singleton.
 - **Runtime adapters**: `src/runtime.ts` (Deno) and `src/runtime.node.ts`
   (Node.js) — the build script swaps them.
 - **Scripts**: `scripts/build-node.sh` produces the npm bundle.
@@ -124,11 +126,87 @@ singleton. The client is lazily initialized from env vars on first use.
 
 `src/api/frappe-client.ts` is a zero-dependency HTTP client wrapping the Frappe
 REST API. Key methods: `list()`, `get()`, `create()`, `update()`, `delete()`,
-`callMethod()`. All errors throw `FrappeAPIError` with HTTP status and parsed
-body — no silent fallbacks.
+`callMethod()`, `invalidate()`. All errors throw `FrappeAPIError` with HTTP
+status and parsed body — no silent fallbacks.
 
 **Submit handlers must GET the doc first** to pass `modified` for Frappe's
-optimistic locking (see `docs/known-issues.md`). Cancel does not need this.
+optimistic locking (see `docs/known-issues.md`), and must pass
+`{ skipCache: true }` so that read isn't served from a stale cache entry. Cancel
+does not need the pre-fetch, but both submit and cancel must call
+`ctx.client.invalidate(doctype, name)` after the mutating `callMethod` succeeds
+— see `src/tools/operations.ts`.
+
+### Caching
+
+`FrappeClient.list()` and `.get()` are cached through a pluggable `Cache`
+(`src/cache/types.ts`). `MemoryCache` (`src/cache/memory.ts`) is the default
+in-process implementation — a hand-rolled TTL `Map`, zero dependencies;
+`NoopCache` (`src/cache/noop.ts`) disables caching without branching inside
+`FrappeClient`. A future backend (e.g. Redis) just implements `Cache`.
+
+- **Per-instance vs. shared**: `FrappeClient` defaults to a _fresh, unshared_
+  `MemoryCache` per instance unless a `cache` is passed in `FrappeClientConfig`.
+  `getFrappeClient()` (the app-wide singleton in the same file) explicitly wires
+  in the shared `getCache()` singleton (`src/cache/cache.ts`) so all tool calls
+  in the process share one cache. Tests that construct their own `FrappeClient`
+  (e.g. `frappe-client_test.ts`) get isolated per-test caches for free — don't
+  change this default.
+- **Invalidation**: `create()`, `update()`, `delete()` call
+  `this.invalidate(doctype, name)` automatically. Any handler that mutates via
+  `callMethod` (submit, cancel, or a custom business method) must call
+  `ctx.client.invalidate(doctype, name)` itself afterward.
+- **Config**: `MCP_CACHE_ENABLED` (`"false"` disables caching entirely, default
+  enabled) and `MCP_CACHE_TTL_MS` (default `15000`).
+- **Warming**: `src/cache/warm.ts`'s `warmCache()` optionally pre-populates the
+  cache on startup by calling a configured set of read-only `_list` tool
+  handlers with no filters — matching the exact cache key a real unfiltered call
+  would use (fields/limit/order_by come from the tool itself, not a hand-rolled
+  `client.list()` guess). Configured via `MCP_CACHE_WARM_TOOLS` (comma-separated
+  tool names; unset/empty = disabled). Refuses to call unknown or non-read-only
+  tools, and never lets one tool's failure abort the rest or the server — see
+  the fire-and-forget call in `server.ts` right after tool registration.
+
+### Date-range filters
+
+List tools whose DocType has a natural date field accept `date_from`/`date_to`
+(`"Start date filter YYYY-MM-DD"` / `"End date filter YYYY-MM-DD"`), filtering
+`[field, ">=", date_from]` / `[field, "<=", date_to]`. Doctypes with distinct
+start/end fields (Timesheet, Project, Task, Leave Application, Campaign) filter
+the start field with `date_from` and the end field with `date_to` — not both
+bounds on one column. Master-data lists (Customer, Item, Warehouse, etc.)
+intentionally have no date filter.
+
+### Link-field resolution
+
+`src/api/resolve.ts`'s `resolveLink(client, doctype, identifier, searchField)`
+lets a tool filter accept either a document's real ID or a human-readable
+identifier (name, email) and resolves it server-side in the same call: try
+`get(doctype, identifier)` first (fast path if it's already a valid ID), then
+fall back to an exact then partial (`like`) match on `searchField`. Wrapped as
+`resolveEmployee`/`resolveCustomer`/`resolveSupplier`/`resolveItem` for the
+common fixed-target cases; `erpnext_timesheet_list` in `src/tools/project.ts`
+shows the pattern. Use this instead of asking the agent to call a `_list` tool
+first to look up an ID before calling the tool that actually needs it.
+
+The fast-path `get()` always 404s when `identifier` is a human name rather than
+a real ID, and `FrappeClient` only caches successful reads — so that 404 would
+otherwise be re-probed over the network on every call to the same name.
+`resolveLink` remembers confirmed 404s itself, in the app-wide `getCache()`
+singleton under `resolve:miss:{doctype}:{identifier}` (15s TTL), so repeat
+resolution of a known-not-an-ID name skips straight to the `list()` fallback.
+
+**Dynamic-link fields** — where the target DocType isn't fixed but comes from a
+companion field (Payment Entry's `party`, target given by `party_type`;
+Quotation/Opportunity's `party_name`, target given by
+`quotation_to`/`opportunity_from`) — use
+`resolveDynamicLink(client, targetDoctype, identifier)` instead, a thin dispatch
+table over `resolveLink` keyed by the resolved doctype. The convention: if the
+identifier field is set but its companion type field isn't, throw a validation
+error (`'{type_field}' is required when filtering by '{identifier_field}'`)
+rather than guessing or passing the raw value through unresolved. See
+`erpnext_payment_entry_list` (`src/tools/accounting.ts`),
+`erpnext_quotation_list`/`erpnext_quotation_create` (`src/tools/sales.ts`), and
+`erpnext_opportunity_list` (`src/tools/crm.ts`).
 
 ### Kanban system
 
@@ -268,6 +346,7 @@ function makeMockClient(overrides: Record<string, unknown> = {}): FrappeClient {
     update: async () => ({ name: "TEST-001" }),
     delete: async () => {},
     callMethod: async () => null,
+    invalidate: () => {},
     ...overrides,
   } as unknown as FrappeClient;
 }
@@ -346,6 +425,9 @@ Rules:
   `MCP_AUTH_TOKEN` / `MCP_AUTH_TOKENS`, or `MCP_OAUTH_JWKS_URL` +
   `MCP_OAUTH_AUDIENCE` + `MCP_OAUTH_ISSUER` — either mode also requires
   `MCP_AUTH_RESOURCE`. See [HTTP authentication](#http-authentication).
+- Caching (optional): `MCP_CACHE_ENABLED` (default enabled), `MCP_CACHE_TTL_MS`
+  (default `15000`), `MCP_CACHE_WARM_TOOLS` (comma-separated tool names to warm
+  on startup, default disabled). See [Caching](#caching).
 - Never commit `.env` files, API keys, or credentials. The `.gitignore` already
   covers `.env*`.
 - `FrappeClient` (talking to ERPNext) authenticates via API key/secret headers
@@ -392,12 +474,19 @@ top of `docker-compose.yml`.
 - `structuredContent` in tool responses: tools that bind to a UI viewer return
   `structuredContent` with the viewer's MIME type so MCP clients can render the
   viewer.
+- Link-field list filters (e.g. `employee`, `customer`, `supplier`, `item`)
+  should accept either the document's ID or its human-readable name and resolve
+  via `resolveLink`/`resolveEmployee`/etc. from `src/api/resolve.ts` — see
+  [Link-field resolution](#link-field-resolution). Mention "ID or name" in the
+  param's `inputSchema` description when you do this.
 
 ## Known Issues & Frappe Gotchas
 
 - **Optimistic locking on submit**: Frappe requires the `modified` timestamp.
-  Submit handlers must `GET` the doc first, then pass the full doc to
-  `frappe.client.submit`. Cancel does not need this. See `docs/known-issues.md`.
+  Submit handlers must `GET` the doc first with `{ skipCache: true }`, then pass
+  the full doc to `frappe.client.submit`, then call
+  `ctx.client.invalidate(doctype, name)`. Cancel doesn't need the pre-fetch but
+  must still invalidate. See `docs/known-issues.md`.
 - **`_server_messages`**: Frappe error responses have 2 levels — `exc_type` and
   `_server_messages`. The client now parses both and includes `_server_messages`
   in the error message (see `src/api/frappe-client.ts`).

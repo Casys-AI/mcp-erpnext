@@ -24,7 +24,10 @@ export class MemoryCache implements Cache {
       this.store.delete(key);
       return undefined;
     }
-    return entry.value as T;
+    // Clone on every read: callers get an independent copy, so mutating a
+    // returned doc/array (e.g. a future `docs.sort()` or `doc.x = ...`)
+    // can't corrupt what later callers read back within the TTL.
+    return structuredClone(entry.value) as T;
   }
 
   set<T>(key: string, value: T, ttlMs: number): void {

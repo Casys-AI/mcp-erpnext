@@ -46,6 +46,19 @@ Deno.test("MemoryCache - deleteByPrefix clears only matching keys", () => {
   assertEquals(cache.get("get:Customer:CUST-001"), { name: "CUST-001" });
 });
 
+Deno.test("MemoryCache - get() returns an independent copy, so mutating it doesn't corrupt later reads", () => {
+  const cache = new MemoryCache();
+  const original = [{ name: "A" }, { name: "B" }];
+  cache.set("docs", original, 1000);
+
+  const firstRead = cache.get<{ name: string }[]>("docs")!;
+  firstRead.sort((a, b) => b.name.localeCompare(a.name));
+  firstRead[0].name = "mutated";
+
+  const secondRead = cache.get<{ name: string }[]>("docs")!;
+  assertEquals(secondRead, [{ name: "A" }, { name: "B" }]);
+});
+
 Deno.test("MemoryCache - clear removes everything", () => {
   const cache = new MemoryCache();
   cache.set("a", 1, 1000);

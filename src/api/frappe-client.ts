@@ -350,14 +350,22 @@ export class FrappeClient {
   /**
    * List documents of a DocType.
    * Frappe list API: GET /api/resource/{doctype}?fields=...&filters=...
+   *
+   * Pass `{ skipCache: true }` to force a fresh read — e.g. for aggregate/KPI
+   * tools that read across doctypes other than the one a preceding mutation
+   * invalidated (see `invalidate()` below for why that gap exists). The fresh
+   * result still refreshes the cache for subsequent normal reads.
    */
   async list<T extends FrappeDoc = FrappeDoc>(
     doctype: string,
     options: FrappeListOptions = {},
+    opts: { skipCache?: boolean } = {},
   ): Promise<T[]> {
     const cacheKey = `list:${doctype}:${stableStringify(options)}`;
-    const cached = this.cache.get<T[]>(cacheKey);
-    if (cached !== undefined) return cached;
+    if (!opts.skipCache) {
+      const cached = this.cache.get<T[]>(cacheKey);
+      if (cached !== undefined) return cached;
+    }
 
     const params = new URLSearchParams();
 
@@ -423,6 +431,14 @@ export class FrappeClient {
    * given, the cached single-document read too. Called automatically after
    * create/update/delete; call explicitly after any mutation that bypasses
    * those methods (e.g. frappe.client.submit/cancel via callMethod).
+   *
+   * Known limitation: this only clears the mutated doctype. Frappe mutations
+   * commonly cascade — submitting a Sales Order also writes Bin/GL
+   * Entry/Sales Invoice rows — and those doctypes' cached `list()` results
+   * aren't invalidated here. Aggregate/KPI tools that read across doctypes
+   * can therefore serve up-to-TTL-stale numbers right after a mutation; pass
+   * `{ skipCache: true }` to `list()` in those tools if that staleness isn't
+   * acceptable for a given call site.
    */
   invalidate(doctype: string, name?: string): void {
     this.cache.deleteByPrefix(`list:${doctype}:`);

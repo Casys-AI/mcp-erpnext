@@ -84,9 +84,9 @@ submitting a Sales Order/Invoice failed with `TypeError: abs(None)` in
 `validate_grand_total()`, because `base_rounded_total`/`rounded_total` stay
 `None` when the rounding configuration is not initialized.
 
-**Applied fix**: `withRoundedTotalFallback()` sets `disable_rounded_total: 1`
-on the pre-submit doc whenever `base_rounded_total` or `rounded_total` is
-`null` and it isn't already set:
+**Applied fix**: `withRoundedTotalFallback()` sets `disable_rounded_total: 1` on
+the pre-submit doc whenever `base_rounded_total` or `rounded_total` is `null`
+and it isn't already set:
 
 - `src/tools/submit-helpers.ts` — `withRoundedTotalFallback()`
 - `src/tools/operations.ts` — `erpnext_doc_submit`

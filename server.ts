@@ -72,7 +72,11 @@ async function main() {
     ? parseInt(portArg.split("=")[1], 10)
     : DEFAULT_HTTP_PORT;
   const hostnameArg = args.find((arg) => arg.startsWith("--hostname="));
-  const hostname = hostnameArg ? hostnameArg.split("=")[1] : "0.0.0.0";
+  // Safe default: bind to loopback only. Exposing HTTP mode to the network must
+  // be an explicit choice (`--hostname=0.0.0.0`), since every tool acts with the
+  // server's ERPNext API key. NOTE: in Docker the published port needs
+  // `--hostname=0.0.0.0` for the container to be reachable.
+  const hostname = hostnameArg ? hostnameArg.split("=")[1] : "127.0.0.1";
 
   // Initialize tools client
   const toolsClient = new ErpNextToolsClient(
@@ -144,6 +148,16 @@ async function main() {
 
   // Start server
   if (httpFlag) {
+    const isLoopback = hostname === "127.0.0.1" || hostname === "::1" ||
+      hostname === "localhost";
+    if (!isLoopback) {
+      console.error(
+        `[mcp-erpnext] WARNING: binding to ${hostname} exposes the HTTP server ` +
+          `to the network. Every tool acts with the server's ERPNext API key, ` +
+          `so restrict access (firewall, private network, or an authenticating ` +
+          `reverse proxy).`,
+      );
+    }
     await server.startHttp({
       port: httpPort,
       hostname,

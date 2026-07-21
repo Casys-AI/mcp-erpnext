@@ -175,6 +175,7 @@ start/end fields (Timesheet, Project, Task, Leave Application, Campaign) filter
 the start field with `date_from` and the end field with `date_to` — not both
 bounds on one column. Master-data lists (Customer, Item, Warehouse, etc.)
 intentionally have no date filter.
+
 ### Link-field resolution
 
 `src/api/resolve.ts`'s `resolveLink(client, doctype, identifier, searchField)`

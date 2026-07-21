@@ -32,6 +32,8 @@ and JSR (Deno).
   publish config).
 - **Kanban**: `src/kanban/` contains types, definitions, field-utils, and
   per-DocType adapters in `adapters/`.
+- **Cache**: `src/cache/` — pluggable `Cache` interface, `MemoryCache`/
+  `NoopCache` implementations, app-wide singleton.
 - **Runtime adapters**: `src/runtime.ts` (Deno) and `src/runtime.node.ts`
   (Node.js) — the build script swaps them.
 - **Scripts**: `scripts/build-node.sh` produces the npm bundle.
@@ -124,11 +126,45 @@ singleton. The client is lazily initialized from env vars on first use.
 
 `src/api/frappe-client.ts` is a zero-dependency HTTP client wrapping the Frappe
 REST API. Key methods: `list()`, `get()`, `create()`, `update()`, `delete()`,
-`callMethod()`. All errors throw `FrappeAPIError` with HTTP status and parsed
-body — no silent fallbacks.
+`callMethod()`, `invalidate()`. All errors throw `FrappeAPIError` with HTTP
+status and parsed body — no silent fallbacks.
 
 **Submit handlers must GET the doc first** to pass `modified` for Frappe's
-optimistic locking (see `docs/known-issues.md`). Cancel does not need this.
+optimistic locking (see `docs/known-issues.md`), and must pass
+`{ skipCache: true }` so that read isn't served from a stale cache entry. Cancel
+does not need the pre-fetch, but both submit and cancel must call
+`ctx.client.invalidate(doctype, name)` after the mutating `callMethod` succeeds
+— see `src/tools/operations.ts`.
+
+### Caching
+
+`FrappeClient.list()` and `.get()` are cached through a pluggable `Cache`
+(`src/cache/types.ts`). `MemoryCache` (`src/cache/memory.ts`) is the default
+in-process implementation — a hand-rolled TTL `Map`, zero dependencies;
+`NoopCache` (`src/cache/noop.ts`) disables caching without branching inside
+`FrappeClient`. A future backend (e.g. Redis) just implements `Cache`.
+
+- **Per-instance vs. shared**: `FrappeClient` defaults to a _fresh, unshared_
+  `MemoryCache` per instance unless a `cache` is passed in `FrappeClientConfig`.
+  `getFrappeClient()` (the app-wide singleton in the same file) explicitly wires
+  in the shared `getCache()` singleton (`src/cache/cache.ts`) so all tool calls
+  in the process share one cache. Tests that construct their own `FrappeClient`
+  (e.g. `frappe-client_test.ts`) get isolated per-test caches for free — don't
+  change this default.
+- **Invalidation**: `create()`, `update()`, `delete()` call
+  `this.invalidate(doctype, name)` automatically. Any handler that mutates via
+  `callMethod` (submit, cancel, or a custom business method) must call
+  `ctx.client.invalidate(doctype, name)` itself afterward.
+- **Config**: `MCP_CACHE_ENABLED` (`"false"` disables caching entirely, default
+  enabled) and `MCP_CACHE_TTL_MS` (default `15000`).
+- **Warming**: `src/cache/warm.ts`'s `warmCache()` optionally pre-populates the
+  cache on startup by calling a configured set of read-only `_list` tool
+  handlers with no filters — matching the exact cache key a real unfiltered call
+  would use (fields/limit/order_by come from the tool itself, not a hand-rolled
+  `client.list()` guess). Configured via `MCP_CACHE_WARM_TOOLS` (comma-separated
+  tool names; unset/empty = disabled). Refuses to call unknown or non-read-only
+  tools, and never lets one tool's failure abort the rest or the server — see
+  the fire-and-forget call in `server.ts` right after tool registration.
 
 ### Kanban system
 
@@ -239,6 +275,7 @@ function makeMockClient(overrides: Record<string, unknown> = {}): FrappeClient {
     update: async () => ({ name: "TEST-001" }),
     delete: async () => {},
     callMethod: async () => null,
+    invalidate: () => {},
     ...overrides,
   } as unknown as FrappeClient;
 }
@@ -313,6 +350,9 @@ Rules:
 
 - Environment variables: `ERPNEXT_URL`, `ERPNEXT_API_KEY`, `ERPNEXT_API_SECRET`
   (all required at runtime).
+- Caching (optional): `MCP_CACHE_ENABLED` (default enabled), `MCP_CACHE_TTL_MS`
+  (default `15000`), `MCP_CACHE_WARM_TOOLS` (comma-separated tool names to warm
+  on startup, default disabled). See [Caching](#caching).
 - Never commit `.env` files, API keys, or credentials. The `.gitignore` already
   covers `.env*`.
 - `FrappeClient` authenticates via API key/secret headers. No OAuth or
@@ -337,8 +377,10 @@ Rules:
 ## Known Issues & Frappe Gotchas
 
 - **Optimistic locking on submit**: Frappe requires the `modified` timestamp.
-  Submit handlers must `GET` the doc first, then pass the full doc to
-  `frappe.client.submit`. Cancel does not need this. See `docs/known-issues.md`.
+  Submit handlers must `GET` the doc first with `{ skipCache: true }`, then pass
+  the full doc to `frappe.client.submit`, then call
+  `ctx.client.invalidate(doctype, name)`. Cancel doesn't need the pre-fetch but
+  must still invalidate. See `docs/known-issues.md`.
 - **`_server_messages`**: Frappe error responses have 2 levels — `exc_type` and
   `_server_messages`. The client now parses both and includes `_server_messages`
   in the error message (see `src/api/frappe-client.ts`).

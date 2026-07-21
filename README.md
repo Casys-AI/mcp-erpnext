@@ -15,6 +15,10 @@ Copilot, custom) to your ERPNext instance via the
 
 Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 
+> Built on **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** — the
+> MCP server framework (concurrency, auth, MCP Apps, observability) that powers
+> this project.
+
 ## Screenshots
 
 Interactive viewers rendered inside an MCP host, driven entirely by tool
@@ -348,6 +352,11 @@ deno task release:check
 # Dev a specific viewer with HMR
 cd src/ui && npm run dev:kanban
 ```
+
+## Contributing
+
+Contributions are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** to get
+started, and [AGENTS.md](AGENTS.md) for the full architecture and conventions.
 
 ## Release Flow
 

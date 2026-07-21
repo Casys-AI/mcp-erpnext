@@ -2,6 +2,28 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [2.5.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.4.2...v2.5.0) (2026-07-21)
+
+### Features
+
+- **Human-readable link filters** — tools filtering on a Link field (employee,
+  customer, supplier, item, plus dynamic-link fields like Payment Entry's
+  `party` or Quotation's `party_name`) now accept a name/email, not just the
+  document ID, and resolve it server-side in the same call — no more
+  list-then-filter round trip. Ambiguous matches surface the candidate list
+  instead of silently guessing, and write paths never fuzzy-match. Thanks
+  [@notnotkeshav](https://github.com/notnotkeshav) (#9).
+- **Date-range filters** — `date_from`/`date_to` added to 10 list tools that
+  lacked them (timesheet, project, task, leave application, payroll entry,
+  expense claim, asset, campaign, quotation, supplier quotation). Thanks
+  [@notnotkeshav](https://github.com/notnotkeshav) (#7).
+- **Pluggable cache layer** — `FrappeClient.list()`/`.get()` are cached through
+  a pluggable `Cache` (in-process `MemoryCache` by default, `NoopCache` to
+  disable), with automatic invalidation on create/update/delete/submit/cancel
+  and optional startup warming. Config: `MCP_CACHE_ENABLED`, `MCP_CACHE_TTL_MS`,
+  `MCP_CACHE_WARM_TOOLS`. Thanks
+  [@notnotkeshav](https://github.com/notnotkeshav) (#6).
+
 ## [2.4.2](https://github.com/Casys-AI/mcp-erpnext/compare/v2.4.1...v2.4.2) (2026-07-21)
 
 ### Bug Fixes

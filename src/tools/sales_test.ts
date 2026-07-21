@@ -279,3 +279,51 @@ Deno.test("erpnext_quotation_create - resolves party_name before building the cr
 
   assertEquals(createdData.party_name, "CUST-042");
 });
+
+// ── erpnext_sales_order_submit / erpnext_sales_invoice_submit ────────────────
+
+Deno.test("erpnext_sales_order_submit - disables rounded total when base_rounded_total is null (fresh instance)", async () => {
+  let submittedDoc: Record<string, unknown> = {};
+  const mockClient = makeMockClient({
+    get: async () => ({
+      name: "SO-001",
+      base_rounded_total: null,
+      modified: "2026-01-01 00:00:00",
+    }),
+    callMethod: async (
+      _method: string,
+      args: { doc: Record<string, unknown> },
+    ) => {
+      submittedDoc = args.doc;
+      return { name: "SO-001", docstatus: 1 };
+    },
+  });
+
+  const tool = getTool("erpnext_sales_order_submit");
+  await tool.handler({ name: "SO-001" }, makeCtx(mockClient));
+
+  assertEquals(submittedDoc.disable_rounded_total, 1);
+});
+
+Deno.test("erpnext_sales_invoice_submit - disables rounded total when base_rounded_total is null (fresh instance)", async () => {
+  let submittedDoc: Record<string, unknown> = {};
+  const mockClient = makeMockClient({
+    get: async () => ({
+      name: "SINV-001",
+      base_rounded_total: null,
+      modified: "2026-01-01 00:00:00",
+    }),
+    callMethod: async (
+      _method: string,
+      args: { doc: Record<string, unknown> },
+    ) => {
+      submittedDoc = args.doc;
+      return { name: "SINV-001", docstatus: 1 };
+    },
+  });
+
+  const tool = getTool("erpnext_sales_invoice_submit");
+  await tool.handler({ name: "SINV-001" }, makeCtx(mockClient));
+
+  assertEquals(submittedDoc.disable_rounded_total, 1);
+});

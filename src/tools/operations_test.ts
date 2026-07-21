@@ -167,6 +167,33 @@ Deno.test("erpnext_doc_submit - skips cache on the pre-submit get and invalidate
   assertEquals(invalidatedName, "SO-001");
 });
 
+Deno.test("erpnext_doc_submit - disables rounded total when base_rounded_total is null (fresh instance)", async () => {
+  let submittedDoc: Record<string, unknown> = {};
+
+  const mockClient = makeMockClient({
+    get: async () => ({
+      name: "SO-001",
+      base_rounded_total: null,
+      modified: "2026-01-01 00:00:00",
+    }),
+    callMethod: async (
+      _method: string,
+      args: { doc: Record<string, unknown> },
+    ) => {
+      submittedDoc = args.doc;
+      return { name: "SO-001", docstatus: 1 };
+    },
+  });
+
+  const tool = getTool("erpnext_doc_submit");
+  await tool.handler(
+    { doctype: "Sales Order", name: "SO-001" },
+    makeCtx(mockClient),
+  );
+
+  assertEquals(submittedDoc.disable_rounded_total, 1);
+});
+
 // ── erpnext_doc_cancel ───────────────────────────────────────────────────────
 
 Deno.test("erpnext_doc_cancel - invalidates cache after cancel", async () => {

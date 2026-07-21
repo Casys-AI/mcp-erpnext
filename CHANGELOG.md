@@ -2,6 +2,18 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [2.4.2](https://github.com/Casys-AI/mcp-erpnext/compare/v2.4.1...v2.4.2) (2026-07-21)
+
+### Bug Fixes
+
+- **http:** HTTP mode (`--http`) now binds to `127.0.0.1` by default instead of
+  `0.0.0.0`. The server — and every tool, which acts with the server's ERPNext
+  API key — is no longer reachable from the whole network unless exposure is
+  explicitly opted into via `--hostname=0.0.0.0`, matching MCP security best
+  practice. A startup warning is printed when binding to a non-loopback
+  interface. Docker deployments must pass `--hostname=0.0.0.0` in the container
+  command. Thanks @notnotkeshav for surfacing the exposure gap (#8, #10).
+
 ## [2.4.1](https://github.com/Casys-AI/mcp-erpnext/compare/v2.4.0...v2.4.1) (2026-07-16)
 
 ### Features

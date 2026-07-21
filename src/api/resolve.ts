@@ -15,30 +15,28 @@ import { getCache } from "../cache/cache.ts";
 /** How long a confirmed "identifier is not a valid ID" result is remembered. */
 const NEGATIVE_CACHE_TTL_MS = 15_000;
 
+/** How many partial-match candidates to fetch when checking for ambiguity. */
+const PARTIAL_MATCH_PROBE_LIMIT = 5;
+
+export interface ResolveLinkOptions {
+  /** Default true. Pass false on write paths — a fuzzy match there can silently attach the wrong record. */
+  allowPartialMatch?: boolean;
+}
+
 /**
- * Resolve `identifier` to a document name (ID) within `doctype`.
- *
- * 1. Fast path: `identifier` may already be the real ID — try get() directly.
- * 2. Exact match on `searchField` (e.g. "employee_name" = identifier).
- * 3. Partial match on `searchField` (e.g. "employee_name" like %identifier%).
- *
- * Throws if none of the three resolve to a document. The exact/partial list()
- * calls go through FrappeClient's cache, so repeated resolution of the same
- * identifier within the cache TTL costs nothing extra there.
- *
- * The fast-path get() is different: when `identifier` is a human name (not a
- * real ID), it always 404s, and FrappeClient only caches successful reads —
- * so that 404 would otherwise be re-fetched over the network on every call.
- * We remember confirmed 404s ourselves (keyed by doctype+identifier, app-wide
- * cache) so repeat resolution of a known-not-an-ID name skips straight to the
- * list() fallback instead of re-probing get().
+ * Resolve `identifier` to a document name (ID) within `doctype`: fast-path
+ * get(), then exact match on `searchField`, then partial match (unless
+ * `allowPartialMatch` is false). A partial match only resolves silently when
+ * it's unique; multiple candidates throw with the list instead of guessing.
  */
 export async function resolveLink(
   client: FrappeClient,
   doctype: string,
   identifier: string,
   searchField: string,
+  options: ResolveLinkOptions = {},
 ): Promise<string> {
+  const { allowPartialMatch = true } = options;
   const cache = getCache();
   const missKey = `resolve:miss:${doctype}:${identifier}`;
 
@@ -59,12 +57,26 @@ export async function resolveLink(
   });
   if (exact.length > 0) return exact[0].name as string;
 
-  const partial = await client.list(doctype, {
-    filters: [[searchField, "like", `%${identifier}%`]],
-    fields: ["name"],
-    limit: 1,
-  });
-  if (partial.length > 0) return partial[0].name as string;
+  if (allowPartialMatch) {
+    const partial = await client.list(doctype, {
+      filters: [[searchField, "like", `%${identifier}%`]],
+      fields: ["name", searchField],
+      limit: PARTIAL_MATCH_PROBE_LIMIT,
+    });
+    if (partial.length === 1) return partial[0].name as string;
+    if (partial.length > 1) {
+      const candidates = partial
+        .map((r) => `${r.name} (${r[searchField]})`)
+        .join(", ");
+      const suffix = partial.length === PARTIAL_MATCH_PROBE_LIMIT
+        ? ", and possibly more"
+        : "";
+      throw new Error(
+        `[resolveLink] Ambiguous ${doctype} identifier "${identifier}": ` +
+          `did you mean ${candidates}${suffix}? Please pass an exact value.`,
+      );
+    }
+  }
 
   throw new Error(`[resolveLink] No ${doctype} found matching "${identifier}"`);
 }
@@ -107,21 +119,17 @@ const DYNAMIC_LINK_SEARCH_FIELDS: Record<string, string> = {
 
 /**
  * Resolve a dynamic-link field, e.g. Payment Entry's `party` (target doctype
- * given by `party_type`) or Quotation/Opportunity's `party_name` (target
- * doctype given by `quotation_to`/`opportunity_from`). Unlike the fixed
- * wrappers above, the target doctype isn't known until the companion field's
- * value is read at the call site.
+ * given by `party_type`). Target doctype isn't known until the companion
+ * field's value is read at the call site. Falls back to passing `identifier`
+ * through unresolved for doctypes not in `DYNAMIC_LINK_SEARCH_FIELDS`.
  */
 export async function resolveDynamicLink(
   client: FrappeClient,
   targetDoctype: string,
   identifier: string,
+  options: ResolveLinkOptions = {},
 ): Promise<string> {
   const searchField = DYNAMIC_LINK_SEARCH_FIELDS[targetDoctype];
-  if (!searchField) {
-    throw new Error(
-      `[resolveDynamicLink] Unsupported dynamic-link target doctype "${targetDoctype}"`,
-    );
-  }
-  return resolveLink(client, targetDoctype, identifier, searchField);
+  if (!searchField) return identifier;
+  return resolveLink(client, targetDoctype, identifier, searchField, options);
 }

@@ -67,6 +67,46 @@ Deno.test("resolveLink - falls back to partial match when exact match misses", a
   assertEquals(result, "HR-EMP-00003");
 });
 
+Deno.test("resolveLink - throws with candidate list when partial match is ambiguous", async () => {
+  setCache(new MemoryCache());
+  const client = makeMockClient({
+    list: async (_doctype: string, options: { filters?: unknown[] }) => {
+      const [, op] = (options.filters?.[0] as [string, string, string]) ?? [];
+      if (op === "like") {
+        return [
+          { name: "HR-EMP-00003", employee_name: "John Doe" },
+          { name: "HR-EMP-00004", employee_name: "Johnny Smith" },
+        ];
+      }
+      return [];
+    },
+  });
+  await assertRejects(
+    () => resolveEmployee(client, "John"),
+    Error,
+    "Ambiguous Employee identifier",
+  );
+});
+
+Deno.test("resolveLink - skips partial match entirely when allowPartialMatch is false", async () => {
+  setCache(new MemoryCache());
+  const client = makeMockClient({
+    list: async (_doctype: string, options: { filters?: unknown[] }) => {
+      const [, op] = (options.filters?.[0] as [string, string, string]) ?? [];
+      if (op === "like") return [{ name: "HR-EMP-00003" }];
+      return [];
+    },
+  });
+  await assertRejects(
+    () =>
+      resolveLink(client, "Employee", "John", "employee_name", {
+        allowPartialMatch: false,
+      }),
+    Error,
+    'No Employee found matching "John"',
+  );
+});
+
 Deno.test("resolveLink - throws when nothing matches", async () => {
   setCache(new MemoryCache());
   const client = makeMockClient();
@@ -144,13 +184,14 @@ Deno.test("resolveDynamicLink - resolves against the target doctype's search fie
   assertEquals(result, "SUPP-00042");
 });
 
-Deno.test("resolveDynamicLink - throws for an unsupported target doctype", async () => {
+Deno.test("resolveDynamicLink - passes identifier through unresolved for an unsupported target doctype", async () => {
   const client = makeMockClient();
-  await assertRejects(
-    () => resolveDynamicLink(client, "Not A Real Doctype", "whatever"),
-    Error,
-    'Unsupported dynamic-link target doctype "Not A Real Doctype"',
+  const result = await resolveDynamicLink(
+    client,
+    "Not A Real Doctype",
+    "whatever",
   );
+  assertEquals(result, "whatever");
 });
 
 Deno.test("resolveDynamicLink - supports Customer, Employee, and Lead targets", async () => {

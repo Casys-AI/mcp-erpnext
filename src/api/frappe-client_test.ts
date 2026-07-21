@@ -9,6 +9,7 @@
 
 import { assertEquals, assertRejects } from "@std/assert";
 import { FrappeAPIError, FrappeClient } from "./frappe-client.ts";
+import { MemoryCache } from "../cache/memory.ts";
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -620,4 +621,14 @@ Deno.test("FrappeClient.invalidate() - clears list cache for a doctype", async (
   } finally {
     globalThis.fetch = original;
   }
+});
+
+Deno.test("FrappeClient.invalidate() - clears resolveLink's negative-match cache for a doctype", () => {
+  const cache = new MemoryCache();
+  const client = makeClient({ cache });
+  cache.set("resolve:miss:Customer:Acme", true, 15_000);
+
+  client.invalidate("Customer");
+
+  assertEquals(cache.get("resolve:miss:Customer:Acme"), undefined);
 });

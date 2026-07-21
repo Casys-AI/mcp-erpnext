@@ -992,6 +992,7 @@ export const salesTools: ErpNextTool[] = [
           ctx.client,
           input.quotation_to as string,
           input.party_name as string,
+          { allowPartialMatch: false },
         ),
         items,
       };

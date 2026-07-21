@@ -427,10 +427,11 @@ export class FrappeClient {
   }
 
   /**
-   * Clear cached entries for a doctype (list results) and, if `name` is
-   * given, the cached single-document read too. Called automatically after
-   * create/update/delete; call explicitly after any mutation that bypasses
-   * those methods (e.g. frappe.client.submit/cancel via callMethod).
+   * Clear cached entries for a doctype (list results, resolveLink's
+   * negative-match cache) and, if `name` is given, the cached single-document
+   * read too. Called automatically after create/update/delete; call explicitly
+   * after any mutation that bypasses those methods (e.g.
+   * frappe.client.submit/cancel via callMethod).
    *
    * Known limitation: this only clears the mutated doctype. Frappe mutations
    * commonly cascade — submitting a Sales Order also writes Bin/GL
@@ -442,6 +443,7 @@ export class FrappeClient {
    */
   invalidate(doctype: string, name?: string): void {
     this.cache.deleteByPrefix(`list:${doctype}:`);
+    this.cache.deleteByPrefix(`resolve:miss:${doctype}:`);
     if (name) this.cache.delete(`get:${doctype}:${name}`);
   }
 

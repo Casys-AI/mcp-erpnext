@@ -39,30 +39,6 @@ export function readDirSync(path: string): string[] {
   return entries;
 }
 
-// ─── HTTP Server ─────────────────────────────────────────
-
-export type HttpHandler = (req: Request) => Response | Promise<Response>;
-
-export interface ServeHttpOptions {
-  port: number;
-  hostname: string;
-  onListen?: (info: { hostname: string; port: number }) => void;
-}
-
-/**
- * Start an HTTP server with the given fetch-compatible handler.
- * Returns a promise that resolves when the server closes.
- */
-export async function serveHttp(
-  handler: HttpHandler,
-  opts: ServeHttpOptions,
-): Promise<void> {
-  await Deno.serve(
-    { port: opts.port, hostname: opts.hostname, onListen: opts.onListen },
-    handler,
-  ).finished;
-}
-
 // ─── Process ─────────────────────────────────────────────
 
 export function getArgs(): string[] {

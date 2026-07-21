@@ -187,38 +187,32 @@ registers all tools + UI resources, and starts in stdio or HTTP mode. Supports
 
 ### HTTP authentication
 
-`src/auth/middleware.ts` guards HTTP mode with bearer-token auth, combinable
-across two modes:
+`src/auth/config.ts` reads env vars and builds an `@casys/mcp-server`
+`AuthProvider`, wired straight into `McpApp`'s own `auth: { provider }` option —
+no separate proxy or listener. Two combinable modes:
 
 - **Static tokens** — `MCP_AUTH_TOKEN` (single) or `MCP_AUTH_TOKENS`
-  (comma-separated), checked via O(1) `Set` lookup.
-- **OAuth 2.0 JWT** — `MCP_OAUTH_JWKS_URL` (+ optional `MCP_OAUTH_AUDIENCE` /
-  `MCP_OAUTH_ISSUER`), validated with `jose`'s `createRemoteJWKSet`/`jwtVerify`.
-  See `docs/oauth-setup.md`.
+  (comma-separated), via `createStaticTokenAuthProvider`.
+- **OAuth 2.0 JWT** — `MCP_OAUTH_JWKS_URL` + `MCP_OAUTH_AUDIENCE` +
+  `MCP_OAUTH_ISSUER` (all required), via `createOIDCAuthProvider`. See
+  `docs/oauth-setup.md`.
 
-When auth is configured, `server.ts` runs `ConcurrentMCPServer` on a
-loopback-only internal port and exposes a Hono (`createAuthProxyApp`) reverse
-proxy on the public port that validates `Authorization: Bearer <token>` and
-strips it before forwarding upstream. If neither env var is set, HTTP mode
-starts unauthenticated with a startup warning — never assume auth is on without
-checking.
+Both modes also require `MCP_AUTH_RESOURCE` — an absolute URL identifying this
+server (RFC 9728), e.g. `https://mcp.example.com`. `buildAuthProvider()` throws
+a targeted error naming the missing var if a mode is partially configured,
+rather than silently accepting requests it can't verify.
 
-`/health` is exempt from the auth guard (still proxied through to the internal
-server, so it reflects real backend health) — Docker/orchestrator healthchecks
-don't send credentials, and requiring them would eventually mark a
-correctly-configured container unhealthy.
+If both static tokens and OAuth are configured, `src/auth/composite-provider.ts`
+(`CompositeAuthProvider`) combines them — a token is accepted if either provider
+accepts it. The framework's own `AuthProvider` only takes one provider at a
+time, so this small wrapper is what preserves that documented "mix both modes"
+behavior.
 
-`@casys/mcp-server` itself logs its own `[WARN] HTTP auth is disabled`,
-referring to the _internal_ loopback-only listener's own unrelated auth concept
-(a different `AuthProvider` mechanism, configured via `MCP_AUTH_*` env vars —
-note the missing `O`, distinct from our `MCP_OAUTH_*`). That listener is never
-reachable outside this process, and our proxy deliberately strips the
-`Authorization` header before forwarding to it, so wiring the framework's own
-auth into it would do nothing useful. The `logger` passed to `McpApp` in
-`server.ts` filters that specific line out — don't be alarmed if you don't see
-it in production logs; the auth enforcement that matters is the Hono proxy
-layer, confirmed by the `Auth: static tokens (N)` / OAuth log line right above
-it.
+If neither is configured, `server.ts` calls `startHttp()` without a provider;
+HTTP mode starts unauthenticated with a startup warning — never assume auth is
+on without checking. `/health`, `/metrics`, and
+`/.well-known/oauth-protected-resource` are exempt from the auth gate by the
+framework itself.
 
 ## Coding Style & Naming Conventions
 
@@ -351,8 +345,8 @@ Rules:
   (all required at runtime).
 - HTTP-mode auth (optional but recommended when exposed beyond localhost):
   `MCP_AUTH_TOKEN` / `MCP_AUTH_TOKENS`, or `MCP_OAUTH_JWKS_URL` +
-  `MCP_OAUTH_AUDIENCE` / `MCP_OAUTH_ISSUER`. See
-  [HTTP authentication](#http-authentication).
+  `MCP_OAUTH_AUDIENCE` + `MCP_OAUTH_ISSUER` — either mode also requires
+  `MCP_AUTH_RESOURCE`. See [HTTP authentication](#http-authentication).
 - Never commit `.env` files, API keys, or credentials. The `.gitignore` already
   covers `.env*`.
 - `FrappeClient` (talking to ERPNext) authenticates via API key/secret headers

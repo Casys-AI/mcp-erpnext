@@ -20,4 +20,4 @@ RUN deno cache --allow-import server.ts
 
 EXPOSE 7654
 
-CMD ["run", "--allow-all", "server.ts", "--http", "--port=7654"]
+CMD ["run", "--allow-all", "server.ts", "--http", "--port=7654", "--hostname=0.0.0.0"]

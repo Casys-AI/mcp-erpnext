@@ -15,20 +15,20 @@ Keycloak, Google, Authentik, Zitadel, Azure AD, Okta, etc.
 ## How it works
 
 ```
-LibreChat  ──Bearer JWT──►  Hono proxy (port 7654)
+LibreChat  ──Bearer JWT──►  mcp-erpnext (port 7654)
                                   │
                           validates JWT against
                           provider's JWKS URL
+                          (@casys/mcp-server's
+                           createOIDCAuthProvider)
                                   │
-                            ✓ valid → forward
+                            ✓ valid → handle
                             ✗ invalid → 401
-                                  │
-                         ConcurrentMCPServer
-                           (127.0.0.1:7655)
 ```
 
-The proxy fetches your provider's public keys once and caches them. No
-credentials are stored — only the token's signature and claims are verified.
+Token validation happens in-process — `@casys/mcp-server` fetches your
+provider's public keys once and caches them. No credentials are stored — only
+the token's signature and claims are verified.
 
 ---
 
@@ -39,12 +39,11 @@ Add these to your `.env` file:
 ```env
 # Required for OAuth
 MCP_OAUTH_JWKS_URL=https://your-idp/.well-known/jwks.json
-
-# Optional — reject tokens not intended for this server
 MCP_OAUTH_AUDIENCE=mcp-erpnext
-
-# Optional — reject tokens from unexpected issuers
 MCP_OAUTH_ISSUER=https://your-idp
+
+# Required for any auth mode — an absolute URL identifying this server (RFC 9728)
+MCP_AUTH_RESOURCE=https://mcp.example.com
 
 # You can keep static tokens alongside OAuth (both work simultaneously)
 # MCP_AUTH_TOKEN=your-static-token
@@ -73,6 +72,7 @@ MCP_OAUTH_ISSUER=https://your-idp
    MCP_OAUTH_JWKS_URL=https://YOUR_DOMAIN.auth0.com/.well-known/jwks.json
    MCP_OAUTH_AUDIENCE=mcp-erpnext
    MCP_OAUTH_ISSUER=https://YOUR_DOMAIN.auth0.com/
+   MCP_AUTH_RESOURCE=https://mcp.example.com
    ```
 
 ---
@@ -97,6 +97,7 @@ MCP_OAUTH_ISSUER=https://your-idp
    MCP_OAUTH_JWKS_URL=https://keycloak.yourdomain.com/realms/erpnext/protocol/openid-connect/certs
    MCP_OAUTH_AUDIENCE=mcp-erpnext
    MCP_OAUTH_ISSUER=https://keycloak.yourdomain.com/realms/erpnext
+   MCP_AUTH_RESOURCE=https://mcp.example.com
    ```
 
 5. Get a token for testing (client credentials flow):
@@ -125,6 +126,7 @@ MCP_OAUTH_ISSUER=https://your-idp
    MCP_OAUTH_JWKS_URL=https://authentik.yourdomain.com/application/o/YOUR_APP_SLUG/jwks/
    MCP_OAUTH_AUDIENCE=mcp-erpnext
    MCP_OAUTH_ISSUER=https://authentik.yourdomain.com/application/o/YOUR_APP_SLUG/
+   MCP_AUTH_RESOURCE=https://mcp.example.com
    ```
 
 ---
@@ -145,6 +147,7 @@ https://www.googleapis.com/oauth2/v3/certs
    MCP_OAUTH_JWKS_URL=https://www.googleapis.com/oauth2/v3/certs
    MCP_OAUTH_AUDIENCE=YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
    MCP_OAUTH_ISSUER=https://accounts.google.com
+   MCP_AUTH_RESOURCE=https://mcp.example.com
    ```
 
 > **Note**: Google issues short-lived tokens. This works for user-delegated
@@ -249,18 +252,24 @@ MCP_AUTH_TOKEN=my-static-secret
 MCP_OAUTH_JWKS_URL=https://your-idp/.well-known/jwks.json
 MCP_OAUTH_AUDIENCE=mcp-erpnext
 MCP_OAUTH_ISSUER=https://your-idp
+
+# Required either way
+MCP_AUTH_RESOURCE=https://mcp.example.com
 ```
 
-A request is accepted if it passes **either** check.
+A request is accepted if it passes **either** check — internally,
+`CompositeAuthProvider` tries the static-token provider first, then falls back
+to the OAuth JWT provider.
 
 ---
 
 ## Troubleshooting
 
-| Symptom                           | Likely cause                        | Fix                                                                              |
-| --------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------- |
-| `401` with a valid-looking token  | Wrong audience or issuer claim      | Check `MCP_OAUTH_AUDIENCE` matches the `aud` claim in the JWT (decode at jwt.io) |
-| `401` with `JWTExpired` in logs   | Token has expired                   | Re-issue a fresh token; for service accounts use a longer expiry                 |
-| `401` on every request            | JWKS URL unreachable from container | Run `docker exec mcp-erpnext curl YOUR_JWKS_URL` to verify network access        |
-| Server logs show no auth mode     | Env vars not loaded                 | Check `.env` file path and `docker compose logs` for startup message             |
-| Both static + OAuth returning 401 | Whitespace in token                 | Trim leading/trailing spaces in `.env` values                                    |
+| Symptom                                        | Likely cause                        | Fix                                                                                                  |
+| ---------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `401` with a valid-looking token               | Wrong audience or issuer claim      | Check `MCP_OAUTH_AUDIENCE` matches the `aud` claim in the JWT (decode at jwt.io)                     |
+| `401` with `JWTExpired` in logs                | Token has expired                   | Re-issue a fresh token; for service accounts use a longer expiry                                     |
+| `401` on every request                         | JWKS URL unreachable from container | Run `docker exec mcp-erpnext curl YOUR_JWKS_URL` to verify network access                            |
+| Startup throws `MCP_AUTH_RESOURCE is required` | Resource URL missing                | Set `MCP_AUTH_RESOURCE` to this server's public URL — required for both static token and OAuth modes |
+| Server logs show no auth mode                  | Env vars not loaded                 | Check `.env` file path and `docker compose logs` for startup message                                 |
+| Both static + OAuth returning 401              | Whitespace in token                 | Trim leading/trailing spaces in `.env` values                                                        |

@@ -97,6 +97,17 @@ A few rules that keep the codebase consistent — full detail in
 - A short _what_ and _why_ goes a long way. Maintainers review promptly and are
   happy to pair — open a draft PR early if you'd like feedback.
 
+## Documentation
+
+`AGENTS.md` is the canonical guide — keep it for **conventions, contracts, and
+gotchas** the next contributor must follow (the cache-invalidation contract,
+import boundaries, Frappe optimistic-locking, etc.), **not a per-feature log**.
+Rule of thumb: if someone would be _blocked or wrong_ without the note, it
+belongs; if a tool schema, a test, or the CHANGELOG already covers it, it
+doesn't. Feature mechanics live in code + tests; user-facing changes go in
+`CHANGELOG.md`. Keep additions terse — `AGENTS.md` should stay high-signal, not
+grow a section per PR.
+
 ## Built on @casys/mcp-server
 
 This server runs on

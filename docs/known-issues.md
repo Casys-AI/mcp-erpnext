@@ -1,18 +1,18 @@
 # ERPNext MCP — Known Issues & TODO
 
-## Bugs fixés
+## Fixed bugs
 
-### TimestampMismatchError sur submit (2026-02-18)
+### TimestampMismatchError on submit (2026-02-18)
 
-**Symptome** : `frappe.client.submit` renvoie `TimestampMismatchError` quand on
-passe `{doctype, name}` sans le champ `modified`.
+**Symptom**: `frappe.client.submit` returns `TimestampMismatchError` when
+passing `{doctype, name}` without the `modified` field.
 
-**Cause** : Frappe utilise un optimistic locking basé sur `modified`. L'API
-`submit` attend le doc complet avec son timestamp `modified` pour vérifier qu'il
-n'a pas été modifié entre-temps.
+**Cause**: Frappe uses optimistic locking based on `modified`. The `submit` API
+expects the full doc with its `modified` timestamp to verify that it has not
+been changed in the meantime.
 
-**Fix appliqué** : Tous les handlers submit font maintenant un `GET` du doc
-avant de le passer à `frappe.client.submit` :
+**Applied fix**: All submit handlers now perform a `GET` of the doc before
+passing it to `frappe.client.submit`:
 
 ```typescript
 const doc = await ctx.client.get("Sales Order", input.name as string);
@@ -21,82 +21,80 @@ const result = await ctx.client.callMethod("frappe.client.submit", {
 });
 ```
 
-**Fichiers corrigés** :
+**Fixed files**:
 
 - `src/tools/operations.ts` — `erpnext_doc_submit`
 - `src/tools/sales.ts` — `erpnext_sales_order_submit`,
   `erpnext_sales_invoice_submit`
 
-**Note** : `frappe.client.cancel` n'a PAS ce problème — il accepte
+**Note**: `frappe.client.cancel` does NOT have this problem — it accepts
 `{doctype, name}`.
 
 ### Fix `uom` → `stock_uom` (inventory.ts)
 
-Le champ `uom` dans `erpnext_item_create` s'appelle `stock_uom` dans ERPNext.
-Corrigé.
+The `uom` field in `erpnext_item_create` is called `stock_uom` in ERPNext.
+Fixed.
 
-### FrappeClient parse maintenant `_server_messages`
+### FrappeClient now parses `_server_messages`
 
-**Symptome historique** : Les erreurs Frappe ont 2 niveaux : `exc_type` (ex:
-`MandatoryError`) et `_server_messages` (ex:
-`["selling_price_list is required"]`). `FrappeClient.handleError()` n'extrayait
-que le premier — messages cryptiques côté agent.
+**Historical symptom**: Frappe errors have 2 levels: `exc_type` (e.g.:
+`MandatoryError`) and `_server_messages` (e.g.:
+`["selling_price_list is required"]`). `FrappeClient.handleError()` only
+extracted the first — cryptic messages on the agent side.
 
-**Fix appliqué** : Parser dédié `extractServerMessages()` qui décode le
-double-encodage JSON Frappe et concatène les messages utiles :
+**Applied fix**: Dedicated parser `extractServerMessages()` that decodes
+Frappe's double JSON encoding and concatenates the useful messages:
 
-- `src/api/frappe-client.ts:80` — fonction `extractServerMessages()`
-- `src/api/frappe-client.ts:181` — usage dans le chemin d'erreur HTTP
+- `src/api/frappe-client.ts:80` — function `extractServerMessages()`
+- `src/api/frappe-client.ts:181` — usage in the HTTP error path
 
-### `erpnext_sales_order_create` accepte les defaults critiques
+### `erpnext_sales_order_create` accepts critical defaults
 
-**Symptome historique** : Création d'un Sales Order échouait avec
-`MandatoryError: selling_price_list` sur instance fraîche, parce que le champ
-n'était ni dans le schema ni transmis.
+**Historical symptom**: Creating a Sales Order failed with
+`MandatoryError: selling_price_list` on a fresh instance, because the field was
+neither in the schema nor passed through.
 
-**Fix appliqué** :
+**Applied fix**:
 
-- `src/tools/sales.ts:324` — `selling_price_list` ajouté au schema
-- `src/tools/sales.ts:381` — passé au payload de création
+- `src/tools/sales.ts:324` — `selling_price_list` added to the schema
+- `src/tools/sales.ts:381` — passed to the creation payload
 
-### `FrappeClient` retry les erreurs transitoires de lecture
+### `FrappeClient` retries transient read errors
 
-**Symptome historique** : Un 429/5xx temporaire ou une erreur réseau faisait
-échouer immédiatement les lectures, même quand une relance courte aurait suffi.
+**Historical symptom**: A temporary 429/5xx or a network error would immediately
+fail reads, even when a short retry would have sufficed.
 
-**Fix appliqué** : `FrappeClient` retry maintenant les `GET` sur les statuts
-transitoires configurés (`408`, `429`, `502`, `503`, `504`) et sur les erreurs
-réseau, avec backoff exponentiel et support de `Retry-After`.
+**Applied fix**: `FrappeClient` now retries `GET`s on configured transient
+statuses (`408`, `429`, `502`, `503`, `504`) and on network errors, with
+exponential backoff and `Retry-After` support.
 
-### `kanban-viewer` garde les sauvegardes sans `serverTools`
+### `kanban-viewer` guards saves without `serverTools`
 
-**Symptome historique** : Dans le modal de détail d'une carte kanban,
-`handleSaveDetail` appelait `app.callServerTool` sans vérifier
-`app.getHostCapabilities()?.serverTools`, contrairement aux autres mutations du
-viewer.
+**Historical symptom**: In the kanban card detail modal, `handleSaveDetail`
+called `app.callServerTool` without checking
+`app.getHostCapabilities()?.serverTools`, unlike the other viewer mutations.
 
-**Fix appliqué** : `handleSaveDetail` échoue maintenant explicitement avec le
-même guard que les déplacements de cartes quand l'hôte ne supporte pas les
-appels serveur proxifiés.
+**Applied fix**: `handleSaveDetail` now fails explicitly with the same guard as
+card moves when the host does not support proxied server calls.
 
 ---
 
-## Bugs ouverts
+## Open bugs
 
 ### P0 — Fresh instance: `base_rounded_total = None` → TypeError
 
-**Symptome** : Sur une instance ERPNext fraîche (sans setup wizard), soumettre
-un Sales Order/Invoice échoue avec `TypeError: abs(None)` dans
+**Symptom**: On a fresh ERPNext instance (without setup wizard), submitting a
+Sales Order/Invoice fails with `TypeError: abs(None)` in
 `validate_grand_total()`.
 
-**Cause** : ERPNext calcule `base_rounded_total` automatiquement mais le champ
-reste `None` si la configuration de rounding n'est pas initialisée.
+**Cause**: ERPNext calculates `base_rounded_total` automatically but the field
+remains `None` if the rounding configuration is not initialized.
 
-**Workaround actuel** : Passer `disable_rounded_total: 1` dans le document avant
+**Current workaround**: Pass `disable_rounded_total: 1` in the document before
 submit.
 
-**Fix souhaité** : Soit le faire automatiquement dans les submit handlers quand
-le champ est `None`, soit documenter que le setup wizard ERPNext est requis.
+**Desired fix**: Either do it automatically in the submit handlers when the
+field is `None`, or document that the ERPNext setup wizard is required.
 
 ---
 
@@ -128,42 +126,42 @@ deno run -A npm:@casys/mcp-erpnext --http --port=3012
 
 ---
 
-## Améliorations souhaitées
+## Desired improvements
 
 ### Setup wizard automation
 
-ERPNext fraîche nécessite du master data avant de pouvoir créer des documents
-transactionnels. Les tools `erpnext_company_create` et `erpnext_doc_create`
-existent maintenant, mais le workflow complet est :
+A fresh ERPNext instance requires master data before being able to create
+transactional documents. The tools `erpnext_company_create` and
+`erpnext_doc_create` now exist, but the full workflow is:
 
-1. Créer Company
-2. Créer Price Lists (Standard Selling, Standard Buying)
-3. Créer Warehouses (ou utiliser les auto-créés par Company)
-4. Créer Item Groups si besoin
-5. Créer UOMs si non standard (Nos, Kg, etc. existent par défaut)
+1. Create Company
+2. Create Price Lists (Standard Selling, Standard Buying)
+3. Create Warehouses (or use the ones auto-created by Company)
+4. Create Item Groups if needed
+5. Create UOMs if non-standard (Nos, Kg, etc. exist by default)
 
-**Idée** : Un tool `erpnext_setup_check` qui vérifie que les prérequis existent
-et retourne ce qui manque.
+**Idea**: A tool `erpnext_setup_check` that checks that the prerequisites exist
+and returns what is missing.
 
 ### Retry / error context enrichment
 
-Quand une opération échoue (ex: MandatoryError), le handler pourrait :
+When an operation fails (e.g.: MandatoryError), the handler could:
 
-1. Parser l'erreur Frappe
-2. Retourner un message structuré avec le champ manquant
-3. Suggérer la correction (ex: "Add selling_price_list field")
+1. Parse the Frappe error
+2. Return a structured message with the missing field
+3. Suggest the fix (e.g.: "Add selling_price_list field")
 
 ### Rate limits / throttling
 
-Aucun rate limiting côté client. Un agent qui boucle peut bombarder l'API
-ERPNext. `FrappeClient` retry les lectures sur 429/5xx, mais il ne fait pas
-encore de throttling global ni de budget de requêtes par session.
+No rate limiting on the client side. An agent that loops can bombard the ERPNext
+API. `FrappeClient` retries reads on 429/5xx, but does not yet perform global
+throttling or per-session request budgeting.
 
-### Tests d'intégration
+### Integration tests
 
-Les tests actuels sont tous mockés. Il faudrait des tests d'intégration qui
-tournent contre un vrai ERPNext (Docker) pour valider les workflows end-to-end.
-Pattern Deno suggéré :
+Current tests are all mocked. Integration tests running against a real ERPNext
+(Docker) instance would be needed to validate end-to-end workflows. Suggested
+Deno pattern:
 
 ```typescript
 const runIntegration = Deno.env.get("ERPNEXT_INTEGRATION") === "1";

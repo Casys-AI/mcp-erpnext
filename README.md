@@ -15,6 +15,10 @@ Copilot, custom) to your ERPNext instance via the
 
 Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 
+> Built on **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** — the
+> MCP server framework (concurrency, auth, MCP Apps, observability) that powers
+> this project.
+
 ## Screenshots
 
 Interactive viewers rendered inside an MCP host, driven entirely by tool
@@ -101,8 +105,6 @@ Generate API credentials in ERPNext:
 > (e.g. `https://mycompany.erpnext.com` or `https://mysite.frappe.cloud`). API
 > key authentication works the same way on self-hosted and cloud instances.
 
-> Zero dependencies — single self-contained bundle. Requires Node >= 20.
-
 ### VS Code Copilot
 
 Add to `.vscode/mcp.json`:
@@ -150,6 +152,9 @@ ERPNEXT_API_KEY=xxx \
 ERPNEXT_API_SECRET=xxx \
 npx -y @casys/mcp-erpnext --http --port=3012
 ```
+
+> **Note:** HTTP mode binds to `127.0.0.1` (loopback) by default as of v2.4.2.
+> For Docker or multi-host setups, add `--hostname=0.0.0.0`.
 
 ### Deno (HTTP mode)
 
@@ -208,8 +213,7 @@ viewers, registered as `ui://mcp-erpnext/{name}`:
 
 Viewers communicate via `app.sendMessage()` — clicking a button in one viewer
 injects a message into the conversation, which triggers the AI to call the right
-tool and open the appropriate viewer. This creates a seamless drill-down
-experience without leaving the chat.
+tool and open the appropriate viewer.
 
 The server auto-injects navigation metadata into tool results:
 
@@ -237,28 +241,32 @@ node build-all.mjs
 
 ## Tools (123)
 
-**14 categories** covering the full ERPNext surface. Each `_list` tool returns
-interactive results in the doclist-viewer with row click, inline detail, and
-cross-viewer navigation.
+123 tools across 14 categories. Each `_list` tool returns interactive results
+via the doclist-viewer with row click, inline detail, and cross-viewer
+navigation.
 
-| Category          | Tools | Viewer               | Key capabilities                                                       |
-| ----------------- | ----- | -------------------- | ---------------------------------------------------------------------- |
-| **Sales**         | 17    | doclist / invoice    | Customers, Sales Orders, Invoices, Quotations — CRUD + Submit/Cancel   |
-| **Purchasing**    | 11    | doclist / invoice    | Suppliers, Purchase Orders, Invoices, Receipts                         |
-| **Inventory**     | 9     | doclist / stock      | Items, Stock Balance, Warehouses, Stock Entries                        |
-| **Accounting**    | 6     | doclist              | Accounts, Journal Entries, Payment Entries                             |
-| **HR**            | 12    | doclist              | Employees, Attendance, Leave, Salary, Expenses                         |
-| **Project**       | 9     | doclist              | Projects, Tasks, Timesheets                                            |
-| **Delivery**      | 5     | doclist              | Delivery Notes, Shipments                                              |
-| **Manufacturing** | 7     | doclist              | BOMs, Work Orders, Job Cards                                           |
-| **CRM**           | 8     | doclist              | Leads, Opportunities, Contacts, Campaigns                              |
-| **Assets**        | 8     | doclist              | Assets, Movements, Maintenance, Categories                             |
-| **Operations**    | 9     | doclist              | Generic CRUD + native assignment for **any** DocType (`erpnext_doc_*`) |
-| **Kanban**        | 2     | kanban               | Task/Opportunity/Issue boards with drag-and-drop                       |
-| **Analytics**     | 17    | chart / kpi / funnel | 12 chart types, 5 KPIs, sales funnel                                   |
-| **Setup**         | 3     | —                    | Company creation, assignable user listing                              |
+- **Sales** (17) — Customers, Sales Orders, Invoices, and Quotations with full
+  CRUD, Submit, and Cancel.
+- **Purchasing** (11) — Suppliers, Purchase Orders, Purchase Invoices, Receipts,
+  and Supplier Quotations.
+- **Inventory** (9) — Items, Stock Balance, Warehouses, and Stock Entries.
+- **Accounting** (6) — Chart of Accounts, Journal Entries, and Payment Entries.
+- **HR** (12) — Employees, Attendance, Leave Applications, Salary Slips, Payroll
+  Entries, and Expense Claims.
+- **Project** (9) — Projects, Tasks (with native assignment), and Timesheets.
+- **Delivery** (5) — Delivery Notes and Shipments.
+- **Manufacturing** (7) — BOMs, Work Orders, and Job Cards.
+- **CRM** (8) — Leads, Opportunities, Contacts, and Campaigns.
+- **Assets** (8) — Assets, Movements, Maintenance records, and Categories.
+- **Operations** (9) — Generic CRUD and native assignment for any DocType
+  (`erpnext_doc_*`).
+- **Kanban** (2) — Read-write boards for Task, Opportunity, and Issue with
+  drag-and-drop.
+- **Analytics** (17) — 11 analytics charts (bar, area, treemap, radar, scatter,
+  P&L…), 5 KPIs with sparklines, and a sales funnel.
+- **Setup** (3) — Company creation and assignable user listing.
 
-> Full tool reference with all parameters: [`docs/tools.md`](docs/tools.md)
+Full per-tool reference with parameters: [`docs/tools.md`](docs/tools.md).
 
 ## Environment Variables
 
@@ -293,8 +301,8 @@ src/
     manufacturing.ts  # 7 manufacturing tools
     crm.ts            # 8 CRM tools
     assets.ts         # 8 asset tools
-    operations.ts     # 7 generic CRUD tools
-    setup.ts          # 2 company/setup tools
+    operations.ts     # 9 generic CRUD tools
+    setup.ts          # 3 company/setup tools
     kanban.ts         # 2 read-write kanban tools
     analytics.ts      # 17 analytics tools (charts, KPIs, funnel)
     ui-refresh.ts     # Auto-inject _rowAction, _sendMessageHints, _drillDown
@@ -322,7 +330,7 @@ docs/
 ## npm Package
 
 The npm package (`@casys/mcp-erpnext`) is a single self-contained bundle with
-zero runtime dependencies. UI viewers are embedded.
+zero runtime dependencies. UI viewers are embedded. Requires Node >= 20.
 
 ## Development
 
@@ -348,6 +356,11 @@ deno task release:check
 # Dev a specific viewer with HMR
 cd src/ui && npm run dev:kanban
 ```
+
+## Contributing
+
+Contributions are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** to get
+started, and [AGENTS.md](AGENTS.md) for the full architecture and conventions.
 
 ## Release Flow
 

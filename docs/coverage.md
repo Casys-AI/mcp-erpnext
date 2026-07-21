@@ -201,14 +201,17 @@
 
 The `operations.ts` tools provide generic CRUD for any ERPNext DocType:
 
-| Operation  | Tool                 | Notes                                                   |
-| ---------- | -------------------- | ------------------------------------------------------- |
-| **Update** | `erpnext_doc_update` | Partial patch — pass only fields to change              |
-| **Delete** | `erpnext_doc_delete` | Draft documents only; submitted must be cancelled first |
-| **Submit** | `erpnext_doc_submit` | Calls `frappe.client.submit`                            |
-| **Cancel** | `erpnext_doc_cancel` | Calls `frappe.client.cancel`                            |
-| **Get**    | `erpnext_doc_get`    | For DocTypes without a dedicated `_get` tool            |
-| **List**   | `erpnext_doc_list`   | Full control: fields, filters, limit, order_by          |
+| Operation    | Tool                   | Notes                                                   |
+| ------------ | ---------------------- | ------------------------------------------------------- |
+| **Create**   | `erpnext_doc_create`   | Create a document of any DocType                        |
+| **Update**   | `erpnext_doc_update`   | Partial patch — pass only fields to change              |
+| **Delete**   | `erpnext_doc_delete`   | Draft documents only; submitted must be cancelled first |
+| **Submit**   | `erpnext_doc_submit`   | Calls `frappe.client.submit`                            |
+| **Cancel**   | `erpnext_doc_cancel`   | Calls `frappe.client.cancel`                            |
+| **Get**      | `erpnext_doc_get`      | For DocTypes without a dedicated `_get` tool            |
+| **List**     | `erpnext_doc_list`     | Full control: fields, filters, limit, order_by          |
+| **Assign**   | `erpnext_doc_assign`   | Add a native assignment (ToDo) to a user                |
+| **Unassign** | `erpnext_doc_unassign` | Remove a user's native assignment                       |
 
 Specific DocTypes also have dedicated submit/cancel tools:
 `erpnext_sales_order_submit/cancel`, `erpnext_sales_invoice_submit`.
@@ -309,7 +312,7 @@ Specific DocTypes also have dedicated submit/cancel tools:
    `purchasing.ts` alongside suppliers, receipts, and quotations.
    `accounting.ts` focuses on accounts, journal entries, and payment entries.
 
-2. **`erpnext_doc_*` as escape hatch** — The 6 generic operations tools cover
+2. **`erpnext_doc_*` as escape hatch** — The 9 generic operations tools cover
    any DocType not yet wrapped. They are the recommended approach for one-off
    operations rather than adding more typed tools.
 

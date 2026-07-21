@@ -15,7 +15,13 @@ import { getCache } from "../cache/cache.ts";
 /** How long a confirmed "identifier is not a valid ID" result is remembered. */
 const NEGATIVE_CACHE_TTL_MS = 15_000;
 
-/** How many partial-match candidates to fetch when checking for ambiguity. */
+/**
+ * How many candidates to fetch per match rung when checking for ambiguity.
+ * `EXACT_MATCH_PROBE_LIMIT` only needs to distinguish "unique" from
+ * "ambiguous" (2 is enough); the partial rung's error message lists
+ * candidates for the caller, so it fetches a few more.
+ */
+const EXACT_MATCH_PROBE_LIMIT = 2;
 const PARTIAL_MATCH_PROBE_LIMIT = 5;
 
 export interface ResolveLinkOptions {
@@ -24,10 +30,47 @@ export interface ResolveLinkOptions {
 }
 
 /**
+ * Run a `searchField <op> value` list() query, probing up to `probeLimit`
+ * rows. Returns the name on a unique hit, `undefined` on no match, and
+ * throws an ambiguity error (listing candidates) when more than one row
+ * matches — display-name fields like `customer_name` aren't unique in
+ * ERPNext, so "matches" is not the same as "safe to resolve silently".
+ */
+async function resolveUnique(
+  client: FrappeClient,
+  doctype: string,
+  identifier: string,
+  searchField: string,
+  op: "=" | "like",
+  value: string,
+  probeLimit: number,
+  ambiguityHint: string,
+): Promise<string | undefined> {
+  const rows = await client.list(doctype, {
+    filters: [[searchField, op, value]],
+    fields: ["name", searchField],
+    limit: probeLimit,
+  });
+  if (rows.length === 0) return undefined;
+  if (rows.length === 1) return rows[0].name as string;
+
+  const candidates = rows.map((r) => `${r.name} (${r[searchField]})`).join(
+    ", ",
+  );
+  const suffix = rows.length === probeLimit ? ", and possibly more" : "";
+  throw new Error(
+    `[resolveLink] Ambiguous ${doctype} identifier "${identifier}": ` +
+      `did you mean ${candidates}${suffix}? ${ambiguityHint}`,
+  );
+}
+
+/**
  * Resolve `identifier` to a document name (ID) within `doctype`: fast-path
  * get(), then exact match on `searchField`, then partial match (unless
- * `allowPartialMatch` is false). A partial match only resolves silently when
- * it's unique; multiple candidates throw with the list instead of guessing.
+ * `allowPartialMatch` is false). Both the exact and partial rungs only
+ * resolve silently when the match is unique; multiple candidates throw with
+ * the list instead of guessing — display-name fields aren't unique keys, so
+ * even an "exact" name match can hit more than one document.
  */
 export async function resolveLink(
   client: FrappeClient,
@@ -50,32 +93,30 @@ export async function resolveLink(
     }
   }
 
-  const exact = await client.list(doctype, {
-    filters: [[searchField, "=", identifier]],
-    fields: ["name"],
-    limit: 1,
-  });
-  if (exact.length > 0) return exact[0].name as string;
+  const exact = await resolveUnique(
+    client,
+    doctype,
+    identifier,
+    searchField,
+    "=",
+    identifier,
+    EXACT_MATCH_PROBE_LIMIT,
+    "Please pass the record's ID directly.",
+  );
+  if (exact !== undefined) return exact;
 
   if (allowPartialMatch) {
-    const partial = await client.list(doctype, {
-      filters: [[searchField, "like", `%${identifier}%`]],
-      fields: ["name", searchField],
-      limit: PARTIAL_MATCH_PROBE_LIMIT,
-    });
-    if (partial.length === 1) return partial[0].name as string;
-    if (partial.length > 1) {
-      const candidates = partial
-        .map((r) => `${r.name} (${r[searchField]})`)
-        .join(", ");
-      const suffix = partial.length === PARTIAL_MATCH_PROBE_LIMIT
-        ? ", and possibly more"
-        : "";
-      throw new Error(
-        `[resolveLink] Ambiguous ${doctype} identifier "${identifier}": ` +
-          `did you mean ${candidates}${suffix}? Please pass an exact value.`,
-      );
-    }
+    const partial = await resolveUnique(
+      client,
+      doctype,
+      identifier,
+      searchField,
+      "like",
+      `%${identifier}%`,
+      PARTIAL_MATCH_PROBE_LIMIT,
+      "Please pass an exact value.",
+    );
+    if (partial !== undefined) return partial;
   }
 
   throw new Error(`[resolveLink] No ${doctype} found matching "${identifier}"`);

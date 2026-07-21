@@ -54,6 +54,55 @@ Deno.test("resolveLink - falls back to exact match on search field", async () =>
   assertEquals(result, "HR-EMP-00002");
 });
 
+Deno.test("resolveLink - throws with candidate list when the exact match is ambiguous", async () => {
+  // customer_name/employee_name/etc. aren't unique keys in ERPNext — two
+  // Employees can share the exact same employee_name.
+  setCache(new MemoryCache());
+  const client = makeMockClient({
+    list: async (_doctype: string, options: { filters?: unknown[] }) => {
+      const [field, op] = (options.filters?.[0] as [string, string, string]) ??
+        [];
+      if (field === "employee_name" && op === "=") {
+        return [
+          { name: "HR-EMP-00002", employee_name: "John Doe" },
+          { name: "HR-EMP-00009", employee_name: "John Doe" },
+        ];
+      }
+      return [];
+    },
+  });
+  await assertRejects(
+    () => resolveEmployee(client, "John Doe"),
+    Error,
+    "Ambiguous Employee identifier",
+  );
+});
+
+Deno.test("resolveLink - exact-match ambiguity still throws when allowPartialMatch is false", async () => {
+  setCache(new MemoryCache());
+  const client = makeMockClient({
+    list: async (_doctype: string, options: { filters?: unknown[] }) => {
+      const [field, op] = (options.filters?.[0] as [string, string, string]) ??
+        [];
+      if (field === "employee_name" && op === "=") {
+        return [
+          { name: "HR-EMP-00002", employee_name: "John Doe" },
+          { name: "HR-EMP-00009", employee_name: "John Doe" },
+        ];
+      }
+      return [];
+    },
+  });
+  await assertRejects(
+    () =>
+      resolveLink(client, "Employee", "John Doe", "employee_name", {
+        allowPartialMatch: false,
+      }),
+    Error,
+    "Ambiguous Employee identifier",
+  );
+});
+
 Deno.test("resolveLink - falls back to partial match when exact match misses", async () => {
   setCache(new MemoryCache());
   const client = makeMockClient({

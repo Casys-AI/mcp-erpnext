@@ -11,7 +11,10 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
-import { withRoundedTotalFallback } from "./submit-helpers.ts";
+import {
+  roundedTotalFallbackWarning,
+  withRoundedTotalFallback,
+} from "./submit-helpers.ts";
 import {
   applyAssignment,
   ASSIGNMENT_INPUT_PROPERTIES,
@@ -208,19 +211,21 @@ export const operationsTools: ErpNextTool[] = [
         input.name as string,
         { skipCache: true },
       );
+      const docWithDoctype = { ...doc, doctype: input.doctype as string };
+      const patchedDoc = withRoundedTotalFallback(docWithDoctype);
       const result = await ctx.client.callMethod("frappe.client.submit", {
-        doc: withRoundedTotalFallback({
-          ...doc,
-          doctype: input.doctype as string,
-        }),
+        doc: patchedDoc,
       });
       ctx.client.invalidate(input.doctype as string, input.name as string);
+
+      const warnings = roundedTotalFallbackWarning(docWithDoctype, patchedDoc);
 
       return {
         data: result,
         message: `${input.doctype} ${input.name} submitted successfully`,
         doctype: input.doctype,
         name: input.name,
+        ...(warnings.length > 0 ? { warnings } : {}),
       };
     },
   },

@@ -300,9 +300,13 @@ Deno.test("erpnext_sales_order_submit - disables rounded total when base_rounded
   });
 
   const tool = getTool("erpnext_sales_order_submit");
-  await tool.handler({ name: "SO-001" }, makeCtx(mockClient));
+  const result = await tool.handler(
+    { name: "SO-001" },
+    makeCtx(mockClient),
+  ) as Record<string, unknown>;
 
   assertEquals(submittedDoc.disable_rounded_total, 1);
+  assertEquals((result.warnings as string[]).length, 1);
 });
 
 Deno.test("erpnext_sales_invoice_submit - disables rounded total when base_rounded_total is null (fresh instance)", async () => {
@@ -323,7 +327,11 @@ Deno.test("erpnext_sales_invoice_submit - disables rounded total when base_round
   });
 
   const tool = getTool("erpnext_sales_invoice_submit");
-  await tool.handler({ name: "SINV-001" }, makeCtx(mockClient));
+  const result = await tool.handler(
+    { name: "SINV-001" },
+    makeCtx(mockClient),
+  ) as Record<string, unknown>;
 
   assertEquals(submittedDoc.disable_rounded_total, 1);
+  assertEquals((result.warnings as string[]).length, 1);
 });

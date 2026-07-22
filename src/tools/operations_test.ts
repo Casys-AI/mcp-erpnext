@@ -186,12 +186,13 @@ Deno.test("erpnext_doc_submit - disables rounded total when base_rounded_total i
   });
 
   const tool = getTool("erpnext_doc_submit");
-  await tool.handler(
+  const result = await tool.handler(
     { doctype: "Sales Order", name: "SO-001" },
     makeCtx(mockClient),
-  );
+  ) as Record<string, unknown>;
 
   assertEquals(submittedDoc.disable_rounded_total, 1);
+  assertEquals((result.warnings as string[]).length, 1);
 });
 
 // ── erpnext_doc_cancel ───────────────────────────────────────────────────────

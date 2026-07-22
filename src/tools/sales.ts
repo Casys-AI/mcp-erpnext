@@ -10,7 +10,10 @@ import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META, INVOICE_META } from "./viewer-meta.ts";
 import { resolveCustomer, resolveDynamicLink } from "../api/resolve.ts";
-import { withRoundedTotalFallback } from "./submit-helpers.ts";
+import {
+  roundedTotalFallbackWarning,
+  withRoundedTotalFallback,
+} from "./submit-helpers.ts";
 
 interface LineItemInput {
   item_code: string;
@@ -524,13 +527,18 @@ export const salesTools: ErpNextTool[] = [
 
       // Fetch fresh doc — frappe.client.submit requires `modified` for optimistic locking
       const doc = await ctx.client.get("Sales Order", input.name as string);
+      const docWithDoctype = { ...doc, doctype: "Sales Order" };
+      const patchedDoc = withRoundedTotalFallback(docWithDoctype);
       const result = await ctx.client.callMethod("frappe.client.submit", {
-        doc: withRoundedTotalFallback({ ...doc, doctype: "Sales Order" }),
+        doc: patchedDoc,
       });
+
+      const warnings = roundedTotalFallbackWarning(docWithDoctype, patchedDoc);
 
       return {
         data: result,
         message: `Sales Order ${input.name} submitted successfully`,
+        ...(warnings.length > 0 ? { warnings } : {}),
       };
     },
   },
@@ -793,14 +801,19 @@ export const salesTools: ErpNextTool[] = [
 
       // Fetch fresh doc — frappe.client.submit requires `modified` for optimistic locking
       const doc = await ctx.client.get("Sales Invoice", input.name as string);
+      const docWithDoctype = { ...doc, doctype: "Sales Invoice" };
+      const patchedDoc = withRoundedTotalFallback(docWithDoctype);
       const result = await ctx.client.callMethod("frappe.client.submit", {
-        doc: withRoundedTotalFallback({ ...doc, doctype: "Sales Invoice" }),
+        doc: patchedDoc,
       });
+
+      const warnings = roundedTotalFallbackWarning(docWithDoctype, patchedDoc);
 
       return {
         data: result,
         message: `Sales Invoice ${input.name} submitted successfully`,
         _meta: INVOICE_META,
+        ...(warnings.length > 0 ? { warnings } : {}),
       };
     },
   },

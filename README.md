@@ -1,3 +1,5 @@
+English | [繁體中文](README.zh-TW.md)
+
 # @casys/mcp-erpnext
 
 [![JSR](https://jsr.io/badges/@casys/mcp-erpnext)](https://jsr.io/@casys/mcp-erpnext)

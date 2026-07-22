@@ -8,13 +8,17 @@
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[ERPNext](https://erpnext.com) / Frappe ERP 的 MCP 伺服器 — 涵蓋 **14 個類別**的 **123 項工具**，以及 **7 個互動式 UI 檢視器**。
+[ERPNext](https://erpnext.com) / Frappe ERP 的 MCP 伺服器 — 涵蓋 **14 個類別**的
+**123 項工具**，以及 **7 個互動式 UI 檢視器**。
 
-透過 [Model Context Protocol](https://modelcontextprotocol.io)，將任何相容 MCP 的 AI 智慧代理（Claude Desktop、Claude Code、VS Code Copilot 或自訂代理）連接至您的 ERPNext 執行個體。
+透過 [Model Context Protocol](https://modelcontextprotocol.io)，將任何相容 MCP
+的 AI 智慧代理（Claude Desktop、Claude Code、VS Code Copilot
+或自訂代理）連接至您的 ERPNext 執行個體。
 
 支援**自行託管**與 **ERPNext Cloud**（frappe.cloud）執行個體。
 
-> 基於 **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** 構建 — 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。
+> 基於 **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** 構建 —
+> 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。
 
 ## 截圖
 
@@ -65,7 +69,8 @@
 
 ## 最新異動
 
-完整的發布歷程請參閱 [CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
+完整的發布歷程請參閱
+[CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
 
 ## 快速開始
 
@@ -95,7 +100,9 @@
 }
 ```
 
-> **支援 ERPNext Cloud** — 將 `ERPNEXT_URL` 設定為您的 Frappe Cloud URL（例如 `https://mycompany.erpnext.com` 或 `https://mysite.frappe.cloud`）。API 金鑰驗證在自行託管與雲端執行個體上的操作方式相同。
+> **支援 ERPNext Cloud** — 將 `ERPNEXT_URL` 設定為您的 Frappe Cloud URL（例如
+> `https://mycompany.erpnext.com` 或 `https://mysite.frappe.cloud`）。API
+> 金鑰驗證在自行託管與雲端執行個體上的操作方式相同。
 
 ### VS Code Copilot
 
@@ -145,7 +152,9 @@ ERPNEXT_API_SECRET=xxx \
 npx -y @casys/mcp-erpnext --http --port=3012
 ```
 
-> **注意：** 自 v2.4.2 起，HTTP 模式預設綁定至 `127.0.0.1`（本機回環位址）。若用於 Docker 或多主機環境，請加上 `--hostname=0.0.0.0`。
+> **注意：** 自 v2.4.2 起，HTTP 模式預設綁定至
+> `127.0.0.1`（本機回環位址）。若用於 Docker 或多主機環境，請加上
+> `--hostname=0.0.0.0`。
 
 ### Deno（HTTP 模式）
 
@@ -156,7 +165,11 @@ ERPNEXT_API_SECRET=xxx \
 deno run -A npm:@casys/mcp-erpnext --http --port=3012
 ```
 
-> **注意：** npm 套件 ≤ 2.3.1 版本在 HTTP 模式下會發生 `ReferenceError: Deno is not defined` 錯誤 — 已於 2.4.0 版本修復（`@casys/mcp-server` ≥ 0.21.1）。若遭遇此問題，請使用 `npx -y @casys/mcp-erpnext@latest` 升級，或改用上方的 Deno 執行方式。詳見 [`docs/known-issues.md`](docs/known-issues.md)。
+> **注意：** npm 套件 ≤ 2.3.1 版本在 HTTP 模式下會發生
+> `ReferenceError: Deno is not defined` 錯誤 — 已於 2.4.0
+> 版本修復（`@casys/mcp-server` ≥ 0.21.1）。若遭遇此問題，請使用
+> `npx -y @casys/mcp-erpnext@latest` 升級，或改用上方的 Deno 執行方式。詳見
+> [`docs/known-issues.md`](docs/known-issues.md)。
 
 ### 類別篩選
 
@@ -168,7 +181,9 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 
 ## 全新執行個體設定
 
-在全新的 ERPNext 執行個體（尚未完成設定精靈）中，使用業務工具前需先建立主要資料。請使用 `erpnext_doc_create` 建立前置條件：
+在全新的 ERPNext
+執行個體（尚未完成設定精靈）中，使用業務工具前需先建立主要資料。請使用
+`erpnext_doc_create` 建立前置條件：
 
 ```
 1. 倉庫類型：Transit、Default
@@ -182,21 +197,24 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 
 ## UI 檢視器
 
-七個互動式 [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) 檢視器，已登錄為 `ui://mcp-erpnext/{name}`：
+七個互動式 [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
+檢視器，已登錄為 `ui://mcp-erpnext/{name}`：
 
-| 檢視器 | 說明 | 互動功能 |
-| --- | --- | --- |
-| `doclist-viewer` | 通用文件表格，支援排序、篩選、分頁與 CSV 匯出 | 點擊列 → 含提交／取消及 sendMessage 導覽的內嵌詳細面板。狀態欄位的晶片篩選器。最多顯示 6 欄，其餘呈現於詳細面板。 |
-| `invoice-viewer` | 含交易方、品項、金額合計的銷售／採購發票 | 點擊品項 → 庫存結餘及品項資訊面板。提交／取消／付款操作。sendMessage 至付款紀錄及客戶發票。 |
-| `stock-viewer` | 含色碼數量標籤的庫存結餘表格 | 點擊列 → 品項資訊及近期異動。sendMessage 至庫存圖表、品項詳情、庫存記錄。 |
-| `chart-viewer` | 通用圖表渲染器（透過 Recharts 支援 12 種圖表類型） | 點擊長條／圓餅／折線資料點 → sendMessage 下鑽至底層文件。 |
-| `kanban-viewer` | 可讀寫的 Task、Opportunity、Issue 看板 | 拖放移動、內嵌編輯（優先順序、進度、日期）、sendMessage 至工時單／報價單／相關文件。 |
-| `kpi-viewer` | 含差異值、迷你圖、趨勢的大數字卡片 | 點擊數字 → sendMessage 至例外清單。點擊迷你圖 → 趨勢圖表。 |
-| `funnel-viewer` | 含轉換率的梯形銷售漏斗 | 點擊階段 → sendMessage 至該階段的文件清單。階段操作按鈕。 |
+| 檢視器           | 說明                                               | 互動功能                                                                                                          |
+| ---------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `doclist-viewer` | 通用文件表格，支援排序、篩選、分頁與 CSV 匯出      | 點擊列 → 含提交／取消及 sendMessage 導覽的內嵌詳細面板。狀態欄位的晶片篩選器。最多顯示 6 欄，其餘呈現於詳細面板。 |
+| `invoice-viewer` | 含交易方、品項、金額合計的銷售／採購發票           | 點擊品項 → 庫存結餘及品項資訊面板。提交／取消／付款操作。sendMessage 至付款紀錄及客戶發票。                       |
+| `stock-viewer`   | 含色碼數量標籤的庫存結餘表格                       | 點擊列 → 品項資訊及近期異動。sendMessage 至庫存圖表、品項詳情、庫存記錄。                                         |
+| `chart-viewer`   | 通用圖表渲染器（透過 Recharts 支援 12 種圖表類型） | 點擊長條／圓餅／折線資料點 → sendMessage 下鑽至底層文件。                                                         |
+| `kanban-viewer`  | 可讀寫的 Task、Opportunity、Issue 看板             | 拖放移動、內嵌編輯（優先順序、進度、日期）、sendMessage 至工時單／報價單／相關文件。                              |
+| `kpi-viewer`     | 含差異值、迷你圖、趨勢的大數字卡片                 | 點擊數字 → sendMessage 至例外清單。點擊迷你圖 → 趨勢圖表。                                                        |
+| `funnel-viewer`  | 含轉換率的梯形銷售漏斗                             | 點擊階段 → sendMessage 至該階段的文件清單。階段操作按鈕。                                                         |
 
 ### 跨檢視器導覽
 
-各檢視器透過 `app.sendMessage()` 互相溝通 — 點擊某一檢視器中的按鈕，即會在對話中注入一則訊息，進而觸發 AI 呼叫對應工具並開啟適當的檢視器。
+各檢視器透過 `app.sendMessage()` 互相溝通 —
+點擊某一檢視器中的按鈕，即會在對話中注入一則訊息，進而觸發 AI
+呼叫對應工具並開啟適當的檢視器。
 
 伺服器會自動在工具結果中注入導覽後設資料：
 
@@ -206,7 +224,8 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 
 ### 重新整理模式
 
-所有檢視器均攜帶 `refreshRequest` 酬載，可透過 `app.callServerTool()` 安全地重新驗證：
+所有檢視器均攜帶 `refreshRequest` 酬載，可透過 `app.callServerTool()`
+安全地重新驗證：
 
 - `kanban-viewer` 在異動後及焦點切換時重新驗證
 - 所有其他檢視器支援焦點重新整理及手動重新整理按鈕
@@ -221,10 +240,13 @@ node build-all.mjs
 
 ## 工具（123 項）
 
-涵蓋 14 個類別的 123 項工具。每個 `_list` 工具均透過 doclist-viewer 返回互動式結果，支援點擊列、內嵌詳情及跨檢視器導覽。
+涵蓋 14 個類別的 123 項工具。每個 `_list` 工具均透過 doclist-viewer
+返回互動式結果，支援點擊列、內嵌詳情及跨檢視器導覽。
 
-- **Sales（銷售）**（17 項）— 客戶、銷售訂單、發票及報價單，含完整的 CRUD、提交與取消功能。
-- **Purchasing（採購）**（11 項）— 供應商、採購訂單、採購發票、收貨單及供應商報價單。
+- **Sales（銷售）**（17 項）— 客戶、銷售訂單、發票及報價單，含完整的
+  CRUD、提交與取消功能。
+- **Purchasing（採購）**（11 項）—
+  供應商、採購訂單、採購發票、收貨單及供應商報價單。
 - **Inventory（庫存）**（9 項）— 品項、庫存結餘、倉庫及庫存記錄。
 - **Accounting（會計）**（6 項）— 科目表、日記帳分錄及付款記錄。
 - **HR（人資）**（12 項）— 員工、出勤、請假申請、薪資單、薪資處理及費用申報。
@@ -233,20 +255,24 @@ node build-all.mjs
 - **Manufacturing（製造）**（7 項）— 物料清單（BOM）、工單及工作卡。
 - **CRM**（8 項）— 潛在客戶、商機、聯絡人及行銷活動。
 - **Assets（資產）**（8 項）— 資產、異動、維護紀錄及類別。
-- **Operations（作業）**（9 項）— 任何 DocType 的通用 CRUD 及原生指派（`erpnext_doc_*`）。
-- **Kanban（看板）**（2 項）— 支援拖放功能的 Task、Opportunity、Issue 可讀寫看板。
-- **Analytics（分析）**（17 項）— 11 種分析圖表（長條圖、面積圖、樹狀圖、雷達圖、散佈圖、損益表等）、5 個含迷你圖的 KPI，以及銷售漏斗。
+- **Operations（作業）**（9 項）— 任何 DocType 的通用 CRUD
+  及原生指派（`erpnext_doc_*`）。
+- **Kanban（看板）**（2 項）— 支援拖放功能的 Task、Opportunity、Issue
+  可讀寫看板。
+- **Analytics（分析）**（17 項）— 11
+  種分析圖表（長條圖、面積圖、樹狀圖、雷達圖、散佈圖、損益表等）、5 個含迷你圖的
+  KPI，以及銷售漏斗。
 - **Setup（設定）**（3 項）— 公司建立及可指派使用者清單。
 
 完整的各工具參數說明請參閱 [`docs/tools.md`](docs/tools.md)。
 
 ## 環境變數
 
-| 變數 | 必填 | 說明 |
-| --- | --- | --- |
-| `ERPNEXT_URL` | 是 | ERPNext 基礎 URL — 自行託管（例如 `http://localhost:8000`）或雲端（例如 `https://mycompany.erpnext.com`） |
-| `ERPNEXT_API_KEY` | 是 | 來自使用者設定的 API Key |
-| `ERPNEXT_API_SECRET` | 是 | 來自使用者設定的 API Secret |
+| 變數                 | 必填 | 說明                                                                                                      |
+| -------------------- | ---- | --------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_URL`        | 是   | ERPNext 基礎 URL — 自行託管（例如 `http://localhost:8000`）或雲端（例如 `https://mycompany.erpnext.com`） |
+| `ERPNEXT_API_KEY`    | 是   | 來自使用者設定的 API Key                                                                                  |
+| `ERPNEXT_API_SECRET` | 是   | 來自使用者設定的 API Secret                                                                               |
 
 ## 架構
 
@@ -301,7 +327,8 @@ docs/
 
 ## npm 套件
 
-npm 套件（`@casys/mcp-erpnext`）是一個完全自包含的套件，無任何執行時相依套件。UI 檢視器已內嵌其中。需要 Node >= 20。
+npm 套件（`@casys/mcp-erpnext`）是一個完全自包含的套件，無任何執行時相依套件。UI
+檢視器已內嵌其中。需要 Node >= 20。
 
 ## 開發
 
@@ -330,7 +357,8 @@ cd src/ui && npm run dev:kanban
 
 ## 貢獻
 
-歡迎貢獻 — 請參閱 **[CONTRIBUTING.md](CONTRIBUTING.md)** 以開始，並參閱 [AGENTS.md](AGENTS.md) 了解完整的架構與慣例。
+歡迎貢獻 — 請參閱 **[CONTRIBUTING.md](CONTRIBUTING.md)** 以開始，並參閱
+[AGENTS.md](AGENTS.md) 了解完整的架構與慣例。
 
 ## 發布流程
 

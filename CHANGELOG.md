@@ -2,13 +2,35 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
-## Unreleased
+## [2.6.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.5.0...v2.6.0) (2026-07-23)
 
 ### Features
 
+- **HTTP authentication and Docker deployment** — HTTP deployments can now opt
+  into static bearer-token authentication (`MCP_AUTH_TOKEN` / `MCP_AUTH_TOKENS`)
+  or OAuth JWT validation through a JWKS endpoint, with protected-resource
+  metadata for MCP clients. Dockerfile, Compose example, and deployment docs are
+  included; existing unauthenticated HTTP and stdio setups remain compatible
+  when no auth is configured. Thanks
+  [@notnotkeshav](https://github.com/notnotkeshav)
+  ([#8](https://github.com/Casys-AI/mcp-erpnext/pull/8)).
 - **`erpnext_file_upload`** attaches base64-supplied bytes to any DocType as a
-  native Frappe `File`, with private-by-default uploads and a configurable
-  decoded-size limit. Tool count 123 → 124.
+  native Frappe `File`, optionally filling an Attach/Attach Image field. Uploads
+  are private by default and have a configurable decoded-size limit. Tool count
+  123 → 124. Thanks [@mateotiedra](https://github.com/mateotiedra)
+  ([#14](https://github.com/Casys-AI/mcp-erpnext/pull/14)).
+
+### Bug Fixes
+
+- **submit:** Fresh ERPNext instances with null rounded totals no longer fail
+  submission; transactional submit tools automatically disable unconfigured
+  rounding and return a warning when this fallback is used. Thanks
+  [@notnotkeshav](https://github.com/notnotkeshav)
+  ([#13](https://github.com/Casys-AI/mcp-erpnext/pull/13)).
+
+### Documentation
+
+- Add a Traditional Chinese README.
 
 ## [2.5.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.4.2...v2.5.0) (2026-07-21)
 

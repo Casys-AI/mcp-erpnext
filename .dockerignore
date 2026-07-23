@@ -1,0 +1,10 @@
+# Deployment secrets and local configuration must never enter an image layer.
+.env*
+
+# VCS metadata and local dependencies/build artifacts.
+.git/
+node_modules/
+src/ui/node_modules/
+src/ui/dist/
+dist-node/
+.DS_Store

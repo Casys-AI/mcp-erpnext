@@ -43,7 +43,9 @@ import {
   readTextFile,
   statSync,
 } from "./src/runtime.ts";
+import { buildAuthProvider, loadAuthConfig } from "./src/auth/config.ts";
 import { warmCache } from "./src/cache/warm.ts";
+import { resourceMetadataRoute } from "./src/auth/resource-metadata-route.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
 
@@ -75,9 +77,17 @@ async function main() {
   const hostnameArg = args.find((arg) => arg.startsWith("--hostname="));
   // Safe default: bind to loopback only. Exposing HTTP mode to the network must
   // be an explicit choice (`--hostname=0.0.0.0`), since every tool acts with the
-  // server's ERPNext API key. NOTE: in Docker the published port needs
-  // `--hostname=0.0.0.0` for the container to be reachable.
+  // server's ERPNext API key. In Docker, the published port needs
+  // `--hostname=0.0.0.0` in the container CMD to be reachable.
   const hostname = hostnameArg ? hostnameArg.split("=")[1] : "127.0.0.1";
+
+  // Auth (HTTP mode only) — built before the McpApp constructor since the
+  // provider is wired in there, not at startHttp() time.
+  const authConfig = httpFlag ? loadAuthConfig() : null;
+  const authProvider = authConfig ? buildAuthProvider(authConfig) : undefined;
+  const authMetadataRoute = authProvider
+    ? resourceMetadataRoute(authProvider)
+    : undefined;
 
   // Initialize tools client
   const toolsClient = new ErpNextToolsClient(
@@ -91,6 +101,7 @@ async function main() {
     maxConcurrent: 10,
     backpressureStrategy: "queue",
     validateSchema: true,
+    auth: authProvider ? { provider: authProvider } : undefined,
     logger: (msg: string) => console.error(`[mcp-erpnext] ${msg}`),
     toolErrorMapper: (error: unknown) => {
       if (error instanceof FrappeAPIError) return error.message;
@@ -160,24 +171,47 @@ async function main() {
       console.error(
         `[mcp-erpnext] WARNING: binding to ${hostname} exposes the HTTP server ` +
           `to the network. Every tool acts with the server's ERPNext API key, ` +
-          `so restrict access (firewall, private network, or an authenticating ` +
-          `reverse proxy).`,
+          `so restrict access (firewall, private network) or configure auth ` +
+          `via MCP_AUTH_TOKEN(S)/MCP_OAUTH_JWKS_URL.`,
       );
     }
-    await server.startHttp({
-      port: httpPort,
-      hostname,
-      cors: true,
-      onListen: (info: { hostname: string; port: number }) => {
-        console.error(
-          `[mcp-erpnext] HTTP server listening on http://${info.hostname}:${info.port}`,
-        );
-      },
-    });
 
     onSignal("SIGINT", () => {
       console.error("[mcp-erpnext] Shutting down...");
       exit(0);
+    });
+
+    if (!authConfig) {
+      // No auth configured — warn and fall back to unprotected HTTP.
+      // Set MCP_AUTH_TOKEN, MCP_AUTH_TOKENS, or MCP_OAUTH_JWKS_URL to enable auth.
+      console.error(
+        "[mcp-erpnext] WARNING: No auth configured for HTTP mode. " +
+          "Set MCP_AUTH_TOKEN, MCP_AUTH_TOKENS, or MCP_OAUTH_JWKS_URL to restrict access.",
+      );
+    }
+
+    await server.startHttp({
+      port: httpPort,
+      hostname,
+      cors: true,
+      customRoutes: authMetadataRoute ? [authMetadataRoute] : undefined,
+      onListen: (info: { hostname: string; port: number }) => {
+        console.error(
+          `[mcp-erpnext] HTTP server listening${
+            authConfig ? "" : " (unauthenticated)"
+          } on http://${info.hostname}:${info.port}`,
+        );
+        if (authConfig) {
+          const authMethods: string[] = [];
+          if (authConfig.tokens.size > 0) {
+            authMethods.push(`static tokens (${authConfig.tokens.size})`);
+          }
+          if (authConfig.jwksUrl) {
+            authMethods.push(`OAuth JWT JWKS (${authConfig.jwksUrl})`);
+          }
+          console.error(`[mcp-erpnext] Auth: ${authMethods.join(", ")}`);
+        }
+      },
     });
   } else {
     await server.start();

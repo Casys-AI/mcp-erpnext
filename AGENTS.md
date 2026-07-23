@@ -263,6 +263,37 @@ Registered in `src/ui/viewers.ts` — add new viewer names there and in
 UI resources, and starts in stdio or HTTP mode. Supports `--http`, `--port=`,
 `--hostname=`, and `--categories=` flags.
 
+### HTTP authentication
+
+`src/auth/config.ts` reads env vars and builds an `@casys/mcp-server`
+`AuthProvider`, wired straight into `McpApp`'s own `auth: { provider }` option —
+no separate proxy or listener. Two combinable modes:
+
+- **Static tokens** — `MCP_AUTH_TOKEN` (single) or `MCP_AUTH_TOKENS`
+  (comma-separated), via `createStaticTokenAuthProvider`.
+- **OAuth 2.0 JWT** — `MCP_OAUTH_JWKS_URL` + `MCP_OAUTH_AUDIENCE` +
+  `MCP_OAUTH_ISSUER` (all required), via `createOIDCAuthProvider`. See
+  `docs/oauth-setup.md`.
+
+Both modes also require `MCP_AUTH_RESOURCE` — the exact public MCP endpoint URL
+(RFC 9728), normally `https://mcp.example.com/mcp`. The server also serves the
+path-qualified metadata URL that RFC 9728 derives from that endpoint. Ensure a
+reverse proxy forwards both paths. `buildAuthProvider()` throws a targeted error
+naming the missing var if a mode is partially configured, rather than silently
+accepting requests it can't verify.
+
+If both static tokens and OAuth are configured, `src/auth/composite-provider.ts`
+(`CompositeAuthProvider`) combines them — a token is accepted if either provider
+accepts it. The framework's own `AuthProvider` only takes one provider at a
+time, so this small wrapper is what preserves that documented "mix both modes"
+behavior.
+
+If neither is configured, `server.ts` calls `startHttp()` without a provider;
+HTTP mode starts unauthenticated with a startup warning — never assume auth is
+on without checking. `/health`, `/metrics`, and
+`/.well-known/oauth-protected-resource` are exempt from the auth gate by the
+framework itself.
+
 ## Coding Style & Naming Conventions
 
 - Language: TypeScript (Deno-flavored ESM). Prefer strict typing; avoid `any`.
@@ -392,15 +423,46 @@ Rules:
 
 - Environment variables: `ERPNEXT_URL`, `ERPNEXT_API_KEY`, `ERPNEXT_API_SECRET`
   (all required at runtime).
+- HTTP-mode auth (optional but recommended when exposed beyond localhost):
+  `MCP_AUTH_TOKEN` / `MCP_AUTH_TOKENS`, or `MCP_OAUTH_JWKS_URL` +
+  `MCP_OAUTH_AUDIENCE` + `MCP_OAUTH_ISSUER` — either mode also requires
+  `MCP_AUTH_RESOURCE`. See [HTTP authentication](#http-authentication).
 - Caching (optional): `MCP_CACHE_ENABLED` (default enabled), `MCP_CACHE_TTL_MS`
   (default `15000`), `MCP_CACHE_WARM_TOOLS` (comma-separated tool names to warm
   on startup, default disabled). See [Caching](#caching).
 - Never commit `.env` files, API keys, or credentials. The `.gitignore` already
   covers `.env*`.
-- `FrappeClient` authenticates via API key/secret headers. No OAuth or
-  session-based auth.
+- `FrappeClient` (talking to ERPNext) authenticates via API key/secret headers
+  only — no OAuth or session-based auth on that side. The MCP server's own HTTP
+  endpoint is a separate auth layer (see above).
 - All errors throw `FrappeAPIError` — no silent fallbacks or swallowed errors.
   Do not introduce `try/catch` blocks that hide errors.
+
+## Docker
+
+`Dockerfile` is a two-stage build:
+
+1. **`ui-builder`** (`node:20-slim`) — `npm ci` + `node build-all.mjs` in
+   `src/ui/`, producing `src/ui/dist/{viewer-name}/index.html` for all 7
+   viewers.
+2. **Runtime** (`denoland/deno:2.3.3`) — copies the app source plus the built
+   `src/ui/dist/` from stage 1, pre-caches deps with
+   `deno cache --allow-import server.ts`, and runs
+   `server.ts --http --port=7654`.
+
+Skipping the UI build stage (e.g. a naive single-stage Dockerfile that never
+runs `npm ci && node build-all.mjs`) silently degrades every viewer — tools
+still work, but `resolveViewerDistPath` finds nothing, each viewer logs
+`Warning: UI not built for ui://mcp-erpnext/{name}` at startup, and
+`Resources: 0` instead of `7`. Check for that count in the startup log after any
+Dockerfile change.
+
+`docker-compose.yml` reads config from `.env` (not baked into the image) and
+binds port 7654 to `127.0.0.1` by default. Expose it beyond the host only with
+MCP auth configured and an appropriate firewall or reverse proxy. To make the
+server reachable by name from another container stack (e.g. a chat client
+running in its own compose project), join that stack's external network instead
+— see the comment at the top of `docker-compose.yml`.
 
 ## Key Conventions
 

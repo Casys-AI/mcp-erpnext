@@ -1,0 +1,25 @@
+# Minimal standalone deployment. If this server needs to be reachable by name
+# from another container stack (e.g. a chat client running in its own
+# compose project), join that stack's network instead: replace the top-level
+# `networks:` block below with a reference to the existing external network,
+# and list it under `services.mcp-erpnext.networks`.
+services:
+  mcp-erpnext:
+    build: .
+    container_name: mcp-erpnext
+    restart: unless-stopped
+    ports:
+      # Loopback-only by default. Expose this beyond the host only with MCP auth
+      # configured and an appropriate firewall or reverse proxy.
+      - "127.0.0.1:7654:7654"
+    env_file: .env
+    healthcheck:
+      test: [
+        "CMD",
+        "deno",
+        "eval",
+        "const response = await fetch('http://127.0.0.1:7654/health'); if (!response.ok) Deno.exit(1);",
+      ]
+      interval: 30s
+      timeout: 10s
+      retries: 3

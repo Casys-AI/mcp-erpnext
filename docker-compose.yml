@@ -9,10 +9,17 @@ services:
     container_name: mcp-erpnext
     restart: unless-stopped
     ports:
-      - "7654:7654" # host:container — adjust the host side if 7654 is taken
+      # Loopback-only by default. Expose this beyond the host only with MCP auth
+      # configured and an appropriate firewall or reverse proxy.
+      - "127.0.0.1:7654:7654"
     env_file: .env
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7654/health"]
+      test: [
+        "CMD",
+        "deno",
+        "eval",
+        "const response = await fetch('http://127.0.0.1:7654/health'); if (!response.ok) Deno.exit(1);",
+      ]
       interval: 30s
       timeout: 10s
       retries: 3

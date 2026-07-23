@@ -55,34 +55,37 @@ function unquote(value: string): string {
   return value;
 }
 
+function optionalEnvValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? unquote(trimmed) : undefined;
+}
+
 /**
  * Read auth config from environment variables.
  * Returns null if no auth is configured (HTTP mode will warn).
  */
 export function loadAuthConfig(): AuthConfig | null {
-  const single = env("MCP_AUTH_TOKEN");
+  const single = optionalEnvValue(env("MCP_AUTH_TOKEN"));
   const multi = env("MCP_AUTH_TOKENS");
-  const jwksUrl = env("MCP_OAUTH_JWKS_URL");
+  const jwksUrl = optionalEnvValue(env("MCP_OAUTH_JWKS_URL"));
 
   const tokens = new Set<string>();
-  if (single?.trim()) tokens.add(unquote(single.trim()));
+  if (single) tokens.add(single);
   if (multi) {
     for (const t of multi.split(",")) {
-      const trimmed = t.trim();
-      if (trimmed) tokens.add(unquote(trimmed));
+      const token = optionalEnvValue(t);
+      if (token) tokens.add(token);
     }
   }
 
   if (tokens.size === 0 && !jwksUrl) return null;
 
-  const resource = env("MCP_AUTH_RESOURCE");
-
   return {
     tokens,
-    resource: resource?.trim() ? unquote(resource.trim()) : undefined,
-    jwksUrl: jwksUrl?.trim() ? unquote(jwksUrl.trim()) : undefined,
-    audience: env("MCP_OAUTH_AUDIENCE")?.trim(),
-    issuer: env("MCP_OAUTH_ISSUER")?.trim(),
+    resource: optionalEnvValue(env("MCP_AUTH_RESOURCE")),
+    jwksUrl,
+    audience: optionalEnvValue(env("MCP_OAUTH_AUDIENCE")),
+    issuer: optionalEnvValue(env("MCP_OAUTH_ISSUER")),
   };
 }
 

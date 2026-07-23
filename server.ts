@@ -45,6 +45,7 @@ import {
 } from "./src/runtime.ts";
 import { buildAuthProvider, loadAuthConfig } from "./src/auth/config.ts";
 import { warmCache } from "./src/cache/warm.ts";
+import { resourceMetadataRoute } from "./src/auth/resource-metadata-route.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
 
@@ -84,6 +85,9 @@ async function main() {
   // provider is wired in there, not at startHttp() time.
   const authConfig = httpFlag ? loadAuthConfig() : null;
   const authProvider = authConfig ? buildAuthProvider(authConfig) : undefined;
+  const authMetadataRoute = authProvider
+    ? resourceMetadataRoute(authProvider)
+    : undefined;
 
   // Initialize tools client
   const toolsClient = new ErpNextToolsClient(
@@ -190,6 +194,7 @@ async function main() {
       port: httpPort,
       hostname,
       cors: true,
+      customRoutes: authMetadataRoute ? [authMetadataRoute] : undefined,
       onListen: (info: { hostname: string; port: number }) => {
         console.error(
           `[mcp-erpnext] HTTP server listening${

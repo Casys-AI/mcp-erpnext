@@ -76,10 +76,12 @@ Deno.test("loadAuthConfig: strips surrounding single quotes from MCP_AUTH_TOKENS
   assertEquals(config?.tokens.size, 2);
 });
 
-Deno.test("loadAuthConfig: strips quotes from MCP_OAUTH_JWKS_URL and MCP_AUTH_RESOURCE", () => {
+Deno.test("loadAuthConfig: strips quotes from OAuth config values", () => {
   using _ = withEnv({
     MCP_OAUTH_JWKS_URL: '"https://auth.example.com/.well-known/jwks.json"',
     MCP_AUTH_RESOURCE: '"https://mcp.example.com"',
+    MCP_OAUTH_AUDIENCE: '"mcp-erpnext"',
+    MCP_OAUTH_ISSUER: '"https://auth.example.com"',
   });
   const config = loadAuthConfig();
   assertEquals(
@@ -87,6 +89,8 @@ Deno.test("loadAuthConfig: strips quotes from MCP_OAUTH_JWKS_URL and MCP_AUTH_RE
     "https://auth.example.com/.well-known/jwks.json",
   );
   assertEquals(config?.resource, "https://mcp.example.com");
+  assertEquals(config?.audience, "mcp-erpnext");
+  assertEquals(config?.issuer, "https://auth.example.com");
 });
 
 // ── buildAuthProvider ─────────────────────────────────────────────────────────
@@ -160,6 +164,20 @@ Deno.test("buildAuthProvider: combines static tokens and OAuth into a CompositeA
     resource: "https://mcp.example.com",
   });
   assertEquals(provider instanceof CompositeAuthProvider, true);
+});
+
+Deno.test("buildAuthProvider: composite advertises the OIDC authorization server", () => {
+  const provider = buildAuthProvider({
+    tokens: new Set(["secret-1"]),
+    jwksUrl: "https://auth.example.com/.well-known/jwks.json",
+    issuer: "https://auth.example.com",
+    audience: "mcp-erpnext",
+    resource: "https://mcp.example.com",
+  });
+
+  assertEquals(provider.getResourceMetadata().authorization_servers, [
+    "https://auth.example.com/",
+  ]);
 });
 
 Deno.test("buildAuthProvider: composite accepts a valid static token without touching the network", async () => {

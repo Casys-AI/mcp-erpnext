@@ -30,6 +30,12 @@ Token validation happens in-process — `@casys/mcp-server` fetches your
 provider's public keys once and caches them. No credentials are stored — only
 the token's signature and claims are verified.
 
+The canonical Streamable HTTP endpoint is `/mcp`. Set `MCP_AUTH_RESOURCE` to
+that exact public URL (for example, `https://mcp.example.com/mcp`). The server
+also publishes the matching RFC 9728 metadata at
+`/.well-known/oauth-protected-resource/mcp`; make sure a reverse proxy forwards
+that path too.
+
 ---
 
 ## Environment variables
@@ -42,8 +48,8 @@ MCP_OAUTH_JWKS_URL=https://your-idp/.well-known/jwks.json
 MCP_OAUTH_AUDIENCE=mcp-erpnext
 MCP_OAUTH_ISSUER=https://your-idp
 
-# Required for any auth mode — an absolute URL identifying this server (RFC 9728)
-MCP_AUTH_RESOURCE=https://mcp.example.com
+# Required for any auth mode — the exact public MCP endpoint URL (RFC 9728)
+MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
 
 # You can keep static tokens alongside OAuth (both work simultaneously)
 # MCP_AUTH_TOKEN=your-static-token
@@ -72,7 +78,7 @@ MCP_AUTH_RESOURCE=https://mcp.example.com
    MCP_OAUTH_JWKS_URL=https://YOUR_DOMAIN.auth0.com/.well-known/jwks.json
    MCP_OAUTH_AUDIENCE=mcp-erpnext
    MCP_OAUTH_ISSUER=https://YOUR_DOMAIN.auth0.com/
-   MCP_AUTH_RESOURCE=https://mcp.example.com
+   MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
    ```
 
 ---
@@ -97,7 +103,7 @@ MCP_AUTH_RESOURCE=https://mcp.example.com
    MCP_OAUTH_JWKS_URL=https://keycloak.yourdomain.com/realms/erpnext/protocol/openid-connect/certs
    MCP_OAUTH_AUDIENCE=mcp-erpnext
    MCP_OAUTH_ISSUER=https://keycloak.yourdomain.com/realms/erpnext
-   MCP_AUTH_RESOURCE=https://mcp.example.com
+   MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
    ```
 
 5. Get a token for testing (client credentials flow):
@@ -126,7 +132,7 @@ MCP_AUTH_RESOURCE=https://mcp.example.com
    MCP_OAUTH_JWKS_URL=https://authentik.yourdomain.com/application/o/YOUR_APP_SLUG/jwks/
    MCP_OAUTH_AUDIENCE=mcp-erpnext
    MCP_OAUTH_ISSUER=https://authentik.yourdomain.com/application/o/YOUR_APP_SLUG/
-   MCP_AUTH_RESOURCE=https://mcp.example.com
+   MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
    ```
 
 ---
@@ -147,7 +153,7 @@ https://www.googleapis.com/oauth2/v3/certs
    MCP_OAUTH_JWKS_URL=https://www.googleapis.com/oauth2/v3/certs
    MCP_OAUTH_AUDIENCE=YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
    MCP_OAUTH_ISSUER=https://accounts.google.com
-   MCP_AUTH_RESOURCE=https://mcp.example.com
+   MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
    ```
 
 > **Note**: Google issues short-lived tokens. This works for user-delegated
@@ -191,7 +197,7 @@ curl -s http://localhost:7654/mcp \
 curl -sv http://localhost:7654/mcp -X POST \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"ping","id":1}'
-# Expect: HTTP 401 + WWW-Authenticate: Bearer realm="mcp-erpnext"
+# Expect: HTTP 401 + WWW-Authenticate: Bearer resource_metadata="…", error="missing_token"
 ```
 
 ---
@@ -254,7 +260,7 @@ MCP_OAUTH_AUDIENCE=mcp-erpnext
 MCP_OAUTH_ISSUER=https://your-idp
 
 # Required either way
-MCP_AUTH_RESOURCE=https://mcp.example.com
+MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
 ```
 
 A request is accepted if it passes **either** check — internally,
@@ -265,11 +271,11 @@ to the OAuth JWT provider.
 
 ## Troubleshooting
 
-| Symptom                                        | Likely cause                        | Fix                                                                                                  |
-| ---------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `401` with a valid-looking token               | Wrong audience or issuer claim      | Check `MCP_OAUTH_AUDIENCE` matches the `aud` claim in the JWT (decode at jwt.io)                     |
-| `401` with `JWTExpired` in logs                | Token has expired                   | Re-issue a fresh token; for service accounts use a longer expiry                                     |
-| `401` on every request                         | JWKS URL unreachable from container | Run `docker exec mcp-erpnext curl YOUR_JWKS_URL` to verify network access                            |
-| Startup throws `MCP_AUTH_RESOURCE is required` | Resource URL missing                | Set `MCP_AUTH_RESOURCE` to this server's public URL — required for both static token and OAuth modes |
-| Server logs show no auth mode                  | Env vars not loaded                 | Check `.env` file path and `docker compose logs` for startup message                                 |
-| Both static + OAuth returning 401              | Whitespace in token                 | Trim leading/trailing spaces in `.env` values                                                        |
+| Symptom                                        | Likely cause                        | Fix                                                                                                                   |
+| ---------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `401` with a valid-looking token               | Wrong audience or issuer claim      | Check `MCP_OAUTH_AUDIENCE` matches the `aud` claim in the JWT (decode at jwt.io)                                      |
+| `401` with `JWTExpired` in logs                | Token has expired                   | Re-issue a fresh token; for service accounts use a longer expiry                                                      |
+| `401` on every request                         | JWKS URL unreachable from container | Run `docker exec mcp-erpnext deno eval "console.log((await fetch('YOUR_JWKS_URL')).status)"` to verify network access |
+| Startup throws `MCP_AUTH_RESOURCE is required` | Resource URL missing                | Set `MCP_AUTH_RESOURCE` to the exact public MCP endpoint URL (normally `https://host/mcp`) — required for both modes  |
+| Server logs show no auth mode                  | Env vars not loaded                 | Check `.env` file path and `docker compose logs` for startup message                                                  |
+| Both static + OAuth returning 401              | Whitespace in token                 | Trim leading/trailing spaces in `.env` values                                                                         |

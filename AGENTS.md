@@ -275,10 +275,12 @@ no separate proxy or listener. Two combinable modes:
   `MCP_OAUTH_ISSUER` (all required), via `createOIDCAuthProvider`. See
   `docs/oauth-setup.md`.
 
-Both modes also require `MCP_AUTH_RESOURCE` — an absolute URL identifying this
-server (RFC 9728), e.g. `https://mcp.example.com`. `buildAuthProvider()` throws
-a targeted error naming the missing var if a mode is partially configured,
-rather than silently accepting requests it can't verify.
+Both modes also require `MCP_AUTH_RESOURCE` — the exact public MCP endpoint URL
+(RFC 9728), normally `https://mcp.example.com/mcp`. The server also serves the
+path-qualified metadata URL that RFC 9728 derives from that endpoint. Ensure a
+reverse proxy forwards both paths. `buildAuthProvider()` throws a targeted error
+naming the missing var if a mode is partially configured, rather than silently
+accepting requests it can't verify.
 
 If both static tokens and OAuth are configured, `src/auth/composite-provider.ts`
 (`CompositeAuthProvider`) combines them — a token is accepted if either provider
@@ -456,10 +458,11 @@ still work, but `resolveViewerDistPath` finds nothing, each viewer logs
 Dockerfile change.
 
 `docker-compose.yml` reads config from `.env` (not baked into the image) and
-exposes port 7654 for a standalone deployment. To make the server reachable by
-name from another container stack (e.g. a chat client running in its own compose
-project), join that stack's external network instead — see the comment at the
-top of `docker-compose.yml`.
+binds port 7654 to `127.0.0.1` by default. Expose it beyond the host only with
+MCP auth configured and an appropriate firewall or reverse proxy. To make the
+server reachable by name from another container stack (e.g. a chat client
+running in its own compose project), join that stack's external network instead
+— see the comment at the top of `docker-compose.yml`.
 
 ## Key Conventions
 

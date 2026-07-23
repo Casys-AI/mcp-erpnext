@@ -31,8 +31,28 @@ export class CompositeAuthProvider extends AuthProvider {
     return null;
   }
 
-  /** Metadata from the first provider — used only for discovery, not enforcement. */
   getResourceMetadata(): ProtectedResourceMetadata {
-    return this.providers[0].getResourceMetadata();
+    const metadata = this.providers.map((provider) =>
+      provider.getResourceMetadata()
+    );
+    const primary = metadata[0]!;
+    const scopesSupported = [
+      ...new Set(metadata.flatMap((item) => item.scopes_supported ?? [])),
+    ];
+
+    return {
+      ...primary,
+      authorization_servers: [
+        ...new Set(metadata.flatMap((item) => item.authorization_servers)),
+      ],
+      ...(scopesSupported.length > 0
+        ? { scopes_supported: scopesSupported }
+        : {}),
+      bearer_methods_supported: [
+        ...new Set(
+          metadata.flatMap((item) => item.bearer_methods_supported),
+        ),
+      ],
+    };
   }
 }

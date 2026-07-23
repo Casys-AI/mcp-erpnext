@@ -526,12 +526,15 @@ export const salesTools: ErpNextTool[] = [
       }
 
       // Fetch fresh doc — frappe.client.submit requires `modified` for optimistic locking
-      const doc = await ctx.client.get("Sales Order", input.name as string);
+      const doc = await ctx.client.get("Sales Order", input.name as string, {
+        skipCache: true,
+      });
       const docWithDoctype = { ...doc, doctype: "Sales Order" };
       const patchedDoc = withRoundedTotalFallback(docWithDoctype);
       const result = await ctx.client.callMethod("frappe.client.submit", {
         doc: patchedDoc,
       });
+      ctx.client.invalidate("Sales Order", input.name as string);
 
       const warnings = roundedTotalFallbackWarning(docWithDoctype, patchedDoc);
 
@@ -569,6 +572,7 @@ export const salesTools: ErpNextTool[] = [
         doctype: "Sales Order",
         name: input.name as string,
       });
+      ctx.client.invalidate("Sales Order", input.name as string);
 
       return {
         data: result,
@@ -800,12 +804,15 @@ export const salesTools: ErpNextTool[] = [
       }
 
       // Fetch fresh doc — frappe.client.submit requires `modified` for optimistic locking
-      const doc = await ctx.client.get("Sales Invoice", input.name as string);
+      const doc = await ctx.client.get("Sales Invoice", input.name as string, {
+        skipCache: true,
+      });
       const docWithDoctype = { ...doc, doctype: "Sales Invoice" };
       const patchedDoc = withRoundedTotalFallback(docWithDoctype);
       const result = await ctx.client.callMethod("frappe.client.submit", {
         doc: patchedDoc,
       });
+      ctx.client.invalidate("Sales Invoice", input.name as string);
 
       const warnings = roundedTotalFallbackWarning(docWithDoctype, patchedDoc);
 

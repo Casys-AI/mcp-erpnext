@@ -28,6 +28,7 @@ function makeMockClient(overrides: Record<string, AnyFn> = {}): FrappeClient {
     update: async () => ({ name: "TEST-001" }),
     delete: async () => {},
     callMethod: async () => null,
+    invalidate: () => {},
     ...overrides,
   };
   return mock as unknown as FrappeClient;
@@ -278,4 +279,105 @@ Deno.test("erpnext_quotation_create - resolves party_name before building the cr
   );
 
   assertEquals(createdData.party_name, "CUST-042");
+});
+
+// ── erpnext_sales_order_submit / erpnext_sales_invoice_submit ────────────────
+
+Deno.test("erpnext_sales_order_submit - disables rounded total when base_rounded_total is null (fresh instance)", async () => {
+  let submittedDoc: Record<string, unknown> = {};
+  let skipCache: boolean | undefined;
+  let invalidated: [string, string | undefined] | undefined;
+  const mockClient = makeMockClient({
+    get: async (
+      _doctype: string,
+      _name: string,
+      opts?: { skipCache?: boolean },
+    ) => {
+      skipCache = opts?.skipCache;
+      return {
+        name: "SO-001",
+        base_rounded_total: null,
+        modified: "2026-01-01 00:00:00",
+      };
+    },
+    callMethod: async (
+      _method: string,
+      args: { doc: Record<string, unknown> },
+    ) => {
+      submittedDoc = args.doc;
+      return { name: "SO-001", docstatus: 1 };
+    },
+    invalidate: (doctype: string, name?: string) => {
+      invalidated = [doctype, name];
+    },
+  });
+
+  const tool = getTool("erpnext_sales_order_submit");
+  const result = await tool.handler(
+    { name: "SO-001" },
+    makeCtx(mockClient),
+  ) as Record<string, unknown>;
+
+  assertEquals(submittedDoc.disable_rounded_total, 1);
+  assertEquals((result.warnings as string[]).length, 1);
+  assertEquals(skipCache, true);
+  assertEquals(invalidated, ["Sales Order", "SO-001"]);
+});
+
+Deno.test("erpnext_sales_invoice_submit - disables rounded total when base_rounded_total is null (fresh instance)", async () => {
+  let submittedDoc: Record<string, unknown> = {};
+  let skipCache: boolean | undefined;
+  let invalidated: [string, string | undefined] | undefined;
+  const mockClient = makeMockClient({
+    get: async (
+      _doctype: string,
+      _name: string,
+      opts?: { skipCache?: boolean },
+    ) => {
+      skipCache = opts?.skipCache;
+      return {
+        name: "SINV-001",
+        base_rounded_total: null,
+        modified: "2026-01-01 00:00:00",
+      };
+    },
+    callMethod: async (
+      _method: string,
+      args: { doc: Record<string, unknown> },
+    ) => {
+      submittedDoc = args.doc;
+      return { name: "SINV-001", docstatus: 1 };
+    },
+    invalidate: (doctype: string, name?: string) => {
+      invalidated = [doctype, name];
+    },
+  });
+
+  const tool = getTool("erpnext_sales_invoice_submit");
+  const result = await tool.handler(
+    { name: "SINV-001" },
+    makeCtx(mockClient),
+  ) as Record<string, unknown>;
+
+  assertEquals(submittedDoc.disable_rounded_total, 1);
+  assertEquals((result.warnings as string[]).length, 1);
+  assertEquals(skipCache, true);
+  assertEquals(invalidated, ["Sales Invoice", "SINV-001"]);
+});
+
+Deno.test("erpnext_sales_order_cancel - invalidates the cancelled document", async () => {
+  let invalidated: [string, string | undefined] | undefined;
+  const tool = getTool("erpnext_sales_order_cancel");
+
+  await tool.handler(
+    { name: "SO-001" },
+    makeCtx(makeMockClient({
+      callMethod: async () => ({ name: "SO-001", docstatus: 2 }),
+      invalidate: (doctype: string, name?: string) => {
+        invalidated = [doctype, name];
+      },
+    })),
+  );
+
+  assertEquals(invalidated, ["Sales Order", "SO-001"]);
 });

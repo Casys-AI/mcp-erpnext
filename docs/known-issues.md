@@ -77,26 +77,25 @@ called `app.callServerTool` without checking
 **Applied fix**: `handleSaveDetail` now fails explicitly with the same guard as
 card moves when the host does not support proxied server calls.
 
+### Fresh instance: `base_rounded_total = None` → TypeError
+
+**Historical symptom**: On a fresh ERPNext instance (without setup wizard),
+submitting a Sales Order/Invoice failed with `TypeError: abs(None)` in
+`validate_grand_total()`, because `base_rounded_total`/`rounded_total` stay
+`None` when the rounding configuration is not initialized.
+
+**Applied fix**: `withRoundedTotalFallback()` sets `disable_rounded_total: 1` on
+the pre-submit doc whenever `base_rounded_total` or `rounded_total` is `null`
+and it isn't already set:
+
+- `src/tools/submit-helpers.ts` — `withRoundedTotalFallback()`
+- `src/tools/operations.ts` — `erpnext_doc_submit`
+- `src/tools/sales.ts` — `erpnext_sales_order_submit`,
+  `erpnext_sales_invoice_submit`
+
 ---
 
 ## Open bugs
-
-### P0 — Fresh instance: `base_rounded_total = None` → TypeError
-
-**Symptom**: On a fresh ERPNext instance (without setup wizard), submitting a
-Sales Order/Invoice fails with `TypeError: abs(None)` in
-`validate_grand_total()`.
-
-**Cause**: ERPNext calculates `base_rounded_total` automatically but the field
-remains `None` if the rounding configuration is not initialized.
-
-**Current workaround**: Pass `disable_rounded_total: 1` in the document before
-submit.
-
-**Desired fix**: Either do it automatically in the submit handlers when the
-field is `None`, or document that the ERPNext setup wizard is required.
-
----
 
 ### ~~RuntimeError: `Deno is not defined` on Node.js~~ — fixed in 2.4.0
 

@@ -22,6 +22,8 @@
 import type {
   FrappeDoc,
   FrappeDocResponse,
+  FrappeFile,
+  FrappeFileUploadInput,
   FrappeListOptions,
   FrappeListResponse,
   FrappeMethodResponse,
@@ -60,6 +62,8 @@ export interface FrappeClientConfig {
   apiSecret: string;
   /** Request timeout in ms. Default: 30000 */
   timeoutMs?: number;
+  /** Maximum decoded file upload size in bytes. Default: 10 MiB. */
+  maxUploadBytes?: number;
   /**
    * Number of retry attempts on retryable failures (default: 3).
    * Set to 0 to disable retries entirely.
@@ -95,6 +99,44 @@ export interface FrappeClientConfig {
 
 const DEFAULT_RETRY_STATUSES = [408, 429, 502, 503, 504];
 const DEFAULT_RETRY_METHODS = ["GET"];
+const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function decodeBase64File(contentBase64: string, maxBytes: number): Uint8Array {
+  if (contentBase64.length === 0) {
+    throw new Error("[FrappeClient] File content must not be empty");
+  }
+
+  const unpadded = contentBase64.replace(/=+$/, "");
+  const padding = contentBase64.slice(unpadded.length);
+  if (
+    !/^[A-Za-z0-9+/]+$/.test(unpadded) ||
+    !/^={0,2}$/.test(padding) ||
+    unpadded.length % 4 === 1
+  ) {
+    throw new Error("[FrappeClient] File content must be valid base64");
+  }
+
+  const decodedSize = Math.floor(unpadded.length * 6 / 8);
+  if (decodedSize > maxBytes) {
+    throw new Error(
+      `[FrappeClient] Decoded file size ${decodedSize} bytes exceeds the ${maxBytes}-byte upload limit`,
+    );
+  }
+
+  const normalized = unpadded + "=".repeat((4 - unpadded.length % 4) % 4);
+  let binary: string;
+  try {
+    binary = atob(normalized);
+  } catch {
+    throw new Error("[FrappeClient] File content must be valid base64");
+  }
+
+  if (binary.length === 0) {
+    throw new Error("[FrappeClient] File content must not be empty");
+  }
+
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
 
 /**
  * Error thrown when a Frappe REST API request fails.
@@ -189,6 +231,7 @@ export class FrappeClient {
   private baseUrl: string;
   private authHeader: string;
   private timeoutMs: number;
+  private maxUploadBytes: number;
   private retries: number;
   private retryStatuses: number[];
   private retryBackoffMs: number;
@@ -199,6 +242,12 @@ export class FrappeClient {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
     this.authHeader = `token ${config.apiKey}:${config.apiSecret}`;
     this.timeoutMs = config.timeoutMs ?? 30_000;
+    this.maxUploadBytes = config.maxUploadBytes ?? DEFAULT_MAX_UPLOAD_BYTES;
+    if (!Number.isInteger(this.maxUploadBytes) || this.maxUploadBytes <= 0) {
+      throw new Error(
+        "[FrappeClient] maxUploadBytes must be a positive integer",
+      );
+    }
     this.retries = config.retries ?? 3;
     this.retryStatuses = config.retryStatuses ?? DEFAULT_RETRY_STATUSES;
     this.retryBackoffMs = config.retryBackoffMs ?? 200;
@@ -208,12 +257,15 @@ export class FrappeClient {
 
   // ── Private HTTP helpers ────────────────────────────────────────────────────
 
-  private buildHeaders(): HeadersInit {
-    return {
+  private buildHeaders(includeJsonContentType = true): HeadersInit {
+    const headers: Record<string, string> = {
       "Authorization": this.authHeader,
       "Accept": "application/json",
-      "Content-Type": "application/json",
     };
+    if (includeJsonContentType) {
+      headers["Content-Type"] = "application/json";
+    }
+    return headers;
   }
 
   /**
@@ -242,11 +294,12 @@ export class FrappeClient {
     method: string,
     path: string,
     body?: unknown,
+    multipart = false,
   ): Promise<T> {
     let lastError: unknown;
     for (let attempt = 0; attempt <= this.retries; attempt++) {
       try {
-        return await this.requestOnce<T>(method, path, body);
+        return await this.requestOnce<T>(method, path, body, multipart);
       } catch (err) {
         lastError = err;
         if (
@@ -268,6 +321,7 @@ export class FrappeClient {
     method: string,
     path: string,
     body?: unknown,
+    multipart = false,
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const controller = new AbortController();
@@ -277,8 +331,12 @@ export class FrappeClient {
     try {
       response = await fetch(url, {
         method,
-        headers: this.buildHeaders(),
-        body: body !== undefined ? JSON.stringify(body) : undefined,
+        headers: this.buildHeaders(!multipart),
+        body: body === undefined
+          ? undefined
+          : multipart
+          ? body as BodyInit
+          : JSON.stringify(body),
         signal: controller.signal,
       });
     } catch (err) {
@@ -499,6 +557,63 @@ export class FrappeClient {
   }
 
   /**
+   * Upload file bytes and attach the native File document to another document.
+   * POST /api/method/upload_file
+   */
+  async uploadFile(input: FrappeFileUploadInput): Promise<FrappeFile> {
+    const fileName = input.fileName.trim();
+    const attachedToDoctype = input.attachedToDoctype.trim();
+    const attachedToName = input.attachedToName.trim();
+    const attachedToField = input.attachedToField?.trim();
+    if (!fileName || /[\\/\0]/.test(fileName)) {
+      throw new Error(
+        "[FrappeClient] fileName must be a filename without path separators",
+      );
+    }
+    if (!attachedToDoctype) {
+      throw new Error("[FrappeClient] attachedToDoctype must not be empty");
+    }
+    if (!attachedToName) {
+      throw new Error("[FrappeClient] attachedToName must not be empty");
+    }
+
+    const bytes = decodeBase64File(
+      input.contentBase64,
+      this.maxUploadBytes,
+    );
+    const fileBuffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(fileBuffer).set(bytes);
+    const form = new FormData();
+    form.append("file", new Blob([fileBuffer]), fileName);
+    form.append("doctype", attachedToDoctype);
+    form.append("docname", attachedToName);
+    if (attachedToField) {
+      form.append("fieldname", attachedToField);
+    }
+    form.append("is_private", input.isPrivate === false ? "0" : "1");
+
+    const res = await this.request<FrappeMethodResponse<FrappeFile>>(
+      "POST",
+      "/api/method/upload_file",
+      form,
+      true,
+    );
+    const file = res.message;
+    this.invalidate("File", file.name);
+    this.invalidate(attachedToDoctype, attachedToName);
+
+    // Frappe records fieldname on File but does not populate the target Attach
+    // field itself, so mirror the Desk uploader's second mutation here.
+    if (attachedToField) {
+      await this.update(attachedToDoctype, attachedToName, {
+        [attachedToField]: file.file_url,
+      });
+    }
+
+    return file;
+  }
+
+  /**
    * Call a whitelisted Frappe method.
    * POST /api/method/{method}
    */
@@ -532,6 +647,7 @@ export function getFrappeClient(): FrappeClient {
   const url = env("ERPNEXT_URL");
   const apiKey = env("ERPNEXT_API_KEY");
   const apiSecret = env("ERPNEXT_API_SECRET");
+  const maxUploadBytesRaw = env("ERPNEXT_MAX_UPLOAD_BYTES");
 
   if (!url) {
     throw new Error(
@@ -551,11 +667,14 @@ export function getFrappeClient(): FrappeClient {
     apiKey,
     apiSecret,
     cache: getCache(),
+    maxUploadBytes: maxUploadBytesRaw?.trim()
+      ? Number(maxUploadBytesRaw)
+      : undefined,
   });
   return _client;
 }
 
 /** Override the singleton (useful for tests or dependency injection) */
-export function setFrappeClient(client: FrappeClient): void {
+export function setFrappeClient(client: FrappeClient | null): void {
   _client = client;
 }

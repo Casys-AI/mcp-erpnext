@@ -32,6 +32,38 @@ export interface FrappeDoc {
   [key: string]: unknown;
 }
 
+/** Native Frappe `File` document returned by the upload API. */
+export interface FrappeFile extends FrappeDoc {
+  /** Original uploaded filename. */
+  file_name: string;
+  /** Public or private URL assigned by Frappe. */
+  file_url: string;
+  /** 1 for private files, 0 for public files. */
+  is_private: 0 | 1;
+  /** DocType the file is attached to. */
+  attached_to_doctype?: string;
+  /** Document name the file is attached to. */
+  attached_to_name?: string;
+  /** Optional Attach/Attach Image field receiving the file. */
+  attached_to_field?: string;
+}
+
+/** Input for Frappe's native multipart file upload endpoint. */
+export interface FrappeFileUploadInput {
+  /** Filename only, without a local path. */
+  fileName: string;
+  /** Standard base64-encoded file bytes. */
+  contentBase64: string;
+  /** Target document's DocType. */
+  attachedToDoctype: string;
+  /** Target document's name/ID. */
+  attachedToName: string;
+  /** Optional Attach/Attach Image field on the target document. */
+  attachedToField?: string;
+  /** Whether Frappe should store the file privately. Defaults to true. */
+  isPrivate?: boolean;
+}
+
 /** Frappe list API response wrapper. Returned by `GET /api/resource/{doctype}`. */
 export interface FrappeListResponse<T extends FrappeDoc = FrappeDoc> {
   /** Array of documents matching the query */

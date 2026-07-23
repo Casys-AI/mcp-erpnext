@@ -1,6 +1,6 @@
 # ERPNext MCP Library - Coverage
 
-## Covered (123 tools, 14 categories)
+## Covered (124 tools, 14 categories)
 
 ### Sales (17 tools)
 
@@ -199,7 +199,8 @@
 
 ## Available Operations (Generic)
 
-The `operations.ts` tools provide generic CRUD for any ERPNext DocType:
+The `operations.ts` tools provide generic CRUD and native file uploads for any
+ERPNext DocType:
 
 | Operation    | Tool                   | Notes                                                   |
 | ------------ | ---------------------- | ------------------------------------------------------- |
@@ -212,6 +213,9 @@ The `operations.ts` tools provide generic CRUD for any ERPNext DocType:
 | **List**     | `erpnext_doc_list`     | Full control: fields, filters, limit, order_by          |
 | **Assign**   | `erpnext_doc_assign`   | Add a native assignment (ToDo) to a user                |
 | **Unassign** | `erpnext_doc_unassign` | Remove a user's native assignment                       |
+
+| **Upload** | `erpnext_file_upload` | Attach base64 bytes as a native private
+File by default |
 
 Specific DocTypes also have dedicated submit/cancel tools:
 `erpnext_sales_order_submit/cancel`, `erpnext_sales_invoice_submit`.
@@ -299,7 +303,7 @@ Specific DocTypes also have dedicated submit/cancel tools:
 - **Linked document chains**: No tool to follow Sales Order → Delivery Note →
   Sales Invoice automatically
 - **Print format**: No tool to get printable HTML/PDF
-- **File attachments**: No upload/download support
+- **File attachments**: No download support
 - **Custom fields**: Work via Frappe REST but not documented/tested
 - **Amend**: Frappe amend workflow not implemented
 - **Get Report**: `callMethod()` exists but no report-specific tool

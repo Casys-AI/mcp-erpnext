@@ -1,4 +1,4 @@
-# Tools Reference (123)
+# Tools Reference (124)
 
 Full reference for all ERPNext MCP tools. See [README](../README.md) for
 overview.
@@ -153,7 +153,7 @@ overview.
 | `erpnext_asset_maintenance_get`  | Asset Maintenance | Get with maintenance tasks                            |
 | `erpnext_asset_category_list`    | Asset Category    | List all categories                                   |
 
-## Generic Operations (9) → doclist-viewer
+## Generic Operations (10) → doclist-viewer
 
 | Tool                   | Operation | Notes                                             |
 | ---------------------- | --------- | ------------------------------------------------- |
@@ -166,6 +166,14 @@ overview.
 | `erpnext_doc_cancel`   | Cancel    | Any submitted document                            |
 | `erpnext_doc_assign`   | Assign    | Native assignment (ToDo + notification) to users  |
 | `erpnext_doc_unassign` | Unassign  | Remove one user's native assignment               |
+| `erpnext_file_upload`  | Upload    | Attach base64 data as a native File               |
+
+`erpnext_file_upload` requires `file_name`, `content_base64`,
+`attached_to_doctype`, and `attached_to_name`; `attached_to_field` is optional.
+Files are private by default (`is_private: false` makes them public), accept no
+local path or URL, are capped at 10 MiB decoded by default (override with
+positive-integer-byte `ERPNEXT_MAX_UPLOAD_BYTES`), require write permission on
+the DocType, and return native `File` metadata.
 
 ## Kanban (2) → kanban-viewer
 

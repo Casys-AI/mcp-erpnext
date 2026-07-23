@@ -8,7 +8,7 @@ English | [繁體中文](README.zh-TW.md)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **123 tools**
+MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **124 tools**
 across **14 categories**, with **7 interactive UI viewers**.
 
 Connect any MCP-compatible AI agent (Claude Desktop, Claude Code, VS Code
@@ -241,9 +241,9 @@ npm install
 node build-all.mjs
 ```
 
-## Tools (123)
+## Tools (124)
 
-123 tools across 14 categories. Each `_list` tool returns interactive results
+124 tools across 14 categories. Each `_list` tool returns interactive results
 via the doclist-viewer with row click, inline detail, and cross-viewer
 navigation.
 
@@ -260,8 +260,8 @@ navigation.
 - **Manufacturing** (7) — BOMs, Work Orders, and Job Cards.
 - **CRM** (8) — Leads, Opportunities, Contacts, and Campaigns.
 - **Assets** (8) — Assets, Movements, Maintenance records, and Categories.
-- **Operations** (9) — Generic CRUD and native assignment for any DocType
-  (`erpnext_doc_*`).
+- **Operations** (10) — Generic CRUD, native assignment, and file upload for any
+  DocType (`erpnext_doc_*`, `erpnext_file_upload`).
 - **Kanban** (2) — Read-write boards for Task, Opportunity, and Issue with
   drag-and-drop.
 - **Analytics** (17) — 11 analytics charts (bar, area, treemap, radar, scatter,
@@ -272,11 +272,12 @@ Full per-tool reference with parameters: [`docs/tools.md`](docs/tools.md).
 
 ## Environment Variables
 
-| Variable             | Required | Description                                                                                                   |
-| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
-| `ERPNEXT_URL`        | Yes      | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`) |
-| `ERPNEXT_API_KEY`    | Yes      | API Key from User Settings                                                                                    |
-| `ERPNEXT_API_SECRET` | Yes      | API Secret from User Settings                                                                                 |
+| Variable                   | Required | Description                                                                                                   |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_URL`              | Yes      | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`) |
+| `ERPNEXT_API_KEY`          | Yes      | API Key from User Settings                                                                                    |
+| `ERPNEXT_API_SECRET`       | Yes      | API Secret from User Settings                                                                                 |
+| `ERPNEXT_MAX_UPLOAD_BYTES` | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                 |
 
 ## Architecture
 
@@ -303,7 +304,7 @@ src/
     manufacturing.ts  # 7 manufacturing tools
     crm.ts            # 8 CRM tools
     assets.ts         # 8 asset tools
-    operations.ts     # 9 generic CRUD tools
+    operations.ts     # 10 generic operations tools
     setup.ts          # 3 company/setup tools
     kanban.ts         # 2 read-write kanban tools
     analytics.ts      # 17 analytics tools (charts, KPIs, funnel)

@@ -7,8 +7,13 @@
  * @module lib/erpnext/tests/api/frappe-client_test
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
-import { FrappeAPIError, FrappeClient } from "./frappe-client.ts";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  FrappeAPIError,
+  FrappeClient,
+  getFrappeClient,
+  setFrappeClient,
+} from "./frappe-client.ts";
 import { MemoryCache } from "../cache/memory.ts";
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -60,6 +65,22 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     retryBackoffMs: 1,
     ...overrides,
   });
+}
+
+function withEnv(
+  key: string,
+  value: string | undefined,
+  fn: () => void,
+) {
+  const original = Deno.env.get(key);
+  if (value === undefined) Deno.env.delete(key);
+  else Deno.env.set(key, value);
+  try {
+    fn();
+  } finally {
+    if (original === undefined) Deno.env.delete(key);
+    else Deno.env.set(key, original);
+  }
 }
 
 // ── Auth header ───────────────────────────────────────────────────────────────
@@ -202,6 +223,270 @@ Deno.test("FrappeClient.create() - sends POST with data", async () => {
   );
 
   globalThis.fetch = original;
+});
+
+// ── uploadFile() ─────────────────────────────────────────────────────────────
+
+Deno.test("FrappeClient.uploadFile() - sends native multipart attachment", async () => {
+  const requests: Array<{
+    url: string;
+    method: string;
+    headers: Headers;
+    body: FormData | string | undefined;
+  }> = [];
+  const original = globalThis.fetch;
+
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    requests.push({
+      url: url.toString(),
+      method: init?.method ?? "",
+      headers: new Headers(init?.headers),
+      body: init?.body as FormData | string | undefined,
+    });
+    if (requests.length === 2) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            name: "CRM-DEAL-0001",
+            proposal: "/private/files/proposal.pdf",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        message: {
+          doctype: "File",
+          name: "a1b2c3",
+          file_name: "proposal.pdf",
+          file_url: "/private/files/proposal.pdf",
+          is_private: 1,
+          attached_to_doctype: "CRM Deal",
+          attached_to_name: "CRM-DEAL-0001",
+          attached_to_field: "proposal",
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const client = makeClient();
+    const result = await client.uploadFile({
+      fileName: "proposal.pdf",
+      contentBase64: btoa("PDF bytes"),
+      attachedToDoctype: "CRM Deal",
+      attachedToName: "CRM-DEAL-0001",
+      attachedToField: "proposal",
+    });
+
+    const upload = requests[0];
+    assertEquals(new URL(upload.url).pathname, "/api/method/upload_file");
+    assertEquals(upload.method, "POST");
+    assertEquals(
+      upload.headers.get("authorization"),
+      "token test-key:test-secret",
+    );
+    assertEquals(upload.headers.get("accept"), "application/json");
+    assertEquals(upload.headers.has("content-type"), false);
+    if (!(upload.body instanceof FormData)) {
+      throw new Error("Expected FormData");
+    }
+    assertEquals(upload.body.get("doctype"), "CRM Deal");
+    assertEquals(upload.body.get("docname"), "CRM-DEAL-0001");
+    assertEquals(upload.body.get("fieldname"), "proposal");
+    assertEquals(upload.body.get("is_private"), "1");
+
+    const file = upload.body.get("file");
+    if (!(file instanceof File)) throw new Error("Expected multipart File");
+    assertEquals(file.name, "proposal.pdf");
+    assertEquals(await file.text(), "PDF bytes");
+
+    const fieldUpdate = requests[1];
+    assertEquals(
+      new URL(fieldUpdate.url).pathname,
+      "/api/resource/CRM%20Deal/CRM-DEAL-0001",
+    );
+    assertEquals(fieldUpdate.method, "PUT");
+    assertEquals(
+      JSON.parse(fieldUpdate.body as string),
+      { data: { proposal: "/private/files/proposal.pdf" } },
+    );
+    assertEquals(result.name, "a1b2c3");
+    assertEquals(result.file_url, "/private/files/proposal.pdf");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.uploadFile() - sends explicit public privacy", async () => {
+  let capturedBody: FormData | undefined;
+  const original = globalThis.fetch;
+
+  globalThis.fetch = async (
+    _url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    capturedBody = init?.body as FormData;
+    return new Response(
+      JSON.stringify({
+        message: {
+          name: "public-file",
+          file_name: "brochure.pdf",
+          file_url: "/files/brochure.pdf",
+          is_private: 0,
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const client = makeClient();
+    await client.uploadFile({
+      fileName: "brochure.pdf",
+      contentBase64: btoa("public"),
+      attachedToDoctype: "Lead",
+      attachedToName: "LEAD-0001",
+      isPrivate: false,
+    });
+
+    assertEquals(capturedBody?.get("is_private"), "0");
+    assertEquals(capturedBody?.has("fieldname"), false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.uploadFile() - rejects malformed or empty base64", async () => {
+  const client = makeClient();
+  const input = {
+    fileName: "proposal.pdf",
+    attachedToDoctype: "CRM Deal",
+    attachedToName: "CRM-DEAL-0001",
+  };
+
+  await assertRejects(
+    () => client.uploadFile({ ...input, contentBase64: "not-base64!" }),
+    Error,
+    "valid base64",
+  );
+  await assertRejects(
+    () => client.uploadFile({ ...input, contentBase64: "" }),
+    Error,
+    "must not be empty",
+  );
+});
+
+Deno.test("FrappeClient.uploadFile() - rejects decoded content over configured limit", async () => {
+  const client = makeClient({ maxUploadBytes: 2 });
+
+  await assertRejects(
+    () =>
+      client.uploadFile({
+        fileName: "proposal.pdf",
+        contentBase64: btoa("abc"),
+        attachedToDoctype: "CRM Deal",
+        attachedToName: "CRM-DEAL-0001",
+      }),
+    Error,
+    "exceeds",
+  );
+});
+
+Deno.test("FrappeClient - rejects a non-positive upload limit", () => {
+  assertThrows(
+    () => makeClient({ maxUploadBytes: 0 }),
+    Error,
+    "maxUploadBytes",
+  );
+});
+
+Deno.test("FrappeClient.uploadFile() - preserves Frappe permission errors", async () => {
+  const restore = mockFetch([
+    {
+      status: 403,
+      body: { message: "Not permitted", exc_type: "PermissionError" },
+    },
+  ]);
+
+  try {
+    const client = makeClient();
+    await assertRejects(
+      () =>
+        client.uploadFile({
+          fileName: "proposal.pdf",
+          contentBase64: btoa("PDF bytes"),
+          attachedToDoctype: "CRM Deal",
+          attachedToName: "CRM-DEAL-0001",
+        }),
+      FrappeAPIError,
+      "HTTP 403",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("FrappeClient.uploadFile() - invalidates File and target caches", async () => {
+  const restore = mockFetch([
+    { status: 200, body: { data: [{ name: "FILE-OLD" }] } },
+    { status: 200, body: { data: { name: "TASK-001", subject: "Before" } } },
+    {
+      status: 200,
+      body: {
+        message: {
+          name: "FILE-NEW",
+          file_name: "report.pdf",
+          file_url: "/private/files/report.pdf",
+          is_private: 1,
+        },
+      },
+    },
+    { status: 200, body: { data: [{ name: "FILE-NEW" }] } },
+    { status: 200, body: { data: { name: "TASK-001", subject: "After" } } },
+  ]);
+
+  try {
+    const client = makeClient({ cache: new MemoryCache() });
+    await client.list("File");
+    await client.get("Task", "TASK-001");
+    await client.uploadFile({
+      fileName: "report.pdf",
+      contentBase64: btoa("report"),
+      attachedToDoctype: "Task",
+      attachedToName: "TASK-001",
+    });
+
+    const files = await client.list("File");
+    const task = await client.get("Task", "TASK-001");
+    assertEquals(files[0].name, "FILE-NEW");
+    assertEquals(task.subject, "After");
+    assertEquals(callCountRef.current, 5);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("getFrappeClient() - treats a blank upload limit as unset", () => {
+  withEnv("ERPNEXT_URL", "http://localhost:8000", () => {
+    withEnv("ERPNEXT_API_KEY", "test-key", () => {
+      withEnv("ERPNEXT_API_SECRET", "test-secret", () => {
+        withEnv("ERPNEXT_MAX_UPLOAD_BYTES", "  ", () => {
+          setFrappeClient(null);
+          try {
+            assertEquals(getFrappeClient() instanceof FrappeClient, true);
+          } finally {
+            setFrappeClient(null);
+          }
+        });
+      });
+    });
+  });
 });
 
 // ── Error handling ────────────────────────────────────────────────────────────

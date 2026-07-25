@@ -1,6 +1,6 @@
 # ERPNext MCP Library - Coverage
 
-## Covered (124 tools, 14 categories)
+## Covered (125 tools, 14 categories)
 
 ### Sales (17 tools)
 
@@ -80,10 +80,11 @@
 | `erpnext_timesheet_list` | Timesheet | List + filters (employee, project, status)           | doclist-viewer |
 | `erpnext_timesheet_get`  | Timesheet | Get by name (with time log details)                  | -              |
 
-### Setup (3 tools)
+### Setup (4 tools)
 
 | Tool                     | DocType | Operations                                             | UI Viewer      |
 | ------------------------ | ------- | ------------------------------------------------------ | -------------- |
+| `erpnext_setup_check`    | —       | Check master-data prerequisites, report what's missing | -              |
 | `erpnext_user_list`      | User    | List assignable users (enabled System Users, search)   | doclist-viewer |
 | `erpnext_company_list`   | Company | List companies (name, abbr, currency, country)         | doclist-viewer |
 | `erpnext_company_create` | Company | Create company (name, abbr, currency, country, domain) | -              |

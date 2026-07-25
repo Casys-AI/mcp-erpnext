@@ -8,7 +8,7 @@ English | [繁體中文](README.zh-TW.md)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **124 tools**
+MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **125 tools**
 across **14 categories**, with **7 interactive UI viewers**.
 
 Connect any MCP-compatible AI agent (Claude Desktop, Claude Code, VS Code
@@ -243,7 +243,7 @@ node build-all.mjs
 
 ## Tools (124)
 
-124 tools across 14 categories. Each `_list` tool returns interactive results
+125 tools across 14 categories. Each `_list` tool returns interactive results
 via the doclist-viewer with row click, inline detail, and cross-viewer
 navigation.
 

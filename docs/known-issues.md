@@ -93,6 +93,48 @@ and it isn't already set:
 - `src/tools/sales.ts` — `erpnext_sales_order_submit`,
   `erpnext_sales_invoice_submit`
 
+### Setup prerequisites are now checkable
+
+**Historical symptom**: A fresh ERPNext instance requires master data before
+transactional documents can be created, and the failure only surfaced as a
+cryptic `MandatoryError` at create time. The full prerequisite chain is:
+
+1. Create Company
+2. Create Price Lists (Standard Selling, Standard Buying)
+3. Create Warehouses (or use the ones auto-created by Company)
+4. Create Item Groups if needed
+5. Create UOMs if non-standard (Nos, Kg, etc. exist by default)
+
+**Applied fix**: `erpnext_setup_check` (`src/tools/setup.ts`) probes all six
+prerequisites in one read-only call and returns, per prerequisite, an
+`ok`/`missing`/`error` status plus the exact tool call that creates what is
+missing. A probe that cannot run (permissions, network) is reported as `error`
+with its message preserved, and lands in `unverified` — it never silently reads
+as "present".
+
+### Frappe errors now carry a remediation hint
+
+**Historical symptom**: `FrappeAPIError` surfaced `exc_type` and
+`_server_messages`, but nothing told the calling agent what to do about them.
+`MandatoryError: selling_price_list` left the agent to guess whether the field
+belonged in the tool input or in instance master data.
+
+**Applied fix**: `src/api/error-hints.ts` maps `exc_type` (and, failing that,
+the HTTP status) to a one-sentence next step, which `FrappeAPIError` exposes as
+`.hint` / `.excType` and appends to `.message`:
+
+- `MandatoryError` — extracts the field names from all three shapes Frappe uses,
+  then routes: a master-data field points at `erpnext_setup_check`, a payload
+  field says to pass it in the tool input.
+- `TimestampMismatchError` — re-read with `{ skipCache: true }` and retry.
+- `DuplicateEntryError`, `LinkValidationError`, `LinkExistsError`,
+  `DoesNotExistError`, `PermissionError` — each mapped.
+- The `abs(None)` / `base_rounded_total` fresh-install crash is recognised by
+  message pattern.
+
+The hint is advisory and additive: the original message is never rewritten or
+suppressed, and an unrecognised error gets no hint rather than a wrong guess.
+
 ---
 
 ## Open bugs
@@ -126,29 +168,6 @@ deno run -A npm:@casys/mcp-erpnext --http --port=3012
 ---
 
 ## Desired improvements
-
-### Setup wizard automation
-
-A fresh ERPNext instance requires master data before being able to create
-transactional documents. The tools `erpnext_company_create` and
-`erpnext_doc_create` now exist, but the full workflow is:
-
-1. Create Company
-2. Create Price Lists (Standard Selling, Standard Buying)
-3. Create Warehouses (or use the ones auto-created by Company)
-4. Create Item Groups if needed
-5. Create UOMs if non-standard (Nos, Kg, etc. exist by default)
-
-**Idea**: A tool `erpnext_setup_check` that checks that the prerequisites exist
-and returns what is missing.
-
-### Retry / error context enrichment
-
-When an operation fails (e.g.: MandatoryError), the handler could:
-
-1. Parse the Frappe error
-2. Return a structured message with the missing field
-3. Suggest the fix (e.g.: "Add selling_price_list field")
 
 ### Rate limits / throttling
 

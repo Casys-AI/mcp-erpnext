@@ -2,6 +2,29 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- **`erpnext_setup_check`** — a read-only diagnostic that verifies, in one call,
+  the master data a fresh instance needs before any transactional document can
+  be created: a Company, enabled selling and buying Price Lists, a leaf
+  Warehouse, an Item Group, and a UOM. Each prerequisite comes back as `ok` /
+  `missing` / `error` with the exact tool call that creates what is missing. A
+  prerequisite that cannot be read (permissions, network) is reported as `error`
+  and listed under `unverified` rather than passing as present. Tool count 124
+  → 125.
+- **Remediation hints on Frappe errors** — `FrappeAPIError` now exposes
+  `.excType` and `.hint`, and appends the hint to `.message`, so a failure tells
+  the calling agent what to do next instead of only what went wrong.
+  `MandatoryError` field names are extracted and routed: a master-data field
+  points at `erpnext_setup_check`, a payload field says to pass it in the tool
+  input. `TimestampMismatchError`, `DuplicateEntryError`, `LinkValidationError`,
+  `LinkExistsError`, `DoesNotExistError` and `PermissionError` are each mapped,
+  as is the `abs(None)` / `base_rounded_total` fresh-install crash. Additive
+  only: original messages are never rewritten, and an unrecognised error gets no
+  hint rather than a wrong guess.
+
 ## [2.6.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.5.0...v2.6.0) (2026-07-23)
 
 ### Features

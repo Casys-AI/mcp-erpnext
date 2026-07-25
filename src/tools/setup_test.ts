@@ -41,6 +41,155 @@ function getTool(name: string) {
   return tool;
 }
 
+// ── erpnext_setup_check ─────────────────────────────────────────────────────
+
+interface SetupCheckResult {
+  ready: boolean;
+  summary: string;
+  checks: Array<{
+    id: string;
+    label: string;
+    status: "ok" | "missing" | "error";
+    found?: number;
+    examples?: string[];
+    detail: string;
+    fix?: string;
+    error?: string;
+  }>;
+  missing: string[];
+  unverified: string[];
+}
+
+/**
+ * Mock `list` driven by a per-doctype table. The Price List probes are
+ * distinguished by their `selling`/`buying` filter, not by doctype.
+ */
+function makeSetupClient(
+  present: Record<string, boolean>,
+  onError?: (doctype: string) => Error | undefined,
+): FrappeClient {
+  return makeMockClient({
+    list: async (
+      doctype: string,
+      options: { filters?: FrappeFilterTuple[] },
+    ) => {
+      const failure = onError?.(doctype);
+      if (failure) throw failure;
+
+      let key = doctype;
+      if (doctype === "Price List") {
+        const selling = options.filters?.some((f) => f[0] === "selling");
+        key = selling ? "Price List:selling" : "Price List:buying";
+      }
+      return present[key] ? [{ name: `${key}-001` }] : [];
+    },
+  });
+}
+
+type FrappeFilterTuple = [string, string, unknown];
+
+const ALL_PRESENT: Record<string, boolean> = {
+  "Company": true,
+  "Price List:selling": true,
+  "Price List:buying": true,
+  "Warehouse": true,
+  "Item Group": true,
+  "UOM": true,
+};
+
+Deno.test("erpnext_setup_check - ready when every prerequisite is present", async () => {
+  const result = await getTool("erpnext_setup_check").handler(
+    {},
+    makeCtx(makeSetupClient(ALL_PRESENT)),
+  ) as unknown as SetupCheckResult;
+
+  assertEquals(result.ready, true);
+  assertEquals(result.missing, []);
+  assertEquals(result.unverified, []);
+  assertEquals(result.checks.length, 6);
+  assertEquals(result.checks.every((c) => c.status === "ok"), true);
+});
+
+Deno.test("erpnext_setup_check - reports missing prerequisites with a fix", async () => {
+  const result = await getTool("erpnext_setup_check").handler(
+    {},
+    makeCtx(makeSetupClient({
+      ...ALL_PRESENT,
+      "Price List:selling": false,
+      "Warehouse": false,
+    })),
+  ) as unknown as SetupCheckResult;
+
+  assertEquals(result.ready, false);
+  assertEquals(result.missing, ["selling_price_list", "warehouse"]);
+
+  const priceList = result.checks.find((c) => c.id === "selling_price_list")!;
+  assertEquals(priceList.status, "missing");
+  assertEquals(priceList.found, 0);
+  // The fix must name the tool the agent should call next.
+  assertEquals(priceList.fix?.startsWith("erpnext_doc_create("), true);
+});
+
+Deno.test("erpnext_setup_check - probes each doctype with the right filters", async () => {
+  const captured: Array<[string, FrappeFilterTuple[] | undefined]> = [];
+  await getTool("erpnext_setup_check").handler(
+    {},
+    makeCtx(makeMockClient({
+      list: async (
+        doctype: string,
+        options: { filters?: FrappeFilterTuple[] },
+      ) => {
+        captured.push([doctype, options.filters]);
+        return [{ name: "X" }];
+      },
+    })),
+  );
+
+  assertEquals(captured.map(([doctype]) => doctype), [
+    "Company",
+    "Price List",
+    "Price List",
+    "Warehouse",
+    "Item Group",
+    "UOM",
+  ]);
+  assertEquals(captured[1][1], [["selling", "=", 1], ["enabled", "=", 1]]);
+  assertEquals(captured[2][1], [["buying", "=", 1], ["enabled", "=", 1]]);
+  // Group warehouses cannot hold stock, so they must not satisfy the probe.
+  assertEquals(captured[3][1], [["is_group", "=", 0]]);
+});
+
+Deno.test("erpnext_setup_check - surfaces a failed probe without aborting the rest", async () => {
+  const result = await getTool("erpnext_setup_check").handler(
+    {},
+    makeCtx(makeSetupClient(
+      ALL_PRESENT,
+      (doctype) =>
+        doctype === "Warehouse"
+          ? new Error("PermissionError: not permitted")
+          : undefined,
+    )),
+  ) as unknown as SetupCheckResult;
+
+  assertEquals(result.ready, false);
+  assertEquals(result.unverified, ["warehouse"]);
+  assertEquals(result.missing, []);
+
+  const warehouse = result.checks.find((c) => c.id === "warehouse")!;
+  assertEquals(warehouse.status, "error");
+  // The underlying message is preserved verbatim, not swallowed.
+  assertEquals(warehouse.error, "PermissionError: not permitted");
+
+  // Every other probe still ran.
+  assertEquals(result.checks.filter((c) => c.status === "ok").length, 5);
+});
+
+Deno.test("erpnext_setup_check - is read-only and takes no input", () => {
+  const tool = getTool("erpnext_setup_check");
+  assertEquals(tool.annotations?.readOnlyHint, true);
+  assertEquals(tool.inputSchema.properties, {});
+});
+
 // ── erpnext_company_list ────────────────────────────────────────────────────
 
 Deno.test("erpnext_company_list - returns formatted result with _meta.ui", async () => {

@@ -32,6 +32,7 @@ import { env } from "../runtime.ts";
 import type { Cache } from "../cache/types.ts";
 import { MemoryCache } from "../cache/memory.ts";
 import { getCache, getCacheTtlMs } from "../cache/cache.ts";
+import { buildErrorHint } from "./error-hints.ts";
 
 /** Deterministic JSON.stringify — sorts object keys so equivalent options produce the same cache key. */
 function stableStringify(value: unknown): string {
@@ -156,6 +157,15 @@ function decodeBase64File(contentBase64: string, maxBytes: number): Uint8Array {
  * ```
  */
 export class FrappeAPIError extends Error {
+  /** Frappe's `exc_type` (e.g. `"MandatoryError"`), when the body carries one. */
+  public readonly excType?: string;
+  /**
+   * Actionable next step derived from `excType` and the message, appended to
+   * `message` so it reaches the calling agent. `undefined` when nothing
+   * specific is known — see `buildErrorHint`.
+   */
+  public readonly hint?: string;
+
   /**
    * @param message - Human-readable error description
    * @param status - HTTP status code (0 for network errors, 408 for timeouts)
@@ -170,8 +180,18 @@ export class FrappeAPIError extends Error {
     public readonly body: unknown,
     public readonly retryAfterMs?: number,
   ) {
-    super(`[FrappeClient] ${message} (HTTP ${status})`);
+    const excType = typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>).exc_type as string | undefined
+      : undefined;
+    const hint = buildErrorHint(excType, status, message);
+
+    super(
+      `[FrappeClient] ${message} (HTTP ${status})` +
+        (hint ? ` — ${hint}` : ""),
+    );
     this.name = "FrappeAPIError";
+    this.excType = excType;
+    this.hint = hint;
   }
 }
 

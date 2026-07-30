@@ -1,6 +1,6 @@
 # Migration: MCP specification 2026-07-28
 
-Verified against `@casys/mcp-server` 0.22.0 and this repository at 2.6.0 on
+Verified against `@casys/mcp-server` 0.22.0 and this repository at 3.0.0 on
 2026-07-30. Every claim below cites the source that establishes it; where the
 draft plan and the implementation disagreed, the implementation won.
 
@@ -95,7 +95,7 @@ a conformance one.
 ```diff
   const server = new McpApp({
     name: "mcp-erpnext",
-    version: "2.6.0",
+    version: "3.0.0",
 +   transport: "stateless",
     maxConcurrent: 10,
 ```
@@ -131,13 +131,22 @@ git commit --allow-empty -m "ci: retrigger — @casys/mcp-server ^0.23 now resol
 
 **This is a breaking change for clients, and the reason is easy to misread.**
 
-The stateless transport validates two `_meta` fields on _every_ request, before
-any method dispatch — `initialize` included (`mcp-app.ts:2158`):
+The stateless transport validates the request's `_meta` envelope before any
+method dispatch — `initialize` included. **What it requires depends on the
+framework version**, and the difference matters when writing a client:
 
-| Required in `params._meta`                   | If missing                                              |
-| -------------------------------------------- | ------------------------------------------------------- |
-| `io.modelcontextprotocol/protocolVersion`    | `-32602 Missing required field` + HTTP 400              |
-| `io.modelcontextprotocol/clientCapabilities` | same — and it must be an **object**, not merely present |
+| Field in `params._meta`                       | On `^0.22` (current pin)                     | On `^0.23`                          |
+| --------------------------------------------- | -------------------------------------------- | ----------------------------------- |
+| `io.modelcontextprotocol/protocolVersion`     | **required** — `-32602` + HTTP 400 if absent | required                            |
+| `io.modelcontextprotocol/clientCapabilities`  | not enforced                                 | required, and must be an **object** |
+| `MCP-Protocol-Version` / `Mcp-Method` headers | not enforced                                 | required                            |
+
+Verified against the resolved 0.22 build: a POST carrying only
+`protocolVersion`, with no headers at all, returns 200. A POST with an empty
+`_meta` returns 400 with `-32602`.
+
+So today the bar is exactly one field — but a client written against 2025-06-18
+sends none of them, so it is rejected on every call, not only on the handshake.
 
 A client written against 2025-06-18 sends neither, so it is rejected on every
 call, not only on the handshake.
@@ -266,15 +275,16 @@ the server.
 deno task serve   # deno run --allow-all server.ts --http --port=3012
 ```
 
-A `tools/list` call is the fastest smoke test. Four things are required of a
-2026-07-28 stateless request:
+A `tools/list` call is the fastest smoke test. On the current `^0.22` pin only
+the first line below is enforced; the rest are what `^0.23` will additionally
+require, so sending them now keeps the request valid across the bump:
 
-| Requirement                                                  | Value                       |
-| ------------------------------------------------------------ | --------------------------- |
-| `params._meta["io.modelcontextprotocol/protocolVersion"]`    | `"2026-07-28"`              |
-| `params._meta["io.modelcontextprotocol/clientCapabilities"]` | an object, `{}` is fine     |
-| `MCP-Protocol-Version` header                                | `"2026-07-28"`              |
-| `Mcp-Method` header                                          | mirrors the body's `method` |
+| Requirement                                                  | Value                       | Enforced on ^0.22 |
+| ------------------------------------------------------------ | --------------------------- | ----------------- |
+| `params._meta["io.modelcontextprotocol/protocolVersion"]`    | `"2026-07-28"`              | **yes**           |
+| `params._meta["io.modelcontextprotocol/clientCapabilities"]` | an object, `{}` is fine     | no                |
+| `MCP-Protocol-Version` header                                | `"2026-07-28"`              | no                |
+| `Mcp-Method` header                                          | mirrors the body's `method` | no                |
 
 ```sh
 curl -s -D - -X POST http://127.0.0.1:3012/mcp \
@@ -294,9 +304,12 @@ curl -s -D - -X POST http://127.0.0.1:3012/mcp \
   }'
 ```
 
-Expect `MCP-Protocol-Version: 2026-07-28` in the response headers, `resultType`
-and `_meta["io.modelcontextprotocol/serverInfo"]` in the result, and **no**
-`Mcp-Session-Id` — the stateless transport never emits one.
+Expect HTTP 200, a `result.tools` array, and **no** `Mcp-Session-Id` — the
+stateless transport never emits one.
+
+`resultType` and `_meta["io.modelcontextprotocol/serverInfo"]` are **not** in
+the result on `^0.22`; those envelope fields arrive with the `^0.23` bump.
+Asserting them today fails against a correctly configured server.
 
 ### Client compatibility — the check that actually matters
 

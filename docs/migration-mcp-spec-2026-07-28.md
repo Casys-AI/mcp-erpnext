@@ -5,7 +5,7 @@ Verified against `@casys/mcp-server` 0.22.0 and this repository at 2.6.0 on
 draft plan and the implementation disagreed, the implementation won.
 
 **Status as of 2026-07-30:** `transport: "stateless"` is implemented in
-`server.ts:99` on branch `feat/stateless-transport`. The framework's `transport`
+`server.ts:98` on branch `feat/stateless-transport`. The framework's `transport`
 option shipped in 0.22, so this change does NOT require a version bump. The
 `^0.22` pin is sufficient.
 
@@ -13,9 +13,9 @@ option shipped in 0.22, so this change does NOT require a version bump. The
 
 | Change                                                         | Action here                                                                                                                                         | Blocked?                                                              |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `transport: "stateless"` (`server.ts:99`)                      | **Done — and BREAKING.** Clients that do not send the `_meta` envelope lose access; warrants a major version. Works on the current `^0.22` pin.     | No                                                                    |
+| `transport: "stateless"` (`server.ts:98`)                      | **Done — and BREAKING.** Clients that do not send the `_meta` envelope lose access; warrants a major version. Works on the current `^0.22` pin.     | No                                                                    |
 | Bump `^0.22` → `^0.23` (`deno.json:59`)                        | Separate, optional — adds `resultType`/`serverInfo` in responses and enables MRTR+Tasks. NOT required for stateless transport itself.               | Yes — JSR 24h dependency-age window, resolvable ~2026-07-31 09:04 UTC |
-| `cache: { ttlMs, scope }` (`server.ts:99`)                     | Optional — cuts `tools/list` latency for frequent callers                                                                                           | No                                                                    |
+| `cache: { ttlMs, scope }` (`server.ts:98`)                     | Optional — cuts `tools/list` latency for frequent callers                                                                                           | No                                                                    |
 | Tasks extension                                                | Optional — no current handler justifies it                                                                                                          | No                                                                    |
 | Result envelope, routing headers, MRTR, `subscriptions/listen` | Nothing to do on `^0.22`; envelope fields (`resultType`, `serverInfo`) appear automatically once bumped to `^0.23`; other items not applicable here | —                                                                     |
 
@@ -29,13 +29,14 @@ the `initialize` handshake remains valid but is no longer required. `GET /mcp`
 returns `405` in stateless mode (`mcp-app.ts:1959`) — the long-lived SSE stream
 is replaced by `subscriptions/listen`.
 
-This server constructs `McpApp` without a `transport` option (`server.ts:98`),
-which selects the `"stateful"` default. The framework's own type documentation
-is blunt about what that costs: `"stateful"` _"advertises 2025-06-18 and
-negotiates nothing per-request, so it never carries the envelope"_
-(`types.ts:161`). A 2026-07-28 client therefore receives the legacy shape even
-after the version bump. This is the one change that is genuinely required, and
-the earlier draft was wrong to file it as "inherited from server".
+This server now passes `transport: "stateless"` explicitly (`server.ts:98`).
+Before that it passed no `transport` option at all, which selected the
+`"stateful"` default. The framework's own type documentation is blunt about what
+that costs: `"stateful"` _"advertises 2025-06-18 and negotiates nothing
+per-request, so it never carries the envelope"_ (`types.ts:161`). A 2026-07-28
+client therefore receives the legacy shape even after the version bump. This is
+the one change that is genuinely required, and the earlier draft was wrong to
+file it as "inherited from server".
 
 ### Result envelope (`resultType`)
 
@@ -89,7 +90,7 @@ a conformance one.
 
 ### 1. Switch the HTTP transport to stateless — **done** in `feat/stateless-transport`
 
-`server.ts:99` (formerly :98, line shifted by one after adding this line):
+`server.ts:98`:
 
 ```diff
   const server = new McpApp({

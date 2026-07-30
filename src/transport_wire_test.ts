@@ -207,3 +207,34 @@ Deno.test(
     );
   },
 );
+
+// ---------------------------------------------------------------------------
+// The tests above prove how the LIBRARY behaves in stateless mode. They build
+// their own McpApp, so they would pass even if server.ts reverted to stateful —
+// which is precisely the regression that matters here. This one closes that gap.
+// ---------------------------------------------------------------------------
+
+Deno.test("server.ts configures the stateless transport", async () => {
+  // A source assertion rather than a behavioural one, deliberately: server.ts
+  // exports nothing (everything lives in a non-exported main()), and starting it
+  // for real needs ERPNext credentials. Refactoring it to expose a testable
+  // builder would be the cleaner fix, but that is a larger change than the one
+  // this commit makes.
+  //
+  // What this catches: someone removing or flipping the option — the actual
+  // regression. What it does not catch: the option being present but ineffective.
+  // The wire tests above cover that half.
+  const source = await Deno.readTextFile(
+    new URL("../server.ts", import.meta.url),
+  );
+
+  assert(
+    /transport:\s*"stateless"/.test(source),
+    'server.ts must pass transport: "stateless" to McpApp — without it the ' +
+      "default is stateful, and @casys/mcp-server 0.24 removes that mode entirely",
+  );
+  assert(
+    !/transport:\s*"stateful"/.test(source),
+    "server.ts must not configure the stateful transport",
+  );
+});

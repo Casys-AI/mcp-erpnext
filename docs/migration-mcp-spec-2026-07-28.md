@@ -1,18 +1,23 @@
 # Migration: MCP specification 2026-07-28
 
-Verified against `@casys/mcp-server` 0.23.0 and this repository at 2.6.0 on
+Verified against `@casys/mcp-server` 0.22.0 and this repository at 2.6.0 on
 2026-07-30. Every claim below cites the source that establishes it; where the
 draft plan and the implementation disagreed, the implementation won.
 
+**Status as of 2026-07-30:** `transport: "stateless"` is implemented in
+`server.ts:99` on branch `feat/stateless-transport`. The framework's `transport`
+option shipped in 0.22, so this change does NOT require a version bump. The
+`^0.22` pin is sufficient.
+
 ## TL;DR
 
-| Change                                                         | Action here                                                                                                                                    | Blocked?                                                              |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Bump `^0.22` → `^0.23` (`deno.json:59`)                        | **Required** — nothing else reaches this server without it                                                                                     | Yes — JSR 24h dependency-age window, resolvable ~2026-07-31 09:04 UTC |
-| `transport: "stateless"` (`server.ts:98`)                      | **Required, same commit as the bump — and BREAKING.** Clients that do not send the 2026 `_meta` envelope lose access; warrants a major version | Depends on the bump                                                   |
-| `cache: { ttlMs, scope }` (`server.ts:98`)                     | Optional — cuts `tools/list` latency for frequent callers                                                                                      | No                                                                    |
-| Tasks extension                                                | Optional — no current handler justifies it                                                                                                     | No                                                                    |
-| Result envelope, routing headers, MRTR, `subscriptions/listen` | Nothing to do — handled by the framework, or not applicable here                                                                               | —                                                                     |
+| Change                                                         | Action here                                                                                                                                         | Blocked?                                                              |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `transport: "stateless"` (`server.ts:99`)                      | **Done — and BREAKING.** Clients that do not send the `_meta` envelope lose access; warrants a major version. Works on the current `^0.22` pin.     | No                                                                    |
+| Bump `^0.22` → `^0.23` (`deno.json:59`)                        | Separate, optional — adds `resultType`/`serverInfo` in responses and enables MRTR+Tasks. NOT required for stateless transport itself.               | Yes — JSR 24h dependency-age window, resolvable ~2026-07-31 09:04 UTC |
+| `cache: { ttlMs, scope }` (`server.ts:99`)                     | Optional — cuts `tools/list` latency for frequent callers                                                                                           | No                                                                    |
+| Tasks extension                                                | Optional — no current handler justifies it                                                                                                          | No                                                                    |
+| Result envelope, routing headers, MRTR, `subscriptions/listen` | Nothing to do on `^0.22`; envelope fields (`resultType`, `serverInfo`) appear automatically once bumped to `^0.23`; other items not applicable here | —                                                                     |
 
 ## What changed in 2026-07-28
 
@@ -82,50 +87,46 @@ a conformance one.
 
 ## Required work
 
-### 1. Bump the framework to `^0.23`
+### 1. Switch the HTTP transport to stateless — **done** in `feat/stateless-transport`
 
-`deno.json:59`:
+`server.ts:99` (formerly :98, line shifted by one after adding this line):
+
+```diff
+  const server = new McpApp({
+    name: "mcp-erpnext",
+    version: "2.6.0",
++   transport: "stateless",
+    maxConcurrent: 10,
+```
+
+The `transport` option is available from `@casys/mcp-server` **0.22**, which is
+the version already pinned in `deno.json`. **No version bump is required** for
+this change. The earlier draft of this document listed it as blocked on the
+^0.23 bump; that was wrong — the option shipped in 0.22, making this change
+immediately available.
+
+> **Note for the ^0.23 bump (future, optional):** once bumped, every result will
+> automatically carry `resultType: "complete"` and
+> `_meta["io.modelcontextprotocol/serverInfo"]` (added by `stampResult()` in the
+> framework). No server code needs to change for that. The bump also unlocks
+> MRTR and the Tasks extension, which are optional improvements described in the
+> section below.
+
+The diff to apply after the bump (when/if desired):
 
 ```diff
 -"@casys/mcp-server": "jsr:@casys/mcp-server@^0.22"
 +"@casys/mcp-server": "jsr:@casys/mcp-server@^0.23"
 ```
 
-In semver 0.x the caret locks the minor, so `^0.22` resolves to
-`>=0.22.0 <0.23.0` and 0.23.0 will never arrive on its own.
-
-**Blocked until ~2026-07-31 09:04 UTC.** Deno enforces a 24h minimum dependency
-age by default — a version published today cannot be resolved until tomorrow,
-and `deno.lock` is gitignored so CI cannot pre-seed the resolution. The failure
-is explicit:
-
-```
-A newer matching version was found, but it was not used because it was newer
-than the specified minimum dependency date of <T-24h>
-```
-
-This repository has hit this before: commit `496e336` ("ci: retrigger CI now
-that @casys/mcp-server@0.22.0 has cleared the minimum-dependency-age window").
-Follow that precedent — land the bump, wait out the window, then retrigger:
+After landing the bump, wait for the JSR 24h dependency-age window and retrigger
+CI (see commit `496e336` for precedent):
 
 ```sh
 git commit --allow-empty -m "ci: retrigger — @casys/mcp-server ^0.23 now resolvable"
 ```
 
-### 2. Switch the HTTP transport to stateless
-
-`server.ts:98`:
-
-```diff
-  const server = new McpApp({
-    name: "mcp-erpnext",
-    version: "2.6.0",
-    maxConcurrent: 10,
-    backpressureStrategy: "queue",
-    validateSchema: true,
-+   transport: "stateless",
-    auth: authProvider ? { provider: authProvider } : undefined,
-```
+### 2. The breaking change, in detail
 
 **This is a breaking change for clients, and the reason is easy to misread.**
 

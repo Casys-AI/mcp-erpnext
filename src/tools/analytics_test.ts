@@ -10,6 +10,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { assert, assertEquals } from "@std/assert";
+import { SchemaValidator } from "@casys/mcp-server";
 import { analyticsTools } from "./analytics.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
@@ -363,6 +364,63 @@ Deno.test("erpnext_product_radar - returns radar with auto-selected items", asyn
   assertEquals(result.datasets.length, 2);
   assertEquals(result.labels.length, 4); // 4 dimensions
   assertChartMeta(result);
+});
+
+Deno.test("erpnext_product_radar - the schema bounds the fan-out and still allows auto-select", () => {
+  // Exercised through the framework's validator against the tool's real schema,
+  // because that is the only place the bound lives — the handler holds no
+  // duplicate of it. Calling `tool.handler()` directly would bypass validation
+  // entirely and prove nothing about what a caller actually gets.
+  //
+  // The empty-array case is the one that matters most: it is the documented way
+  // to ask for auto-selection, so a lower bound on this array would reject a
+  // supported call as malformed. An earlier revision added `minItems: 2` and
+  // broke exactly that.
+  const validator = new SchemaValidator();
+  const tool = getTool("erpnext_product_radar");
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+
+  const items = (n: number) => ({
+    items: Array.from({ length: n }, (_, i) => `ITEM-${i}`),
+  });
+
+  assertEquals(
+    validator.validate(tool.name, items(9)).valid,
+    false,
+    "9 items must be rejected: each item costs one Bin query",
+  );
+  assertEquals(
+    validator.validate(tool.name, items(8)).valid,
+    true,
+    "8 is inside the contract",
+  );
+  assertEquals(
+    validator.validate(tool.name, { items: [] }).valid,
+    true,
+    "an empty array is the documented auto-select invocation",
+  );
+
+  // How that rejection is *worded* is the framework's contract, tested there.
+  // This asserts only what this repo owns: that the bound exists and that
+  // auto-selection stays reachable through it.
+});
+
+Deno.test("erpnext_product_radar - auto-select still works with no items given", async () => {
+  // Guards the behaviour the schema must keep reachable, end to end.
+  const mockClient = makeMockClient({
+    list: async (doctype: string, opts?: { limit?: number }) => {
+      if (doctype !== "Bin") return [];
+      return opts?.limit === 4
+        ? [{ item_code: "ITEM-A" }, { item_code: "ITEM-B" }]
+        : [{ actual_qty: 5, stock_value: 500 }];
+    },
+  });
+
+  const tool = getTool("erpnext_product_radar");
+  const result = await tool.handler({}, makeCtx(mockClient)) as any;
+
+  assertEquals(result.type, "radar");
+  assertEquals(result.datasets.length, 2);
 });
 
 // ── erpnext_price_vs_qty ────────────────────────────────────────────────────

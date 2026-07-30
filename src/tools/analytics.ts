@@ -15,6 +15,20 @@ import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { CHART_META, FUNNEL_META, KPI_META } from "./viewer-meta.ts";
 
+/**
+ * Upper bound on the item codes `erpnext_product_radar` will compare.
+ *
+ * Two reasons, and the readability one is the binding constraint: a radar chart
+ * with more than eight series is unreadable, and each item costs one Bin query.
+ *
+ * Enforced twice, and both are load-bearing. `maxItems` in the tool's
+ * `inputSchema` covers the MCP path, where the framework validates before the
+ * handler runs. But `ErpNextToolsClient.execute()` (`client.ts:167`) is an
+ * exported API that calls handlers directly, with no validator in between — so
+ * the schema alone leaves that path unbounded, and the handler checks too.
+ */
+const MAX_RADAR_ITEMS = 8;
+
 export const analyticsTools: ErpNextTool[] = [
   // ── Stock Chart ───────────────────────────────────────────────────────────
 
@@ -663,7 +677,7 @@ export const analyticsTools: ErpNextTool[] = [
     _meta: CHART_META,
     description: "Radar chart comparing items across multiple dimensions: " +
       "stock level, stock value, order frequency, and revenue. " +
-      "Pass 2-4 item codes to compare.",
+      "Pass 2-8 item codes to compare, or none to auto-select top items.",
     category: "analytics",
     inputSchema: {
       type: "object",
@@ -671,13 +685,28 @@ export const analyticsTools: ErpNextTool[] = [
         items: {
           type: "array",
           items: { type: "string" },
+          // No `minItems`: an empty array is the documented way to ask for
+          // auto-selection, and the schema is enforced before the handler runs.
+          // A lower bound here would reject that call as malformed.
+          maxItems: MAX_RADAR_ITEMS,
           description:
-            "2-4 item codes to compare. Leave empty for auto-select top items.",
+            "2-8 item codes to compare. Leave empty for auto-select top items.",
         },
       },
     },
     handler: async (input, ctx) => {
       let itemCodes = (input.items as string[]) ?? [];
+
+      // Not redundant with the schema's `maxItems`: this handler is also reached
+      // through `ErpNextToolsClient.execute()`, which invokes handlers directly
+      // and never validates. Without this, that path fans out to one Bin query
+      // per item with no ceiling. Rejects before any round-trip.
+      if (itemCodes.length > MAX_RADAR_ITEMS) {
+        throw new Error(
+          `erpnext_product_radar accepts at most ${MAX_RADAR_ITEMS} item codes, received ${itemCodes.length}. ` +
+            `A radar chart with more series is unreadable — compare in batches of ${MAX_RADAR_ITEMS} or fewer.`,
+        );
+      }
 
       // Auto-select top items if not provided
       if (itemCodes.length === 0) {
@@ -704,13 +733,22 @@ export const analyticsTools: ErpNextTool[] = [
       const dimensions = ["Stock Qty", "Stock Value", "Order Lines", "Revenue"];
       const raw: Record<string, number[]> = {};
 
-      // Stock data
-      for (const code of itemCodes) {
-        const bins = await ctx.client.list("Bin", {
-          fields: ["actual_qty", "stock_value"],
-          filters: [["item_code", "=", code]],
-          limit: 100,
-        });
+      // Stock data — one Bin query per item, issued together rather than in
+      // sequence. A per-item query (rather than a single `in` filter) is
+      // deliberate: `limit` then applies per item, so an item fragmented across
+      // many warehouses cannot be truncated by a sibling item's rows.
+      const binResults = await Promise.all(
+        itemCodes.map((code) =>
+          ctx.client.list("Bin", {
+            fields: ["actual_qty", "stock_value"],
+            filters: [["item_code", "=", code]],
+            limit: 100,
+          })
+        ),
+      );
+
+      itemCodes.forEach((code, i) => {
+        const bins = binResults[i];
         const totalQty = bins.reduce(
           (s, b) => s + (Number(b.actual_qty) || 0),
           0,
@@ -720,7 +758,7 @@ export const analyticsTools: ErpNextTool[] = [
           0,
         );
         raw[code] = [totalQty, totalVal, 0, 0];
-      }
+      });
 
       // Order data — fetch all, filter in memory (the item set can exceed a sane "in" filter size)
       const soItems = await ctx.client.list("Sales Order Item", {
@@ -1188,29 +1226,31 @@ export const analyticsTools: ErpNextTool[] = [
         ["docstatus", "!=", 2],
       ];
 
-      const leads = await ctx.client.list("Lead", {
-        fields: ["name"],
-        filters: leadFilters,
-        limit: 500,
-      });
-
-      const opps = await ctx.client.list("Opportunity", {
-        fields: ["name", "opportunity_amount"],
-        filters: txnFilters,
-        limit: 500,
-      });
-
-      const quots = await ctx.client.list("Quotation", {
-        fields: ["name", "grand_total"],
-        filters: submittedTxnFilters,
-        limit: 500,
-      });
-
-      const orders = await ctx.client.list("Sales Order", {
-        fields: ["name", "grand_total"],
-        filters: submittedTxnFilters,
-        limit: 500,
-      });
+      // The four funnel stages are independent queries — none feeds the next —
+      // so they go out together. Awaiting them in sequence cost four round-trips
+      // to Frappe for one tool call.
+      const [leads, opps, quots, orders] = await Promise.all([
+        ctx.client.list("Lead", {
+          fields: ["name"],
+          filters: leadFilters,
+          limit: 500,
+        }),
+        ctx.client.list("Opportunity", {
+          fields: ["name", "opportunity_amount"],
+          filters: txnFilters,
+          limit: 500,
+        }),
+        ctx.client.list("Quotation", {
+          fields: ["name", "grand_total"],
+          filters: submittedTxnFilters,
+          limit: 500,
+        }),
+        ctx.client.list("Sales Order", {
+          fields: ["name", "grand_total"],
+          filters: submittedTxnFilters,
+          limit: 500,
+        }),
+      ]);
 
       const stages = [
         {
@@ -1422,20 +1462,34 @@ export const analyticsTools: ErpNextTool[] = [
       const limit = (input.limit as number) ?? 10;
       const groupBy = (input.group_by as string) ?? "item";
 
-      // Fetch submitted Sales Invoice Items for revenue
-      const siItems = await ctx.client.list("Sales Invoice Item", {
-        fields: ["parent", "item_code", "item_name", "amount", "qty"],
-        filters: [["docstatus", "=", 1]],
-        limit: 500,
-        order_by: "amount desc",
-      });
-
-      // Fetch Bin for valuation_rate (cost per unit)
-      const bins = await ctx.client.list("Bin", {
-        fields: ["item_code", "valuation_rate"],
-        filters: [["valuation_rate", ">", 0]],
-        limit: 500,
-      });
+      // Revenue, cost and (when grouping by customer) the invoice→customer map
+      // are three independent queries. They go out together; the third is only
+      // requested when the grouping actually needs it, so the cheap path stays
+      // two queries rather than three.
+      const needsCustomers = groupBy === "customer";
+      const [siItems, bins, invoices] = await Promise.all([
+        // Submitted Sales Invoice Items for revenue
+        ctx.client.list("Sales Invoice Item", {
+          fields: ["parent", "item_code", "item_name", "amount", "qty"],
+          filters: [["docstatus", "=", 1]],
+          limit: 500,
+          order_by: "amount desc",
+        }),
+        // Bin for valuation_rate (cost per unit)
+        ctx.client.list("Bin", {
+          fields: ["item_code", "valuation_rate"],
+          filters: [["valuation_rate", ">", 0]],
+          limit: 500,
+        }),
+        // Invoices, to map parent invoice name to customer
+        needsCustomers
+          ? ctx.client.list("Sales Invoice", {
+            fields: ["name", "customer_name"],
+            filters: [["docstatus", "=", 1]],
+            limit: 500,
+          })
+          : Promise.resolve([]),
+      ]);
 
       const costMap: Record<string, number> = {};
       for (const bin of bins) {
@@ -1447,14 +1501,7 @@ export const analyticsTools: ErpNextTool[] = [
         );
       }
 
-      if (groupBy === "customer") {
-        // Fetch invoices to map parent invoice name to customer
-        const invoices = await ctx.client.list("Sales Invoice", {
-          fields: ["name", "customer_name"],
-          filters: [["docstatus", "=", 1]],
-          limit: 500,
-        });
-
+      if (needsCustomers) {
         const custMap: Record<string, string> = {};
         for (const inv of invoices) {
           custMap[inv.name as string] = (inv.customer_name as string) ??
@@ -1612,21 +1659,32 @@ export const analyticsTools: ErpNextTool[] = [
       );
       const startStr = startDate.toISOString().split("T")[0];
 
-      // Fetch Sales Orders (income) — submitted only
-      const salesOrders = await ctx.client.list("Sales Order", {
-        fields: ["grand_total", "transaction_date"],
-        filters: [["transaction_date", ">=", startStr], ["docstatus", "=", 1]],
-        limit: 1000,
-        order_by: "transaction_date asc",
-      });
-
-      // Fetch Purchase Orders (expenses) — submitted only
-      const purchaseOrders = await ctx.client.list("Purchase Order", {
-        fields: ["grand_total", "transaction_date"],
-        filters: [["transaction_date", ">=", startStr], ["docstatus", "=", 1]],
-        limit: 1000,
-        order_by: "transaction_date asc",
-      });
+      // Income and expenses are the same query against two doctypes, with no
+      // dependency between them — one round-trip instead of two.
+      const [salesOrders, purchaseOrders] = await Promise.all([
+        // Sales Orders (income) — submitted only
+        ctx.client.list("Sales Order", {
+          fields: ["grand_total", "transaction_date"],
+          filters: [["transaction_date", ">=", startStr], [
+            "docstatus",
+            "=",
+            1,
+          ]],
+          limit: 1000,
+          order_by: "transaction_date asc",
+        }),
+        // Purchase Orders (expenses) — submitted only
+        ctx.client.list("Purchase Order", {
+          fields: ["grand_total", "transaction_date"],
+          filters: [["transaction_date", ">=", startStr], [
+            "docstatus",
+            "=",
+            1,
+          ]],
+          limit: 1000,
+          order_by: "transaction_date asc",
+        }),
+      ]);
 
       // Build month labels
       const months: string[] = [];

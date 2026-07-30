@@ -1,5 +1,6 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { ErpNextToolsClient } from "./client.ts";
+import { type FrappeClient, setFrappeClient } from "./api/frappe-client.ts";
 
 // Note: Error handling previously tested here (isError wrapping) has been moved
 // to the server layer via toolErrorMapper in server.ts. Handlers now throw
@@ -81,5 +82,47 @@ Deno.test("buildHandlersMap - viewer tools return structuredContent", async () =
     assert(wrapped.structuredContent, "Should have structuredContent");
     assertEquals(wrapped.structuredContent.doctype, "Test");
     assert(wrapped._meta, "Should have _meta");
+  }
+});
+
+Deno.test("execute - bounded tools stay bounded on the direct-execution path", async () => {
+  // `execute()` calls handlers directly, with no schema validator in between.
+  // A bound declared only in `inputSchema` therefore protects the MCP route and
+  // leaves this exported API wide open — which is not theoretical: driving
+  // erpnext_product_radar through here with 200 item codes was observed to start
+  // 200 concurrent Bin queries against Frappe.
+  //
+  // The invariant is that the rejection happens before any round-trip, so this
+  // counts queries rather than merely asserting that it throws.
+  let queries = 0;
+  const mock = {
+    list: () => {
+      queries++;
+      return Promise.resolve([]);
+    },
+    get: () => Promise.resolve({ name: "X" }),
+    create: () => Promise.resolve({ name: "X" }),
+    update: () => Promise.resolve({ name: "X" }),
+    delete: () => Promise.resolve(),
+    callMethod: () => Promise.resolve(null),
+  } as unknown as FrappeClient;
+
+  setFrappeClient(mock);
+  try {
+    const client = new ErpNextToolsClient();
+    const tooMany = Array.from({ length: 200 }, (_, i) => `ITEM-${i}`);
+
+    await assertRejects(
+      () => client.execute("erpnext_product_radar", { items: tooMany }),
+      Error,
+    );
+    assertEquals(queries, 0, "must reject before issuing any Frappe query");
+
+    // The bound must not swallow the supported calls either.
+    queries = 0;
+    await client.execute("erpnext_product_radar", { items: [] });
+    assert(queries > 0, "auto-select still reaches Frappe");
+  } finally {
+    setFrappeClient(null);
   }
 });

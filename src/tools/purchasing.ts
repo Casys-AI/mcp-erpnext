@@ -10,7 +10,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
-import { resolveSupplier } from "../api/resolve.ts";
+import { resolveLink, resolveSupplier } from "../api/resolve.ts";
 
 export const purchasingTools: ErpNextTool[] = [
   // ── Suppliers ─────────────────────────────────────────────────────────────
@@ -268,7 +268,11 @@ export const purchasingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        supplier: { type: "string", description: "Supplier name (ID)" },
+        supplier: {
+          type: "string",
+          description:
+            "Supplier name or ID — a unique name resolves automatically",
+        },
         items: {
           type: "array",
           description: "Line items: [{item_code, qty, rate}]",
@@ -322,7 +326,15 @@ export const purchasingTools: ErpNextTool[] = [
           );
 
       const doc = await ctx.client.create("Purchase Order", {
-        supplier: input.supplier as string,
+        supplier: await resolveLink(
+          ctx.client,
+          "Supplier",
+          input.supplier as string,
+          "supplier_name",
+          // Write path: a fuzzy match here would attach the order to the wrong
+          // supplier, silently and irreversibly once submitted.
+          { allowPartialMatch: false },
+        ),
         items,
         schedule_date: (input.schedule_date as string) ?? undefined,
       });

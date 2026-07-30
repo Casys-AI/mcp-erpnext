@@ -9,7 +9,7 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
-import { resolveEmployee } from "../api/resolve.ts";
+import { resolveEmployee, resolveLink } from "../api/resolve.ts";
 
 export const hrTools: ErpNextTool[] = [
   // ── Employees ─────────────────────────────────────────────────────────────
@@ -82,7 +82,8 @@ export const hrTools: ErpNextTool[] = [
       properties: {
         name: {
           type: "string",
-          description: "Employee ID (e.g. HR-EMP-00001)",
+          description:
+            "Employee name or ID (e.g. HR-EMP-00001) — a unique name resolves automatically",
         },
       },
       required: ["name"],
@@ -287,7 +288,8 @@ export const hrTools: ErpNextTool[] = [
       properties: {
         employee: {
           type: "string",
-          description: "Employee ID (e.g. HR-EMP-00001)",
+          description:
+            "Employee name or ID (e.g. HR-EMP-00001) — a unique name resolves automatically",
         },
         leave_type: {
           type: "string",
@@ -322,7 +324,14 @@ export const hrTools: ErpNextTool[] = [
       }
 
       const data: Record<string, unknown> = {
-        employee: input.employee as string,
+        employee: await resolveLink(
+          ctx.client,
+          "Employee",
+          input.employee as string,
+          "employee_name",
+          // Write path — see purchasing.ts: no fuzzy matching on writes.
+          { allowPartialMatch: false },
+        ),
         leave_type: input.leave_type as string,
         from_date: input.from_date as string,
         to_date: input.to_date as string,
@@ -603,7 +612,8 @@ export const hrTools: ErpNextTool[] = [
       properties: {
         employee: {
           type: "string",
-          description: "Employee ID (e.g. HR-EMP-00001)",
+          description:
+            "Employee name or ID (e.g. HR-EMP-00001) — a unique name resolves automatically",
         },
         expenses: {
           type: "array",
@@ -651,7 +661,14 @@ export const hrTools: ErpNextTool[] = [
       >;
 
       const data: Record<string, unknown> = {
-        employee: input.employee as string,
+        employee: await resolveLink(
+          ctx.client,
+          "Employee",
+          input.employee as string,
+          "employee_name",
+          // Write path — see purchasing.ts: no fuzzy matching on writes.
+          { allowPartialMatch: false },
+        ),
         expenses: expenses.map((e) => ({
           expense_type: e.expense_type,
           amount: e.amount,

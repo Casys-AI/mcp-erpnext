@@ -148,6 +148,13 @@ Add to `.vscode/mcp.json`:
 
 ### HTTP mode
 
+> **Breaking in 3.0.0 — HTTP clients only.** The HTTP transport is now stateless
+> (MCP spec 2026-07-28). Every request must carry
+> `params._meta["io.modelcontextprotocol/protocolVersion"]`; clients that omit
+> it get HTTP 400. The official TypeScript SDK v1 line is affected. **stdio is
+> unaffected** — if you connect via `command`/`args` above, nothing changes. See
+> [the migration guide](docs/migration-mcp-spec-2026-07-28.md), or stay on 2.x.
+
 ```bash
 ERPNEXT_URL=http://localhost:8000 \
 ERPNEXT_API_KEY=xxx \

@@ -191,7 +191,13 @@ curl -s http://localhost:7654/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}'
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1,"params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
+
+# Note: the server uses the stateless transport, so every request must carry
+# `params._meta["io.modelcontextprotocol/protocolVersion"]`. The legacy
+# `initialize` shape with a top-level `protocolVersion` is rejected with
+# HTTP 400 / -32602 before auth is even reached — which would make this smoke
+# test look like an OAuth failure when it is a protocol one.
 
 # Step 3 — confirm 401 without token
 curl -sv http://localhost:7654/mcp -X POST \

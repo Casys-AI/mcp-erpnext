@@ -2,6 +2,42 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.0.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.6.0...v3.0.0) (2026-07-30)
+
+### ⚠ BREAKING CHANGES
+
+- **HTTP transport is now stateless.** Every HTTP request must carry
+  `params._meta["io.modelcontextprotocol/protocolVersion"]`. A client that omits
+  it is rejected with HTTP 400 / `-32602` on every call, including `initialize`.
+  Clients built against MCP spec 2025-06-18 send no such field — notably the
+  official TypeScript SDK v1 line, whose HTTP transport never emits it.
+  `GET /mcp` now returns 405; no `Mcp-Session-Id` is issued.
+
+  **stdio clients are unaffected** — the stateless mode gates only the HTTP
+  handler. If you connect via `command`/`args`, nothing changes for you.
+
+  Users who need the previous behaviour should stay on the 2.x line. See
+  [docs/migration-mcp-spec-2026-07-28.md](docs/migration-mcp-spec-2026-07-28.md).
+
+### Features
+
+- switch the HTTP transport to stateless (MCP spec 2026-07-28)
+
+### Bug Fixes
+
+- **write paths:** resolve supplier and employee names on create handlers —
+  `erpnext_purchase_order_create`, `erpnext_leave_application_create` and
+  `erpnext_expense_claim_create` required an opaque Frappe ID while their
+  `_list` counterparts already accepted human-readable names, so an agent given
+  a display name could not succeed at all
+- **hr:** `erpnext_employee_get` now resolves a name, honouring the description
+  it advertises
+- **analytics:** issue independent Frappe queries concurrently in
+  `erpnext_sales_funnel`, `erpnext_gross_profit`, `erpnext_profit_loss` and
+  `erpnext_product_radar` — one round-trip instead of up to four
+- **analytics:** bound `erpnext_product_radar` input to 8 items; the fan-out is
+  one Bin query per item
+
 ## [2.6.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.5.0...v2.6.0) (2026-07-23)
 
 ### Features

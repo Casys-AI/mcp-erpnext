@@ -92,7 +92,17 @@ export const hrTools: ErpNextTool[] = [
       if (!input.name) {
         throw new Error("[erpnext_employee_get] 'name' is required");
       }
-      const doc = await ctx.client.get("Employee", input.name as string);
+      // The description promises a name works, so resolve it. Strict mode even
+      // on this read path: two employees sharing a display name should surface
+      // both IDs rather than have one silently picked.
+      const employeeId = await resolveLink(
+        ctx.client,
+        "Employee",
+        input.name as string,
+        "employee_name",
+        { allowPartialMatch: false },
+      );
+      const doc = await ctx.client.get("Employee", employeeId);
       return { data: doc };
     },
   },

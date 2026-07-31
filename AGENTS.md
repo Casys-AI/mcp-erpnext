@@ -130,7 +130,7 @@ REST API. Key methods: `list()`, `get()`, `create()`, `update()`, `delete()`,
 status and parsed body — no silent fallbacks.
 
 **Submit handlers must GET the doc first** to pass `modified` for Frappe's
-optimistic locking (see `docs/known-issues.md`), and must pass
+optimistic locking (see `docs/erpnext-quirks.md`), and must pass
 `{ skipCache: true }` so that read isn't served from a stale cache entry. Cancel
 does not need the pre-fetch, but both submit and cancel must call
 `ctx.client.invalidate(doctype, name)` after the mutating `callMethod` succeeds
@@ -489,7 +489,7 @@ running in its own compose project), join that stack's external network instead
   Submit handlers must `GET` the doc first with `{ skipCache: true }`, then pass
   the full doc to `frappe.client.submit`, then call
   `ctx.client.invalidate(doctype, name)`. Cancel doesn't need the pre-fetch but
-  must still invalidate. See `docs/known-issues.md`.
+  must still invalidate. See `docs/erpnext-quirks.md`.
 - **`_server_messages`**: Frappe error responses have 2 levels — `exc_type` and
   `_server_messages`. The client now parses both and includes `_server_messages`
   in the error message (see `src/api/frappe-client.ts`).

@@ -221,7 +221,7 @@ Specific DocTypes also have dedicated submit/cancel tools:
 `erpnext_sales_order_submit/cancel`, `erpnext_sales_invoice_submit`.
 
 > **Note**: All submit handlers fetch the doc first (`GET`) to pass `modified`
-> for optimistic locking. See `docs/known-issues.md` for details.
+> for optimistic locking. See `erpnext-quirks.md` for details.
 
 ---
 
@@ -338,7 +338,7 @@ Specific DocTypes also have dedicated submit/cancel tools:
 
 ## Production Hardening (TODO avant usage réel)
 
-> Voir aussi `docs/known-issues.md` pour les bugs connus et fixes appliqués.
+> Voir aussi `erpnext-quirks.md` pour les bugs connus et fixes appliqués.
 
 La lib fonctionne pour du prototypage/dev. Avant de brancher sur un vrai ERPNext
 :

@@ -72,6 +72,17 @@
 完整的發布歷程請參閱
 [CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
 
+## 文件
+
+依照 [Diátaxis](https://diataxis.fr) 依「你正在做什麼」分類：
+
+|                       |                                                                                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **學習** — 第一次接觸 | [第一次工具呼叫](docs/tutorial-first-tool-call.md) — 四個步驟，從零到看見回應                                                                                                               |
+| **執行** — 有明確目標 | [建立主檔資料](docs/fresh-instance-setup.md) · [執行 HTTP 伺服器](docs/http-deployment.md) · [設定 OAuth](docs/oauth-setup.md) · [遷移至 2026-07-28](docs/migration-mcp-spec-2026-07-28.md) |
+| **查閱**              | [工具](docs/tools.md) · [環境變數](docs/environment-variables.md) · [DocType 涵蓋範圍](docs/coverage.md) · [儲存庫結構](docs/architecture.md)                                               |
+| **理解原理**          | [設計概念](docs/concepts.md) — 連結解析、傳輸方式、MRTR，以及各層快取的差異                                                                                                                 |
+
 ## 快速開始
 
 ### 前置條件
@@ -145,44 +156,9 @@
 
 ### HTTP 模式
 
-> **已於尚未發布的 3.0.0 實作破壞性變更 — 僅限 HTTP 用戶端。** HTTP
-> 傳輸採用無狀態模式（MCP 規格 2026-07-28）。每個請求都必須帶有
-> `params._meta["io.modelcontextprotocol/protocolVersion"]`；缺少此欄位的用戶端會被
-> 拒絕。官方 TypeScript SDK v1 系列會受影響。**stdio 不受影響** — 若透過上方的
-> `command`/`args` 連線，行為不變。請參閱
-> [遷移指南](docs/migration-mcp-spec-2026-07-28.md)，或維持使用 2.x。
-
-> 3.0.0 的 HTTP 用戶端也必須傳送 `MCP-Protocol-Version: 2026-07-28`、相符的
-> `Mcp-Method`，以及物件型別的
-> `params._meta["io.modelcontextprotocol/clientCapabilities"]`。 `clientInfo` 是
-> SHOULD，非必要欄位。新的公開一小時快取提示只適用於協定的探索／列出／讀取回應，
-> 不會影響 ERPNext 資料快取。
-
-```bash
-ERPNEXT_URL=http://localhost:8000 \
-ERPNEXT_API_KEY=xxx \
-ERPNEXT_API_SECRET=xxx \
-npx -y @casys/mcp-erpnext --http --port=3012
-```
-
-> **注意：** 自 v2.4.2 起，HTTP 模式預設綁定至
-> `127.0.0.1`（本機回環位址）。若用於 Docker 或多主機環境，請加上
-> `--hostname=0.0.0.0`。
-
-### Deno（HTTP 模式）
-
-```bash
-ERPNEXT_URL=http://localhost:8000 \
-ERPNEXT_API_KEY=xxx \
-ERPNEXT_API_SECRET=xxx \
-deno run -A npm:@casys/mcp-erpnext --http --port=3012
-```
-
-> **注意：** npm 套件 ≤ 2.3.1 版本在 HTTP 模式下會發生
-> `ReferenceError: Deno is not defined` 錯誤 — 已於 2.4.0
-> 版本修復（`@casys/mcp-server` ≥ 0.21.1）。若遭遇此問題，請使用
-> `npx -y @casys/mcp-erpnext@latest` 升級，或改用上方的 Deno 執行方式。詳見
-> [`docs/known-issues.md`](docs/known-issues.md)。
+若需要多個用戶端共用一個常駐伺服器，而非每個用戶端各自啟動一個行程：
+[如何執行 HTTP 伺服器](docs/http-deployment.md)。 請注意，3.0.0 對 2026 年前的
+HTTP 用戶端屬於破壞性變更。
 
 ### 類別篩選
 
@@ -194,19 +170,8 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 
 ## 全新執行個體設定
 
-在全新的 ERPNext
-執行個體（尚未完成設定精靈）中，使用業務工具前需先建立主要資料。請使用
-`erpnext_doc_create` 建立前置條件：
-
-```
-1. 倉庫類型：Transit、Default
-2. 計量單位（UOM）：Nos、Kg、Unit、Set、Meter
-3. 品項群組：All Item Groups（is_group=1），再建立 Products、Raw Material（parent=All Item Groups）
-4. 地區：All Territories（is_group=1），再建立 France 等子地區
-5. 客戶群組：All Customer Groups（is_group=1），再建立 Commercial 等子群組
-6. 供應商群組：All Supplier Groups（is_group=1），再建立 Hardware 等子群組
-7. 公司：需先確認倉庫類型已存在
-```
+全新的 ERPNext 執行個體沒有主檔資料，因此業務工具會因驗證失敗而無法使用。
+請見[為全新 ERPNext 執行個體建立主檔資料](docs/fresh-instance-setup.md)。
 
 ## UI 檢視器
 
@@ -251,7 +216,7 @@ npm install
 node build-all.mjs
 ```
 
-## 工具（123 項）
+## 工具（124 項）
 
 涵蓋 14 個類別的 123 項工具。每個 `_list` 工具均透過 doclist-viewer
 返回互動式結果，支援點擊列、內嵌詳情及跨檢視器導覽。
@@ -303,101 +268,19 @@ MRTR 為選用功能。未設定此金鑰，或用戶端未宣告 elicitation
 
 ## 架構
 
-```
-server.ts           # MCP 伺服器（stdio + HTTP + inspector）
-mod.ts              # 公開 API
-deno.json           # 套件設定
-src/
-  api/
-    frappe-client.ts  # Frappe REST HTTP 客戶端（零相依套件）
-    types.ts          # Frappe 型別定義
-  kanban/
-    adapters/         # 各 DocType 的看板介面卡（task、opportunity、issue）
-    definitions.ts    # 看板登錄表
-    types.ts          # 共用看板契約
-  tools/
-    sales.ts          # 17 項銷售工具
-    inventory.ts      # 9 項庫存工具
-    purchasing.ts     # 11 項採購工具
-    accounting.ts     # 6 項會計工具
-    hr.ts             # 12 項人資工具
-    project.ts        # 9 項專案工具
-    delivery.ts       # 5 項出貨工具
-    manufacturing.ts  # 7 項製造工具
-    crm.ts            # 8 項 CRM 工具
-    assets.ts         # 8 項資產工具
-    operations.ts     # 9 項通用 CRUD 工具
-    setup.ts          # 3 項公司／設定工具
-    kanban.ts         # 2 項可讀寫看板工具
-    analytics.ts      # 17 項分析工具（圖表、KPI、漏斗）
-    ui-refresh.ts     # 自動注入 _rowAction、_sendMessageHints、_drillDown
-    mod.ts            # 工具登錄表
-    types.ts          # 工具介面
-  client.ts           # ErpNextToolsClient
-  runtime.ts          # Deno 執行環境介面卡
-  runtime.node.ts     # Node.js 執行環境介面卡
-  *_test.ts           # 測試與原始碼並置
-  ui/
-    shared/           # ActionButton、InfoField、主題、品牌識別、重新整理
-    doclist-viewer/   # 通用文件清單（內嵌詳情、晶片篩選器）
-    invoice-viewer/   # 發票顯示（品項下鑽、操作）
-    stock-viewer/     # 庫存結餘（詳細面板、sendMessage）
-    chart-viewer/     # 通用圖表渲染器（12 種類型、點擊下鑽）
-    kanban-viewer/    # 可讀寫看板（拖放、編輯、sendMessage）
-    kpi-viewer/       # KPI 卡片（可點擊數字 + 迷你圖）
-    funnel-viewer/    # 銷售漏斗（梯形階段、點擊穿透）
-    viewers.ts        # 檢視器登錄表
-docs/
-  ROADMAP.md          # 功能藍圖
-  coverage.md         # 測試涵蓋率矩陣
-```
+工具依業務領域分組於 `src/tools/`，Frappe REST 用戶端不含任何相依套件， 每個 UI
+檢視器則是 `src/ui/` 下的獨立建置。完整結構請見
+[儲存庫結構](docs/architecture.md)。
 
 ## npm 套件
 
 npm 套件（`@casys/mcp-erpnext`）是一個完全自包含的套件，無任何執行時相依套件。UI
 檢視器已內嵌其中。需要 Node >= 20。
 
-## 開發
-
-```bash
-# 執行測試
-deno test --allow-all src/
-
-# 型別檢查
-deno task check
-
-# 啟動 HTTP 伺服器（開發模式）
-deno task serve
-
-# 啟動 MCP Inspector
-deno task inspect
-
-# 建置 UI 檢視器
-deno task ui:build
-
-# 完整的本機發布前置檢查（不實際發布）
-deno task release:check
-
-# 使用 HMR 開發特定檢視器
-cd src/ui && npm run dev:kanban
-```
-
 ## 貢獻
 
 歡迎貢獻 — 請參閱 **[CONTRIBUTING.md](CONTRIBUTING.md)** 以開始，並參閱
 [AGENTS.md](AGENTS.md) 了解完整的架構與慣例。
-
-## 發布流程
-
-發布作業為手動且明確執行：
-
-1. 更新 `deno.json`、`server.ts` 及 `CHANGELOG.md`。
-2. 在本機執行 `deno task release:check`。
-3. 將發布提交推送至 `main`。
-4. 建立 GitHub 發布／標籤，例如 `v2.3.0`。
-5. 手動執行 `Publish` 工作流程，將同一版本發布至 JSR 和 npm。
-
-套件名稱維持 `@casys/mcp-erpnext`；發布僅更新套件版本號。
 
 ## 授權條款
 

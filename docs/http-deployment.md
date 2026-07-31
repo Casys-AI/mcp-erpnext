@@ -21,7 +21,7 @@ the server lives somewhere other than the user's machine.
 > `params._meta["io.modelcontextprotocol/protocolVersion"]`; clients that omit
 > it are rejected. The official TypeScript SDK v1 line is affected. **stdio is
 > unaffected** — if you connect via `command`/`args` above, nothing changes. See
-> [the migration guide](docs/migration-mcp-spec-2026-07-28.md), or stay on 2.x.
+> [the migration guide](migration-mcp-spec-2026-07-28.md), or stay on 2.x.
 
 > 3.0.0 HTTP clients must also send `MCP-Protocol-Version: 2026-07-28`, the
 > matching `Mcp-Method`, and an object-valued
@@ -52,4 +52,4 @@ deno run -A npm:@casys/mcp-erpnext --http --port=3012
 > `ReferenceError: Deno is not defined` in HTTP mode — fixed in 2.4.0
 > (`@casys/mcp-server` ≥ 0.21.1). If you hit this error, upgrade with
 > `npx -y @casys/mcp-erpnext@latest`, or use the Deno runner above. See
-> [`docs/known-issues.md`](docs/known-issues.md).
+> [`erpnext-quirks.md`](erpnext-quirks.md).

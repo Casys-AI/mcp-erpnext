@@ -1,6 +1,11 @@
-# ERPNext MCP — Known Issues & TODO
+# ERPNext quirks this server works around
 
-## Fixed bugs
+Behaviours of Frappe/ERPNext that are surprising enough to have caused a bug
+here, with the workaround the code now carries. Read this before removing
+something that looks redundant — each of these exists because it was not.
+
+The reader is a contributor. A user never hits these: the workarounds are
+already in place.
 
 ### TimestampMismatchError on submit (2026-02-18)
 
@@ -94,81 +99,3 @@ and it isn't already set:
   `erpnext_sales_invoice_submit`
 
 ---
-
-## Open bugs
-
-### ~~RuntimeError: `Deno is not defined` on Node.js~~ — fixed in 2.4.0
-
-**Status**: ✅ **Fixed in 2.4.0** (`@casys/mcp-server` ≥ 0.21.1). The npm bundle
-now consumes `@casys/mcp-server`'s own Node-clean npm build, and both packages
-select their runtime adapter at load time (`runtime.ts` selector) instead of a
-build-time file swap. `build-node.sh` fails fast if the resolved
-`@casys/mcp-server` predates 0.21.1. Reported by
-[@dennypradipta](https://github.com/dennypradipta) in
-[#4](https://github.com/Casys-AI/mcp-erpnext/pull/4).
-
-**Symptom** (≤ 2.3.1): Running the npm bundle (`npx @casys/mcp-erpnext
---http`)
-crashes with `ReferenceError: Deno is not defined` at `loadYamlAuth`.
-
-**Cause**: The transitive dependency `@casys/mcp-server` (≤ 0.21.0 as bundled
-from JSR source) contained `Deno.readTextFile` calls that esbuild inlined into
-the bundle. The project's own runtime adapter handled the swap correctly, but
-`@casys/mcp-server`'s internal auth-config loader bypassed it.
-
-**Workaround on old versions**: upgrade to ≥ 2.4.0, or run with the Deno runtime
-instead:
-
-```bash
-deno run -A npm:@casys/mcp-erpnext --http --port=3012
-```
-
----
-
-## Desired improvements
-
-### Setup wizard automation
-
-A fresh ERPNext instance requires master data before being able to create
-transactional documents. The tools `erpnext_company_create` and
-`erpnext_doc_create` now exist, but the full workflow is:
-
-1. Create Company
-2. Create Price Lists (Standard Selling, Standard Buying)
-3. Create Warehouses (or use the ones auto-created by Company)
-4. Create Item Groups if needed
-5. Create UOMs if non-standard (Nos, Kg, etc. exist by default)
-
-**Idea**: A tool `erpnext_setup_check` that checks that the prerequisites exist
-and returns what is missing.
-
-### Retry / error context enrichment
-
-When an operation fails (e.g.: MandatoryError), the handler could:
-
-1. Parse the Frappe error
-2. Return a structured message with the missing field
-3. Suggest the fix (e.g.: "Add selling_price_list field")
-
-### Rate limits / throttling
-
-No rate limiting on the client side. An agent that loops can bombard the ERPNext
-API. `FrappeClient` retries reads on 429/5xx, but does not yet perform global
-throttling or per-session request budgeting.
-
-### Integration tests
-
-Current tests are all mocked. Integration tests running against a real ERPNext
-(Docker) instance would be needed to validate end-to-end workflows. Suggested
-Deno pattern:
-
-```typescript
-const runIntegration = Deno.env.get("ERPNEXT_INTEGRATION") === "1";
-Deno.test({
-  name: "integration: sales order create validates ERPNext defaults",
-  ignore: !runIntegration,
-  fn: async () => {
-    /* requires ERPNEXT_URL, ERPNEXT_API_KEY, ERPNEXT_API_SECRET */
-  },
-});
-```

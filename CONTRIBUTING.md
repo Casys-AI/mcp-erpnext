@@ -84,6 +84,10 @@ Releases are manual and explicit — nothing publishes on push.
 
 The package name stays `@casys/mcp-erpnext`; a release only moves the version.
 
+Before removing something that looks redundant in a handler, check
+[ERPNext quirks](docs/erpnext-quirks.md) — several guards there exist because
+Frappe surprised us once.
+
 ## The non-negotiables
 
 A few rules that keep the codebase consistent — full detail in

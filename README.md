@@ -148,12 +148,18 @@ Add to `.vscode/mcp.json`:
 
 ### HTTP mode
 
-> **Breaking in 3.0.0 — HTTP clients only.** The HTTP transport is now stateless
-> (MCP spec 2026-07-28). Every request must carry
+> **Implemented in unreleased 3.0.0 — HTTP clients only.** The HTTP transport is
+> stateless (MCP spec 2026-07-28). Every request must carry
 > `params._meta["io.modelcontextprotocol/protocolVersion"]`; clients that omit
-> it get HTTP 400. The official TypeScript SDK v1 line is affected. **stdio is
+> it are rejected. The official TypeScript SDK v1 line is affected. **stdio is
 > unaffected** — if you connect via `command`/`args` above, nothing changes. See
 > [the migration guide](docs/migration-mcp-spec-2026-07-28.md), or stay on 2.x.
+
+> 3.0.0 HTTP clients must also send `MCP-Protocol-Version: 2026-07-28`, the
+> matching `Mcp-Method`, and an object-valued
+> `params._meta["io.modelcontextprotocol/clientCapabilities"]`. `clientInfo` is
+> a protocol SHOULD, not a mandatory field. The new public one-hour cache hints
+> apply only to protocol discovery/list/read responses, not ERPNext data.
 
 ```bash
 ERPNEXT_URL=http://localhost:8000 \
@@ -279,12 +285,29 @@ Full per-tool reference with parameters: [`docs/tools.md`](docs/tools.md).
 
 ## Environment Variables
 
-| Variable                   | Required | Description                                                                                                   |
-| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
-| `ERPNEXT_URL`              | Yes      | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`) |
-| `ERPNEXT_API_KEY`          | Yes      | API Key from User Settings                                                                                    |
-| `ERPNEXT_API_SECRET`       | Yes      | API Secret from User Settings                                                                                 |
-| `ERPNEXT_MAX_UPLOAD_BYTES` | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                 |
+| Variable                   | Required | Description                                                                                                                      |
+| -------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_URL`              | Yes      | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`)                    |
+| `ERPNEXT_API_KEY`          | Yes      | API Key from User Settings                                                                                                       |
+| `ERPNEXT_API_SECRET`       | Yes      | API Secret from User Settings                                                                                                    |
+| `ERPNEXT_MAX_UPLOAD_BYTES` | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                                    |
+| `MCP_MRTR_SIGNING_KEY`     | No       | Exactly 64 lowercase hex characters; enables signed ambiguous-link elicitation. **Single-instance deployments only** — see below |
+
+MRTR is opt-in. Without this key, or when the client does not advertise
+elicitation, ambiguous links keep returning the existing actionable ambiguity
+error instead of prompting for a selection.
+
+> **Do not run MRTR behind a load balancer with this configuration.** The
+> signing key proves a retry token is authentic; it does not make it single-use.
+> That is the job of a replay store, and the default one is process-local. Share
+> the key across two instances and the same signed retry validates on both —
+> creating the purchase order, leave application or expense claim **twice**,
+> irreversibly once submitted.
+>
+> A multi-instance deployment must pass a shared atomic `mrtr.replayStore` to
+> `McpApp` (Redis satisfies the contract with `SET key 1 NX EXAT`). The
+> framework logs a warning at startup whenever MRTR is enabled without one —
+> that warning is not noise, it is this paragraph.
 
 ## Architecture
 

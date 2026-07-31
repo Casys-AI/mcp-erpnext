@@ -145,12 +145,18 @@
 
 ### HTTP 模式
 
-> **Breaking in 3.0.0 — HTTP clients only.** The HTTP transport is now stateless
-> (MCP spec 2026-07-28). Every request must carry
-> `params._meta["io.modelcontextprotocol/protocolVersion"]`; clients that omit
-> it get HTTP 400. The official TypeScript SDK v1 line is affected. **stdio is
-> unaffected** — if you connect via `command`/`args` above, nothing changes. See
-> [the migration guide](docs/migration-mcp-spec-2026-07-28.md), or stay on 2.x.
+> **已於尚未發布的 3.0.0 實作破壞性變更 — 僅限 HTTP 用戶端。** HTTP
+> 傳輸採用無狀態模式（MCP 規格 2026-07-28）。每個請求都必須帶有
+> `params._meta["io.modelcontextprotocol/protocolVersion"]`；缺少此欄位的用戶端會被
+> 拒絕。官方 TypeScript SDK v1 系列會受影響。**stdio 不受影響** — 若透過上方的
+> `command`/`args` 連線，行為不變。請參閱
+> [遷移指南](docs/migration-mcp-spec-2026-07-28.md)，或維持使用 2.x。
+
+> 3.0.0 的 HTTP 用戶端也必須傳送 `MCP-Protocol-Version: 2026-07-28`、相符的
+> `Mcp-Method`，以及物件型別的
+> `params._meta["io.modelcontextprotocol/clientCapabilities"]`。 `clientInfo` 是
+> SHOULD，非必要欄位。新的公開一小時快取提示只適用於協定的探索／列出／讀取回應，
+> 不會影響 ERPNext 資料快取。
 
 ```bash
 ERPNEXT_URL=http://localhost:8000 \
@@ -275,11 +281,25 @@ node build-all.mjs
 
 ## 環境變數
 
-| 變數                 | 必填 | 說明                                                                                                      |
-| -------------------- | ---- | --------------------------------------------------------------------------------------------------------- |
-| `ERPNEXT_URL`        | 是   | ERPNext 基礎 URL — 自行託管（例如 `http://localhost:8000`）或雲端（例如 `https://mycompany.erpnext.com`） |
-| `ERPNEXT_API_KEY`    | 是   | 來自使用者設定的 API Key                                                                                  |
-| `ERPNEXT_API_SECRET` | 是   | 來自使用者設定的 API Secret                                                                               |
+| 變數                   | 必填 | 說明                                                                                                      |
+| ---------------------- | ---- | --------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_URL`          | 是   | ERPNext 基礎 URL — 自行託管（例如 `http://localhost:8000`）或雲端（例如 `https://mycompany.erpnext.com`） |
+| `ERPNEXT_API_KEY`      | 是   | 來自使用者設定的 API Key                                                                                  |
+| `ERPNEXT_API_SECRET`   | 是   | 來自使用者設定的 API Secret                                                                               |
+| `MCP_MRTR_SIGNING_KEY` | 否   | 恰為 64 個小寫十六進位字元；啟用已簽章的模糊連結 elicitation。**僅限單一執行個體部署**，詳見下方說明      |
+
+MRTR 為選用功能。未設定此金鑰，或用戶端未宣告 elicitation
+時，模糊連結會維持既有的 可操作歧義錯誤，而不會要求選擇。
+
+> **請勿在負載平衡器後方使用此設定執行 MRTR。** 簽章金鑰只證明重試權杖為真，
+> 並不使其只能使用一次；後者是 replay store 的職責，而預設的 replay store
+> 僅在單一行程內有效。若兩個執行個體共用金鑰，同一個已簽章的重試會在兩邊
+> 都通過驗證，導致採購單、請假單或費用報銷單被**建立兩次**，且一經提交即
+> 無法復原。
+>
+> 多執行個體部署必須將共用且具原子性的 `mrtr.replayStore` 傳入 `McpApp` （Redis
+> 可用 `SET key 1 NX EXAT` 滿足此契約）。啟用 MRTR 而未提供時，
+> 框架會在啟動時記錄警告——該警告並非雜訊，正是本段所述的問題。
 
 ## 架構
 

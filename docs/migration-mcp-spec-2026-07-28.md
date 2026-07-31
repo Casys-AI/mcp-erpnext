@@ -1,300 +1,61 @@
 # Migration: MCP specification 2026-07-28
 
-Verified against `@casys/mcp-server` 0.22.0 and this repository at 3.0.0 on
-2026-07-30. Every claim below cites the source that establishes it; where the
-draft plan and the implementation disagreed, the implementation won.
+This document describes what is **implemented in the unreleased 3.0.0 code**. It
+is not evidence that 3.0.0 has been published. The release notes and package
+metadata remain authoritative for an actually released version.
 
-**Status as of 2026-07-30:** `transport: "stateless"` is implemented in
-`server.ts:98` on branch `feat/stateless-transport`. The framework's `transport`
-option shipped in 0.22, so this change does NOT require a version bump. The
-`^0.22` pin is sufficient.
+## What unreleased 3.0.0 implements
 
-## TL;DR
+The server uses `@casys/mcp-server` `^0.24` and the stateless 2026-07-28 HTTP
+contract:
 
-| Change                                                         | Action here                                                                                                                                         | Blocked?                                                              |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `transport: "stateless"` (`server.ts:98`)                      | **Done — and BREAKING.** Clients that do not send the `_meta` envelope lose access; warrants a major version. Works on the current `^0.22` pin.     | No                                                                    |
-| Bump `^0.22` → `^0.23` (`deno.json:59`)                        | Separate, optional — adds `resultType`/`serverInfo` in responses and enables MRTR+Tasks. NOT required for stateless transport itself.               | Yes — JSR 24h dependency-age window, resolvable ~2026-07-31 09:04 UTC |
-| `cache: { ttlMs, scope }` (`server.ts:98`)                     | Optional — cuts `tools/list` latency for frequent callers                                                                                           | No                                                                    |
-| Tasks extension                                                | Optional — no current handler justifies it                                                                                                          | No                                                                    |
-| Result envelope, routing headers, MRTR, `subscriptions/listen` | Nothing to do on `^0.22`; envelope fields (`resultType`, `serverInfo`) appear automatically once bumped to `^0.23`; other items not applicable here | —                                                                     |
+- `server/discover` is available for capability discovery.
+- Every HTTP request supplies `MCP-Protocol-Version: 2026-07-28` and the
+  matching `Mcp-Method` header. Methods addressing a named object also supply
+  `Mcp-Name`.
+- Every request includes `params._meta` with
+  `io.modelcontextprotocol/protocolVersion` and an object-valued
+  `io.modelcontextprotocol/clientCapabilities`.
+- Successful complete results carry `resultType: "complete"` and
+  `_meta["io.modelcontextprotocol/serverInfo"]`; protocol errors use the
+  2026-07-28 error envelopes.
+- `server/discover`, `tools/list`, `resources/list`, and `resources/read`
+  advertise public cache hints of one hour. This is protocol-response caching,
+  distinct from the ERPNext data cache configured with `MCP_CACHE_TTL_MS`.
 
-## What changed in 2026-07-28
+  `"public"` is only correct because nothing here varies by caller: the tool set
+  is chosen once at startup from `categories`, auth performs no per-caller
+  filtering, and the viewer HTML is a build artefact. **If any of those ever
+  becomes caller-specific — role-based tool filtering, per-tenant resources —
+  this must move back to `"private"` in the same change.** A shared cache is
+  otherwise free to serve one caller's response to another.
 
-### Stateless transport
+`clientInfo` is a SHOULD, not a required field. Clients may send it, but a valid
+request is not rejected merely because it is absent.
 
-The spec makes stateless HTTP the primary path. Each request carries its own
-protocol version in `params._meta["io.modelcontextprotocol/protocolVersion"]`;
-the `initialize` handshake remains valid but is no longer required. `GET /mcp`
-returns `405` in stateless mode (`mcp-app.ts:1959`) — the long-lived SSE stream
-is replaced by `subscriptions/listen`.
+`deno.json` preserves Deno 2.9's 24-hour minimum dependency age for every other
+package, while explicitly exempting the coordinated `jsr:@casys/mcp-server`
+release. This makes clean CI and Docker builds reproducible during its initial
+cooldown without globally disabling the supply-chain delay.
 
-This server now passes `transport: "stateless"` explicitly (`server.ts:98`).
-Before that it passed no `transport` option at all, which selected the
-`"stateful"` default. The framework's own type documentation is blunt about what
-that costs: `"stateful"` _"advertises 2025-06-18 and negotiates nothing
-per-request, so it never carries the envelope"_ (`types.ts:161`). A 2026-07-28
-client therefore receives the legacy shape even after the version bump. This is
-the one change that is genuinely required, and the earlier draft was wrong to
-file it as "inherited from server".
+## Stateless HTTP client requirements
 
-### Result envelope (`resultType`)
+Stateless mode has no session identifier. `GET /mcp` and `DELETE /mcp` return
+405, and the server does not issue `Mcp-Session-Id`. HTTP clients written for
+older MCP revisions must be updated before moving to 3.0.0; stdio clients are
+unaffected.
 
-Every result from a 2026-07-28 server carries `resultType: "complete"` at the
-root plus `io.modelcontextprotocol/serverInfo` in `_meta`. The framework applies
-this in `completeResult()` (`mcp-app.ts:530`), gated on the negotiated version.
-Nothing to do here.
-
-### Routing headers (`Mcp-Method` / `Mcp-Name`)
-
-2026-07-28 requests carry `Mcp-Method` so proxies can route without parsing the
-body, plus `Mcp-Name` for the methods that name a target — `tools/call`,
-`resources/read`, `prompts/get`, `tasks/*`. It is not required on `tools/list`
-and friends (`transport/request-headers.ts:30`). The framework validates them
-against the body they claim to describe (`transport/request-headers.ts:426`,
-gated at `mcp-app.ts:2238`), and only for peers that negotiated 2026-07-28. This
-server validates inbound headers; it proxies nothing. Nothing to do.
-
-### MRTR replaces server-initiated requests
-
-Sampling and other server→client requests are replaced by MRTR: a handler
-needing client input returns an `input_required` result, and the client replays
-it with `inputResponses` and a sealed `requestState`. No handler here asks for
-input mid-call, and `enableSampling` is unused. Not applicable.
-
-### `subscriptions/listen`
-
-The `GET /mcp` SSE stream and `resources/subscribe` are both gone; clients that
-want notifications open a stream via `subscriptions/listen`. This server pushes
-no notifications — no `sendNotification`, no dynamic resource registration after
-startup. The registry will exist and stay empty. Nothing to do.
-
-### Tasks extension (SEP-2663)
-
-A handler opts into async mode by returning `createTask(...)` instead of a
-direct result; the framework then exposes it through `tasks/get|update|cancel`.
-`createTask` is imported from the framework's barrel (`@casys/mcp-server`,
-`packages/server/mod.ts:263`). There is no `ctx.tasks.create()` — the earlier
-draft invented that API. Optional; see below.
-
-### Cache hints (SEP-2549)
-
-Results of `tools/list`, `resources/list` and `resources/read` carry `ttlMs` and
-`cacheScope` (`"public"` | `"private"` — not `global`/`tenant`, as the earlier
-draft had it). The framework emits them automatically, defaulting to `ttlMs: 0`
-and `scope: "private"` (`types.ts:186`) — inert by design. The server is
-conformant without touching this; setting values is a performance decision, not
-a conformance one.
-
-## Required work
-
-### 1. Switch the HTTP transport to stateless — **done** in `feat/stateless-transport`
-
-`server.ts:98`:
-
-```diff
-  const server = new McpApp({
-    name: "mcp-erpnext",
-    version: "3.0.0",
-+   transport: "stateless",
-    maxConcurrent: 10,
-```
-
-The `transport` option is available from `@casys/mcp-server` **0.22**, which is
-the version already pinned in `deno.json`. **No version bump is required** for
-this change. The earlier draft of this document listed it as blocked on the
-^0.23 bump; that was wrong — the option shipped in 0.22, making this change
-immediately available.
-
-> **Note for the ^0.23 bump (future, optional):** once bumped, every result will
-> automatically carry `resultType: "complete"` and
-> `_meta["io.modelcontextprotocol/serverInfo"]` (added by `stampResult()` in the
-> framework). No server code needs to change for that. The bump also unlocks
-> MRTR and the Tasks extension, which are optional improvements described in the
-> section below.
-
-The diff to apply after the bump (when/if desired):
-
-```diff
--"@casys/mcp-server": "jsr:@casys/mcp-server@^0.22"
-+"@casys/mcp-server": "jsr:@casys/mcp-server@^0.23"
-```
-
-After landing the bump, wait for the JSR 24h dependency-age window and retrigger
-CI (see commit `496e336` for precedent):
+Use this shape for a discovery request:
 
 ```sh
-git commit --allow-empty -m "ci: retrigger — @casys/mcp-server ^0.23 now resolvable"
-```
-
-### 2. The breaking change, in detail
-
-**This is a breaking change for clients, and the reason is easy to misread.**
-
-The stateless transport validates the request's `_meta` envelope before any
-method dispatch — `initialize` included. **What it requires depends on the
-framework version**, and the difference matters when writing a client:
-
-| Field in `params._meta`                       | On `^0.22` (current pin)                     | On `^0.23`                          |
-| --------------------------------------------- | -------------------------------------------- | ----------------------------------- |
-| `io.modelcontextprotocol/protocolVersion`     | **required** — `-32602` + HTTP 400 if absent | required                            |
-| `io.modelcontextprotocol/clientCapabilities`  | not enforced                                 | required, and must be an **object** |
-| `MCP-Protocol-Version` / `Mcp-Method` headers | not enforced                                 | required                            |
-
-Verified against the resolved 0.22 build: a POST carrying only
-`protocolVersion`, with no headers at all, returns 200. A POST with an empty
-`_meta` returns 400 with `-32602`.
-
-So today the bar is exactly one field — but a client written against 2025-06-18
-sends none of them, so it is rejected on every call, not only on the handshake.
-
-A client written against 2025-06-18 sends neither, so it is rejected on every
-call, not only on the handshake.
-
-The trap is `STATELESS_SUPPORTED_VERSIONS`, which does list `2026-07-28`,
-`2025-11-25` and `2025-06-18` (`mcp-app.ts:212`). That is **not** backward
-compatibility: it means a _stateless-aware_ client may negotiate an older
-revision. The per-request `_meta` envelope is required whichever version it
-declares. Reading that list as "old clients keep working" is exactly the mistake
-an earlier revision of this document made.
-
-What is true, and still reassuring: nothing this repository relies on is
-withdrawn — no `sendNotification`, no `resources/subscribe`, no sampling, no
-elicitation, no `@casys/mcp-bridge` dependency. The migration costs no
-functionality here, only client compatibility.
-
-**So this warrants a major version.** Before releasing, verify against the
-clients that actually matter — Claude Desktop, Claude Code, VS Code Copilot, and
-anything custom — that each sends the 2026 `_meta` envelope. Any that does not
-loses access at the switch; users needing the old behaviour stay on the 2.x
-line.
-
-Commit both changes together — they are one atomic migration.
-
-## Optional improvements
-
-### Cache hints
-
-`McpAppOptions.cache` (`types.ts:185`) controls the hints emitted on list and
-read results. It does not affect `tools/call` — `CacheableResult` covers list
-and read only.
-
-This server is deployed one instance per ERPNext site. The tool list is built at
-startup from source and is identical for every caller, and the viewer HTML under
-`src/ui/` is a static build artefact — both are safely `"public"`:
-
-```typescript
-cache: {
-  ttlMs: 3_600_000,  // 1h — match your redeploy cadence
-  scope: "public",
-},
-```
-
-If a future change ever makes the tool list vary per caller (role-based
-filtering, say), move back to `"private"` until invariance is re-established.
-Getting this wrong lets a shared cache serve one caller's view to another, so
-`"private"` is the right answer whenever there is doubt.
-
-### Tasks extension
-
-Declare the extension so clients know to poll it — the framework will not hand a
-task to a client that did not declare support, and will not advertise an
-extension it was not told to enable:
-
-```typescript
-extensions: { "io.modelcontextprotocol/tasks": {} },
-```
-
-`extensions` is `Readonly<Record<string, unknown>>` (`types.ts:259`); `{}` is
-correct, as the Tasks spec defines no per-extension configuration yet.
-
-A handler then opts in per call:
-
-```typescript
-import { createTask } from "@casys/mcp-server";
-
-handler: async (args, ctx) => {
-  return createTask(
-    { statusMessage: "Analysing…", pollIntervalMs: 3_000 },
-    async (ctrl) => {
-      ctrl.setStatusMessage("Fetching data…");
-      const data = await ctx.client.list("BOM", { limit: 1000 });
-      if (ctrl.signal.aborted) return { cancelled: true };
-      return { result: data };
-    },
-  );
-},
-```
-
-`CreateTaskOptions` (`task-store.ts:41`): `statusMessage?`, `ttlMs?`,
-`pollIntervalMs?`. `TaskController` (`task-store.ts:76`): `signal`,
-`setStatusMessage()`, `requireInput()`. Throwing `{ code, message }` marks the
-task `failed`; a business-level outcome ("order not found") should be _returned_
-normally — it reaches `completed`, not `failed` (`task-store.ts:120`).
-
-**No current handler justifies converting**, but the reasoning depends on work
-that is not yet on `main`, so it is worth being exact.
-
-Tasks pays for itself when work outlasts `pollIntervalMs` — caller-chosen,
-defaulting to 5s (`task-store.ts:41`); there is no framework threshold. Below
-that, polling costs more than it saves.
-
-The five tools an obvious reading nominates — `erpnext_kanban_get_board`,
-`erpnext_revenue_trend`, `erpnext_stock_treemap`, `erpnext_revenue_vs_orders`,
-`erpnext_stock_chart` — each make a single Frappe call, with one exception:
-`erpnext_stock_chart` issues a second, serial call when `item_group` is supplied
-(`analytics.ts:68`). None is a Tasks candidate.
-
-The genuinely multi-query handlers are `erpnext_sales_funnel` (four calls),
-`erpnext_gross_profit`, `erpnext_profit_loss` and `erpnext_product_radar`. On
-`main` today those calls are **serial**. Branch
-`perf/parallelise-analytics-fanout` groups each set with `Promise.all`, bringing
-them to roughly one round-trip; once it merges, the "no handler is slow enough"
-conclusion holds by measurement rather than by assertion. Until then, the
-strongest accurate statement is that these handlers are latency-bound on ERPNext
-round-trips, and that removing the serialisation is the cheaper fix — Tasks
-would move the wait to the client rather than remove it.
-
-## Verifying the migration
-
-### Static checks (what CI runs)
-
-```sh
-deno task pre-commit   # fmt --check && lint && task check
-deno test --allow-all src/
-```
-
-`deno task check` targets `mod.ts` and `server.ts` only. Do **not** run a bare
-`deno check .`: the React viewers under `src/ui/` are built by Vite and are
-outside Deno's type graph, so a global check fails on files that are not part of
-the server.
-
-### Wire-level probe
-
-```sh
-deno task serve   # deno run --allow-all server.ts --http --port=3012
-```
-
-A `tools/list` call is the fastest smoke test. On the current `^0.22` pin only
-the first line below is enforced; the rest are what `^0.23` will additionally
-require, so sending them now keeps the request valid across the bump:
-
-| Requirement                                                  | Value                       | Enforced on ^0.22 |
-| ------------------------------------------------------------ | --------------------------- | ----------------- |
-| `params._meta["io.modelcontextprotocol/protocolVersion"]`    | `"2026-07-28"`              | **yes**           |
-| `params._meta["io.modelcontextprotocol/clientCapabilities"]` | an object, `{}` is fine     | no                |
-| `MCP-Protocol-Version` header                                | `"2026-07-28"`              | no                |
-| `Mcp-Method` header                                          | mirrors the body's `method` | no                |
-
-```sh
-curl -s -D - -X POST http://127.0.0.1:3012/mcp \
+curl -sS -D - -X POST http://127.0.0.1:3012/mcp \
   -H 'Content-Type: application/json' \
   -H 'MCP-Protocol-Version: 2026-07-28' \
-  -H 'Mcp-Method: tools/list' \
+  -H 'Mcp-Method: server/discover' \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
-    "method": "tools/list",
+    "method": "server/discover",
     "params": {
       "_meta": {
         "io.modelcontextprotocol/protocolVersion": "2026-07-28",
@@ -304,46 +65,54 @@ curl -s -D - -X POST http://127.0.0.1:3012/mcp \
   }'
 ```
 
-Expect HTTP 200, a `result.tools` array, and **no** `Mcp-Session-Id` — the
-stateless transport never emits one.
+A `tools/list` request uses the same envelope and changes `Mcp-Method` and
+`method` to `tools/list`. Its response includes `resultType: "complete"`, server
+information in `_meta`, and the public one-hour cache hint.
 
-`resultType` and `_meta["io.modelcontextprotocol/serverInfo"]` are **not** in
-the result on `^0.22`; those envelope fields arrive with the `^0.23` bump.
-Asserting them today fails against a correctly configured server.
+## Optional MRTR link disambiguation
 
-### Client compatibility — the check that actually matters
+Some ERPNext links accept an ID or a human-readable identifier. Where a lookup
+has several safe candidates, the unreleased 3.0.0 code can ask a capable client
+to choose through MCP request/retry (MRTR), rather than guessing. MRTR is
+opt-in.
 
-Re-running the call with `2025-06-18` in the header and `_meta` proves only that
-the server down-negotiates for a _stateless-aware_ client. It says nothing about
-existing clients, because it still sends the 2026 `_meta` envelope that they do
-not.
+- The client must advertise elicitation support in `clientCapabilities`.
+- Set `MCP_MRTR_SIGNING_KEY` to exactly 64 lowercase hexadecimal characters to
+  enable signed request state. Use the same key on every HTTP instance.
+- The retry is accepted only when the framework marks it verified and the
+  selected record is among the candidates reconstructed from the unchanged
+  original arguments. A refusal or invalid response performs no ERPNext
+  mutation.
+- Without a signing key or elicitation support, clients retain the existing
+  explicit ambiguity error with the candidate list. They can retry with an
+  unambiguous ID.
 
-To find out what breaks, drop the envelope entirely — this is the shape a
-pre-migration client sends:
+Do not configure an unsigned or per-instance signing key for write paths.
+Signing protects retry integrity; it does not make a token single-use. As with
+an ordinary non-idempotent tool call, clients must not automatically replay an
+accepted write retry. Deployments requiring strict at-most-once execution need a
+shared nonce-consumption store, which this package does not provide.
+
+## Deliberately not advertised
+
+Tasks are not advertised. No handler has been demonstrated to be long-running
+enough to justify asynchronous polling, and the framework `TaskStore` is local
+to a process, which is unsuitable for a multi-instance HTTP deployment without
+shared task storage.
+
+The framework supports `subscriptions/listen`, but this server emits no ERPNext
+notifications. Clients therefore must not rely on subscriptions for ERPNext
+updates.
+
+## Verification before release
 
 ```sh
-curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:3012/mcp \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+deno check mod.ts server.ts
+deno test --allow-all src/transport_wire_test.ts
+deno task release:check
 ```
 
-Against the stateless transport this returns **400** with
-`-32602 Missing required field`. That is the breaking change, reproduced in one
-command.
-
-So the real test is not a curl at all: connect each client you support — Claude
-Desktop, Claude Code, VS Code Copilot, anything custom — and confirm it still
-lists tools and calls one. Whatever fails here is what your major version bump
-is for.
-
-## Deliberately not doing
-
-| Item                                               | Why                                                                                                                                                                                       |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ConcurrentMCPServer` → `McpApp` rename            | Already done — `server.ts:34` imports `McpApp` directly. The earlier draft listed this as outstanding work; executing it would be a no-op.                                                |
-| Sampling / `createMessage`                         | Zero occurrences in `src/**/*.ts`, and deprecated in 2026-07-28 regardless                                                                                                                |
-| W3C Trace Context                                  | Not implemented in the framework — zero source hits for `traceparent`, `tracestate` or `propagation.extract`. There is nothing to inherit.                                                |
-| MRTR                                               | No handler requests input mid-call                                                                                                                                                        |
-| `subscriptions/listen`                             | This server pushes no notifications                                                                                                                                                       |
-| Converting analytics to Tasks                      | No handler approaches the threshold where polling beats blocking                                                                                                                          |
-| `_meta.ui.csp` / `_meta.ui.permissions` per viewer | `MCPResource` exposes no **per-resource** field for either (`types.ts:326`). A global `resourceCsp` option does exist (`types.ts:121`) — it is the per-viewer granularity that is missing |
+Confirm on the wire that `server/discover`, result envelopes, routing headers,
+public one-hour cache hints, and the stateless 405/no-session behavior all match
+this document. Test both MRTR-capable and non-elicitation clients before
+enabling MRTR for any write path.

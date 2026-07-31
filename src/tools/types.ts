@@ -8,7 +8,11 @@
  */
 
 import type { FrappeClient } from "../api/frappe-client.ts";
-import type { MCPToolMeta, ToolAnnotations } from "@casys/mcp-server";
+import type {
+  MCPToolMeta,
+  ToolAnnotations,
+  ToolHandlerContext,
+} from "@casys/mcp-server";
 
 export type { ToolAnnotations };
 
@@ -43,6 +47,12 @@ export type JSONSchema = {
 /** Context passed to every tool handler */
 export interface ErpNextToolContext {
   client: FrappeClient;
+  /** Capabilities declared by the MCP client for this request. */
+  clientCapabilities?: ToolHandlerContext["clientCapabilities"];
+  /** Verified responses to a prior MRTR input request. */
+  inputResponses?: ToolHandlerContext["inputResponses"];
+  /** Whether the MRTR request-state token was verified by the framework. */
+  retryVerified?: ToolHandlerContext["retryVerified"];
 }
 
 /**

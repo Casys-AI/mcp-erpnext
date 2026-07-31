@@ -449,7 +449,9 @@ export const projectTools: ErpNextTool[] = [
         filters.push([
           "employee",
           "=",
-          await resolveEmployee(ctx.client, input.employee as string),
+          await resolveEmployee(ctx.client, input.employee as string, {
+            inputPath: "employee",
+          }),
         ]);
       }
       if (input.project) {

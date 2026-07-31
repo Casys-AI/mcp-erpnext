@@ -100,7 +100,7 @@ export const hrTools: ErpNextTool[] = [
         "Employee",
         input.name as string,
         "employee_name",
-        { allowPartialMatch: false },
+        { allowPartialMatch: false, inputPath: "name" },
       );
       const doc = await ctx.client.get("Employee", employeeId);
       return { data: doc };
@@ -145,7 +145,9 @@ export const hrTools: ErpNextTool[] = [
         filters.push([
           "employee",
           "=",
-          await resolveEmployee(ctx.client, input.employee as string),
+          await resolveEmployee(ctx.client, input.employee as string, {
+            inputPath: "employee",
+          }),
         ]);
       }
       if (input.status) {
@@ -222,7 +224,9 @@ export const hrTools: ErpNextTool[] = [
         filters.push([
           "employee",
           "=",
-          await resolveEmployee(ctx.client, input.employee as string),
+          await resolveEmployee(ctx.client, input.employee as string, {
+            inputPath: "employee",
+          }),
         ]);
       }
       if (input.status) {
@@ -340,7 +344,7 @@ export const hrTools: ErpNextTool[] = [
           input.employee as string,
           "employee_name",
           // Write path — see purchasing.ts: no fuzzy matching on writes.
-          { allowPartialMatch: false },
+          { allowPartialMatch: false, inputPath: "employee" },
         ),
         leave_type: input.leave_type as string,
         from_date: input.from_date as string,
@@ -399,7 +403,9 @@ export const hrTools: ErpNextTool[] = [
         filters.push([
           "employee",
           "=",
-          await resolveEmployee(ctx.client, input.employee as string),
+          await resolveEmployee(ctx.client, input.employee as string, {
+            inputPath: "employee",
+          }),
         ]);
       }
       if (input.status) {
@@ -571,7 +577,9 @@ export const hrTools: ErpNextTool[] = [
         filters.push([
           "employee",
           "=",
-          await resolveEmployee(ctx.client, input.employee as string),
+          await resolveEmployee(ctx.client, input.employee as string, {
+            inputPath: "employee",
+          }),
         ]);
       }
       if (input.status) {
@@ -677,7 +685,7 @@ export const hrTools: ErpNextTool[] = [
           input.employee as string,
           "employee_name",
           // Write path — see purchasing.ts: no fuzzy matching on writes.
-          { allowPartialMatch: false },
+          { allowPartialMatch: false, inputPath: "employee" },
         ),
         expenses: expenses.map((e) => ({
           expense_type: e.expense_type,
@@ -726,7 +734,9 @@ export const hrTools: ErpNextTool[] = [
         [
           "employee",
           "=",
-          await resolveEmployee(ctx.client, input.employee as string),
+          await resolveEmployee(ctx.client, input.employee as string, {
+            inputPath: "employee",
+          }),
         ],
         ["docstatus", "=", 1],
       ];

@@ -64,6 +64,26 @@ deno task test    # tests
 
 Or the full local release preflight (no publish): `deno task release:check`.
 
+Two more that are occasionally useful:
+
+```bash
+deno task inspect    # launch the MCP Inspector against a local server
+deno task ui:build   # rebuild all UI viewers
+```
+
+## Releasing
+
+Releases are manual and explicit — nothing publishes on push.
+
+1. Update the version in `deno.json` **and** `server.ts` (it lives in both),
+   plus `CHANGELOG.md`.
+2. `deno task release:check` locally.
+3. Commit and push to `main`.
+4. Create the GitHub release/tag, e.g. `v3.0.0`.
+5. Run the `Publish` workflow manually to push the same version to JSR and npm.
+
+The package name stays `@casys/mcp-erpnext`; a release only moves the version.
+
 ## The non-negotiables
 
 A few rules that keep the codebase consistent — full detail in

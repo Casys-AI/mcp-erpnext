@@ -79,12 +79,12 @@ the current version's highlights.
 
 Organised by what you are doing, following [Diátaxis](https://diataxis.fr):
 
-|                                       |                                                                                                                                                                      |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Learning** — never used this before | [Your first tool call](docs/tutorial-first-tool-call.md) — from nothing to a working response in four steps                                                          |
-| **Doing** — you have a specific goal  | [Seed a blank ERPNext instance](docs/fresh-instance-setup.md) · [Set up OAuth](docs/oauth-setup.md) · [Migrate to 2026-07-28](docs/migration-mcp-spec-2026-07-28.md) |
-| **Looking something up**              | [Tools](docs/tools.md) · [Environment variables](docs/environment-variables.md) · [DocType coverage](docs/coverage.md)                                               |
-| **Understanding why**                 | [Concepts](docs/concepts.md) — link resolution, transports, MRTR, and which cache does what                                                                          |
+|                                       |                                                                                                                                                                                                                       |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Learning** — never used this before | [Your first tool call](docs/tutorial-first-tool-call.md) — from nothing to a working response in four steps                                                                                                           |
+| **Doing** — you have a specific goal  | [Seed a blank ERPNext instance](docs/fresh-instance-setup.md) · [Run the HTTP server](docs/http-deployment.md) · [Set up OAuth](docs/oauth-setup.md) · [Migrate to 2026-07-28](docs/migration-mcp-spec-2026-07-28.md) |
+| **Looking something up**              | [Tools](docs/tools.md) · [Environment variables](docs/environment-variables.md) · [DocType coverage](docs/coverage.md)                                                                                                |
+| **Understanding why**                 | [Concepts](docs/concepts.md) — link resolution, transports, MRTR, and which cache does what                                                                                                                           |
 
 ## Quick Start
 
@@ -159,43 +159,9 @@ Add to `.vscode/mcp.json`:
 
 ### HTTP mode
 
-> **Implemented in unreleased 3.0.0 — HTTP clients only.** The HTTP transport is
-> stateless (MCP spec 2026-07-28). Every request must carry
-> `params._meta["io.modelcontextprotocol/protocolVersion"]`; clients that omit
-> it are rejected. The official TypeScript SDK v1 line is affected. **stdio is
-> unaffected** — if you connect via `command`/`args` above, nothing changes. See
-> [the migration guide](docs/migration-mcp-spec-2026-07-28.md), or stay on 2.x.
-
-> 3.0.0 HTTP clients must also send `MCP-Protocol-Version: 2026-07-28`, the
-> matching `Mcp-Method`, and an object-valued
-> `params._meta["io.modelcontextprotocol/clientCapabilities"]`. `clientInfo` is
-> a protocol SHOULD, not a mandatory field. The new public one-hour cache hints
-> apply only to protocol discovery/list/read responses, not ERPNext data.
-
-```bash
-ERPNEXT_URL=http://localhost:8000 \
-ERPNEXT_API_KEY=xxx \
-ERPNEXT_API_SECRET=xxx \
-npx -y @casys/mcp-erpnext --http --port=3012
-```
-
-> **Note:** HTTP mode binds to `127.0.0.1` (loopback) by default as of v2.4.2.
-> For Docker or multi-host setups, add `--hostname=0.0.0.0`.
-
-### Deno (HTTP mode)
-
-```bash
-ERPNEXT_URL=http://localhost:8000 \
-ERPNEXT_API_KEY=xxx \
-ERPNEXT_API_SECRET=xxx \
-deno run -A npm:@casys/mcp-erpnext --http --port=3012
-```
-
-> **Note:** Versions ≤ 2.3.1 of the npm bundle crashed with
-> `ReferenceError: Deno is not defined` in HTTP mode — fixed in 2.4.0
-> (`@casys/mcp-server` ≥ 0.21.1). If you hit this error, upgrade with
-> `npx -y @casys/mcp-erpnext@latest`, or use the Deno runner above. See
-> [`docs/known-issues.md`](docs/known-issues.md).
+For a shared, always-on server rather than one process per client:
+[how to run the HTTP server](docs/http-deployment.md). Note it is breaking for
+pre-2026 HTTP clients in 3.0.0.
 
 ### Category filtering
 
@@ -207,18 +173,9 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 
 ## Fresh Instance Setup
 
-On a fresh ERPNext instance (no setup wizard), you need to create master data
-before using business tools. Use `erpnext_doc_create` for prerequisites:
-
-```
-1. Warehouse Types: Transit, Default
-2. UOMs: Nos, Kg, Unit, Set, Meter
-3. Item Groups: All Item Groups (is_group=1), then Products, Raw Material (parent=All Item Groups)
-4. Territories: All Territories (is_group=1), then France, etc.
-5. Customer Groups: All Customer Groups (is_group=1), then Commercial, etc.
-6. Supplier Groups: All Supplier Groups (is_group=1), then Hardware, etc.
-7. Company: requires Warehouse Types to exist first
-```
+A blank ERPNext instance has no master data, so business tools fail validation
+until it exists. See
+[Seed a blank ERPNext instance](docs/fresh-instance-setup.md).
 
 ## UI Viewers
 
@@ -322,103 +279,19 @@ error instead of prompting for a selection.
 
 ## Architecture
 
-```
-server.ts           # MCP server (stdio + HTTP + inspector)
-mod.ts              # Public API
-deno.json           # Package config
-src/
-  api/
-    frappe-client.ts  # Frappe REST HTTP client (zero-dependency)
-    types.ts          # Frappe type definitions
-  kanban/
-    adapters/         # Per-DocType kanban adapters (task, opportunity, issue)
-    definitions.ts    # Board registry
-    types.ts          # Shared kanban contracts
-  tools/
-    sales.ts          # 17 sales tools
-    inventory.ts      # 9 inventory tools
-    purchasing.ts     # 11 purchasing tools
-    accounting.ts     # 6 accounting tools
-    hr.ts             # 12 HR tools
-    project.ts        # 9 project tools
-    delivery.ts       # 5 delivery tools
-    manufacturing.ts  # 7 manufacturing tools
-    crm.ts            # 8 CRM tools
-    assets.ts         # 8 asset tools
-    operations.ts     # 10 generic operations tools
-    setup.ts          # 3 company/setup tools
-    kanban.ts         # 2 read-write kanban tools
-    analytics.ts      # 17 analytics tools (charts, KPIs, funnel)
-    ui-refresh.ts     # Auto-inject _rowAction, _sendMessageHints, _drillDown
-    mod.ts            # Tool registry
-    types.ts          # Tool interface
-  client.ts           # ErpNextToolsClient
-  runtime.ts          # Deno runtime adapter
-  runtime.node.ts     # Node.js runtime adapter
-  *_test.ts           # Tests are colocated with source files
-  ui/
-    shared/           # ActionButton, InfoField, theme, branding, refresh
-    doclist-viewer/   # Generic document list (inline detail, chip filters)
-    invoice-viewer/   # Invoice display (item drill-down, actions)
-    stock-viewer/     # Stock balance (detail panel, sendMessage)
-    chart-viewer/     # Universal chart renderer (12 types, click drill-down)
-    kanban-viewer/    # Read-write kanban (drag, edit, sendMessage)
-    kpi-viewer/       # KPI card (clickable number + sparkline)
-    funnel-viewer/    # Sales funnel (trapezoid stages, click-through)
-    viewers.ts        # Viewer registry
-docs/
-  ROADMAP.md          # Feature roadmap
-  coverage.md         # Test coverage matrix
-```
+Tools are grouped by business domain under `src/tools/`, the Frappe REST client
+is dependency-free, and each UI viewer is a separate build under `src/ui/`. Full
+layout: [repository layout](docs/architecture.md).
 
 ## npm Package
 
 The npm package (`@casys/mcp-erpnext`) is a single self-contained bundle with
 zero runtime dependencies. UI viewers are embedded. Requires Node >= 20.
 
-## Development
-
-```bash
-# Run tests
-deno test --allow-all src/
-
-# Type check
-deno task check
-
-# Start HTTP server (dev)
-deno task serve
-
-# Launch MCP Inspector
-deno task inspect
-
-# Build UI viewers
-deno task ui:build
-
-# Full local release preflight (no publish)
-deno task release:check
-
-# Dev a specific viewer with HMR
-cd src/ui && npm run dev:kanban
-```
-
 ## Contributing
 
 Contributions are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** to get
 started, and [AGENTS.md](AGENTS.md) for the full architecture and conventions.
-
-## Release Flow
-
-Releases are manual and explicit:
-
-1. Update `deno.json`, `server.ts`, and `CHANGELOG.md`.
-2. Run `deno task release:check` locally.
-3. Commit and push the release commit to `main`.
-4. Create the GitHub release/tag, for example `v2.3.0`.
-5. Run the `Publish` workflow manually to publish the same version to JSR and
-   npm.
-
-The package name stays `@casys/mcp-erpnext`; releases only bump the package
-version.
 
 ## License
 

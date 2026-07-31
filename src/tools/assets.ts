@@ -69,7 +69,9 @@ export const assetsTools: ErpNextTool[] = [
         filters.push([
           "custodian",
           "=",
-          await resolveEmployee(ctx.client, input.custodian as string),
+          await resolveEmployee(ctx.client, input.custodian as string, {
+            inputPath: "custodian",
+          }),
         ]);
       }
       if (input.date_from) {

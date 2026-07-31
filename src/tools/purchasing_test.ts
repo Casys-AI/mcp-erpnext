@@ -7,6 +7,7 @@
  */
 
 import { assertEquals, assertRejects } from "@std/assert";
+import { AmbiguousLinkError } from "../api/resolve.ts";
 import { purchasingTools } from "./purchasing.ts";
 import { FrappeAPIError, type FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
@@ -246,10 +247,11 @@ Deno.test("erpnext_purchase_order_create - refuses to guess between two supplier
         { supplier: "Acme", items: [{ item_code: "ITEM-A", qty: 1, rate: 5 }] },
         makeCtx(mockClient),
       ),
-    Error,
+    AmbiguousLinkError,
   );
 
   assertEquals(createCalled, false, "must not create against a guess");
+  assertEquals(error.inputPath, "supplier");
   // The agent recovers by re-calling with an ID, which it can only do if the
   // candidates are named.
   assertEquals(error.message.includes("SUPP-00031"), true);

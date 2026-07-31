@@ -49,7 +49,9 @@ export const manufacturingTools: ErpNextTool[] = [
         filters.push([
           "item",
           "=",
-          await resolveItem(ctx.client, input.item as string),
+          await resolveItem(ctx.client, input.item as string, {
+            inputPath: "item",
+          }),
         ]);
       }
       if (input.is_active !== undefined) {
@@ -151,7 +153,9 @@ export const manufacturingTools: ErpNextTool[] = [
         filters.push([
           "production_item",
           "=",
-          await resolveItem(ctx.client, input.production_item as string),
+          await resolveItem(ctx.client, input.production_item as string, {
+            inputPath: "production_item",
+          }),
         ]);
       }
       if (input.status) {

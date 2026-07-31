@@ -2,16 +2,20 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
-## [3.0.0](https://github.com/Casys-AI/mcp-erpnext/compare/v2.6.0...v3.0.0) (2026-07-30)
+## [Unreleased]
+
+### Included in 3.0.0 when released
 
 ### ⚠ BREAKING CHANGES
 
-- **HTTP transport is now stateless.** Every HTTP request must carry
-  `params._meta["io.modelcontextprotocol/protocolVersion"]`. A client that omits
-  it is rejected with HTTP 400 / `-32602` on every call, including `initialize`.
-  Clients built against MCP spec 2025-06-18 send no such field — notably the
-  official TypeScript SDK v1 line, whose HTTP transport never emits it.
-  `GET /mcp` now returns 405; no `Mcp-Session-Id` is issued.
+- **HTTP transport is stateless in the unreleased code.** Every HTTP request
+  must carry `MCP-Protocol-Version: 2026-07-28`, the matching `Mcp-Method`, and
+  `params._meta["io.modelcontextprotocol/protocolVersion"]` plus an
+  object-valued `clientCapabilities`. A client that omits required protocol
+  fields is rejected on every call, including `initialize`. Clients built
+  against MCP spec 2025-06-18 send no such field — notably the official
+  TypeScript SDK v1 line, whose HTTP transport never emits it. `GET /mcp`
+  returns 405; no `Mcp-Session-Id` is issued.
 
   **stdio clients are unaffected** — the stateless mode gates only the HTTP
   handler. If you connect via `command`/`args`, nothing changes for you.
@@ -21,7 +25,15 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Features
 
-- switch the HTTP transport to stateless (MCP spec 2026-07-28)
+- use `@casys/mcp-server` `^0.24` and the complete MCP 2026-07-28 HTTP contract:
+  `server/discover`, routing headers, complete result envelopes, and public
+  one-hour cache hints for discovery/list/read responses
+- offer opt-in signed MRTR link disambiguation where configured with
+  `MCP_MRTR_SIGNING_KEY` (exactly 64 lowercase hexadecimal characters); without
+  a key or client elicitation, the explicit ambiguity error remains
+- do not advertise Tasks: no handler is demonstrated long-running enough and
+  framework task storage is process-local; `subscriptions/listen` exists in the
+  framework, but ERPNext notifications are not emitted
 
 ### Bug Fixes
 

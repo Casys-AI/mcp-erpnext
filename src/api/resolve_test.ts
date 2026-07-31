@@ -4,8 +4,13 @@
  * @module lib/erpnext/tests/api/resolve_test
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
-import { resolveDynamicLink, resolveEmployee, resolveLink } from "./resolve.ts";
+import { assertEquals, assertInstanceOf, assertRejects } from "@std/assert";
+import {
+  AmbiguousLinkError,
+  resolveDynamicLink,
+  resolveEmployee,
+  resolveLink,
+} from "./resolve.ts";
 import { FrappeAPIError, type FrappeClient } from "./frappe-client.ts";
 import { setCache } from "../cache/cache.ts";
 import { MemoryCache } from "../cache/memory.ts";
@@ -71,11 +76,19 @@ Deno.test("resolveLink - throws with candidate list when the exact match is ambi
       return [];
     },
   });
-  await assertRejects(
-    () => resolveEmployee(client, "John Doe"),
-    Error,
-    "Ambiguous Employee identifier",
+  const error = await assertRejects(() =>
+    resolveEmployee(client, "John Doe", { inputPath: "employee" })
   );
+  assertInstanceOf(error, AmbiguousLinkError);
+  assertEquals(error.message.includes("Ambiguous Employee identifier"), true);
+  assertEquals(error.doctype, "Employee");
+  assertEquals(error.identifier, "John Doe");
+  assertEquals(error.inputPath, "employee");
+  assertEquals(error.candidates, [
+    { id: "HR-EMP-00002", label: "John Doe" },
+    { id: "HR-EMP-00009", label: "John Doe" },
+  ]);
+  assertEquals(error.truncated, true);
 });
 
 Deno.test("resolveLink - exact-match ambiguity still throws when allowPartialMatch is false", async () => {

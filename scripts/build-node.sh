@@ -90,8 +90,10 @@ npm install --no-fund --no-audit "${MCP_SERVER_OVERRIDE:-@casys/mcp-server@$MCP_
 node -e '
   const v = require("@casys/mcp-server/package.json").version;
   const [ma, mi, pa] = v.split(".").map(Number);
-  if (ma === 0 && (mi < 21 || (mi === 21 && pa < 1))) {
-    console.error(`[build-node] @casys/mcp-server ${v} predates the runtime-selector fix (need >=0.21.1)`);
+  if (ma === 0 && (mi < 24 || (mi === 24 && pa < 1))) {
+    console.error(`[build-node] @casys/mcp-server ${v} lacks MRTR nonce consumption (need >=0.24.1)`);
+    console.error(`[build-node] 0.24.0 verifies a requestState token but never consumes its nonce,`);
+    console.error(`[build-node] so a signed retry can be replayed into a duplicate write.`);
     process.exit(1);
   }
   console.log(`[build-node] @casys/mcp-server ${v} OK (>=0.21.1)`);

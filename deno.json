@@ -2,6 +2,10 @@
   "name": "@casys/mcp-erpnext",
   "version": "3.0.0",
   "nodeModulesDir": "auto",
+  "minimumDependencyAge": {
+    "age": "PT24H",
+    "exclude": ["jsr:@casys/mcp-server"]
+  },
   "tasks": {
     "serve": "deno run --allow-all server.ts --http --port=3012",
     "compile": "deno compile -A --output mcp-erpnext server.ts",
@@ -56,7 +60,7 @@
     ]
   },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.22",
+    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.24.1",
     "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
     "@std/yaml": "jsr:@std/yaml@^1",
     "@std/assert": "jsr:@std/assert@^1"

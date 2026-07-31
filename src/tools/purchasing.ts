@@ -197,7 +197,9 @@ export const purchasingTools: ErpNextTool[] = [
         filters.push([
           "supplier",
           "=",
-          await resolveSupplier(ctx.client, input.supplier as string),
+          await resolveSupplier(ctx.client, input.supplier as string, {
+            inputPath: "supplier",
+          }),
         ]);
       }
       if (input.status) {
@@ -333,7 +335,7 @@ export const purchasingTools: ErpNextTool[] = [
           "supplier_name",
           // Write path: a fuzzy match here would attach the order to the wrong
           // supplier, silently and irreversibly once submitted.
-          { allowPartialMatch: false },
+          { allowPartialMatch: false, inputPath: "supplier" },
         ),
         items,
         schedule_date: (input.schedule_date as string) ?? undefined,
@@ -384,7 +386,9 @@ export const purchasingTools: ErpNextTool[] = [
         filters.push([
           "supplier",
           "=",
-          await resolveSupplier(ctx.client, input.supplier as string),
+          await resolveSupplier(ctx.client, input.supplier as string, {
+            inputPath: "supplier",
+          }),
         ]);
       }
       if (input.status) {
@@ -487,7 +491,9 @@ export const purchasingTools: ErpNextTool[] = [
         filters.push([
           "supplier",
           "=",
-          await resolveSupplier(ctx.client, input.supplier as string),
+          await resolveSupplier(ctx.client, input.supplier as string, {
+            inputPath: "supplier",
+          }),
         ]);
       }
       if (input.status) {
@@ -589,7 +595,9 @@ export const purchasingTools: ErpNextTool[] = [
         filters.push([
           "supplier",
           "=",
-          await resolveSupplier(ctx.client, input.supplier as string),
+          await resolveSupplier(ctx.client, input.supplier as string, {
+            inputPath: "supplier",
+          }),
         ]);
       }
       if (input.status) {

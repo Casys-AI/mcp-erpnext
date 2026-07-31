@@ -224,6 +224,7 @@ export const accountingTools: ErpNextTool[] = [
             ctx.client,
             input.party_type as string,
             input.party as string,
+            { inputPath: "party" },
           ),
         ]);
       }

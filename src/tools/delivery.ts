@@ -50,7 +50,9 @@ export const deliveryTools: ErpNextTool[] = [
         filters.push([
           "customer",
           "=",
-          await resolveCustomer(ctx.client, input.customer as string),
+          await resolveCustomer(ctx.client, input.customer as string, {
+            inputPath: "customer",
+          }),
         ]);
       }
       if (input.status) {

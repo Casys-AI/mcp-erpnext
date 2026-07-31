@@ -1,6 +1,10 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { ErpNextToolsClient } from "./client.ts";
 import { type FrappeClient, setFrappeClient } from "./api/frappe-client.ts";
+import { AmbiguousLinkError } from "./api/resolve.ts";
+import { linkDisambiguationRequestKey } from "./mrtr/link-disambiguation.ts";
+import type { ErpNextTool, ErpNextToolContext } from "./tools/types.ts";
+import type { ToolHandlerContext } from "@casys/mcp-server";
 
 // Note: Error handling previously tested here (isError wrapping) has been moved
 // to the server layer via toolErrorMapper in server.ts. Handlers now throw
@@ -14,6 +18,147 @@ Deno.test("buildHandlersMap - returns a handler for each registered tool", () =>
   assertEquals(handlers.size, tools.length);
   for (const tool of tools) {
     assertEquals(handlers.has(tool.name), true);
+  }
+});
+
+Deno.test("buildHandlersMap - forwards MCP request context to ERPNext tools", async () => {
+  let received: ErpNextToolContext | undefined;
+  const tool: ErpNextTool = {
+    name: "erpnext_context_probe",
+    description: "Test-only MCP context probe",
+    category: "setup",
+    inputSchema: { type: "object" },
+    handler: async (_input, context) => {
+      received = context;
+      return "ok";
+    },
+  };
+  const client = new ErpNextToolsClient();
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool];
+  const frappeClient = {} as FrappeClient;
+  const mcpContext: ToolHandlerContext = {
+    toolName: tool.name,
+    clientCapabilities: { elicitation: {} },
+    inputResponses: { selected_customer: { action: "accept" } },
+    retryVerified: true,
+  };
+
+  setFrappeClient(frappeClient);
+  try {
+    await client.buildHandlersMap().get(tool.name)!({}, mcpContext);
+  } finally {
+    setFrappeClient(null);
+  }
+
+  assert(received, "tool should receive an ERPNext context");
+  assertEquals(received.client, frappeClient);
+  assertEquals(received.clientCapabilities, mcpContext.clientCapabilities);
+  assertEquals(received.inputResponses, mcpContext.inputResponses);
+  assertEquals(received.retryVerified, true);
+});
+
+Deno.test("buildHandlersMap - remains compatible without MCP request context", async () => {
+  let received: ErpNextToolContext | undefined;
+  const tool: ErpNextTool = {
+    name: "erpnext_context_compatibility_probe",
+    description: "Test-only MCP context compatibility probe",
+    category: "setup",
+    inputSchema: { type: "object" },
+    handler: async (_input, context) => {
+      received = context;
+      return "ok";
+    },
+  };
+  const client = new ErpNextToolsClient();
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool];
+  const frappeClient = {} as FrappeClient;
+
+  setFrappeClient(frappeClient);
+  try {
+    await client.buildHandlersMap().get(tool.name)!({});
+  } finally {
+    setFrappeClient(null);
+  }
+
+  assert(received, "tool should receive an ERPNext context");
+  assertEquals(received.client, frappeClient);
+  assertEquals(Object.keys(received), ["client"]);
+});
+
+Deno.test("buildHandlersMap - uses resolved Link IDs in UI refresh requests", async () => {
+  const inputPath = "customer";
+  const requestKey = linkDisambiguationRequestKey(inputPath);
+  const tool: ErpNextTool = {
+    name: "erpnext_context_ui_probe",
+    description: "Test-only UI Link disambiguation probe",
+    category: "setup",
+    inputSchema: { type: "object" },
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    handler: async (input) => {
+      if (input.customer === "Acme") {
+        throw new AmbiguousLinkError({
+          message: "ambiguous customer",
+          doctype: "Customer",
+          identifier: "Acme",
+          inputPath,
+          candidates: [
+            { id: "CUST-001", label: "Acme" },
+            { id: "CUST-002", label: "Acme" },
+          ],
+          truncated: false,
+        });
+      }
+      return {
+        doctype: "Customer",
+        data: [],
+        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+      };
+    },
+  };
+  const client = new ErpNextToolsClient({ enableLinkDisambiguation: true });
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool];
+  const frappeClient = {} as FrappeClient;
+
+  setFrappeClient(frappeClient);
+  try {
+    const handler = client.buildHandlersMap().get(tool.name)!;
+    const initial = await handler(
+      { customer: "Acme" },
+      {
+        toolName: tool.name,
+        clientCapabilities: { elicitation: {} },
+      },
+    ) as Record<string, unknown>;
+    assertEquals(initial.resultType, "input_required");
+    assertEquals(
+      "structuredContent" in initial,
+      false,
+      "UI metadata must not hide the top-level MRTR signal",
+    );
+
+    const result = await handler(
+      { customer: "Acme" },
+      {
+        toolName: tool.name,
+        clientCapabilities: { elicitation: {} },
+        inputResponses: {
+          [requestKey]: {
+            action: "accept",
+            content: { recordId: "CUST-002" },
+          },
+        },
+        retryVerified: true,
+      },
+    ) as { structuredContent: Record<string, unknown> };
+
+    assertEquals(
+      (result.structuredContent.refreshRequest as {
+        arguments: Record<string, unknown>;
+      }).arguments,
+      { customer: "CUST-002" },
+    );
+  } finally {
+    setFrappeClient(null);
   }
 });
 

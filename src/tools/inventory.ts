@@ -236,7 +236,9 @@ export const inventoryTools: ErpNextTool[] = [
         filters.push([
           "item_code",
           "=",
-          await resolveItem(ctx.client, input.item_code as string),
+          await resolveItem(ctx.client, input.item_code as string, {
+            inputPath: "item_code",
+          }),
         ]);
       }
       if (input.warehouse) {

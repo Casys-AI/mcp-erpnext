@@ -35,10 +35,32 @@ const result = await ctx.client.callMethod("frappe.client.submit", {
 **Note**: `frappe.client.cancel` does NOT have this problem — it accepts
 `{doctype, name}`.
 
-### Fix `uom` → `stock_uom` (inventory.ts)
+### Item's unit of measure is `stock_uom`, not `uom`
 
-The `uom` field in `erpnext_item_create` is called `stock_uom` in ERPNext.
-Fixed.
+**Symptom**: `erpnext_item_create` accepted a `uom` argument and the created
+Item had no unit of measure set — silently, with no error from Frappe.
+
+**Cause**: the Item DocType stores it as `stock_uom`. Frappe ignores unknown
+fields on create rather than rejecting them, so a wrong field name produces a
+successful call and an incomplete record.
+
+**Applied fix** (`src/tools/inventory.ts`): the tool keeps `uom` as its argument
+name — it is what a caller expects — and maps it on the way out:
+
+```typescript
+if (input.uom) data.stock_uom = input.uom as string;
+```
+
+The argument description now states the mapping, so the discrepancy is visible
+from `tools/list` rather than only from the source.
+
+**Note on this entry**: it previously read "Fixed" and had done since the
+document was imported from another repository (`b1ce00d`, "Sync from
+pml-cloud"). The fix existed _there_. In this repository the mapping was never
+applied, and the bug survived until 2026-07-31 — protected by a note claiming it
+was already handled. Imported documentation describes the codebase it came from;
+carrying it over without re-verifying is how a defect gets a certificate of good
+health.
 
 ### FrappeClient now parses `_server_messages`
 

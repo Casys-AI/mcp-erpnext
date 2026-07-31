@@ -36,6 +36,11 @@ also publishes the matching RFC 9728 metadata at
 `/.well-known/oauth-protected-resource/mcp`; make sure a reverse proxy forwards
 that path too.
 
+The planned, unreleased 3.0.0 HTTP surface uses MCP 2026-07-28. An MCP request
+must include `MCP-Protocol-Version`, `Mcp-Method`, and the `_meta` protocol
+envelope shown below. `clientInfo` is recommended by the protocol (SHOULD), not
+required.
+
 ---
 
 ## Environment variables
@@ -191,6 +196,8 @@ curl -s http://localhost:7654/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2026-07-28" \
+  -H "Mcp-Method: tools/list" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1,"params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
 
 # Note: the server uses the stateless transport, so every request must carry
@@ -202,7 +209,9 @@ curl -s http://localhost:7654/mcp \
 # Step 3 — confirm 401 without token
 curl -sv http://localhost:7654/mcp -X POST \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"ping","id":1}'
+  -H "MCP-Protocol-Version: 2026-07-28" \
+  -H "Mcp-Method: ping" \
+  -d '{"jsonrpc":"2.0","method":"ping","id":1,"params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
 # Expect: HTTP 401 + WWW-Authenticate: Bearer resource_metadata="…", error="missing_token"
 ```
 

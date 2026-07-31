@@ -46,6 +46,7 @@ import {
 import { buildAuthProvider, loadAuthConfig } from "./src/auth/config.ts";
 import { warmCache } from "./src/cache/warm.ts";
 import { resourceMetadataRoute } from "./src/auth/resource-metadata-route.ts";
+import { loadMrtrConfig } from "./src/mrtr/config.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
 
@@ -88,10 +89,14 @@ async function main() {
   const authMetadataRoute = authProvider
     ? resourceMetadataRoute(authProvider)
     : undefined;
+  const mrtrConfig = loadMrtrConfig();
 
   // Initialize tools client
   const toolsClient = new ErpNextToolsClient(
-    categories ? { categories } : undefined,
+    {
+      ...(categories ? { categories } : {}),
+      enableLinkDisambiguation: mrtrConfig !== undefined,
+    },
   );
 
   // Build MCP server
@@ -99,6 +104,11 @@ async function main() {
     name: "mcp-erpnext",
     version: "3.0.0",
     transport: "stateless",
+    cache: {
+      ttlMs: 3_600_000,
+      scope: "public",
+    },
+    mrtr: mrtrConfig,
     maxConcurrent: 10,
     backpressureStrategy: "queue",
     validateSchema: true,

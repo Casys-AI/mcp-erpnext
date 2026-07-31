@@ -27,6 +27,39 @@ const PARTIAL_MATCH_PROBE_LIMIT = 5;
 export interface ResolveLinkOptions {
   /** Default true. Pass false on write paths — a fuzzy match there can silently attach the wrong record. */
   allowPartialMatch?: boolean;
+  /** Top-level tool input field to replace when an MCP client disambiguates via MRTR. */
+  inputPath?: string;
+}
+
+export interface LinkCandidate {
+  id: string;
+  label: string;
+}
+
+/** Structured ambiguity used by the MCP layer to offer a safe MRTR choice. */
+export class AmbiguousLinkError extends Error {
+  readonly doctype: string;
+  readonly identifier: string;
+  readonly inputPath?: string;
+  readonly candidates: LinkCandidate[];
+  readonly truncated: boolean;
+
+  constructor(options: {
+    message: string;
+    doctype: string;
+    identifier: string;
+    inputPath?: string;
+    candidates: LinkCandidate[];
+    truncated: boolean;
+  }) {
+    super(options.message);
+    this.name = "AmbiguousLinkError";
+    this.doctype = options.doctype;
+    this.identifier = options.identifier;
+    this.inputPath = options.inputPath;
+    this.candidates = options.candidates;
+    this.truncated = options.truncated;
+  }
 }
 
 /**
@@ -45,6 +78,7 @@ async function resolveUnique(
   value: string,
   probeLimit: number,
   ambiguityHint: string,
+  inputPath?: string,
 ): Promise<string | undefined> {
   const rows = await client.list(doctype, {
     filters: [[searchField, op, value]],
@@ -54,14 +88,23 @@ async function resolveUnique(
   if (rows.length === 0) return undefined;
   if (rows.length === 1) return rows[0].name as string;
 
-  const candidates = rows.map((r) => `${r.name} (${r[searchField]})`).join(
-    ", ",
-  );
-  const suffix = rows.length === probeLimit ? ", and possibly more" : "";
-  throw new Error(
-    `[resolveLink] Ambiguous ${doctype} identifier "${identifier}": ` +
-      `did you mean ${candidates}${suffix}? ${ambiguityHint}`,
-  );
+  const candidates = rows.map((row) => ({
+    id: String(row.name),
+    label: String(row[searchField] ?? row.name),
+  }));
+  const candidateText = candidates.map(({ id, label }) => `${id} (${label})`)
+    .join(", ");
+  const truncated = rows.length === probeLimit;
+  const suffix = truncated ? ", and possibly more" : "";
+  throw new AmbiguousLinkError({
+    message: `[resolveLink] Ambiguous ${doctype} identifier "${identifier}": ` +
+      `did you mean ${candidateText}${suffix}? ${ambiguityHint}`,
+    doctype,
+    identifier,
+    inputPath,
+    candidates,
+    truncated,
+  });
 }
 
 /**
@@ -79,7 +122,7 @@ export async function resolveLink(
   searchField: string,
   options: ResolveLinkOptions = {},
 ): Promise<string> {
-  const { allowPartialMatch = true } = options;
+  const { allowPartialMatch = true, inputPath } = options;
   const cache = getCache();
   const missKey = `resolve:miss:${doctype}:${identifier}`;
 
@@ -102,6 +145,7 @@ export async function resolveLink(
     identifier,
     EXACT_MATCH_PROBE_LIMIT,
     "Please pass the record's ID directly.",
+    inputPath,
   );
   if (exact !== undefined) return exact;
 
@@ -115,6 +159,7 @@ export async function resolveLink(
       `%${identifier}%`,
       PARTIAL_MATCH_PROBE_LIMIT,
       "Please pass an exact value.",
+      inputPath,
     );
     if (partial !== undefined) return partial;
   }
@@ -125,29 +170,33 @@ export async function resolveLink(
 export function resolveEmployee(
   client: FrappeClient,
   identifier: string,
+  options: ResolveLinkOptions = {},
 ): Promise<string> {
-  return resolveLink(client, "Employee", identifier, "employee_name");
+  return resolveLink(client, "Employee", identifier, "employee_name", options);
 }
 
 export function resolveCustomer(
   client: FrappeClient,
   identifier: string,
+  options: ResolveLinkOptions = {},
 ): Promise<string> {
-  return resolveLink(client, "Customer", identifier, "customer_name");
+  return resolveLink(client, "Customer", identifier, "customer_name", options);
 }
 
 export function resolveSupplier(
   client: FrappeClient,
   identifier: string,
+  options: ResolveLinkOptions = {},
 ): Promise<string> {
-  return resolveLink(client, "Supplier", identifier, "supplier_name");
+  return resolveLink(client, "Supplier", identifier, "supplier_name", options);
 }
 
 export function resolveItem(
   client: FrappeClient,
   identifier: string,
+  options: ResolveLinkOptions = {},
 ): Promise<string> {
-  return resolveLink(client, "Item", identifier, "item_name");
+  return resolveLink(client, "Item", identifier, "item_name", options);
 }
 
 /** Human-readable name field per doctype, for dynamic-link resolution. */

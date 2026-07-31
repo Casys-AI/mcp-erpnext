@@ -19,8 +19,13 @@ import type {
   ErpNextToolCategory,
   ToolAnnotations,
 } from "./tools/types.ts";
-import type { MCPToolMeta } from "@casys/mcp-server";
+import type {
+  MCPToolMeta,
+  ToolHandler,
+  ToolHandlerContext,
+} from "@casys/mcp-server";
 import { getFrappeClient } from "./api/frappe-client.ts";
+import { runWithLinkDisambiguation } from "./mrtr/link-disambiguation.ts";
 import { withUiRefreshRequest } from "./tools/ui-refresh.ts";
 
 // Re-export from tools
@@ -76,6 +81,8 @@ export interface MCPToolWireFormat {
 export interface ErpNextToolsClientOptions {
   /** Restrict tools to specific categories (e.g. `["selling", "stock"]`). Omit to load all. */
   categories?: string[];
+  /** Enable MRTR forms for ambiguous Link-field resolution. Default: false. */
+  enableLinkDisambiguation?: boolean;
 }
 
 /**
@@ -84,8 +91,10 @@ export interface ErpNextToolsClientOptions {
  */
 export class ErpNextToolsClient {
   private tools: ErpNextTool[];
+  private readonly enableLinkDisambiguation: boolean;
 
   constructor(options?: ErpNextToolsClientOptions) {
+    this.enableLinkDisambiguation = options?.enableLinkDisambiguation ?? false;
     if (options?.categories) {
       this.tools = options.categories.flatMap((cat) => getToolsByCategory(cat));
     } else {
@@ -122,20 +131,52 @@ export class ErpNextToolsClient {
    * (object for the UI viewer). McpApp passes pre-formatted results
    * through unchanged.
    */
-  buildHandlersMap(): Map<
-    string,
-    (args: Record<string, unknown>) => Promise<unknown>
-  > {
-    const handlers = new Map<
-      string,
-      (args: Record<string, unknown>) => Promise<unknown>
-    >();
+  buildHandlersMap(): Map<string, ToolHandler> {
+    const handlers = new Map<string, ToolHandler>();
     for (const tool of this.tools) {
       const toolMeta = tool._meta;
-      handlers.set(tool.name, async (args: Record<string, unknown>) => {
+      handlers.set(tool.name, async (
+        args: Record<string, unknown>,
+        mcpContext?: ToolHandlerContext,
+      ) => {
         const client = getFrappeClient();
-        const rawResult = await tool.handler(args, { client });
-        const result = withUiRefreshRequest(rawResult, tool.name, args);
+        const toolContext = {
+          client,
+          ...(mcpContext?.clientCapabilities !== undefined
+            ? { clientCapabilities: mcpContext.clientCapabilities }
+            : {}),
+          ...(mcpContext?.inputResponses !== undefined
+            ? { inputResponses: mcpContext.inputResponses }
+            : {}),
+          ...(mcpContext?.retryVerified !== undefined
+            ? { retryVerified: mcpContext.retryVerified }
+            : {}),
+        };
+        const execution = this.enableLinkDisambiguation
+          ? await runWithLinkDisambiguation({
+            args,
+            context: mcpContext,
+            enabled: true,
+            execute: (callArgs) => tool.handler(callArgs, toolContext),
+          })
+          : {
+            result: await tool.handler(args, toolContext),
+            args,
+          };
+        if (
+          execution.result !== null &&
+          typeof execution.result === "object" &&
+          !Array.isArray(execution.result) &&
+          (execution.result as Record<string, unknown>).resultType ===
+            "input_required"
+        ) {
+          return execution.result;
+        }
+        const result = withUiRefreshRequest(
+          execution.result,
+          tool.name,
+          execution.args,
+        );
 
         // For viewer tools, return a pre-formatted MCP result so the server
         // passes it through intact. Viewers receive structuredContent directly;

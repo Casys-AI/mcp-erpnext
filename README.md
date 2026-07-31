@@ -148,12 +148,18 @@ Add to `.vscode/mcp.json`:
 
 ### HTTP mode
 
-> **Breaking in 3.0.0 — HTTP clients only.** The HTTP transport is now stateless
-> (MCP spec 2026-07-28). Every request must carry
+> **Implemented in unreleased 3.0.0 — HTTP clients only.** The HTTP transport is
+> stateless (MCP spec 2026-07-28). Every request must carry
 > `params._meta["io.modelcontextprotocol/protocolVersion"]`; clients that omit
-> it get HTTP 400. The official TypeScript SDK v1 line is affected. **stdio is
+> it are rejected. The official TypeScript SDK v1 line is affected. **stdio is
 > unaffected** — if you connect via `command`/`args` above, nothing changes. See
 > [the migration guide](docs/migration-mcp-spec-2026-07-28.md), or stay on 2.x.
+
+> 3.0.0 HTTP clients must also send `MCP-Protocol-Version: 2026-07-28`, the
+> matching `Mcp-Method`, and an object-valued
+> `params._meta["io.modelcontextprotocol/clientCapabilities"]`. `clientInfo` is
+> a protocol SHOULD, not a mandatory field. The new public one-hour cache hints
+> apply only to protocol discovery/list/read responses, not ERPNext data.
 
 ```bash
 ERPNEXT_URL=http://localhost:8000 \
@@ -285,6 +291,11 @@ Full per-tool reference with parameters: [`docs/tools.md`](docs/tools.md).
 | `ERPNEXT_API_KEY`          | Yes      | API Key from User Settings                                                                                    |
 | `ERPNEXT_API_SECRET`       | Yes      | API Secret from User Settings                                                                                 |
 | `ERPNEXT_MAX_UPLOAD_BYTES` | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                 |
+| `MCP_MRTR_SIGNING_KEY`     | No       | Exactly 64 lowercase hex characters; shared across HTTP instances; enables signed ambiguous-link elicitation  |
+
+MRTR is opt-in. Without this key, or when the client does not advertise
+elicitation, ambiguous links keep returning the existing actionable ambiguity
+error instead of prompting for a selection.
 
 ## Architecture
 

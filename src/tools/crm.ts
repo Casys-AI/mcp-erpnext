@@ -204,6 +204,7 @@ export const crmTools: ErpNextTool[] = [
             ctx.client,
             input.opportunity_from as string,
             input.party_name as string,
+            { inputPath: "party_name" },
           ),
         ]);
       }

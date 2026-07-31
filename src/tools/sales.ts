@@ -288,7 +288,9 @@ export const salesTools: ErpNextTool[] = [
         filters.push([
           "customer",
           "=",
-          await resolveCustomer(ctx.client, input.customer as string),
+          await resolveCustomer(ctx.client, input.customer as string, {
+            inputPath: "customer",
+          }),
         ]);
       }
       if (input.status) {
@@ -619,7 +621,9 @@ export const salesTools: ErpNextTool[] = [
         filters.push([
           "customer",
           "=",
-          await resolveCustomer(ctx.client, input.customer as string),
+          await resolveCustomer(ctx.client, input.customer as string, {
+            inputPath: "customer",
+          }),
         ]);
       }
       if (input.status) {
@@ -878,6 +882,7 @@ export const salesTools: ErpNextTool[] = [
             ctx.client,
             input.quotation_to as string,
             input.party_name as string,
+            { inputPath: "party_name" },
           ),
         ]);
       }
@@ -1013,7 +1018,7 @@ export const salesTools: ErpNextTool[] = [
           ctx.client,
           input.quotation_to as string,
           input.party_name as string,
-          { allowPartialMatch: false },
+          { allowPartialMatch: false, inputPath: "party_name" },
         ),
         items,
       };

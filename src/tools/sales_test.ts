@@ -9,6 +9,7 @@
 
 import { assertEquals, assertRejects } from "@std/assert";
 import { salesTools } from "./sales.ts";
+import { AmbiguousLinkError } from "../api/resolve.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
 
@@ -279,6 +280,41 @@ Deno.test("erpnext_quotation_create - resolves party_name before building the cr
   );
 
   assertEquals(createdData.party_name, "CUST-042");
+});
+
+Deno.test("erpnext_quotation_create - reports party_name ambiguity before create", async () => {
+  const { FrappeAPIError } = await import("../api/frappe-client.ts");
+  let createCalls = 0;
+  const client = makeMockClient({
+    get: async () => {
+      throw new FrappeAPIError("not found", 404, null);
+    },
+    list: async () => [
+      { name: "CUST-001", customer_name: "Ambiguous Co" },
+      { name: "CUST-002", customer_name: "Ambiguous Co" },
+    ],
+    create: async () => {
+      createCalls++;
+      return { name: "QTN-NEW-001" };
+    },
+  });
+
+  const tool = getTool("erpnext_quotation_create");
+  const error = await assertRejects(
+    () =>
+      tool.handler(
+        {
+          quotation_to: "Customer",
+          party_name: "Ambiguous Co",
+          items: [{ item_code: "ITEM-001", qty: 1, rate: 100 }],
+        },
+        makeCtx(client),
+      ),
+    AmbiguousLinkError,
+  );
+
+  assertEquals(error.inputPath, "party_name");
+  assertEquals(createCalls, 0);
 });
 
 // ── erpnext_sales_order_submit / erpnext_sales_invoice_submit ────────────────

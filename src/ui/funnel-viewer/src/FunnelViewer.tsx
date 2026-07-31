@@ -421,8 +421,6 @@ export function FunnelViewer() {
   }
 
   useEffect(() => {
-    app.connect().catch(() => {});
-
     app.ontoolresult = (result: ToolResultPayload) => {
       consumeToolResult(result);
     };
@@ -432,6 +430,8 @@ export function FunnelViewer() {
         setLoading(true);
       }
     };
+
+    app.connect().catch(() => {});
   }, []);
 
   useEffect(() => {

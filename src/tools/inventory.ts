@@ -117,7 +117,8 @@ export const inventoryTools: ErpNextTool[] = [
         },
         uom: {
           type: "string",
-          description: "Unit of measure (default: 'Nos')",
+          description:
+            "Stock unit of measure, sent to ERPNext as stock_uom (for example 'Nos')",
         },
         is_stock_item: {
           type: "boolean",
@@ -141,7 +142,7 @@ export const inventoryTools: ErpNextTool[] = [
         item_name: input.item_name as string,
       };
       if (input.item_group) data.item_group = input.item_group as string;
-      if (input.uom) data.uom = input.uom as string;
+      if (input.uom) data.stock_uom = input.uom as string;
       if (input.is_stock_item !== undefined) {
         data.is_stock_item = input.is_stock_item;
       }

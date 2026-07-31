@@ -335,13 +335,13 @@ export function InvoiceViewer() {
   }
 
   useEffect(() => {
-    app.connect().catch(() => {});
     app.ontoolresult = (result: ToolResultPayload) => {
       consumeToolResult(result);
     };
     app.ontoolinputpartial = () => {
       if (!dataRef.current) setLoading(true);
     };
+    app.connect().catch(() => {});
   }, []);
 
   useEffect(() => {

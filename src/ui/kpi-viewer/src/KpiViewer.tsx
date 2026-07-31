@@ -467,8 +467,6 @@ export function KpiViewer() {
   }
 
   useEffect(() => {
-    app.connect().catch(() => {});
-
     app.ontoolresult = (result: ToolResultPayload) => {
       consumeToolResult(result);
     };
@@ -478,6 +476,8 @@ export function KpiViewer() {
         setLoading(true);
       }
     };
+
+    app.connect().catch(() => {});
   }, []);
 
   useEffect(() => {

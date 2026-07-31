@@ -1304,8 +1304,6 @@ export function ChartViewer() {
   }
 
   useEffect(() => {
-    app.connect().catch(() => {});
-
     app.ontoolresult = (result: ToolResultPayload) => {
       consumeToolResult(result);
     };
@@ -1315,6 +1313,8 @@ export function ChartViewer() {
         setLoading(true);
       }
     };
+
+    app.connect().catch(() => {});
   }, []);
 
   useEffect(() => {

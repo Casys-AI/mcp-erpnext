@@ -10,7 +10,7 @@ reachable through a shared MCP bridge with real identity.
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | **MCP bridge wiring**   | Connect to a Deno Deploy relay (local tunnel → cloud → host) so viewers and KPI feeds can be published and shared outside a single host session, not just spawned per-client over stdio.                                         | In progress |
 | **ERP-agnostic core**   | Extract the Frappe/ERPNext REST client behind an adapter interface so the same tool catalog and viewers can target other ERP backends. ERPNext becomes the first adapter rather than a hard dependency.                          | Next        |
-| **Zitadel auth (OIDC)** | Wire [Zitadel](https://zitadel.com) as the OAuth2/OIDC provider for the HTTP transport: JWT/JWKS validation and per-tool scope enforcement (`erpnext:read` vs `erpnext:write`). Prerequisite for multi-tenant bridge deployment. | Next        |
+| **Zitadel auth (OIDC)** | Wire [Zitadel](https://zitadel.com) as the OAuth2/OIDC provider for the HTTP transport: JWT/JWKS validation and per-tool scope enforcement (`erpnext:read` vs `erpnext:write`). Prerequisite for multi-tenant bridge deployment. | Done        |
 
 ## Interactive Additions (P0)
 

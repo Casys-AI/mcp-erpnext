@@ -88,7 +88,7 @@
 | `erpnext_company_list`   | Company | List companies (name, abbr, currency, country)         | doclist-viewer |
 | `erpnext_company_create` | Company | Create company (name, abbr, currency, country, domain) | -              |
 
-### Generic Operations (9 tools)
+### Generic Operations (10 tools)
 
 | Tool                   | DocType | Operations                                       | UI Viewer      |
 | ---------------------- | ------- | ------------------------------------------------ | -------------- |

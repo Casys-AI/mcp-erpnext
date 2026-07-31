@@ -304,8 +304,6 @@ export function StockViewer() {
   }
 
   useEffect(() => {
-    app.connect().catch(() => {});
-
     app.ontoolresult = (result: ToolResultPayload) => {
       consumeToolResult(result);
     };
@@ -315,6 +313,8 @@ export function StockViewer() {
         setLoading(true);
       }
     };
+
+    app.connect().catch(() => {});
   }, []);
 
   useEffect(() => {

@@ -1271,10 +1271,6 @@ export function KanbanViewer() {
   }
 
   useEffect(() => {
-    app.connect().catch(() => {
-      setError("Failed to connect MCP App host");
-    });
-
     app.ontoolinput = (params: { arguments?: Record<string, unknown> }) => {
       const toolName = app.getHostContext()?.toolInfo?.tool.name;
       if (toolName && params.arguments) {
@@ -1312,6 +1308,10 @@ export function KanbanViewer() {
         startLoading();
       }
     };
+
+    app.connect().catch(() => {
+      setError("Failed to connect MCP App host");
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

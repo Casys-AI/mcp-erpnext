@@ -1,6 +1,6 @@
 # Repository layout
 
-Where things live. Tool counts are per file and sum to 124.
+Where things live. Tool counts are per file and sum to 125.
 
 ```
 server.ts           # MCP server (stdio + HTTP + inspector)
@@ -25,7 +25,7 @@ src/
     manufacturing.ts  # 7 manufacturing tools
     crm.ts            # 8 CRM tools
     assets.ts         # 8 asset tools
-    operations.ts     # 10 generic operations tools
+    operations.ts     # 11 generic operations tools
     setup.ts          # 3 company/setup tools
     kanban.ts         # 2 read-write kanban tools
     analytics.ts      # 17 analytics tools (charts, KPIs, funnel)

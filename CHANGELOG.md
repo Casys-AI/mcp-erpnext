@@ -25,6 +25,14 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Features
 
+- add `erpnext_method_call`, which invokes a whitelisted Frappe method by its
+  dotted path. It reaches business endpoints no typed tool wraps, including the
+  custom-app methods that are sometimes the only supported way to change a field
+  the document API refuses to write. The tool is deny-by-default: it calls
+  nothing unless the method matches `ERPNEXT_METHOD_ALLOWLIST` (exact paths,
+  `prefix.*` patterns, or `*`). Pass `http_method: "GET"` for methods
+  whitelisted read-only, and `invalidate` to drop a cached document the call
+  mutated
 - use `@casys/mcp-server` `^0.24` and the complete MCP 2026-07-28 HTTP contract:
   `server/discover`, routing headers, complete result envelopes, and public
   one-hour cache hints for discovery/list/read responses

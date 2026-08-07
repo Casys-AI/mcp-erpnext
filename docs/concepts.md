@@ -58,7 +58,7 @@ need HTTP mode.
 
 ## Tool categories and the escape hatch
 
-The server organises its 124 tools across 14 typed categories — sales,
+The server organises its 125 tools across 14 typed categories — sales,
 purchasing, accounting, HR, inventory, and so on. Each category wraps the
 doctypes its domain most commonly needs, with typed schemas, validated fields,
 and predictable behaviour.
@@ -73,6 +73,15 @@ The trade-off is explicitness: a typed tool can validate inputs specific to a
 DocType (required child table rows, mandatory fields, domain constraints) before
 touching ERPNext. The generic operations trust that the caller supplies a
 correct payload, which ERPNext then validates server-side.
+
+Some behaviour is not reachable through the document API at all. A site can
+refuse a direct field write and expose a whitelisted method as the only
+supported way to change it, and custom apps ship business endpoints that no
+DocType write can stand in for. `erpnext_method_call` covers that last gap: it
+calls a whitelisted method by its dotted path. Because it is a far wider surface
+than the typed tools, it is deny-by-default and only reaches methods matched by
+`ERPNEXT_METHOD_ALLOWLIST`; with that variable unset the tool refuses every
+call.
 
 ## MRTR: how link disambiguation reaches the user
 

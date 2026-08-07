@@ -26,6 +26,17 @@ Always required, regardless of transport (stdio or HTTP).
 
 ---
 
+## Whitelisted method calls
+
+Read lazily, on each `erpnext_method_call` invocation, so it can be changed
+without restarting the server.
+
+| Variable                   | Type                                     | Default | Required | Notes                                                                                                                                                                                                                                                                                     |
+| -------------------------- | ---------------------------------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_METHOD_ALLOWLIST` | string (comma-separated method patterns) | -       | No       | Dotted paths `erpnext_method_call` may invoke. An entry is an exact path (`my_app.api.do_thing`), a prefix wildcard (`my_app.api.*`), or `*` for everything. Matching is case-sensitive. Unset or empty means the tool refuses every call, so arbitrary RPC is always an explicit opt-in. |
+
+---
+
 ## MRTR — signed link disambiguation
 
 | Variable               | Type                            | Default | Required | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -66,6 +77,8 @@ set.
 <!-- Maintainer source references (not user-facing):
   ERPNEXT_URL / ERPNEXT_API_KEY / ERPNEXT_API_SECRET / ERPNEXT_MAX_UPLOAD_BYTES:
     src/api/frappe-client.ts:102 (DEFAULT_MAX_UPLOAD_BYTES), :647-673 (getFrappeClient)
+  ERPNEXT_METHOD_ALLOWLIST:
+    src/tools/method-allowlist.ts (getMethodAllowlist, isMethodAllowed)
   MCP_MRTR_SIGNING_KEY:
     src/mrtr/config.ts:23-32 (loadMrtrConfig, regex validation)
   MCP_AUTH_TOKEN / MCP_AUTH_TOKENS / MCP_OAUTH_JWKS_URL:

@@ -1,4 +1,4 @@
-# Tools Reference (124)
+# Tools Reference (125)
 
 Full reference for all ERPNext MCP tools. See [README](../README.md) for
 overview.
@@ -153,7 +153,7 @@ overview.
 | `erpnext_asset_maintenance_get`  | Asset Maintenance | Get with maintenance tasks                            |
 | `erpnext_asset_category_list`    | Asset Category    | List all categories                                   |
 
-## Generic Operations (10) → doclist-viewer
+## Generic Operations (11) → doclist-viewer
 
 | Tool                   | Operation | Notes                                             |
 | ---------------------- | --------- | ------------------------------------------------- |
@@ -167,6 +167,7 @@ overview.
 | `erpnext_doc_assign`   | Assign    | Native assignment (ToDo + notification) to users  |
 | `erpnext_doc_unassign` | Unassign  | Remove one user's native assignment               |
 | `erpnext_file_upload`  | Upload    | Attach base64 data as a native File               |
+| `erpnext_method_call`  | Call      | Any allowlisted whitelisted method by dotted path |
 
 `erpnext_file_upload` requires `file_name`, `content_base64`,
 `attached_to_doctype`, and `attached_to_name`; `attached_to_field` is optional.
@@ -174,6 +175,31 @@ Files are private by default (`is_private: false` makes them public), accept no
 local path or URL, are capped at 10 MiB decoded by default (override with
 positive-integer-byte `ERPNEXT_MAX_UPLOAD_BYTES`), require write permission on
 the DocType, and return native `File` metadata.
+
+`erpnext_method_call` reaches business endpoints that no typed tool wraps,
+including custom-app methods that are the only supported way to change a field
+the document API refuses to write directly (a `validate` hook that blocks the
+field, an `on_update` guard, a permlevel). It takes `method` (dotted path),
+optional `args`, optional `http_method` (`POST` by default; `GET` only for
+methods whitelisted read-only), and optional `invalidate` (`{doctype, name}`):
+pass that last one whenever the method mutates a document, or a later read may
+be served a stale cache entry.
+
+It is **deny-by-default**: without `ERPNEXT_METHOD_ALLOWLIST` every call is
+refused, and the allowlist accepts exact dotted paths, `prefix.*` patterns, or a
+bare `*` for everything. Scope it as narrowly as the work needs: the API key
+already carries its user's full permissions, so the allowlist is what keeps a
+prompt-injected agent from reaching methods the task never called for. Method
+paths are validated against `[A-Za-z0-9_.]` before the URL is built, so a
+crafted `method` cannot append a query string or traverse to another endpoint.
+
+```json
+{
+  "method": "my_app.api.update_task_meta",
+  "args": { "task": "TASK-2026-00001", "meta": "sku: ABC-1" },
+  "invalidate": { "doctype": "Task", "name": "TASK-2026-00001" }
+}
+```
 
 ## Kanban (2) → kanban-viewer
 

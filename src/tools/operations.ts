@@ -23,6 +23,32 @@ import {
   removeAssignment,
   validateAssignees,
 } from "./assignment.ts";
+import {
+  getMethodAllowlist,
+  isMethodAllowed,
+  isValidMethodPath,
+} from "./method-allowlist.ts";
+
+function parseInvalidateTarget(
+  raw: unknown,
+): { doctype: string; name: string } | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error(
+      "[erpnext_method_call] 'invalidate' must be an object with 'doctype' and 'name'",
+    );
+  }
+  const { doctype, name } = raw as Record<string, unknown>;
+  if (
+    typeof doctype !== "string" || !doctype.trim() ||
+    typeof name !== "string" || !name.trim()
+  ) {
+    throw new Error(
+      "[erpnext_method_call] 'invalidate.doctype' and 'invalidate.name' must be non-empty strings",
+    );
+  }
+  return { doctype: doctype.trim(), name: name.trim() };
+}
 
 export const operationsTools: ErpNextTool[] = [
   // ── File Attachments ───────────────────────────────────────────────────────
@@ -623,6 +649,119 @@ export const operationsTools: ErpNextTool[] = [
         data: doc,
         message: `${assignee} unassigned from ${doctype} ${name}`,
         assignment: unassignment,
+      };
+    },
+  },
+
+  // ── Whitelisted Method Call ───────────────────────────────────────────────
+
+  {
+    name: "erpnext_method_call",
+    annotations: { destructiveHint: true },
+    description:
+      "Call a whitelisted Frappe/ERPNext method by its dotted path. This is the escape hatch " +
+      "for business endpoints no typed tool wraps, including custom-app methods that are the " +
+      "only supported way to change a field the document API refuses to write directly. " +
+      "Deny-by-default: the method must match the ERPNEXT_METHOD_ALLOWLIST environment variable.",
+    category: "operations",
+    inputSchema: {
+      type: "object",
+      properties: {
+        method: {
+          type: "string",
+          description:
+            "Dotted path of the whitelisted method, e.g. 'frappe.client.get_count' or " +
+            "'my_app.api.do_thing'. Must be permitted by ERPNEXT_METHOD_ALLOWLIST.",
+          minLength: 1,
+        },
+        args: {
+          type: "object",
+          description:
+            "Keyword arguments for the method. Omit for a method that takes none.",
+          additionalProperties: true,
+        },
+        http_method: {
+          type: "string",
+          description:
+            "HTTP verb. Default 'POST'. Use 'GET' only for methods whitelisted read-only " +
+            "(@frappe.whitelist(methods=['GET'])), which reject POST.",
+          enum: ["GET", "POST"],
+          default: "POST",
+        },
+        invalidate: {
+          type: "object",
+          description:
+            "Document whose cache entry to drop after the call. Pass this whenever the method " +
+            "mutates a document, otherwise a later read may be served a stale copy.",
+          properties: {
+            doctype: { type: "string", minLength: 1 },
+            name: { type: "string", minLength: 1 },
+          },
+          required: ["doctype", "name"],
+        },
+      },
+      required: ["method"],
+    },
+    handler: async (input, ctx) => {
+      if (typeof input.method !== "string" || !input.method.trim()) {
+        throw new Error(
+          "[erpnext_method_call] 'method' must be a non-empty dotted path",
+        );
+      }
+      const method = input.method.trim();
+      if (!isValidMethodPath(method)) {
+        throw new Error(
+          `[erpnext_method_call] '${method}' is not a valid method path. ` +
+            "Expected a dotted path such as 'my_app.api.do_thing'.",
+        );
+      }
+
+      const allowlist = getMethodAllowlist();
+      if (allowlist.length === 0) {
+        throw new Error(
+          "[erpnext_method_call] ERPNEXT_METHOD_ALLOWLIST is not set, so no method may be " +
+            "called. Set it to a comma-separated list of dotted paths or 'prefix.*' patterns " +
+            "(e.g. 'my_app.api.*') to enable this tool.",
+        );
+      }
+      if (!isMethodAllowed(method, allowlist)) {
+        throw new Error(
+          `[erpnext_method_call] '${method}' is not in ERPNEXT_METHOD_ALLOWLIST ` +
+            `(${allowlist.join(", ")})`,
+        );
+      }
+
+      if (
+        input.args !== undefined &&
+        (typeof input.args !== "object" || input.args === null ||
+          Array.isArray(input.args))
+      ) {
+        throw new Error(
+          "[erpnext_method_call] 'args' must be an object of keyword arguments",
+        );
+      }
+      const httpMethod = input.http_method ?? "POST";
+      if (httpMethod !== "GET" && httpMethod !== "POST") {
+        throw new Error(
+          "[erpnext_method_call] 'http_method' must be 'GET' or 'POST'",
+        );
+      }
+      const invalidate = parseInvalidateTarget(input.invalidate);
+
+      const result = await ctx.client.callMethod(
+        method,
+        (input.args as Record<string, unknown>) ?? {},
+        { httpMethod },
+      );
+      if (invalidate) {
+        ctx.client.invalidate(invalidate.doctype, invalidate.name);
+      }
+
+      return {
+        data: result,
+        method,
+        message: `${method} called successfully`,
+        ...(invalidate ? { invalidated: invalidate } : {}),
       };
     },
   },

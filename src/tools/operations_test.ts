@@ -505,3 +505,164 @@ Deno.test("erpnext_doc_unassign - rejects a missing or empty assign_to", async (
     "non-empty user email",
   );
 });
+
+// ── erpnext_method_call ─────────────────────────────────────────────────────
+
+// Temporarily override the allowlist env var for the duration of a test block.
+function withAllowlist(value?: string): Disposable {
+  const saved = Deno.env.get("ERPNEXT_METHOD_ALLOWLIST");
+  if (value === undefined) {
+    Deno.env.delete("ERPNEXT_METHOD_ALLOWLIST");
+  } else {
+    Deno.env.set("ERPNEXT_METHOD_ALLOWLIST", value);
+  }
+  return {
+    [Symbol.dispose]() {
+      Deno.env.delete("ERPNEXT_METHOD_ALLOWLIST");
+      if (saved !== undefined) Deno.env.set("ERPNEXT_METHOD_ALLOWLIST", saved);
+    },
+  };
+}
+
+Deno.test("erpnext_method_call - calls an allowlisted method via POST", async () => {
+  using _env = withAllowlist("my_app.api.*");
+  const calls: unknown[] = [];
+  const result = await getTool("erpnext_method_call").handler(
+    { method: "my_app.api.update_meta", args: { name: "T-1", meta: "a: 1" } },
+    makeCtx(makeMockClient({
+      callMethod: (method: string, args: unknown, opts: unknown) => {
+        calls.push({ method, args, opts });
+        return Promise.resolve({ ok: true });
+      },
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(calls, [{
+    method: "my_app.api.update_meta",
+    args: { name: "T-1", meta: "a: 1" },
+    opts: { httpMethod: "POST" },
+  }]);
+  assertEquals(result.data, { ok: true });
+  assertEquals(result.method, "my_app.api.update_meta");
+});
+
+Deno.test("erpnext_method_call - forwards http_method GET", async () => {
+  using _env = withAllowlist("my_app.api.read_meta");
+  let seen: unknown;
+  await getTool("erpnext_method_call").handler(
+    { method: "my_app.api.read_meta", http_method: "GET" },
+    makeCtx(makeMockClient({
+      callMethod: (_m: string, _a: unknown, opts: unknown) => {
+        seen = opts;
+        return Promise.resolve(null);
+      },
+    })),
+  );
+  assertEquals(seen, { httpMethod: "GET" });
+});
+
+Deno.test("erpnext_method_call - invalidates the named document after the call", async () => {
+  using _env = withAllowlist("my_app.api.*");
+  const invalidated: string[][] = [];
+  const result = await getTool("erpnext_method_call").handler(
+    {
+      method: "my_app.api.update_meta",
+      invalidate: { doctype: "Task", name: "TASK-001" },
+    },
+    makeCtx(makeMockClient({
+      invalidate: (doctype: string, name: string) => {
+        invalidated.push([doctype, name]);
+      },
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(invalidated, [["Task", "TASK-001"]]);
+  assertEquals(result.invalidated, { doctype: "Task", name: "TASK-001" });
+});
+
+Deno.test("erpnext_method_call - refuses every method when the allowlist is unset", async () => {
+  using _env = withAllowlist(undefined);
+  await assertRejects(
+    () =>
+      getTool("erpnext_method_call").handler(
+        { method: "frappe.client.get_count" },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "ERPNEXT_METHOD_ALLOWLIST is not set",
+  );
+});
+
+Deno.test("erpnext_method_call - refuses a method outside the allowlist", async () => {
+  using _env = withAllowlist("my_app.api.*");
+  await assertRejects(
+    () =>
+      getTool("erpnext_method_call").handler(
+        { method: "frappe.client.delete" },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "is not in ERPNEXT_METHOD_ALLOWLIST",
+  );
+});
+
+Deno.test("erpnext_method_call - rejects a method path that could rewrite the URL", async () => {
+  using _env = withAllowlist("*");
+  await assertRejects(
+    () =>
+      getTool("erpnext_method_call").handler(
+        { method: "my_app.api.x?cmd=frappe.client.delete" },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "is not a valid method path",
+  );
+});
+
+Deno.test("erpnext_method_call - rejects a missing method", async () => {
+  using _env = withAllowlist("*");
+  await assertRejects(
+    () => getTool("erpnext_method_call").handler({}, makeCtx(makeMockClient())),
+    Error,
+    "non-empty dotted path",
+  );
+});
+
+Deno.test("erpnext_method_call - rejects non-object args", async () => {
+  using _env = withAllowlist("*");
+  await assertRejects(
+    () =>
+      getTool("erpnext_method_call").handler(
+        { method: "my_app.api.x", args: ["a", "b"] },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "'args' must be an object",
+  );
+});
+
+Deno.test("erpnext_method_call - rejects an incomplete invalidate target", async () => {
+  using _env = withAllowlist("*");
+  await assertRejects(
+    () =>
+      getTool("erpnext_method_call").handler(
+        { method: "my_app.api.x", invalidate: { doctype: "Task" } },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "must be non-empty strings",
+  );
+});
+
+Deno.test("erpnext_method_call - rejects an unsupported http_method", async () => {
+  using _env = withAllowlist("*");
+  await assertRejects(
+    () =>
+      getTool("erpnext_method_call").handler(
+        { method: "my_app.api.x", http_method: "DELETE" },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "'http_method' must be 'GET' or 'POST'",
+  );
+});

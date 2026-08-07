@@ -2,11 +2,11 @@
 # from another container stack (e.g. a chat client running in its own
 # compose project), join that stack's network instead: replace the top-level
 # `networks:` block below with a reference to the existing external network,
-# and list it under `services.mcp-erpnext.networks`.
+# and list it under `services.hvgerp-mcp.networks`.
 services:
-  mcp-erpnext:
+  hvgerp-mcp:
     build: .
-    container_name: mcp-erpnext
+    container_name: hvgerp-mcp
     restart: unless-stopped
     ports:
       # Loopback-only by default. Expose this beyond the host only with MCP auth

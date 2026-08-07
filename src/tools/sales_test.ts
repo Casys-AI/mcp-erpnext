@@ -68,7 +68,7 @@ Deno.test("erpnext_customer_list - returns formatted result", async () => {
   assertEquals((result.data as unknown[]).length, 2);
   assertEquals(
     (result._meta as { ui: { resourceUri: string } }).ui.resourceUri,
-    "ui://mcp-erpnext/doclist-viewer",
+    "ui://hvgerp-mcp/doclist-viewer",
   );
 });
 
@@ -215,7 +215,7 @@ Deno.test("erpnext_sales_invoice_list - returns invoices with _meta.ui", async (
   // Sales invoices list uses doclist viewer
   assertEquals(
     (result._meta as { ui: { resourceUri: string } }).ui.resourceUri,
-    "ui://mcp-erpnext/doclist-viewer",
+    "ui://hvgerp-mcp/doclist-viewer",
   );
 });
 

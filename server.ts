@@ -101,7 +101,7 @@ async function main() {
 
   // Build MCP server
   const server = new McpApp({
-    name: "mcp-erpnext",
+    name: "hvgerp-mcp",
     version: "3.0.0",
     transport: "stateless",
     cache: {
@@ -113,7 +113,7 @@ async function main() {
     backpressureStrategy: "queue",
     validateSchema: true,
     auth: authProvider ? { provider: authProvider } : undefined,
-    logger: (msg: string) => console.error(`[mcp-erpnext] ${msg}`),
+    logger: (msg: string) => console.error(`[hvgerp-mcp] ${msg}`),
     toolErrorMapper: (error: unknown) => {
       if (error instanceof FrappeAPIError) return error.message;
       if (error instanceof Error) return error.message;
@@ -135,7 +135,7 @@ async function main() {
       statSync,
     );
 
-    const resourceUri = `ui://mcp-erpnext/${viewerName}`;
+    const resourceUri = `ui://hvgerp-mcp/${viewerName}`;
     const humanName = viewerName
       .split("-")
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -154,24 +154,24 @@ async function main() {
           return { uri: resourceUri, mimeType: MCP_APP_MIME_TYPE, text: html };
         },
       );
-      console.error(`[mcp-erpnext] Registered UI resource: ${resourceUri}`);
+      console.error(`[hvgerp-mcp] Registered UI resource: ${resourceUri}`);
     } else {
       console.error(
-        `[mcp-erpnext] Warning: UI not built for ${resourceUri}. ` +
+        `[hvgerp-mcp] Warning: UI not built for ${resourceUri}. ` +
           `Run 'cd lib/erpnext/src/ui && node build-all.mjs' first or package ui-dist with the npm bundle.`,
       );
     }
   }
 
   console.error(
-    `[mcp-erpnext] Initialized — ${toolsClient.count} tools${
+    `[hvgerp-mcp] Initialized — ${toolsClient.count} tools${
       categories ? ` (categories: ${categories.join(", ")})` : ""
     }`,
   );
 
   // Fire-and-forget — must never block or fail startup (see warmCache() docs).
   warmCache().catch((err) => {
-    console.error("[mcp-erpnext] Cache warm failed (non-fatal):", err);
+    console.error("[hvgerp-mcp] Cache warm failed (non-fatal):", err);
   });
 
   // Start server
@@ -180,7 +180,7 @@ async function main() {
       hostname === "localhost";
     if (!isLoopback) {
       console.error(
-        `[mcp-erpnext] WARNING: binding to ${hostname} exposes the HTTP server ` +
+        `[hvgerp-mcp] WARNING: binding to ${hostname} exposes the HTTP server ` +
           `to the network. Every tool acts with the server's ERPNext API key, ` +
           `so restrict access (firewall, private network) or configure auth ` +
           `via MCP_AUTH_TOKEN(S)/MCP_OAUTH_JWKS_URL.`,
@@ -188,7 +188,7 @@ async function main() {
     }
 
     onSignal("SIGINT", () => {
-      console.error("[mcp-erpnext] Shutting down...");
+      console.error("[hvgerp-mcp] Shutting down...");
       exit(0);
     });
 
@@ -196,7 +196,7 @@ async function main() {
       // No auth configured — warn and fall back to unprotected HTTP.
       // Set MCP_AUTH_TOKEN, MCP_AUTH_TOKENS, or MCP_OAUTH_JWKS_URL to enable auth.
       console.error(
-        "[mcp-erpnext] WARNING: No auth configured for HTTP mode. " +
+        "[hvgerp-mcp] WARNING: No auth configured for HTTP mode. " +
           "Set MCP_AUTH_TOKEN, MCP_AUTH_TOKENS, or MCP_OAUTH_JWKS_URL to restrict access.",
       );
     }
@@ -208,7 +208,7 @@ async function main() {
       customRoutes: authMetadataRoute ? [authMetadataRoute] : undefined,
       onListen: (info: { hostname: string; port: number }) => {
         console.error(
-          `[mcp-erpnext] HTTP server listening${
+          `[hvgerp-mcp] HTTP server listening${
             authConfig ? "" : " (unauthenticated)"
           } on http://${info.hostname}:${info.port}`,
         );
@@ -220,17 +220,17 @@ async function main() {
           if (authConfig.jwksUrl) {
             authMethods.push(`OAuth JWT JWKS (${authConfig.jwksUrl})`);
           }
-          console.error(`[mcp-erpnext] Auth: ${authMethods.join(", ")}`);
+          console.error(`[hvgerp-mcp] Auth: ${authMethods.join(", ")}`);
         }
       },
     });
   } else {
     await server.start();
-    console.error("[mcp-erpnext] stdio mode ready");
+    console.error("[hvgerp-mcp] stdio mode ready");
   }
 }
 
 main().catch((err) => {
-  console.error("[mcp-erpnext] Fatal error:", err);
+  console.error("[hvgerp-mcp] Fatal error:", err);
   exit(1);
 });

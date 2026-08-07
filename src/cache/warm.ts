@@ -34,13 +34,13 @@ export async function warmCache(): Promise<void> {
     const tool = getToolByName(name);
     if (!tool) {
       console.error(
-        `[mcp-erpnext] Cache warm: unknown tool "${name}", skipping`,
+        `[hvgerp-mcp] Cache warm: unknown tool "${name}", skipping`,
       );
       continue;
     }
     if (!tool.annotations?.readOnlyHint) {
       console.error(
-        `[mcp-erpnext] Cache warm: "${name}" is not read-only, refusing to call it, skipping`,
+        `[hvgerp-mcp] Cache warm: "${name}" is not read-only, refusing to call it, skipping`,
       );
       continue;
     }
@@ -48,7 +48,7 @@ export async function warmCache(): Promise<void> {
       await tool.handler({}, { client });
     } catch (err) {
       console.error(
-        `[mcp-erpnext] Cache warm: "${name}" failed (non-fatal):`,
+        `[hvgerp-mcp] Cache warm: "${name}" failed (non-fatal):`,
         err,
       );
     }

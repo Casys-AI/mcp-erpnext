@@ -1,4 +1,4 @@
-# OAuth Setup Guide for mcp-erpnext
+# OAuth Setup Guide for hvgerp-mcp
 
 This server supports two auth modes that can be used together:
 
@@ -15,7 +15,7 @@ Keycloak, Google, Authentik, Zitadel, Azure AD, Okta, etc.
 ## How it works
 
 ```
-LibreChat  ──Bearer JWT──►  mcp-erpnext (port 7654)
+LibreChat  ──Bearer JWT──►  hvgerp-mcp (port 7654)
                                   │
                           validates JWT against
                           provider's JWKS URL
@@ -50,7 +50,7 @@ Add these to your `.env` file:
 ```env
 # Required for OAuth
 MCP_OAUTH_JWKS_URL=https://your-idp/.well-known/jwks.json
-MCP_OAUTH_AUDIENCE=mcp-erpnext
+MCP_OAUTH_AUDIENCE=hvgerp-mcp
 MCP_OAUTH_ISSUER=https://your-idp
 
 # Required for any auth mode — the exact public MCP endpoint URL (RFC 9728)
@@ -68,7 +68,7 @@ MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
 
 1. Go to **Applications → APIs → Create API**
    - Name: `ERPNext MCP`
-   - Identifier: `mcp-erpnext` ← this becomes your audience
+   - Identifier: `hvgerp-mcp` ← this becomes your audience
 
 2. Your JWKS URL is:
    ```
@@ -81,7 +81,7 @@ MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
 4. `.env`:
    ```env
    MCP_OAUTH_JWKS_URL=https://YOUR_DOMAIN.auth0.com/.well-known/jwks.json
-   MCP_OAUTH_AUDIENCE=mcp-erpnext
+   MCP_OAUTH_AUDIENCE=hvgerp-mcp
    MCP_OAUTH_ISSUER=https://YOUR_DOMAIN.auth0.com/
    MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
    ```
@@ -93,7 +93,7 @@ MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
 1. Create a **Realm** (e.g. `erpnext`)
 
 2. Create a **Client**:
-   - Client ID: `mcp-erpnext`
+   - Client ID: `hvgerp-mcp`
    - Client Protocol: `openid-connect`
    - Access Type: `confidential`
    - Service Accounts: **Enabled**
@@ -106,7 +106,7 @@ MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
 4. `.env`:
    ```env
    MCP_OAUTH_JWKS_URL=https://keycloak.yourdomain.com/realms/erpnext/protocol/openid-connect/certs
-   MCP_OAUTH_AUDIENCE=mcp-erpnext
+   MCP_OAUTH_AUDIENCE=hvgerp-mcp
    MCP_OAUTH_ISSUER=https://keycloak.yourdomain.com/realms/erpnext
    MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
    ```
@@ -116,7 +116,7 @@ MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
    curl -s -X POST \
      https://keycloak.yourdomain.com/realms/erpnext/protocol/openid-connect/token \
      -d "grant_type=client_credentials" \
-     -d "client_id=mcp-erpnext" \
+     -d "client_id=hvgerp-mcp" \
      -d "client_secret=YOUR_CLIENT_SECRET" \
      | jq -r .access_token
    ```
@@ -135,7 +135,7 @@ MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
 4. `.env`:
    ```env
    MCP_OAUTH_JWKS_URL=https://authentik.yourdomain.com/application/o/YOUR_APP_SLUG/jwks/
-   MCP_OAUTH_AUDIENCE=mcp-erpnext
+   MCP_OAUTH_AUDIENCE=hvgerp-mcp
    MCP_OAUTH_ISSUER=https://authentik.yourdomain.com/application/o/YOUR_APP_SLUG/
    MCP_AUTH_RESOURCE=https://mcp.example.com/mcp
    ```
@@ -175,9 +175,9 @@ https://www.googleapis.com/oauth2/v3/certs
 docker compose up -d --build
 
 # 3. Check logs to confirm OAuth is active
-docker compose logs mcp-erpnext --tail=20
+docker compose logs hvgerp-mcp --tail=20
 # Should show:
-# [mcp-erpnext] Auth: OAuth JWT JWKS (https://...)
+# [hvgerp-mcp] Auth: OAuth JWT JWKS (https://...)
 ```
 
 ---
@@ -187,7 +187,7 @@ docker compose logs mcp-erpnext --tail=20
 ```bash
 # Step 1 — get a JWT from your provider (example: client credentials)
 TOKEN=$(curl -s -X POST https://YOUR_IDP/token \
-  -d "grant_type=client_credentials&client_id=mcp-erpnext&client_secret=SECRET" \
+  -d "grant_type=client_credentials&client_id=hvgerp-mcp&client_secret=SECRET" \
   | jq -r .access_token)
 
 # Step 2 — call the MCP server with it
@@ -228,7 +228,7 @@ LibreChat sends the token in the `Authorization` header. You have two options:
 mcpServers:
   erpnext:
     type: streamable-http
-    url: http://mcp-erpnext:7654/mcp
+    url: http://hvgerp-mcp:7654/mcp
     title: "ERPNext"
     timeout: 60000
     initTimeout: 20000
@@ -246,7 +246,7 @@ static token in LibreChat:
 mcpServers:
   erpnext:
     type: streamable-http
-    url: http://mcp-erpnext:7654/mcp
+    url: http://hvgerp-mcp:7654/mcp
     title: "ERPNext"
     timeout: 60000
     initTimeout: 20000
@@ -271,7 +271,7 @@ MCP_AUTH_TOKEN=my-static-secret
 
 # OAuth JWT for external clients / user-level access
 MCP_OAUTH_JWKS_URL=https://your-idp/.well-known/jwks.json
-MCP_OAUTH_AUDIENCE=mcp-erpnext
+MCP_OAUTH_AUDIENCE=hvgerp-mcp
 MCP_OAUTH_ISSUER=https://your-idp
 
 # Required either way
@@ -286,11 +286,11 @@ to the OAuth JWT provider.
 
 ## Troubleshooting
 
-| Symptom                                        | Likely cause                        | Fix                                                                                                                   |
-| ---------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `401` with a valid-looking token               | Wrong audience or issuer claim      | Check `MCP_OAUTH_AUDIENCE` matches the `aud` claim in the JWT (decode at jwt.io)                                      |
-| `401` with `JWTExpired` in logs                | Token has expired                   | Re-issue a fresh token; for service accounts use a longer expiry                                                      |
-| `401` on every request                         | JWKS URL unreachable from container | Run `docker exec mcp-erpnext deno eval "console.log((await fetch('YOUR_JWKS_URL')).status)"` to verify network access |
-| Startup throws `MCP_AUTH_RESOURCE is required` | Resource URL missing                | Set `MCP_AUTH_RESOURCE` to the exact public MCP endpoint URL (normally `https://host/mcp`) — required for both modes  |
-| Server logs show no auth mode                  | Env vars not loaded                 | Check `.env` file path and `docker compose logs` for startup message                                                  |
-| Both static + OAuth returning 401              | Whitespace in token                 | Trim leading/trailing spaces in `.env` values                                                                         |
+| Symptom                                        | Likely cause                        | Fix                                                                                                                  |
+| ---------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `401` with a valid-looking token               | Wrong audience or issuer claim      | Check `MCP_OAUTH_AUDIENCE` matches the `aud` claim in the JWT (decode at jwt.io)                                     |
+| `401` with `JWTExpired` in logs                | Token has expired                   | Re-issue a fresh token; for service accounts use a longer expiry                                                     |
+| `401` on every request                         | JWKS URL unreachable from container | Run `docker exec hvgerp-mcp deno eval "console.log((await fetch('YOUR_JWKS_URL')).status)"` to verify network access |
+| Startup throws `MCP_AUTH_RESOURCE is required` | Resource URL missing                | Set `MCP_AUTH_RESOURCE` to the exact public MCP endpoint URL (normally `https://host/mcp`) — required for both modes |
+| Server logs show no auth mode                  | Env vars not loaded                 | Check `.env` file path and `docker compose logs` for startup message                                                 |
+| Both static + OAuth returning 401              | Whitespace in token                 | Trim leading/trailing spaces in `.env` values                                                                        |

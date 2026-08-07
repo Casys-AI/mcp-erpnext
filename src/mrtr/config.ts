@@ -25,7 +25,7 @@ export function loadMrtrConfig(): MrtrOptions | undefined {
 
   if (!/^[0-9a-f]{64}$/.test(signingKey)) {
     throw new Error(
-      "[mcp-erpnext] MCP_MRTR_SIGNING_KEY must be exactly 64 lowercase hex characters",
+      "[hvgerp-mcp] MCP_MRTR_SIGNING_KEY must be exactly 64 lowercase hex characters",
     );
   }
 

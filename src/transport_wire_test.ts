@@ -38,7 +38,7 @@ const MRTR_SIGNING_KEY = "0123456789abcdef".repeat(4);
 /** Build a minimal McpApp configured exactly as server.ts configures it. */
 function buildApp(): McpApp {
   const app = new McpApp({
-    name: "mcp-erpnext-wire-test",
+    name: "hvgerp-mcp-wire-test",
     version: "0.0.0",
     transport: "stateless",
     cache: { ttlMs: CACHE_TTL_MS, scope: "public" },
@@ -79,7 +79,7 @@ let _tasksHandler: FetchHandler | null = null;
 async function tasksHandler(): Promise<FetchHandler> {
   if (!_tasksHandler) {
     _tasksHandler = await new McpApp({
-      name: "mcp-erpnext-wire-tasks-test",
+      name: "hvgerp-mcp-wire-tasks-test",
       version: "0.0.0",
       transport: "stateless",
       extensions: { "io.modelcontextprotocol/tasks": {} },
@@ -93,7 +93,7 @@ let _mrtrHandler: FetchHandler | null = null;
 async function mrtrHandler(): Promise<FetchHandler> {
   if (!_mrtrHandler) {
     const app = new McpApp({
-      name: "mcp-erpnext-wire-mrtr-test",
+      name: "hvgerp-mcp-wire-mrtr-test",
       version: "0.0.0",
       transport: "stateless",
       mrtr: { signingKey: MRTR_SIGNING_KEY },
@@ -219,7 +219,7 @@ Deno.test(
     assertEquals(result["ttlMs"], CACHE_TTL_MS);
     assertEquals(result["cacheScope"], "public");
 
-    const serverInfo = { name: "mcp-erpnext-wire-test", version: "0.0.0" };
+    const serverInfo = { name: "hvgerp-mcp-wire-test", version: "0.0.0" };
     assertEquals(result["serverInfo"], serverInfo);
     const meta = result["_meta"] as Record<string, unknown>;
     assertEquals(meta[SERVER_INFO_KEY], serverInfo);
@@ -506,7 +506,7 @@ Deno.test(
         enableLinkDisambiguation: true,
       });
       const app = new McpApp({
-        name: "mcp-erpnext-wire-erp-mrtr-test",
+        name: "hvgerp-mcp-wire-erp-mrtr-test",
         version: "0.0.0",
         transport: "stateless",
         mrtr: { signingKey: MRTR_SIGNING_KEY },

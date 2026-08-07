@@ -13,7 +13,7 @@
 import type { MCPToolMeta } from "@casys/mcp-server";
 
 const viewer = (name: string): MCPToolMeta => ({
-  ui: { resourceUri: `ui://mcp-erpnext/${name}` },
+  ui: { resourceUri: `ui://hvgerp-mcp/${name}` },
 });
 
 export const DOCLIST_META = viewer("doclist-viewer");

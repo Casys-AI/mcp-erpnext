@@ -20,11 +20,11 @@ export interface UIResourceMeta {
   tools: string[];
 }
 
-const UI_NAMESPACE = "mcp-erpnext";
+const UI_NAMESPACE = "hvgerp-mcp";
 
 /**
  * Auto-discover UI resources from dist/ folder.
- * Registers each viewer under the mcp-erpnext namespace.
+ * Registers each viewer under the hvgerp-mcp namespace.
  */
 function discoverUiResources(): Record<string, UIResourceMeta> {
   const resources: Record<string, UIResourceMeta> = {};
@@ -46,7 +46,7 @@ function discoverUiResources(): Record<string, UIResourceMeta> {
     }
   } catch (e) {
     console.error(
-      `[mcp-erpnext/ui] Failed to discover UIs from ${distPath}:`,
+      `[hvgerp-mcp/ui] Failed to discover UIs from ${distPath}:`,
       e,
     );
   }
@@ -64,7 +64,7 @@ const UI_BUNDLES: Record<string, string> = {};
 /**
  * Load UI HTML for a given resource URI.
  *
- * @param uri - The ui://mcp-erpnext/... resource URI
+ * @param uri - The ui://hvgerp-mcp/... resource URI
  * @returns The HTML content to serve
  * @throws Error if UI resource not found
  */
@@ -78,12 +78,12 @@ export async function loadUiHtml(uri: string): Promise<string> {
     try {
       return await readTextFile(uiPath);
     } catch (e) {
-      console.error(`[mcp-erpnext/ui] Failed to load UI from ${uiPath}:`, e);
+      console.error(`[hvgerp-mcp/ui] Failed to load UI from ${uiPath}:`, e);
     }
   }
 
   throw new Error(
-    `[mcp-erpnext/ui] UI resource not found: ${uri}. ` +
+    `[hvgerp-mcp/ui] UI resource not found: ${uri}. ` +
       `Ensure dist/ folder contains the UI HTML bundles (run: cd src/ui && npm run build).`,
   );
 }
@@ -95,7 +95,7 @@ export function registerUiBundle(uri: string, html: string): void {
 
 /**
  * Convert ui:// URI to file path.
- * Extracts the viewer name from ui://mcp-erpnext/viewer-name pattern
+ * Extracts the viewer name from ui://hvgerp-mcp/viewer-name pattern
  * and resolves it from the local dist/ folder.
  */
 function uriToPath(uri: string): string | null {

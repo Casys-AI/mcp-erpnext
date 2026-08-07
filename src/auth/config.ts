@@ -102,7 +102,7 @@ export function buildAuthProvider(config: AuthConfig): AuthProvider {
   if (config.tokens.size > 0) {
     if (!config.resource) {
       throw new Error(
-        "[mcp-erpnext] MCP_AUTH_RESOURCE is required alongside MCP_AUTH_TOKEN(S) " +
+        "[hvgerp-mcp] MCP_AUTH_RESOURCE is required alongside MCP_AUTH_TOKEN(S) " +
           "— set it to this server's public URL, e.g. https://mcp.example.com",
       );
     }
@@ -116,17 +116,17 @@ export function buildAuthProvider(config: AuthConfig): AuthProvider {
   if (config.jwksUrl) {
     if (!config.issuer) {
       throw new Error(
-        "[mcp-erpnext] MCP_OAUTH_ISSUER is required alongside MCP_OAUTH_JWKS_URL",
+        "[hvgerp-mcp] MCP_OAUTH_ISSUER is required alongside MCP_OAUTH_JWKS_URL",
       );
     }
     if (!config.audience) {
       throw new Error(
-        "[mcp-erpnext] MCP_OAUTH_AUDIENCE is required alongside MCP_OAUTH_JWKS_URL",
+        "[hvgerp-mcp] MCP_OAUTH_AUDIENCE is required alongside MCP_OAUTH_JWKS_URL",
       );
     }
     if (!config.resource) {
       throw new Error(
-        "[mcp-erpnext] MCP_AUTH_RESOURCE is required alongside MCP_OAUTH_JWKS_URL",
+        "[hvgerp-mcp] MCP_AUTH_RESOURCE is required alongside MCP_OAUTH_JWKS_URL",
       );
     }
     providers.push(

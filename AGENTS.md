@@ -2,7 +2,7 @@
 
 Repository guidelines for AI coding agents working on this codebase.
 
-- Repo: https://github.com/Casys-AI/mcp-erpnext
+- Repo: https://github.com/thuongtin/hvgerp-mcp
 - In chat replies, file references must be repo-root relative only (example:
   `src/tools/sales.ts:42`); never absolute paths.
 
@@ -10,7 +10,7 @@ Repository guidelines for AI coding agents working on this codebase.
 
 MCP server for ERPNext/Frappe ERP — 125 tools across 14 categories with 7
 interactive UI viewers. Connects MCP-compatible AI agents to ERPNext via the
-Model Context Protocol. Published as `@casys/mcp-erpnext` on npm (Node bundle)
+Model Context Protocol. Published as `@hvgllc/hvgerp-mcp` on npm (Node bundle)
 and JSR (Deno).
 
 ## Project Structure & Module Organization
@@ -103,7 +103,7 @@ Platform-specific APIs are abstracted through a runtime adapter:
 
 The build script `scripts/build-node.sh` swaps `runtime.ts` with
 `runtime.node.ts`, strips `.ts` extensions from imports, and produces a single
-esbuild bundle at `dist-node/bin/mcp-erpnext.mjs`.
+esbuild bundle at `dist-node/bin/hvgerp-mcp.mjs`.
 
 **All source code imports `from "./runtime.ts"` — never import Deno or Node APIs
 directly.**
@@ -245,7 +245,7 @@ goes to `src/ui/dist/{viewer-name}/index.html`.
 
 Viewers: `invoice-viewer`, `stock-viewer`, `doclist-viewer`, `chart-viewer`,
 `kpi-viewer`, `funnel-viewer`, `kanban-viewer`. Resource URIs:
-`ui://mcp-erpnext/{viewer-name}`.
+`ui://hvgerp-mcp/{viewer-name}`.
 
 Viewers use the MCP Apps SDK (`@modelcontextprotocol/ext-apps`). Interactive
 viewers use `app.callServerTool()` for mutations and `app.sendMessage()` for
@@ -453,7 +453,7 @@ Rules:
 Skipping the UI build stage (e.g. a naive single-stage Dockerfile that never
 runs `npm ci && node build-all.mjs`) silently degrades every viewer — tools
 still work, but `resolveViewerDistPath` finds nothing, each viewer logs
-`Warning: UI not built for ui://mcp-erpnext/{name}` at startup, and
+`Warning: UI not built for ui://hvgerp-mcp/{name}` at startup, and
 `Resources: 0` instead of `7`. Check for that count in the startup log after any
 Dockerfile change.
 
@@ -467,7 +467,7 @@ running in its own compose project), join that stack's external network instead
 ## Key Conventions
 
 - Tool `_meta.ui.resourceUri` binds a tool's output to a specific UI viewer
-  (e.g. `"ui://mcp-erpnext/doclist-viewer"`). Use `uiMeta()` from
+  (e.g. `"ui://hvgerp-mcp/doclist-viewer"`). Use `uiMeta()` from
   `src/tools/viewer-meta.ts`.
 - `FrappeFilter` is a `[field, operator, value]` tuple for Frappe list queries.
 - Generic operations tools (`erpnext_doc_*`) are the escape hatch for any

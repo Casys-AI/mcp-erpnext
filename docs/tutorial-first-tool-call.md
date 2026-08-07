@@ -1,6 +1,6 @@
 # Tutorial: Your first tool call
 
-In this tutorial we will connect mcp-erpnext to Claude Desktop and confirm that
+In this tutorial we will connect hvgerp-mcp to Claude Desktop and confirm that
 it can talk to your ERPNext instance — from zero to a working tool response in
 four steps.
 
@@ -50,7 +50,7 @@ three placeholder values with your own:
   "mcpServers": {
     "erpnext": {
       "command": "npx",
-      "args": ["-y", "@casys/mcp-erpnext"],
+      "args": ["-y", "@hvgllc/hvgerp-mcp"],
       "env": {
         "ERPNEXT_URL": "https://yoursite.frappe.cloud",
         "ERPNEXT_API_KEY": "your-api-key",

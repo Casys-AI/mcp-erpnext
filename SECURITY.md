@@ -3,7 +3,7 @@
 ## Supported versions
 
 Security fixes are released for the latest published version. We recommend
-always running the most recent release of `@casys/mcp-erpnext`.
+always running the most recent release of `@hvgllc/hvgerp-mcp`.
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -15,7 +15,7 @@ always running the most recent release of `@casys/mcp-erpnext`.
 **Please do not open a public issue for security vulnerabilities.**
 
 Report them privately via GitHub's
-[private vulnerability reporting](https://github.com/Casys-AI/mcp-erpnext/security/advisories/new)
+[private vulnerability reporting](https://github.com/thuongtin/hvgerp-mcp/security/advisories/new)
 (Security tab → "Report a vulnerability"). We aim to acknowledge reports within
 72 hours and to ship a fix or mitigation as quickly as the severity warrants.
 

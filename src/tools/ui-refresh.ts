@@ -173,12 +173,12 @@ const CHART_DRILL_DOWN: Record<string, string> = {
 
 function isChartViewer(result: UiRefreshableResult): boolean {
   const uri = result._meta?.ui?.resourceUri;
-  return uri === "ui://mcp-erpnext/chart-viewer";
+  return uri === "ui://hvgerp-mcp/chart-viewer";
 }
 
 function isKpiViewer(result: UiRefreshableResult): boolean {
   const uri = result._meta?.ui?.resourceUri;
-  return uri === "ui://mcp-erpnext/kpi-viewer";
+  return uri === "ui://hvgerp-mcp/kpi-viewer";
 }
 
 function isDoclistResult(result: UiRefreshableResult): boolean {
@@ -187,7 +187,7 @@ function isDoclistResult(result: UiRefreshableResult): boolean {
 
 function isDoclistViewer(result: UiRefreshableResult): boolean {
   const uri = result._meta?.ui?.resourceUri;
-  return uri === "ui://mcp-erpnext/doclist-viewer";
+  return uri === "ui://hvgerp-mcp/doclist-viewer";
 }
 
 export function withUiRefreshRequest(

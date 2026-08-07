@@ -1,6 +1,6 @@
-# Contributing to @casys/mcp-erpnext
+# Contributing to @hvgllc/hvgerp-mcp
 
-Thanks for your interest in improving `@casys/mcp-erpnext`. Contributions
+Thanks for your interest in improving `@hvgllc/hvgerp-mcp`. Contributions
 welcome — bug reports, new tools, doc fixes, UI viewers.
 
 This guide gets you set up and covers what we expect from a contribution. For
@@ -9,7 +9,7 @@ the full architecture and conventions, see [`AGENTS.md`](AGENTS.md).
 ## Ways to contribute
 
 - **Report a bug** — use the
-  [issue templates](https://github.com/Casys-AI/mcp-erpnext/issues/new/choose)
+  [issue templates](https://github.com/thuongtin/hvgerp-mcp/issues/new/choose)
   (include repro steps and your ERPNext version).
 - **Add or improve a tool** — the 124 tools live in `src/tools/`, by category.
 - **Add a UI viewer** — interactive MCP App views under `src/ui/`.
@@ -26,8 +26,8 @@ the full architecture and conventions, see [`AGENTS.md`](AGENTS.md).
 ## Getting started
 
 ```bash
-git clone https://github.com/Casys-AI/mcp-erpnext.git
-cd mcp-erpnext
+git clone https://github.com/thuongtin/hvgerp-mcp.git
+cd hvgerp-mcp
 
 # Run the test suite (no ERPNext instance needed — tests mock the client)
 deno task test
@@ -82,7 +82,7 @@ Releases are manual and explicit — nothing publishes on push.
 4. Create the GitHub release/tag, e.g. `v3.0.0`.
 5. Run the `Publish` workflow manually to push the same version to JSR and npm.
 
-The package name stays `@casys/mcp-erpnext`; a release only moves the version.
+The package name stays `@hvgllc/hvgerp-mcp`; a release only moves the version.
 
 Before removing something that looks redundant in a handler, check
 [ERPNext quirks](docs/erpnext-quirks.md) — several guards there exist because

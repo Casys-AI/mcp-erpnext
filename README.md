@@ -1,10 +1,10 @@
 English | [繁體中文](README.zh-TW.md)
 
-# @casys/mcp-erpnext
+# @hvgllc/hvgerp-mcp
 
-[![JSR](https://jsr.io/badges/@casys/mcp-erpnext)](https://jsr.io/@casys/mcp-erpnext)
-[![npm](https://img.shields.io/npm/v/@casys/mcp-erpnext?logo=npm&color=cb3837)](https://www.npmjs.com/package/@casys/mcp-erpnext)
-[![CI](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml)
+[![JSR](https://jsr.io/badges/@hvgllc/hvgerp-mcp)](https://jsr.io/@hvgllc/hvgerp-mcp)
+[![npm](https://img.shields.io/npm/v/@hvgllc/hvgerp-mcp?logo=npm&color=cb3837)](https://www.npmjs.com/package/@hvgllc/hvgerp-mcp)
+[![CI](https://github.com/thuongtin/hvgerp-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/thuongtin/hvgerp-mcp/actions/workflows/test.yml)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -20,6 +20,10 @@ Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 > Built on **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** — the
 > MCP server framework (concurrency, auth, MCP Apps, observability) that powers
 > this project.
+
+> Forked from **[@casys/mcp-erpnext](https://github.com/Casys-AI/mcp-erpnext)**
+> by Casys AI, MIT licensed. Everything up to 2.6.0 is their work; this fork
+> renames the package and adds tools of its own.
 
 ## Screenshots
 
@@ -72,7 +76,7 @@ results.
 ## What's New
 
 See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
-[latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for
+[latest release](https://github.com/thuongtin/hvgerp-mcp/releases/latest) for
 the current version's highlights.
 
 ## Documentation
@@ -103,7 +107,7 @@ Generate API credentials in ERPNext:
   "mcpServers": {
     "erpnext": {
       "command": "npx",
-      "args": ["-y", "@casys/mcp-erpnext"],
+      "args": ["-y", "@hvgllc/hvgerp-mcp"],
       "env": {
         "ERPNEXT_URL": "http://localhost:8000",
         "ERPNEXT_API_KEY": "your-api-key",
@@ -128,7 +132,7 @@ Add to `.vscode/mcp.json`:
     "erpnext": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@casys/mcp-erpnext"],
+      "args": ["-y", "@hvgllc/hvgerp-mcp"],
       "env": {
         "ERPNEXT_URL": "http://localhost:8000",
         "ERPNEXT_API_KEY": "your-api-key",
@@ -168,7 +172,7 @@ pre-2026 HTTP clients in 3.0.0.
 Load only the categories you need:
 
 ```bash
-npx -y @casys/mcp-erpnext --categories=sales,inventory
+npx -y @hvgllc/hvgerp-mcp --categories=sales,inventory
 ```
 
 ## Fresh Instance Setup
@@ -180,7 +184,7 @@ until it exists. See
 ## UI Viewers
 
 Seven interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
-viewers, registered as `ui://mcp-erpnext/{name}`:
+viewers, registered as `ui://hvgerp-mcp/{name}`:
 
 | Viewer           | Description                                                      | Interactive Features                                                                                                                               |
 | ---------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -287,7 +291,7 @@ layout: [repository layout](docs/architecture.md).
 
 ## npm Package
 
-The npm package (`@casys/mcp-erpnext`) is a single self-contained bundle with
+The npm package (`@hvgllc/hvgerp-mcp`) is a single self-contained bundle with
 zero runtime dependencies. UI viewers are embedded. Requires Node >= 20.
 
 ## Contributing

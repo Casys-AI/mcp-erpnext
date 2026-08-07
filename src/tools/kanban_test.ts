@@ -113,7 +113,7 @@ Deno.test("erpnext_kanban_get_board - returns a Task board with metadata and pag
   ]);
   assertEquals(
     (result._meta as { ui: { resourceUri: string } }).ui.resourceUri,
-    "ui://mcp-erpnext/kanban-viewer",
+    "ui://hvgerp-mcp/kanban-viewer",
   );
   assertEquals(result.doctype, "Task");
   assertEquals(

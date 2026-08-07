@@ -306,7 +306,7 @@ Deno.test("erpnext_file_upload - is marked destructive", () => {
 
 Deno.test("erpnext_doc_list - has _meta.ui for doclist-viewer", () => {
   const tool = getTool("erpnext_doc_list");
-  assertEquals(tool._meta?.ui?.resourceUri, "ui://mcp-erpnext/doclist-viewer");
+  assertEquals(tool._meta?.ui?.resourceUri, "ui://hvgerp-mcp/doclist-viewer");
 });
 
 // ── erpnext_doc_update ──────────────────────────────────────────────────────

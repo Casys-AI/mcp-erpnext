@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build @casys/mcp-erpnext for Node.js distribution
+# Build @hvgllc/hvgerp-mcp for Node.js distribution
 #
 # What this does:
 # 1. Copies src/ and server.ts to dist-node/
@@ -24,7 +24,7 @@ DIST_DIR="$ROOT_DIR/dist-node"
 VERSION="$(grep '"version"' "$ROOT_DIR/deno.json" | sed 's/.*"version": *"\([^"]*\)".*/\1/')"
 MCP_SERVER_VERSION="$(grep '"@casys/mcp-server"' "$ROOT_DIR/deno.json" | sed 's/.*"@casys\/mcp-server": *"jsr:@casys\/mcp-server@\([^"]*\)".*/\1/')"
 
-echo "[build-node] Building Node.js distribution for @casys/mcp-erpnext..."
+echo "[build-node] Building Node.js distribution for @hvgllc/hvgerp-mcp..."
 
 # Clean
 rm -rf "$DIST_DIR"
@@ -50,10 +50,10 @@ find "$DIST_DIR" -name "*.ts" -exec perl -pi -e \
 # Generate package.json for the intermediate Node workspace
 cat > "$DIST_DIR/package.json" <<PKGJSON
 {
-  "name": "@casys/mcp-erpnext-build",
+  "name": "@hvgllc/hvgerp-mcp-build",
   "private": true,
   "version": "$VERSION",
-  "description": "Intermediate build workspace for @casys/mcp-erpnext",
+  "description": "Intermediate build workspace for @hvgllc/hvgerp-mcp",
   "type": "module",
   "main": "server.ts",
   "types": "server.ts",
@@ -103,28 +103,28 @@ node -e '
   --platform=node \
   --target=node20 \
   --format=esm \
-  --outfile=bin/mcp-erpnext.mjs \
+  --outfile=bin/hvgerp-mcp.mjs \
   --external:node:* \
   --banner:js='import { createRequire } from "node:module"; const require = createRequire(import.meta.url);'
 tmp_shebang="$(mktemp)"
 printf '#!/usr/bin/env node\n' > "$tmp_shebang"
-cat bin/mcp-erpnext.mjs >> "$tmp_shebang"
-mv "$tmp_shebang" bin/mcp-erpnext.mjs
-chmod +x bin/mcp-erpnext.mjs
+cat bin/hvgerp-mcp.mjs >> "$tmp_shebang"
+mv "$tmp_shebang" bin/hvgerp-mcp.mjs
+chmod +x bin/hvgerp-mcp.mjs
 cp -r src/ui/dist bin/ui-dist
 cp README.md bin/README.md 2>/dev/null || cp ../README.md bin/README.md 2>/dev/null || true
 
 cat > bin/package.json <<PKGJSON
 {
-  "name": "@casys/mcp-erpnext",
+  "name": "@hvgllc/hvgerp-mcp",
   "version": "$VERSION",
   "description": "MCP server for ERPNext with interactive UI viewers",
   "type": "module",
   "bin": {
-    "mcp-erpnext": "mcp-erpnext.mjs"
+    "hvgerp-mcp": "hvgerp-mcp.mjs"
   },
   "files": [
-    "mcp-erpnext.mjs",
+    "hvgerp-mcp.mjs",
     "ui-dist/**/*",
     "README.md"
   ],
@@ -143,7 +143,7 @@ cat > bin/package.json <<PKGJSON
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Casys-AI/mcp-erpnext"
+    "url": "https://github.com/thuongtin/hvgerp-mcp"
   },
   "license": "MIT"
 }
@@ -154,5 +154,5 @@ echo "[build-node] Done! Intermediate workspace: $DIST_DIR"
 echo "[build-node] Publishable package: $DIST_DIR/bin"
 echo ""
 echo "Useful commands:"
-echo "  node $DIST_DIR/bin/mcp-erpnext.mjs --http --port=3012"
+echo "  node $DIST_DIR/bin/hvgerp-mcp.mjs --http --port=3012"
 echo "  cd $DIST_DIR/bin && npm pack"

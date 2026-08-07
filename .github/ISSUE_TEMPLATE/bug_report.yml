@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug in mcp-erpnext
+description: Report a bug in hvgerp-mcp
 title: "[Bug]: "
 labels: [bug]
 body:
@@ -68,7 +68,7 @@ body:
     id: package_version
     attributes:
       label: Package version
-      description: The version pinned in your MCP client config, or the output of `npm list @casys/mcp-erpnext`.
+      description: The version pinned in your MCP client config, or the output of `npm list @hvgllc/hvgerp-mcp`.
       placeholder: "e.g. 2.3.0"
     validations:
       required: true

@@ -13,7 +13,7 @@
  *   Project:     project_list/get, task_list/create, timesheet_list
  *
  * Usage:
- *   import { ErpNextToolsClient } from "@casys/mcp-erpnext";
+ *   import { ErpNextToolsClient } from "@hvgllc/hvgerp-mcp";
  *
  *   const client = new ErpNextToolsClient();
  *   const result = await client.execute("erpnext_customer_list", { limit: 10 });

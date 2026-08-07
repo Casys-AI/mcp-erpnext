@@ -1,12 +1,27 @@
 # Changelog
 
-All notable changes to `@casys/mcp-erpnext` will be documented in this file.
+All notable changes to `@hvgllc/hvgerp-mcp` will be documented in this file.
+
+This package is a fork of
+[`@casys/mcp-erpnext`](https://github.com/Casys-AI/mcp-erpnext), renamed at
+3.0.0. Every entry below 3.0.0 is that project's history, and its links
+deliberately still point at the upstream repository, where those commits, pull
+requests and tags actually live.
 
 ## [Unreleased]
 
 ### Included in 3.0.0 when released
 
 ### ⚠ BREAKING CHANGES
+
+- **Renamed to `@hvgllc/hvgerp-mcp`.** The package, the server name reported to
+  MCP clients, the log prefix, and the compiled binary are all `hvgerp-mcp` now.
+  Three things break for an existing install: the install command
+  (`npx @hvgllc/hvgerp-mcp`, `jsr:@hvgllc/hvgerp-mcp`), the Node bundle path
+  (`dist-node/bin/hvgerp-mcp.mjs`), and the UI resource URIs, which moved from
+  `ui://mcp-erpnext/{viewer}` to `ui://hvgerp-mcp/{viewer}` — a host holding a
+  cached resource list must re-read it. Tool names are untouched: every tool is
+  still `erpnext_*`, so no client tool configuration changes.
 
 - **HTTP transport is stateless in the unreleased code.** Every HTTP request
   must carry `MCP-Protocol-Version: 2026-07-28`, the matching `Mcp-Method`, and

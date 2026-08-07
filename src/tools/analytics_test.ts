@@ -53,7 +53,7 @@ function getTool(name: string) {
 
 function assertChartMeta(result: any, viewerName = "chart-viewer") {
   assert(result._meta, "Result should have _meta");
-  assertEquals(result._meta.ui.resourceUri, `ui://mcp-erpnext/${viewerName}`);
+  assertEquals(result._meta.ui.resourceUri, `ui://hvgerp-mcp/${viewerName}`);
 }
 
 // ── Legacy pipeline surface removed ─────────────────────────────────────────
@@ -736,8 +736,8 @@ Deno.test("all analytics tools have _meta with resourceUri", () => {
       `${tool.name} should have _meta.ui.resourceUri`,
     );
     assert(
-      meta.ui.resourceUri.startsWith("ui://mcp-erpnext/"),
-      `${tool.name} resourceUri should start with ui://mcp-erpnext/`,
+      meta.ui.resourceUri.startsWith("ui://hvgerp-mcp/"),
+      `${tool.name} resourceUri should start with ui://hvgerp-mcp/`,
     );
   }
 });

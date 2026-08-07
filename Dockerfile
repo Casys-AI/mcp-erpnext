@@ -1,4 +1,4 @@
-# ~/mcp-erpnext/Dockerfile
+# ~/hvgerp-mcp/Dockerfile
 
 # ── Stage 1: build the UI viewers (needs Node/npm, not present in the Deno image) ──
 FROM node:20-slim AS ui-builder

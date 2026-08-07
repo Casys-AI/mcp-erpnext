@@ -101,7 +101,7 @@ Deno.test("erpnext_account_list - returns chart of accounts with doclist meta", 
 
   assertEquals(result.doctype, "Account");
   assertEquals(result.count, 2);
-  assertEquals(result._meta.ui.resourceUri, "ui://mcp-erpnext/doclist-viewer");
+  assertEquals(result._meta.ui.resourceUri, "ui://hvgerp-mcp/doclist-viewer");
 });
 
 Deno.test("erpnext_account_list - applies root_type filter", async () => {

@@ -2,7 +2,7 @@
 
 ## Platform Integration (current focus)
 
-The viewer and tooling layer is mature. This phase turns mcp-erpnext from a
+The viewer and tooling layer is mature. This phase turns hvgerp-mcp from a
 single-instance stdio/HTTP server into a multi-tenant, ERP-agnostic platform
 reachable through a shared MCP bridge with real identity.
 
@@ -27,16 +27,16 @@ What remains:
 
 ## New Viewers & Infrastructure (P1)
 
-| Item                       | Type                                 | Description                                                                                                                                                                                                                                        |
-| -------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **HTTP Auth (OAuth/JWT)**  | Infrastructure                       | Wire auth config and test scope-per-tool (`erpnext:read` vs `erpnext:write`) with mcp-erpnext. `@casys/mcp-server` already has the full pipeline (Bearer/JWT/JWKS, Auth0/Google/GitHub presets, RFC 9728). Prerequisite for multi-user deployment. |
-| Customer 360 viewer        | New viewer                           | All docs for one customer in one view — orders, invoices, payments, contacts — via `sendMessage`-heavy composition.                                                                                                                                |
-| Employee Card viewer       | New viewer                           | Employee profile with attendance, leaves, salary, and expenses.                                                                                                                                                                                    |
-| BOM Cost Breakdown         | chart-viewer (treemap)               | Bill of Materials cost hierarchy.                                                                                                                                                                                                                  |
-| Bank Reconciliation Status | New viewer                           | Match bank transactions to GL entries.                                                                                                                                                                                                             |
-| HR Overview                | kpi-viewer + chart-viewer            | Headcount, attendance, leave balance.                                                                                                                                                                                                              |
-| Stock Ledger Timeline      | chart-viewer (line) + doclist-viewer | Stock movements over time with drill-down.                                                                                                                                                                                                         |
-| Gantt Viewer               | New viewer                           | Project/task timeline (horizontal bars).                                                                                                                                                                                                           |
+| Item                       | Type                                 | Description                                                                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **HTTP Auth (OAuth/JWT)**  | Infrastructure                       | Wire auth config and test scope-per-tool (`erpnext:read` vs `erpnext:write`) with hvgerp-mcp. `@casys/mcp-server` already has the full pipeline (Bearer/JWT/JWKS, Auth0/Google/GitHub presets, RFC 9728). Prerequisite for multi-user deployment. |
+| Customer 360 viewer        | New viewer                           | All docs for one customer in one view — orders, invoices, payments, contacts — via `sendMessage`-heavy composition.                                                                                                                               |
+| Employee Card viewer       | New viewer                           | Employee profile with attendance, leaves, salary, and expenses.                                                                                                                                                                                   |
+| BOM Cost Breakdown         | chart-viewer (treemap)               | Bill of Materials cost hierarchy.                                                                                                                                                                                                                 |
+| Bank Reconciliation Status | New viewer                           | Match bank transactions to GL entries.                                                                                                                                                                                                            |
+| HR Overview                | kpi-viewer + chart-viewer            | Headcount, attendance, leave balance.                                                                                                                                                                                                             |
+| Stock Ledger Timeline      | chart-viewer (line) + doclist-viewer | Stock movements over time with drill-down.                                                                                                                                                                                                        |
+| Gantt Viewer               | New viewer                           | Project/task timeline (horizontal bars).                                                                                                                                                                                                          |
 
 ## Ideas / Nice-to-have (P2)
 

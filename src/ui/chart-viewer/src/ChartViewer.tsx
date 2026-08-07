@@ -10,7 +10,7 @@
  * Data preparation patterns:
  * 1. Analytics tools (erpnext_stock_chart, erpnext_sales_chart) — pre-formatted
  * 2. PML workflows — custom queries + transforms → ChartData
- * 3. Any MCP tool returning { _meta: { ui: { resourceUri: "ui://mcp-erpnext/chart-viewer" } } }
+ * 3. Any MCP tool returning { _meta: { ui: { resourceUri: "ui://hvgerp-mcp/chart-viewer" } } }
  */
 
 import { useEffect, useRef, useState } from "react";

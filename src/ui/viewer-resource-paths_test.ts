@@ -17,7 +17,7 @@ Deno.test("resolveViewerDistPath prefers source dist in repo mode", () => {
 
 Deno.test("resolveViewerDistPath falls back to packaged ui-dist for npm bundle", () => {
   const resolved = resolveViewerDistPath(
-    "file:///workspace/lib/erpnext/dist-node/bin/mcp-erpnext.mjs",
+    "file:///workspace/lib/erpnext/dist-node/bin/hvgerp-mcp.mjs",
     "kanban-viewer",
     (path: string) =>
       path ===
@@ -32,7 +32,7 @@ Deno.test("resolveViewerDistPath falls back to packaged ui-dist for npm bundle",
 
 Deno.test("resolveViewerDistPath resolves Windows file URLs for packaged ui-dist", () => {
   const resolved = resolveViewerDistPath(
-    "file:///C:/workspace/lib/erpnext/dist-node/bin/mcp-erpnext.mjs",
+    "file:///C:/workspace/lib/erpnext/dist-node/bin/hvgerp-mcp.mjs",
     "kanban-viewer",
     (path: string) =>
       path ===

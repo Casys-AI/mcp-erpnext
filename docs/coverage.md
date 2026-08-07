@@ -228,15 +228,15 @@ Specific DocTypes also have dedicated submit/cancel tools:
 
 ## UI Viewers (7 active)
 
-| Viewer           | URI                               | Usage                                                                                                                                                                            |
-| ---------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `doclist-viewer` | `ui://mcp-erpnext/doclist-viewer` | Generic table with sort, filter, pagination, CSV export, and refresh-aware revalidation                                                                                          |
-| `invoice-viewer` | `ui://mcp-erpnext/invoice-viewer` | Single invoice display with refresh-aware revalidation                                                                                                                           |
-| `stock-viewer`   | `ui://mcp-erpnext/stock-viewer`   | Stock balance table with refresh-aware revalidation                                                                                                                              |
-| `chart-viewer`   | `ui://mcp-erpnext/chart-viewer`   | Universal chart renderer for analytics tools                                                                                                                                     |
-| `kanban-viewer`  | `ui://mcp-erpnext/kanban-viewer`  | Canonical read-write kanban board for Task, Opportunity, and Issue. Accent-colored cards, tone-aware badges, column-colored move buttons, column focus mode for narrow viewports |
-| `kpi-viewer`     | `ui://mcp-erpnext/kpi-viewer`     | Metric card with delta, sparkline, and refresh-aware revalidation                                                                                                                |
-| `funnel-viewer`  | `ui://mcp-erpnext/funnel-viewer`  | Sales funnel with conversion stages and refresh-aware revalidation                                                                                                               |
+| Viewer           | URI                              | Usage                                                                                                                                                                            |
+| ---------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `doclist-viewer` | `ui://hvgerp-mcp/doclist-viewer` | Generic table with sort, filter, pagination, CSV export, and refresh-aware revalidation                                                                                          |
+| `invoice-viewer` | `ui://hvgerp-mcp/invoice-viewer` | Single invoice display with refresh-aware revalidation                                                                                                                           |
+| `stock-viewer`   | `ui://hvgerp-mcp/stock-viewer`   | Stock balance table with refresh-aware revalidation                                                                                                                              |
+| `chart-viewer`   | `ui://hvgerp-mcp/chart-viewer`   | Universal chart renderer for analytics tools                                                                                                                                     |
+| `kanban-viewer`  | `ui://hvgerp-mcp/kanban-viewer`  | Canonical read-write kanban board for Task, Opportunity, and Issue. Accent-colored cards, tone-aware badges, column-colored move buttons, column focus mode for narrow viewports |
+| `kpi-viewer`     | `ui://hvgerp-mcp/kpi-viewer`     | Metric card with delta, sparkline, and refresh-aware revalidation                                                                                                                |
+| `funnel-viewer`  | `ui://hvgerp-mcp/funnel-viewer`  | Sales funnel with conversion stages and refresh-aware revalidation                                                                                                               |
 
 > `order-pipeline-viewer` and the legacy `erpnext_order_pipeline` /
 > `erpnext_purchase_pipeline` tools were removed once `kanban-viewer` became the

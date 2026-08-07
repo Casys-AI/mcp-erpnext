@@ -93,7 +93,7 @@ Deno.test("buildHandlersMap - uses resolved Link IDs in UI refresh requests", as
     description: "Test-only UI Link disambiguation probe",
     category: "setup",
     inputSchema: { type: "object" },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    _meta: { ui: { resourceUri: "ui://hvgerp-mcp/doclist-viewer" } },
     handler: async (input) => {
       if (input.customer === "Acme") {
         throw new AmbiguousLinkError({
@@ -111,7 +111,7 @@ Deno.test("buildHandlersMap - uses resolved Link IDs in UI refresh requests", as
       return {
         doctype: "Customer",
         data: [],
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: { ui: { resourceUri: "ui://hvgerp-mcp/doclist-viewer" } },
       };
     },
   };
@@ -181,8 +181,8 @@ Deno.test("toMCPFormat - all viewer tools have MCPToolMeta _meta", () => {
 
   for (const tool of viewerTools) {
     assert(
-      tool._meta!.ui!.resourceUri.startsWith("ui://mcp-erpnext/"),
-      `${tool.name} resourceUri should start with ui://mcp-erpnext/`,
+      tool._meta!.ui!.resourceUri.startsWith("ui://hvgerp-mcp/"),
+      `${tool.name} resourceUri should start with ui://hvgerp-mcp/`,
     );
   }
 });

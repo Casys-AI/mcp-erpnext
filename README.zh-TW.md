@@ -1,10 +1,10 @@
 [English](README.md) | 繁體中文
 
-# @casys/mcp-erpnext
+# @hvgllc/hvgerp-mcp
 
-[![JSR](https://jsr.io/badges/@casys/mcp-erpnext)](https://jsr.io/@casys/mcp-erpnext)
-[![npm](https://img.shields.io/npm/v/@casys/mcp-erpnext?logo=npm&color=cb3837)](https://www.npmjs.com/package/@casys/mcp-erpnext)
-[![CI](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml)
+[![JSR](https://jsr.io/badges/@hvgllc/hvgerp-mcp)](https://jsr.io/@hvgllc/hvgerp-mcp)
+[![npm](https://img.shields.io/npm/v/@hvgllc/hvgerp-mcp?logo=npm&color=cb3837)](https://www.npmjs.com/package/@hvgllc/hvgerp-mcp)
+[![CI](https://github.com/thuongtin/hvgerp-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/thuongtin/hvgerp-mcp/actions/workflows/test.yml)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -70,7 +70,7 @@
 ## 最新異動
 
 完整的發布歷程請參閱
-[CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
+[CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/thuongtin/hvgerp-mcp/releases/latest)。
 
 ## 文件
 
@@ -100,7 +100,7 @@
   "mcpServers": {
     "erpnext": {
       "command": "npx",
-      "args": ["-y", "@casys/mcp-erpnext"],
+      "args": ["-y", "@hvgllc/hvgerp-mcp"],
       "env": {
         "ERPNEXT_URL": "http://localhost:8000",
         "ERPNEXT_API_KEY": "your-api-key",
@@ -125,7 +125,7 @@
     "erpnext": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@casys/mcp-erpnext"],
+      "args": ["-y", "@hvgllc/hvgerp-mcp"],
       "env": {
         "ERPNEXT_URL": "http://localhost:8000",
         "ERPNEXT_API_KEY": "your-api-key",
@@ -165,7 +165,7 @@ HTTP 用戶端屬於破壞性變更。
 僅載入您所需的類別：
 
 ```bash
-npx -y @casys/mcp-erpnext --categories=sales,inventory
+npx -y @hvgllc/hvgerp-mcp --categories=sales,inventory
 ```
 
 ## 全新執行個體設定
@@ -176,7 +176,7 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 ## UI 檢視器
 
 七個互動式 [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
-檢視器，已登錄為 `ui://mcp-erpnext/{name}`：
+檢視器，已登錄為 `ui://hvgerp-mcp/{name}`：
 
 | 檢視器           | 說明                                               | 互動功能                                                                                                          |
 | ---------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -274,7 +274,7 @@ MRTR 為選用功能。未設定此金鑰，或用戶端未宣告 elicitation
 
 ## npm 套件
 
-npm 套件（`@casys/mcp-erpnext`）是一個完全自包含的套件，無任何執行時相依套件。UI
+npm 套件（`@hvgllc/hvgerp-mcp`）是一個完全自包含的套件，無任何執行時相依套件。UI
 檢視器已內嵌其中。需要 Node >= 20。
 
 ## 貢獻

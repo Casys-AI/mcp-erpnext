@@ -30,7 +30,7 @@ export function getCacheTtlMs(): number {
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed < 0) {
     console.error(
-      `[mcp-erpnext] Invalid MCP_CACHE_TTL_MS=${
+      `[hvgerp-mcp] Invalid MCP_CACHE_TTL_MS=${
         JSON.stringify(raw)
       } — must be a non-negative number. Falling back to default (${DEFAULT_CACHE_TTL_MS}ms).`,
     );

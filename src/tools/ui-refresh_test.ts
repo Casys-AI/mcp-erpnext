@@ -9,7 +9,7 @@ Deno.test("ui refresh - injects refreshRequest into UI payloads", () => {
     {
       doctype: "Task",
       data: [],
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/doclist-viewer" } },
     },
     "erpnext_task_list",
     args,
@@ -37,7 +37,7 @@ Deno.test("ui refresh - preserves an existing refreshRequest", () => {
       toolName: "erpnext_kanban_get_board",
       arguments: { doctype: "Task" },
     },
-    _meta: { ui: { resourceUri: "ui://mcp-erpnext/kanban-viewer" } },
+    _meta: { ui: { resourceUri: "ui://hvgerp-mcp/kanban-viewer" } },
   };
 
   assertEquals(withUiRefreshRequest(payload, "erpnext_task_list", {}), payload);
@@ -50,7 +50,7 @@ Deno.test("ui refresh - injects _rowAction for known doctype with dedicated get 
     {
       doctype: "Customer",
       data: [{ name: "C-001" }],
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/doclist-viewer" } },
     },
     "erpnext_customer_list",
     {},
@@ -68,7 +68,7 @@ Deno.test("ui refresh - injects _rowAction fallback to erpnext_doc_get for unkno
     {
       doctype: "Warehouse",
       data: [{ name: "WH-001" }],
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/doclist-viewer" } },
     },
     "erpnext_warehouse_list",
     {},
@@ -86,7 +86,7 @@ Deno.test("ui refresh - does not inject _rowAction for non-doclist viewers", () 
   const result = withUiRefreshRequest(
     {
       data: [],
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/kanban-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/kanban-viewer" } },
     },
     "erpnext_kanban_get_board",
     {},
@@ -101,7 +101,7 @@ Deno.test("ui refresh - does not inject _rowAction when already present", () => 
     {
       doctype: "Customer",
       data: [],
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/doclist-viewer" } },
       _rowAction: existing,
     },
     "erpnext_customer_list",
@@ -118,7 +118,7 @@ Deno.test("ui refresh - injects _sendMessageHints for known doctype", () => {
     {
       doctype: "Customer",
       data: [],
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/doclist-viewer" } },
     },
     "erpnext_customer_list",
     {},
@@ -137,7 +137,7 @@ Deno.test("ui refresh - no _sendMessageHints for doctype without hints", () => {
     {
       doctype: "Warehouse",
       data: [],
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/doclist-viewer" } },
     },
     "erpnext_warehouse_list",
     {},
@@ -153,7 +153,7 @@ Deno.test("ui refresh - injects _drillDown and _trendDrillDown for KPI tools", (
     {
       label: "Revenue",
       value: 100000,
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/kpi-viewer" } },
     },
     "erpnext_kpi_revenue",
     {},
@@ -171,7 +171,7 @@ Deno.test("ui refresh - no KPI drill-down for non-KPI tools", () => {
     {
       doctype: "Customer",
       data: [],
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/doclist-viewer" } },
     },
     "erpnext_customer_list",
     {},
@@ -186,7 +186,7 @@ Deno.test("ui refresh - preserves existing KPI _drillDown", () => {
     {
       label: "Revenue",
       value: 100000,
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/kpi-viewer" } },
       _drillDown: "Custom drill-down",
     },
     "erpnext_kpi_revenue",
@@ -204,7 +204,7 @@ Deno.test("ui refresh - injects _drillDown for chart tools", () => {
       title: "Sales by Customer",
       labels: ["A", "B"],
       datasets: [],
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/chart-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/chart-viewer" } },
     },
     "erpnext_sales_chart",
     {},
@@ -219,7 +219,7 @@ Deno.test("ui refresh - no chart _drillDown for unknown chart tool", () => {
       title: "Custom Chart",
       labels: [],
       datasets: [],
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/chart-viewer" } },
+      _meta: { ui: { resourceUri: "ui://hvgerp-mcp/chart-viewer" } },
     },
     "custom_chart_tool",
     {},
@@ -246,7 +246,7 @@ Deno.test("ui refresh - all major doctypes get correct _rowAction", () => {
       {
         doctype,
         data: [{ name: "test" }],
-        _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+        _meta: { ui: { resourceUri: "ui://hvgerp-mcp/doclist-viewer" } },
       },
       "erpnext_doc_list",
       { doctype },

@@ -33,7 +33,7 @@ the server lives somewhere other than the user's machine.
 ERPNEXT_URL=http://localhost:8000 \
 ERPNEXT_API_KEY=xxx \
 ERPNEXT_API_SECRET=xxx \
-npx -y @casys/mcp-erpnext --http --port=3012
+npx -y @hvgllc/hvgerp-mcp --http --port=3012
 ```
 
 > **Note:** HTTP mode binds to `127.0.0.1` (loopback) by default as of v2.4.2.
@@ -45,11 +45,11 @@ npx -y @casys/mcp-erpnext --http --port=3012
 ERPNEXT_URL=http://localhost:8000 \
 ERPNEXT_API_KEY=xxx \
 ERPNEXT_API_SECRET=xxx \
-deno run -A npm:@casys/mcp-erpnext --http --port=3012
+deno run -A npm:@hvgllc/hvgerp-mcp --http --port=3012
 ```
 
 > **Note:** Versions ≤ 2.3.1 of the npm bundle crashed with
 > `ReferenceError: Deno is not defined` in HTTP mode — fixed in 2.4.0
 > (`@casys/mcp-server` ≥ 0.21.1). If you hit this error, upgrade with
-> `npx -y @casys/mcp-erpnext@latest`, or use the Deno runner above. See
+> `npx -y @hvgllc/hvgerp-mcp@latest`, or use the Deno runner above. See
 > [`erpnext-quirks.md`](erpnext-quirks.md).

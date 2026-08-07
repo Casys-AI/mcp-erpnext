@@ -38,7 +38,7 @@ Deno.test("loadAuthConfig: merges MCP_AUTH_TOKEN and MCP_AUTH_TOKENS", () => {
 Deno.test("loadAuthConfig: reads OAuth JWKS config plus MCP_AUTH_RESOURCE", () => {
   using _ = withEnv({
     MCP_OAUTH_JWKS_URL: "https://auth.example.com/.well-known/jwks.json",
-    MCP_OAUTH_AUDIENCE: "mcp-erpnext",
+    MCP_OAUTH_AUDIENCE: "hvgerp-mcp",
     MCP_OAUTH_ISSUER: "https://auth.example.com",
     MCP_AUTH_RESOURCE: "https://mcp.example.com",
   });
@@ -47,7 +47,7 @@ Deno.test("loadAuthConfig: reads OAuth JWKS config plus MCP_AUTH_RESOURCE", () =
     config?.jwksUrl,
     "https://auth.example.com/.well-known/jwks.json",
   );
-  assertEquals(config?.audience, "mcp-erpnext");
+  assertEquals(config?.audience, "hvgerp-mcp");
   assertEquals(config?.issuer, "https://auth.example.com");
   assertEquals(config?.resource, "https://mcp.example.com");
 });
@@ -80,7 +80,7 @@ Deno.test("loadAuthConfig: strips quotes from OAuth config values", () => {
   using _ = withEnv({
     MCP_OAUTH_JWKS_URL: '"https://auth.example.com/.well-known/jwks.json"',
     MCP_AUTH_RESOURCE: '"https://mcp.example.com"',
-    MCP_OAUTH_AUDIENCE: '"mcp-erpnext"',
+    MCP_OAUTH_AUDIENCE: '"hvgerp-mcp"',
     MCP_OAUTH_ISSUER: '"https://auth.example.com"',
   });
   const config = loadAuthConfig();
@@ -89,7 +89,7 @@ Deno.test("loadAuthConfig: strips quotes from OAuth config values", () => {
     "https://auth.example.com/.well-known/jwks.json",
   );
   assertEquals(config?.resource, "https://mcp.example.com");
-  assertEquals(config?.audience, "mcp-erpnext");
+  assertEquals(config?.audience, "hvgerp-mcp");
   assertEquals(config?.issuer, "https://auth.example.com");
 });
 
@@ -119,7 +119,7 @@ Deno.test("buildAuthProvider: throws when JWKS URL is set without an issuer", ()
       buildAuthProvider({
         tokens: new Set(),
         jwksUrl: "https://auth.example.com/.well-known/jwks.json",
-        audience: "mcp-erpnext",
+        audience: "hvgerp-mcp",
         resource: "https://mcp.example.com",
       }),
     Error,
@@ -148,7 +148,7 @@ Deno.test("buildAuthProvider: throws when JWKS URL is set without MCP_AUTH_RESOU
         tokens: new Set(),
         jwksUrl: "https://auth.example.com/.well-known/jwks.json",
         issuer: "https://auth.example.com",
-        audience: "mcp-erpnext",
+        audience: "hvgerp-mcp",
       }),
     Error,
     "MCP_AUTH_RESOURCE is required",
@@ -160,7 +160,7 @@ Deno.test("buildAuthProvider: combines static tokens and OAuth into a CompositeA
     tokens: new Set(["secret-1"]),
     jwksUrl: "https://auth.example.com/.well-known/jwks.json",
     issuer: "https://auth.example.com",
-    audience: "mcp-erpnext",
+    audience: "hvgerp-mcp",
     resource: "https://mcp.example.com",
   });
   assertEquals(provider instanceof CompositeAuthProvider, true);
@@ -171,7 +171,7 @@ Deno.test("buildAuthProvider: composite advertises the OIDC authorization server
     tokens: new Set(["secret-1"]),
     jwksUrl: "https://auth.example.com/.well-known/jwks.json",
     issuer: "https://auth.example.com",
-    audience: "mcp-erpnext",
+    audience: "hvgerp-mcp",
     resource: "https://mcp.example.com",
   });
 
@@ -185,7 +185,7 @@ Deno.test("buildAuthProvider: composite accepts a valid static token without tou
     tokens: new Set(["secret-1"]),
     jwksUrl: "https://auth.example.com/.well-known/jwks.json",
     issuer: "https://auth.example.com",
-    audience: "mcp-erpnext",
+    audience: "hvgerp-mcp",
     resource: "https://mcp.example.com",
   });
   const info = await provider.verifyToken("secret-1");
@@ -197,7 +197,7 @@ Deno.test("buildAuthProvider: composite rejects an unknown token (falls through 
     tokens: new Set(["secret-1"]),
     jwksUrl: "https://auth.example.com/.well-known/jwks.json",
     issuer: "https://auth.example.com",
-    audience: "mcp-erpnext",
+    audience: "hvgerp-mcp",
     resource: "https://mcp.example.com",
   });
   // Malformed JWT fails signature-structure parsing before any JWKS fetch,

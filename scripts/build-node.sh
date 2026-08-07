@@ -143,7 +143,7 @@ cat > bin/package.json <<PKGJSON
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/thuongtin/hvgerp-mcp"
+    "url": "https://github.com/hvgllc/hvgerp-mcp"
   },
   "license": "MIT"
 }

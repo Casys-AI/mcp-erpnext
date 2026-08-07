@@ -2,7 +2,7 @@
 
 Repository guidelines for AI coding agents working on this codebase.
 
-- Repo: https://github.com/thuongtin/hvgerp-mcp
+- Repo: https://github.com/hvgllc/hvgerp-mcp
 - In chat replies, file references must be repo-root relative only (example:
   `src/tools/sales.ts:42`); never absolute paths.
 

@@ -9,7 +9,7 @@ the full architecture and conventions, see [`AGENTS.md`](AGENTS.md).
 ## Ways to contribute
 
 - **Report a bug** — use the
-  [issue templates](https://github.com/thuongtin/hvgerp-mcp/issues/new/choose)
+  [issue templates](https://github.com/hvgllc/hvgerp-mcp/issues/new/choose)
   (include repro steps and your ERPNext version).
 - **Add or improve a tool** — the 124 tools live in `src/tools/`, by category.
 - **Add a UI viewer** — interactive MCP App views under `src/ui/`.
@@ -26,7 +26,7 @@ the full architecture and conventions, see [`AGENTS.md`](AGENTS.md).
 ## Getting started
 
 ```bash
-git clone https://github.com/thuongtin/hvgerp-mcp.git
+git clone https://github.com/hvgllc/hvgerp-mcp.git
 cd hvgerp-mcp
 
 # Run the test suite (no ERPNext instance needed — tests mock the client)

@@ -30,7 +30,7 @@ project in public spaces.
 
 To report unacceptable behaviour, use GitHub's **private vulnerability / abuse
 reporting** on the repository, or open a private report via the maintainers at
-<https://github.com/thuongtin/hvgerp-mcp/security/advisories/new>.
+<https://github.com/hvgllc/hvgerp-mcp/security/advisories/new>.
 
 All reports will be reviewed and investigated promptly and fairly. Maintainers
 are obligated to respect the privacy and security of the reporter.

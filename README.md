@@ -4,7 +4,7 @@ English | [繁體中文](README.zh-TW.md)
 
 [![JSR](https://jsr.io/badges/@hvgllc/hvgerp-mcp)](https://jsr.io/@hvgllc/hvgerp-mcp)
 [![npm](https://img.shields.io/npm/v/@hvgllc/hvgerp-mcp?logo=npm&color=cb3837)](https://www.npmjs.com/package/@hvgllc/hvgerp-mcp)
-[![CI](https://github.com/thuongtin/hvgerp-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/thuongtin/hvgerp-mcp/actions/workflows/test.yml)
+[![CI](https://github.com/hvgllc/hvgerp-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/hvgllc/hvgerp-mcp/actions/workflows/test.yml)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -76,8 +76,8 @@ results.
 ## What's New
 
 See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
-[latest release](https://github.com/thuongtin/hvgerp-mcp/releases/latest) for
-the current version's highlights.
+[latest release](https://github.com/hvgllc/hvgerp-mcp/releases/latest) for the
+current version's highlights.
 
 ## Documentation
 

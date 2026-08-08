@@ -49,9 +49,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Trusted publishing needs Node 22.14.0 at minimum; the 22 line is well past
+      # that, and unlike a 22.14 pin it still satisfies the engine range current
+      # npm declares for itself.
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.14"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
       # setup-node ships the npm that came with the Node release, which is older

@@ -2,9 +2,21 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
-## [Unreleased]
+## [3.0.1] - 2026-08-08
 
-### Included in 3.0.0 when released
+### Changed
+
+- use `@casys/mcp-server` `^0.25.0`, which brings four 2026-07-28 conformance
+  fixes: `server/discover` over stdio, argument validation on JSON Schema
+  2020-12 (draft-07 silently ignored `prefixItems` and the other 2020-12
+  keywords), W3C trace-context propagation, and client credentials bound to the
+  authorization server that issued them.
+
+  None of that release's breaking changes affect this server: it does not use
+  the OAuth client, no tool schema uses the draft-07 tuple form, and no test
+  asserts on the method-not-found message.
+
+## [3.0.0] - 2026-07-31
 
 ### ⚠ BREAKING CHANGES
 

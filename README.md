@@ -1,8 +1,5 @@
-English | [繁體中文](README.zh-TW.md)
-
 # @hvgllc/hvgerp-mcp
 
-[![JSR](https://jsr.io/badges/@hvgllc/hvgerp-mcp)](https://jsr.io/@hvgllc/hvgerp-mcp)
 [![npm](https://img.shields.io/npm/v/@hvgllc/hvgerp-mcp?logo=npm&color=cb3837)](https://www.npmjs.com/package/@hvgllc/hvgerp-mcp)
 [![CI](https://github.com/hvgllc/hvgerp-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/hvgllc/hvgerp-mcp/actions/workflows/test.yml)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)

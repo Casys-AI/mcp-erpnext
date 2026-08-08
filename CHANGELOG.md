@@ -43,9 +43,9 @@ requests and tags actually live.
 - add `erpnext_method_call`, which invokes a whitelisted Frappe method by its
   dotted path. It reaches business endpoints no typed tool wraps, including the
   custom-app methods that are sometimes the only supported way to change a field
-  the document API refuses to write. The tool is deny-by-default: it calls
-  nothing unless the method matches `ERPNEXT_METHOD_ALLOWLIST` (exact paths,
-  `prefix.*` patterns, or `*`). Pass `http_method: "GET"` for methods
+  the document API refuses to write. Calls run as the API key's own ERPNext
+  user; `ERPNEXT_METHOD_ALLOWLIST` (exact paths, `prefix.*` patterns, or `*`)
+  optionally narrows the tool below that. Pass `http_method: "GET"` for methods
   whitelisted read-only, and `invalidate` to drop a cached document the call
   mutated
 - use `@casys/mcp-server` `^0.24` and the complete MCP 2026-07-28 HTTP contract:

@@ -2,10 +2,15 @@
  * Allowlist gate for the generic whitelisted-method tool.
  *
  * `erpnext_method_call` can reach any method Frappe has whitelisted, which is a
- * far wider surface than the typed tools. The gate is deny-by-default: with no
- * ERPNEXT_METHOD_ALLOWLIST set the tool refuses every call, so opening up
- * arbitrary RPC is always a deliberate operator decision rather than a side
- * effect of installing the server.
+ * far wider surface than the typed tools. That surface is already bounded by the
+ * API key's own ERPNext permissions, so the gate is optional: with no
+ * ERPNEXT_METHOD_ALLOWLIST set every whitelisted method is reachable, and
+ * setting it narrows the server to the listed paths. Use it when one MCP session
+ * should reach less than its user is otherwise allowed to.
+ *
+ * The dotted-path check below is NOT optional. It runs on every call regardless
+ * of the allowlist, because the method name is interpolated into the request
+ * path.
  *
  * @module lib/erpnext/tools/method-allowlist
  */
@@ -33,7 +38,7 @@ export function parseMethodAllowlist(raw: string | undefined): string[] {
   );
 }
 
-/** Read the configured allowlist from the environment. */
+/** Read the configured allowlist from the environment. Empty means unrestricted. */
 export function getMethodAllowlist(): string[] {
   return parseMethodAllowlist(env("ERPNEXT_METHOD_ALLOWLIST"));
 }

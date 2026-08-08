@@ -74,7 +74,10 @@ Deno.test("isMethodAllowed - bare star allows everything", () => {
   assertEquals(isMethodAllowed("frappe.client.delete", ["*"]), true);
 });
 
-Deno.test("isMethodAllowed - empty allowlist denies everything", () => {
+// This is the pure matcher: nothing is in an empty list. "No allowlist means no
+// restriction" is a policy the tool handler applies by not consulting the
+// matcher at all, which is why the two answers differ for the same input.
+Deno.test("isMethodAllowed - nothing matches an empty pattern list", () => {
   assertEquals(isMethodAllowed("frappe.client.get_count", []), false);
 });
 

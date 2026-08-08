@@ -258,14 +258,14 @@ Full per-tool reference with parameters: [`docs/tools.md`](docs/tools.md).
 
 ## Environment Variables
 
-| Variable                   | Required | Description                                                                                                                        |
-| -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `ERPNEXT_URL`              | Yes      | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`)                      |
-| `ERPNEXT_API_KEY`          | Yes      | API Key from User Settings                                                                                                         |
-| `ERPNEXT_API_SECRET`       | Yes      | API Secret from User Settings                                                                                                      |
-| `ERPNEXT_MAX_UPLOAD_BYTES` | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                                      |
-| `ERPNEXT_METHOD_ALLOWLIST` | No       | Comma-separated dotted paths or `prefix.*` patterns that `erpnext_method_call` may invoke. Unset means the tool refuses every call |
-| `MCP_MRTR_SIGNING_KEY`     | No       | Exactly 64 lowercase hex characters; enables signed ambiguous-link elicitation. **Single-instance deployments only** — see below   |
+| Variable                   | Required | Description                                                                                                                                                              |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ERPNEXT_URL`              | Yes      | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`)                                                            |
+| `ERPNEXT_API_KEY`          | Yes      | API Key from User Settings                                                                                                                                               |
+| `ERPNEXT_API_SECRET`       | Yes      | API Secret from User Settings                                                                                                                                            |
+| `ERPNEXT_MAX_UPLOAD_BYTES` | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                                                                            |
+| `ERPNEXT_METHOD_ALLOWLIST` | No       | Comma-separated dotted paths or `prefix.*` patterns that `erpnext_method_call` may invoke. Unset means no extra restriction beyond the API key's own ERPNext permissions |
+| `MCP_MRTR_SIGNING_KEY`     | No       | Exactly 64 lowercase hex characters; enables signed ambiguous-link elicitation. **Single-instance deployments only** — see below                                         |
 
 MRTR is opt-in. Without this key, or when the client does not advertise
 elicitation, ambiguous links keep returning the existing actionable ambiguity

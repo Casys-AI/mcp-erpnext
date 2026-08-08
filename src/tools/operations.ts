@@ -662,7 +662,8 @@ export const operationsTools: ErpNextTool[] = [
       "Call a whitelisted Frappe/ERPNext method by its dotted path. This is the escape hatch " +
       "for business endpoints no typed tool wraps, including custom-app methods that are the " +
       "only supported way to change a field the document API refuses to write directly. " +
-      "Deny-by-default: the method must match the ERPNEXT_METHOD_ALLOWLIST environment variable.",
+      "Reaches whatever the API key's own ERPNext permissions allow, unless the optional " +
+      "ERPNEXT_METHOD_ALLOWLIST environment variable narrows it further.",
     category: "operations",
     inputSchema: {
       type: "object",
@@ -671,7 +672,7 @@ export const operationsTools: ErpNextTool[] = [
           type: "string",
           description:
             "Dotted path of the whitelisted method, e.g. 'frappe.client.get_count' or " +
-            "'my_app.api.do_thing'. Must be permitted by ERPNEXT_METHOD_ALLOWLIST.",
+            "'my_app.api.do_thing'.",
           minLength: 1,
         },
         args: {
@@ -716,15 +717,10 @@ export const operationsTools: ErpNextTool[] = [
         );
       }
 
+      // An empty allowlist means unrestricted, not blocked: the API key already carries its
+      // user's ERPNext permissions, and the allowlist exists to narrow a session below them.
       const allowlist = getMethodAllowlist();
-      if (allowlist.length === 0) {
-        throw new Error(
-          "[erpnext_method_call] ERPNEXT_METHOD_ALLOWLIST is not set, so no method may be " +
-            "called. Set it to a comma-separated list of dotted paths or 'prefix.*' patterns " +
-            "(e.g. 'my_app.api.*') to enable this tool.",
-        );
-      }
-      if (!isMethodAllowed(method, allowlist)) {
+      if (allowlist.length > 0 && !isMethodAllowed(method, allowlist)) {
         throw new Error(
           `[erpnext_method_call] '${method}' is not in ERPNEXT_METHOD_ALLOWLIST ` +
             `(${allowlist.join(", ")})`,

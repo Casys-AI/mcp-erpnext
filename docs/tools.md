@@ -185,13 +185,16 @@ methods whitelisted read-only), and optional `invalidate` (`{doctype, name}`):
 pass that last one whenever the method mutates a document, or a later read may
 be served a stale cache entry.
 
-It is **deny-by-default**: without `ERPNEXT_METHOD_ALLOWLIST` every call is
-refused, and the allowlist accepts exact dotted paths, `prefix.*` patterns, or a
-bare `*` for everything. Scope it as narrowly as the work needs: the API key
-already carries its user's full permissions, so the allowlist is what keeps a
-prompt-injected agent from reaching methods the task never called for. Method
-paths are validated against `[A-Za-z0-9_.]` before the URL is built, so a
-crafted `method` cannot append a query string or traverse to another endpoint.
+Every call runs as the API key's own ERPNext user, so a method that user may not
+call still fails at the server. `ERPNEXT_METHOD_ALLOWLIST` narrows the tool
+further when you want it to: it accepts exact dotted paths, `prefix.*` patterns,
+or a bare `*`, and unset it imposes no restriction of its own. Setting it is
+worth it when an agent should reach only a few named endpoints, since the key
+carries its user's full permissions and the allowlist is then the only thing
+keeping a prompt-injected agent away from the rest. Method paths are validated
+against `[A-Za-z0-9_.]` before the URL is built no matter how the allowlist is
+configured, so a crafted `method` can never append a query string or traverse to
+another endpoint.
 
 ```json
 {

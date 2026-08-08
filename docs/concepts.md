@@ -78,10 +78,11 @@ Some behaviour is not reachable through the document API at all. A site can
 refuse a direct field write and expose a whitelisted method as the only
 supported way to change it, and custom apps ship business endpoints that no
 DocType write can stand in for. `erpnext_method_call` covers that last gap: it
-calls a whitelisted method by its dotted path. Because it is a far wider surface
-than the typed tools, it is deny-by-default and only reaches methods matched by
-`ERPNEXT_METHOD_ALLOWLIST`; with that variable unset the tool refuses every
-call.
+calls a whitelisted method by its dotted path. What it can reach is bounded by
+the API key's own ERPNext permissions, exactly like every other tool here.
+`ERPNEXT_METHOD_ALLOWLIST` is an optional second bound on top of that, for when
+one MCP session should reach less than its user otherwise may; unset, the tool
+is unrestricted.
 
 ## MRTR: how link disambiguation reaches the user
 

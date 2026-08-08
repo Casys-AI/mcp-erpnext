@@ -580,17 +580,21 @@ Deno.test("erpnext_method_call - invalidates the named document after the call",
   assertEquals(result.invalidated, { doctype: "Task", name: "TASK-001" });
 });
 
-Deno.test("erpnext_method_call - refuses every method when the allowlist is unset", async () => {
+Deno.test("erpnext_method_call - allows any method when the allowlist is unset", async () => {
   using _env = withAllowlist(undefined);
-  await assertRejects(
-    () =>
-      getTool("erpnext_method_call").handler(
-        { method: "frappe.client.get_count" },
-        makeCtx(makeMockClient()),
-      ),
-    Error,
-    "ERPNEXT_METHOD_ALLOWLIST is not set",
-  );
+  let seen: string | undefined;
+  const result = await getTool("erpnext_method_call").handler(
+    { method: "frappe.client.get_count" },
+    makeCtx(makeMockClient({
+      callMethod: (method: string) => {
+        seen = method;
+        return Promise.resolve(7);
+      },
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(seen, "frappe.client.get_count");
+  assertEquals(result.data, 7);
 });
 
 Deno.test("erpnext_method_call - refuses a method outside the allowlist", async () => {
@@ -608,6 +612,21 @@ Deno.test("erpnext_method_call - refuses a method outside the allowlist", async 
 
 Deno.test("erpnext_method_call - rejects a method path that could rewrite the URL", async () => {
   using _env = withAllowlist("*");
+  await assertRejects(
+    () =>
+      getTool("erpnext_method_call").handler(
+        { method: "my_app.api.x?cmd=frappe.client.delete" },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "is not a valid method path",
+  );
+});
+
+// The path check is the one guard that is not opt-in, so it has to hold in the
+// default state too, where there is no allowlist left to catch a crafted path.
+Deno.test("erpnext_method_call - still rejects a crafted path with no allowlist", async () => {
+  using _env = withAllowlist(undefined);
   await assertRejects(
     () =>
       getTool("erpnext_method_call").handler(

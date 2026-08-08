@@ -5,7 +5,11 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Opt-in: this fork publishes to npm, and only to JSR once an @hvgllc scope
+  # exists there. Without the guard a dispatch fails on the JSR step alone and
+  # reports the whole run red even though npm published fine.
   publish-jsr:
+    if: vars.PUBLISH_JSR == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

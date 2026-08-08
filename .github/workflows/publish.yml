@@ -40,13 +40,24 @@ jobs:
 
   publish-npm:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Trusted publishing: npm mints a short-lived credential from this OIDC
+      # token instead of a long-lived NPM_TOKEN. Without this permission the
+      # publish falls back to looking for a token and fails on 2FA.
+      id-token: write
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "22.14"
           registry-url: "https://registry.npmjs.org"
+
+      # setup-node ships the npm that came with the Node release, which is older
+      # than the 11.5.1 that first understood trusted publishing.
+      - name: Use an npm that supports trusted publishing
+        run: npm install -g npm@latest
 
       - uses: denoland/setup-deno@v2
         with:
@@ -90,5 +101,3 @@ jobs:
           fi
 
           exit "$PUBLISH_STATUS"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

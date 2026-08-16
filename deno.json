@@ -1,6 +1,6 @@
 {
   "name": "@hvgllc/hvgerp-mcp",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "nodeModulesDir": "auto",
   "minimumDependencyAge": {
     "age": "PT24H",
@@ -60,7 +60,7 @@
     ]
   },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.24.1",
+    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.25.0",
     "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
     "@std/yaml": "jsr:@std/yaml@^1",
     "@std/assert": "jsr:@std/assert@^1"

@@ -126,10 +126,10 @@ export class ErpNextToolsClient {
    * Each handler wraps the tool to inject the FrappeClient context.
    * Errors are handled by the server's toolErrorMapper (configured in server.ts).
    *
-   * For viewer tools (result has _meta.ui), the return value is a pre-formatted
-   * MCP result with both `content` (text JSON for LLM) and `structuredContent`
-   * (object for the UI viewer). McpApp passes pre-formatted results
-   * through unchanged.
+   * Object results are returned as pre-formatted MCP results with both
+   * `content` (text JSON for model clients) and `structuredContent` (the exact
+   * machine-readable value). Viewer metadata is attached only when declared.
+   * McpApp passes these results through unchanged.
    */
   buildHandlersMap(): Map<string, ToolHandler> {
     const handlers = new Map<string, ToolHandler>();
@@ -178,10 +178,9 @@ export class ErpNextToolsClient {
           execution.args,
         );
 
-        // For viewer tools, return a pre-formatted MCP result so the server
-        // passes it through intact. Viewers receive structuredContent directly;
-        // LLMs receive the same data as a JSON text string in content.
-        // Check both result._meta.ui (list tools embed it) and tool._meta.ui (get tools don't).
+        // Every JSON object remains machine-readable, whether or not it has a
+        // viewer. Check both result._meta.ui (list tools embed it) and
+        // tool._meta.ui (some detail tools declare it on registration).
         const r = result !== null && typeof result === "object" &&
             !Array.isArray(result)
           ? result as Record<string, unknown>
@@ -190,11 +189,11 @@ export class ErpNextToolsClient {
           (r._meta as Record<string, unknown>).ui;
         const hasViewer = resultUi || toolMeta?.ui;
 
-        if (r && hasViewer) {
+        if (r) {
           return {
             content: [{ type: "text", text: JSON.stringify(result) }],
             structuredContent: r,
-            _meta: r._meta ?? toolMeta,
+            ...(hasViewer ? { _meta: r._meta ?? toolMeta } : {}),
           };
         }
 

@@ -230,6 +230,34 @@ Deno.test("buildHandlersMap - viewer tools return structuredContent", async () =
   }
 });
 
+Deno.test("buildHandlersMap - detail objects remain machine-readable without a viewer", async () => {
+  const tool: ErpNextTool = {
+    name: "erpnext_detail_probe",
+    description: "Test-only detail probe",
+    category: "setup",
+    inputSchema: { type: "object" },
+    annotations: { readOnlyHint: true },
+    handler: () => Promise.resolve({ data: { name: "BOM-001", items: [] } }),
+  };
+  const client = new ErpNextToolsClient();
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool];
+  setFrappeClient({} as FrappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(tool.name)!({}) as {
+      content: Array<{ type: string; text: string }>;
+      structuredContent: Record<string, unknown>;
+      _meta?: unknown;
+    };
+    assertEquals(result.structuredContent, {
+      data: { name: "BOM-001", items: [] },
+    });
+    assertEquals(JSON.parse(result.content[0].text), result.structuredContent);
+    assertEquals(result._meta, undefined);
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
 Deno.test("execute - bounded tools stay bounded on the direct-execution path", async () => {
   // `execute()` calls handlers directly, with no schema validator in between.
   // A bound declared only in `inputSchema` therefore protects the MCP route and

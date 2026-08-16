@@ -8,12 +8,9 @@ English | [繁體中文](README.zh-TW.md)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-MCP server for [ERPNext](https://erpnext.com) / Frappe ERP — **124 tools**
-across **14 categories**, with **7 interactive UI viewers**.
-
-Connect any MCP-compatible AI agent (Claude Desktop, Claude Code, VS Code
-Copilot, custom) to your ERPNext instance via the
-[Model Context Protocol](https://modelcontextprotocol.io).
+Let any MCP-compatible AI agent operate your [ERPNext](https://erpnext.com) /
+Frappe instance — documents, workflows, and interactive viewers inside the
+host (Claude Desktop, Claude Code, VS Code Copilot, or custom).
 
 Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 
@@ -222,32 +219,31 @@ npm install
 node build-all.mjs
 ```
 
-## Tools (124)
+## Tools
 
-124 tools across 14 categories. Each `_list` tool returns interactive results
-via the doclist-viewer with row click, inline detail, and cross-viewer
-navigation.
+Each `_list` tool returns interactive results via the doclist-viewer with row
+click, inline detail, and cross-viewer navigation.
 
-- **Sales** (17) — Customers, Sales Orders, Invoices, and Quotations with full
-  CRUD, Submit, and Cancel.
-- **Purchasing** (11) — Suppliers, Purchase Orders, Purchase Invoices, Receipts,
-  and Supplier Quotations.
-- **Inventory** (9) — Items, Stock Balance, Warehouses, and Stock Entries.
-- **Accounting** (6) — Chart of Accounts, Journal Entries, and Payment Entries.
-- **HR** (12) — Employees, Attendance, Leave Applications, Salary Slips, Payroll
+- **Sales** — Customers, Sales Orders, Invoices, and Quotations with full CRUD,
+  Submit, and Cancel.
+- **Purchasing** — Suppliers, Purchase Orders, Purchase Invoices, Receipts, and
+  Supplier Quotations.
+- **Inventory** — Items, Stock Balance, Warehouses, and Stock Entries.
+- **Accounting** — Chart of Accounts, Journal Entries, and Payment Entries.
+- **HR** — Employees, Attendance, Leave Applications, Salary Slips, Payroll
   Entries, and Expense Claims.
-- **Project** (9) — Projects, Tasks (with native assignment), and Timesheets.
-- **Delivery** (5) — Delivery Notes and Shipments.
-- **Manufacturing** (7) — BOMs, Work Orders, and Job Cards.
-- **CRM** (8) — Leads, Opportunities, Contacts, and Campaigns.
-- **Assets** (8) — Assets, Movements, Maintenance records, and Categories.
-- **Operations** (10) — Generic CRUD, native assignment, and file upload for any
+- **Project** — Projects, Tasks (with native assignment), and Timesheets.
+- **Delivery** — Delivery Notes and Shipments.
+- **Manufacturing** — BOMs, Work Orders, and Job Cards.
+- **CRM** — Leads, Opportunities, Contacts, and Campaigns.
+- **Assets** — Assets, Movements, Maintenance records, and Categories.
+- **Operations** — Generic CRUD, native assignment, and file upload for any
   DocType (`erpnext_doc_*`, `erpnext_file_upload`).
-- **Kanban** (2) — Read-write boards for Task, Opportunity, and Issue with
+- **Kanban** — Read-write boards for Task, Opportunity, and Issue with
   drag-and-drop.
-- **Analytics** (17) — 11 analytics charts (bar, area, treemap, radar, scatter,
-  P&L…), 5 KPIs with sparklines, and a sales funnel.
-- **Setup** (3) — Company creation and assignable user listing.
+- **Analytics** — Charts (bar, area, treemap, radar, scatter, P&L…), KPIs with
+  sparklines, and a sales funnel.
+- **Setup** — Company creation and assignable user listing.
 
 Full per-tool reference with parameters: [`docs/tools.md`](docs/tools.md).
 

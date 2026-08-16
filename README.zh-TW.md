@@ -8,12 +8,9 @@
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[ERPNext](https://erpnext.com) / Frappe ERP 的 MCP 伺服器 — 涵蓋 **14 個類別**的
-**123 項工具**，以及 **7 個互動式 UI 檢視器**。
-
-透過 [Model Context Protocol](https://modelcontextprotocol.io)，將任何相容 MCP
-的 AI 智慧代理（Claude Desktop、Claude Code、VS Code Copilot
-或自訂代理）連接至您的 ERPNext 執行個體。
+讓任何相容 MCP 的 AI 智慧代理操作您的 [ERPNext](https://erpnext.com) /
+Frappe 執行個體 — 文件、工作流程，以及主機內的互動式檢視器（Claude Desktop、
+Claude Code、VS Code Copilot 或自訂代理）。
 
 支援**自行託管**與 **ERPNext Cloud**（frappe.cloud）執行個體。
 
@@ -216,31 +213,27 @@ npm install
 node build-all.mjs
 ```
 
-## 工具（124 項）
+## 工具
 
-涵蓋 14 個類別的 123 項工具。每個 `_list` 工具均透過 doclist-viewer
-返回互動式結果，支援點擊列、內嵌詳情及跨檢視器導覽。
+每個 `_list` 工具均透過 doclist-viewer 返回互動式結果，支援點擊列、內嵌詳情及
+跨檢視器導覽。
 
-- **Sales（銷售）**（17 項）— 客戶、銷售訂單、發票及報價單，含完整的
-  CRUD、提交與取消功能。
-- **Purchasing（採購）**（11 項）—
-  供應商、採購訂單、採購發票、收貨單及供應商報價單。
-- **Inventory（庫存）**（9 項）— 品項、庫存結餘、倉庫及庫存記錄。
-- **Accounting（會計）**（6 項）— 科目表、日記帳分錄及付款記錄。
-- **HR（人資）**（12 項）— 員工、出勤、請假申請、薪資單、薪資處理及費用申報。
-- **Project（專案）**（9 項）— 專案、任務（含原生指派）及工時單。
-- **Delivery（出貨）**（5 項）— 出貨單及貨運單。
-- **Manufacturing（製造）**（7 項）— 物料清單（BOM）、工單及工作卡。
-- **CRM**（8 項）— 潛在客戶、商機、聯絡人及行銷活動。
-- **Assets（資產）**（8 項）— 資產、異動、維護紀錄及類別。
-- **Operations（作業）**（9 項）— 任何 DocType 的通用 CRUD
-  及原生指派（`erpnext_doc_*`）。
-- **Kanban（看板）**（2 項）— 支援拖放功能的 Task、Opportunity、Issue
-  可讀寫看板。
-- **Analytics（分析）**（17 項）— 11
-  種分析圖表（長條圖、面積圖、樹狀圖、雷達圖、散佈圖、損益表等）、5 個含迷你圖的
-  KPI，以及銷售漏斗。
-- **Setup（設定）**（3 項）— 公司建立及可指派使用者清單。
+- **Sales（銷售）** — 客戶、銷售訂單、發票及報價單，含完整的 CRUD、提交與取消。
+- **Purchasing（採購）** — 供應商、採購訂單、採購發票、收貨單及供應商報價單。
+- **Inventory（庫存）** — 品項、庫存結餘、倉庫及庫存記錄。
+- **Accounting（會計）** — 科目表、日記帳分錄及付款記錄。
+- **HR（人資）** — 員工、出勤、請假申請、薪資單、薪資處理及費用申報。
+- **Project（專案）** — 專案、任務（含原生指派）及工時單。
+- **Delivery（出貨）** — 出貨單及貨運單。
+- **Manufacturing（製造）** — 物料清單（BOM）、工單及工作卡。
+- **CRM** — 潛在客戶、商機、聯絡人及行銷活動。
+- **Assets（資產）** — 資產、異動、維護紀錄及類別。
+- **Operations（作業）** — 任何 DocType 的通用 CRUD 及原生指派
+  （`erpnext_doc_*`）。
+- **Kanban（看板）** — 支援拖放的 Task、Opportunity、Issue 可讀寫看板。
+- **Analytics（分析）** — 圖表（長條圖、面積圖、樹狀圖、雷達圖、散佈圖、損益表
+  等）、含迷你圖的 KPI，以及銷售漏斗。
+- **Setup（設定）** — 公司建立及可指派使用者清單。
 
 完整的各工具參數說明請參閱 [`docs/tools.md`](docs/tools.md)。
 

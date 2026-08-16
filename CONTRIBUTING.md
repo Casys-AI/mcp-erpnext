@@ -11,7 +11,7 @@ the full architecture and conventions, see [`AGENTS.md`](AGENTS.md).
 - **Report a bug** — use the
   [issue templates](https://github.com/Casys-AI/mcp-erpnext/issues/new/choose)
   (include repro steps and your ERPNext version).
-- **Add or improve a tool** — the 124 tools live in `src/tools/`, by category.
+- **Add or improve a tool** — tools live in `src/tools/`, by category.
 - **Add a UI viewer** — interactive MCP App views under `src/ui/`.
 - **Improve docs** — README, guides, or AGENTS.md.
 

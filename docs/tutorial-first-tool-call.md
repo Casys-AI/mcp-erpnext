@@ -93,7 +93,7 @@ authenticated with ERPNext, and the response came back correctly.
 ## What next?
 
 - **See what else you can ask:** the
-  [tools overview in the README](../README.md) lists all 14 categories and gives
+  [tools overview in the README](../README.md) lists the categories and gives
   you a sense of what is available.
 - **Understand how it works:** read [docs/concepts.md](./concepts.md) for the
   mental model behind the server — link resolution, caching, UI viewers, and

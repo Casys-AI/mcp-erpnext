@@ -1,6 +1,6 @@
 # ERPNext MCP Library - Coverage
 
-## Covered (124 tools, 14 categories)
+## Covered
 
 ### Sales (17 tools)
 

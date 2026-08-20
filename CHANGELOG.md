@@ -2,6 +2,26 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.0.2] - 2026-08-21
+
+### Fixed
+
+- **Claude Code can load all 124 tools over stdio with MCP 2026-07-28.** The
+  bundled framework now uses the official era-aware stdio server, so modern
+  `server/discover` and `tools/list` responses carry the required
+  `resultType: "complete"`. A client that begins with legacy `initialize` still
+  receives the 2025-11-25 response shape. This fixes
+  [#22](https://github.com/Casys-AI/mcp-erpnext/issues/22). Many thanks to
+  [@cschoa-dotcom](https://github.com/cschoa-dotcom) for the precise report,
+  reproduction, and protocol diagnosis.
+
+- Ambiguous-link MRTR now follows the same signed-state and single-use replay
+  policy on stdio as on HTTP, including the SDK's compatibility path for legacy
+  clients. The framework rejects malformed or replayed retries before an ERPNext
+  handler can mutate data.
+
+- The MCP server identity now reports `3.0.2`, matching the package version.
+
 ## [3.0.1] - 2026-08-08
 
 ### Changed

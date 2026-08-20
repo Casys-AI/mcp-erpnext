@@ -9,8 +9,8 @@ English | [繁體中文](README.zh-TW.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Let any MCP-compatible AI agent operate your [ERPNext](https://erpnext.com) /
-Frappe instance — documents, workflows, and interactive viewers inside the
-host (Claude Desktop, Claude Code, VS Code Copilot, or custom).
+Frappe instance — documents, workflows, and interactive viewers inside the host
+(Claude Desktop, Claude Code, VS Code Copilot, or custom).
 
 Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 

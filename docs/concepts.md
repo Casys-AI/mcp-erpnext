@@ -59,9 +59,9 @@ need HTTP mode.
 ## Tool categories and the escape hatch
 
 The server organises tools into typed categories — sales, purchasing,
-accounting, HR, inventory, and so on. Each category wraps the
-doctypes its domain most commonly needs, with typed schemas, validated fields,
-and predictable behaviour.
+accounting, HR, inventory, and so on. Each category wraps the doctypes its
+domain most commonly needs, with typed schemas, validated fields, and
+predictable behaviour.
 
 The Generic Operations category exists for everything else. Its tools take a
 `doctype` argument and work against any ERPNext DocType — see the reference for

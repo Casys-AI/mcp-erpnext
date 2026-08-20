@@ -1,12 +1,12 @@
 # Migration: MCP specification 2026-07-28
 
-This document describes what is **implemented in the unreleased 3.0.0 code**. It
-is not evidence that 3.0.0 has been published. The release notes and package
-metadata remain authoritative for an actually released version.
+This document describes the MCP 2026-07-28 contract introduced on the 3.x line.
+The release notes and package metadata remain authoritative for the exact
+version installed.
 
-## What unreleased 3.0.0 implements
+## What 3.x implements
 
-The server uses `@casys/mcp-server` `^0.24` and the stateless 2026-07-28 HTTP
+The server uses `@casys/mcp-server` `^0.26.1` and the 2026-07-28 protocol
 contract:
 
 - `server/discover` is available for capability discovery.
@@ -42,8 +42,10 @@ cooldown without globally disabling the supply-chain delay.
 
 Stateless mode has no session identifier. `GET /mcp` and `DELETE /mcp` return
 405, and the server does not issue `Mcp-Session-Id`. HTTP clients written for
-older MCP revisions must be updated before moving to 3.0.0; stdio clients are
-unaffected.
+older MCP revisions must be updated before using HTTP on 3.x; stdio clients are
+served through era negotiation. Modern stdio clients receive 2026-07-28 result
+envelopes; clients that begin with legacy `initialize` retain the 2025-11-25
+wire shape.
 
 Use this shape for a discovery request:
 
@@ -72,13 +74,13 @@ information in `_meta`, and the public one-hour cache hint.
 ## Optional MRTR link disambiguation
 
 Some ERPNext links accept an ID or a human-readable identifier. Where a lookup
-has several safe candidates, the unreleased 3.0.0 code can ask a capable client
-to choose through MCP request/retry (MRTR), rather than guessing. MRTR is
-opt-in.
+has several safe candidates, the server can ask a capable client to choose
+through MCP request/retry (MRTR), rather than guessing. MRTR is opt-in.
 
 - The client must advertise elicitation support in `clientCapabilities`.
 - Set `MCP_MRTR_SIGNING_KEY` to exactly 64 lowercase hexadecimal characters to
-  enable signed request state. Use the same key on every HTTP instance.
+  enable signed request state. The environment-based bootstrap is intended for
+  one server instance.
 - The retry is accepted only when the framework marks it verified and the
   selected record is among the candidates reconstructed from the unchanged
   original arguments. A refusal or invalid response performs no ERPNext
@@ -87,11 +89,11 @@ opt-in.
   explicit ambiguity error with the candidate list. They can retry with an
   unambiguous ID.
 
-Do not configure an unsigned or per-instance signing key for write paths.
-Signing protects retry integrity; it does not make a token single-use. As with
-an ordinary non-idempotent tool call, clients must not automatically replay an
-accepted write retry. Deployments requiring strict at-most-once execution need a
-shared nonce-consumption store, which this package does not provide.
+Do not enable this environment-only MRTR setup on more than one instance. The
+framework consumes a verified retry nonce before application dispatch, but its
+default replay store is process-local. A load-balanced deployment requires one
+shared signing key and a shared atomic replay store wired directly into
+`McpApp`, which this bootstrap does not currently expose.
 
 ## Deliberately not advertised
 

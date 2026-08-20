@@ -8,9 +8,9 @@
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-讓任何相容 MCP 的 AI 智慧代理操作您的 [ERPNext](https://erpnext.com) /
-Frappe 執行個體 — 文件、工作流程，以及主機內的互動式檢視器（Claude Desktop、
-Claude Code、VS Code Copilot 或自訂代理）。
+讓任何相容 MCP 的 AI 智慧代理操作您的 [ERPNext](https://erpnext.com) / Frappe
+執行個體 — 文件、工作流程，以及主機內的互動式檢視器（Claude Desktop、 Claude
+Code、VS Code Copilot 或自訂代理）。
 
 支援**自行託管**與 **ERPNext Cloud**（frappe.cloud）執行個體。
 

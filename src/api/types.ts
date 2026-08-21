@@ -40,6 +40,8 @@ export interface FrappeFile extends FrappeDoc {
   file_url: string;
   /** 1 for private files, 0 for public files. */
   is_private: 0 | 1;
+  /** Size in bytes, as stored by Frappe. Absent on some older rows. */
+  file_size?: number;
   /** DocType the file is attached to. */
   attached_to_doctype?: string;
   /** Document name the file is attached to. */

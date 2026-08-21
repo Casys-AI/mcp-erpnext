@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Work+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #191d21; font-family: 'Work Sans', system-ui, sans-serif; }
+    a { color: #3ec1cf; text-decoration: none; }
+    a:hover { color: #6fd7e2; }
+  </style>
+</helmet>
+
+<div style="display: flex; flex-direction: column; gap: 28px; padding: 24px; font-family: 'Work Sans', system-ui, sans-serif;">
+
+  <div style="display: flex; flex-direction: column; gap: 6px; max-width: 640px;">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #5d6a74;">pièces jointes · les états</span>
+    <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #8895a0; text-wrap: pretty;">La section vit dans la colonne de droite du doc-viewer, à 268 px. Une ligne par fichier : icône de type, nom tronqué par la droite, taille et visibilité en mono. Le bouton d'ajout est en pointillé parce qu'il ouvre un sélecteur, il ne fait rien tout seul. L'envoi se lit dans la ligne elle-même.</p>
+  </div>
+
+  <div style="display: flex; gap: 20px; align-items: flex-start;">
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">vide</span>
+      <div style="width: 268px; background: #0f1215; border: 1px solid #262c33; border-radius: 8px; overflow: hidden;">
+        <div style="display: flex; flex-direction: column; gap: 10px; padding: 12px 14px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">pièces jointes</span>
+          </div>
+          <p style="margin: 0; font-size: 11.5px; color: #4a5661;">Aucun fichier joint.</p>
+          <button style="display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; background: transparent; border: 1px dashed #2d353d; border-radius: 5px; padding: 8px 10px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 11.5px; color: #8895a0; cursor: pointer;">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="color: #8895a0;"><path d="M6 10.5v-7M3 6.5l3-3 3 3M1.5 1.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Joindre un fichier
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">envoi en cours · 64 %</span>
+      <div style="width: 268px; background: #0f1215; border: 1px solid #262c33; border-radius: 8px; overflow: hidden;">
+        <div style="display: flex; flex-direction: column; gap: 10px; padding: 12px 14px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">pièces jointes</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 7px; border-radius: 3px; background: #1d2329; color: #8895a0;">1</span>
+          </div>
+          <div style="display: flex; flex-direction: column;">
+            <a href="#" style="display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #1d2227; color: inherit;">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color: #5d6a74;"><path d="M3.5 1.5h5l2.5 2.5v8.5h-7.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M8.5 1.5v2.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+              <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 11.5px; color: #c3ccd3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">protocole-Q1-v3.pdf</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">248 Ko · privé</span></span>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="color: #5d6a74;"><path d="M6 1.5v7M3 6l3 3 3-3M1.5 10.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            <div style="display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 7px 0;">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color: #3ec1cf;"><rect x="1.5" y="2.5" width="11" height="9" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M1.5 9l3-3 2.5 2.5L9 6.5l3.5 3.5" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+              <span style="display: flex; flex-direction: column; gap: 4px; min-width: 0;">
+                <span style="font-size: 11.5px; color: #e6ecf0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">station-4-fixture.jpg</span>
+                <span style="height: 2px; background: #262c33; border-radius: 2px; overflow: hidden;"><span style="display: block; width: 64%; height: 2px; background: #3ec1cf; border-radius: 2px;"></span></span>
+              </span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6fd7e2; font-variant-numeric: tabular-nums;">64 %</span>
+            </div>
+          </div>
+          <button style="display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; background: transparent; border: 1px dashed #2d353d; border-radius: 5px; padding: 8px 10px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 11.5px; color: #4a5661; cursor: not-allowed;">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="color: #4a5661;"><path d="M6 10.5v-7M3 6.5l3-3 3 3M1.5 1.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Joindre un fichier
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">refusé · trop lourd</span>
+      <div style="width: 268px; background: #0f1215; border: 1px solid #262c33; border-radius: 8px; overflow: hidden;">
+        <div style="display: flex; flex-direction: column; gap: 10px; padding: 12px 14px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">pièces jointes</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 7px; border-radius: 3px; background: #1d2329; color: #8895a0;">1</span>
+          </div>
+          <div style="display: flex; flex-direction: column;">
+            <a href="#" style="display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #1d2227; color: inherit;">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color: #5d6a74;"><path d="M3.5 1.5h5l2.5 2.5v8.5h-7.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M8.5 1.5v2.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+              <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 11.5px; color: #c3ccd3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">protocole-Q1-v3.pdf</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">248 Ko · privé</span></span>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="color: #5d6a74;"><path d="M6 1.5v7M3 6l3 3 3-3M1.5 10.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            <div style="display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 7px 0 7px 0; border-left: 2px solid #f07067; margin-left: -14px; padding-left: 12px;">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color: #f07067;"><path d="M3.5 1.5h5l2.5 2.5v8.5h-7.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M8.5 1.5v2.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+              <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+                <span style="font-size: 11.5px; color: #c3ccd3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">rapport-complet.zip</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #f07067;">38 Mo · limite 25 Mo</span>
+              </span>
+              <button style="background: none; border: none; padding: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #5d6a74; cursor: pointer; line-height: 1;">×</button>
+            </div>
+          </div>
+          <button style="display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; background: transparent; border: 1px dashed #2d353d; border-radius: 5px; padding: 8px 10px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 11.5px; color: #8895a0; cursor: pointer;">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="color: #8895a0;"><path d="M6 10.5v-7M3 6.5l3-3 3 3M1.5 1.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Joindre un fichier
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">survol d'une ligne</span>
+      <div style="width: 268px; background: #0f1215; border: 1px solid #262c33; border-radius: 8px; overflow: hidden;">
+        <div style="display: flex; flex-direction: column; gap: 10px; padding: 12px 14px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">pièces jointes</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 7px; border-radius: 3px; background: #1d2329; color: #8895a0;">2</span>
+          </div>
+          <div style="display: flex; flex-direction: column;">
+            <a href="#" style="display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 7px 14px; margin: 0 -14px; border-bottom: 1px solid #1d2227; background: #181c21; color: inherit;">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color: #8895a0;"><path d="M3.5 1.5h5l2.5 2.5v8.5h-7.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M8.5 1.5v2.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+              <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 11.5px; color: #e6ecf0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">protocole-Q1-v3.pdf</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8895a0;">248 Ko · privé</span></span>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="color: #3ec1cf;"><path d="M6 1.5v7M3 6l3 3 3-3M1.5 10.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            <a href="#" style="display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 7px 0; color: inherit;">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color: #5d6a74;"><rect x="1.5" y="2.5" width="11" height="9" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M1.5 9l3-3 2.5 2.5L9 6.5l3.5 3.5" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><circle cx="9.5" cy="5" r="0.9" fill="currentColor"/></svg>
+              <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 11.5px; color: #c3ccd3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">station-4-fixture.jpg</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">1,2 Mo · public</span></span>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="color: #5d6a74;"><path d="M6 1.5v7M3 6l3 3 3-3M1.5 10.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+          </div>
+          <button style="display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; background: transparent; border: 1px dashed #2d353d; border-radius: 5px; padding: 8px 10px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 11.5px; color: #8895a0; cursor: pointer;">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="color: #8895a0;"><path d="M6 10.5v-7M3 6.5l3-3 3 3M1.5 1.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Joindre un fichier
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px; max-width: 640px;">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">règles</span>
+    <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; line-height: 1.55; color: #8895a0;">
+      <span>— Le nom se tronque par la droite, contrairement aux identifiants : ce qui distingue deux fichiers est au début, pas à la fin.</span>
+      <span>— « privé » / « public » est écrit, jamais seulement iconographié : c'est une décision de visibilité, elle doit se lire.</span>
+      <span>— Pendant un envoi, le bouton d'ajout se désactive : un seul fichier à la fois, la file n'est pas une promesse qu'on tient dans une iframe.</span>
+      <span>— Un refus reste dans la liste, bord gauche rouge, avec la raison et une croix : on ne fait pas disparaître une erreur.</span>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+</body>
+</html>

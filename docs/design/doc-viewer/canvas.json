@@ -1,0 +1,71 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 740,
+      "h": 900,
+      "title": "doc-viewer · large · sombre"
+    },
+    {
+      "file": "Light.dc.html",
+      "x": 840,
+      "y": 0,
+      "w": 740,
+      "h": 900,
+      "title": "doc-viewer · large · clair"
+    },
+    {
+      "file": "Mobile.dc.html",
+      "x": 1680,
+      "y": 0,
+      "w": 390,
+      "h": 900,
+      "title": "doc-viewer · mobile 390"
+    },
+    {
+      "file": "ChildTable.dc.html",
+      "x": 0,
+      "y": 1040,
+      "w": 740,
+      "h": 1080,
+      "title": "doc-viewer · tables enfants (BOM)"
+    },
+    {
+      "file": "Attachments.dc.html",
+      "x": 840,
+      "y": 1040,
+      "w": 1230,
+      "h": 620,
+      "title": "pièces jointes · les états"
+    },
+    {
+      "file": "MobileChild.dc.html",
+      "x": 840,
+      "y": 1780,
+      "w": 720,
+      "h": 760,
+      "title": "doc-viewer · table enfant · mobile 390"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "why",
+      "x": 0,
+      "y": -150,
+      "w": 560,
+      "text": "doc-viewer — la vue de document unique qui manque.\n24 outils *_get rendent { data: doc } sans aucune vue. Un seul viewer les couvre tous : en-tête (doctype · id · titre · statut · docstatus), champs en sections, tables enfants, colonne droite pour ce qui agit sur le document.\nL'inspecteur doclist et la modale kanban en deviennent des cas particuliers."
+    },
+    {
+      "id": "attach",
+      "x": 840,
+      "y": 960,
+      "w": 520,
+      "text": "Répond à l'issue #15 (Mateo). La section vit ici, une fois, et tout *_get en hérite — pas dans le doclist ni l'invoice comme l'issue le disait. Demande erpnext_file_list côté serveur."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

@@ -1,5 +1,9 @@
-import { createRoot } from "react-dom/client";
+/** @jsxImportSource preact */
+import { render } from "preact";
 import "~/global.css";
+import "./kanban.css";
+import { applyCasysTheme, themeFromSearch } from "~/shared/casys-theme";
 import { KanbanViewer } from "./KanbanViewer";
 
-createRoot(document.getElementById("app")!).render(<KanbanViewer />);
+applyCasysTheme(themeFromSearch());
+render(<KanbanViewer />, document.getElementById("app")!);

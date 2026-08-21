@@ -1,5 +1,8 @@
-import { createRoot } from "react-dom/client";
+/** @jsxImportSource preact */
+import { render } from "preact";
 import "~/global.css";
+import { applyCasysTheme, themeFromSearch } from "~/shared/casys-theme";
 import { InvoiceViewer } from "./InvoiceViewer";
 
-createRoot(document.getElementById("app")!).render(<InvoiceViewer />);
+applyCasysTheme(themeFromSearch());
+render(<InvoiceViewer />, document.getElementById("app")!);

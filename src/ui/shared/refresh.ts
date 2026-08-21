@@ -1,3 +1,5 @@
+import { t } from "./i18n.ts";
+
 export interface UiRefreshRequestData {
   toolName: string;
   arguments: Record<string, unknown>;
@@ -50,10 +52,10 @@ export function resolveUiRefreshRequest<T extends UiRefreshableData>(
 
 export function normalizeUiRefreshFailureMessage(cause: unknown): string {
   if (cause instanceof Error && /timed? out/i.test(cause.message)) {
-    return "Refresh timed out";
+    return t("common.error.refresh_timeout");
   }
 
-  return "Refresh failed";
+  return t("common.error.refresh_failed");
 }
 
 export function extractToolResultText(

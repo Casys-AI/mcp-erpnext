@@ -1,5 +1,6 @@
 import type { KanbanViewerState } from "./state.ts";
 import type { KanbanBoardData } from "./types.ts";
+import { t } from "../i18n.ts";
 
 export function getErrorPresentation(
   state: Pick<KanbanViewerState, "board" | "error">,
@@ -21,7 +22,7 @@ export function getErrorPresentation(
 export function formatBoardSummary(
   board: Pick<
     KanbanBoardData,
-    "doctype" | "moveToolName" | "cards" | "pagination"
+    "doctype" | "cards" | "pagination"
   >,
 ): string {
   let countLabel: string;
@@ -32,7 +33,7 @@ export function formatBoardSummary(
   } else {
     countLabel = `${board.pagination.loadedCount} cards`;
   }
-  return `${countLabel} · ${board.doctype} · move tool ${board.moveToolName}`;
+  return `${countLabel} · ${board.doctype}`;
 }
 
 export function normalizeMoveFailureMessage(error: unknown): string {
@@ -42,11 +43,11 @@ export function normalizeMoveFailureMessage(error: unknown): string {
   } else if (typeof error === "string") {
     raw = error;
   } else {
-    raw = "Move failed";
+    raw = t("kanban.error.move_failed");
   }
 
   if (/timeout|timed out/i.test(raw)) {
-    return "La mise a jour a expire, veuillez reessayer.";
+    return t("kanban.error.move_timeout");
   }
 
   return raw;

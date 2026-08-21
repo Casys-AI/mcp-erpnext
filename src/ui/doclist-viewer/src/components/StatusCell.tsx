@@ -1,29 +1,28 @@
-/** Status badge for ERPNext document statuses */
+/** @jsxImportSource preact */
+/** Badge de statut : mono, capitales, fond translucide dans le ton du statut. */
 
-import { colors, styles } from "~/shared/theme";
-
-export const DOC_STATUS: Record<string, { color: string; bg: string }> = {
-  Submitted: { color: colors.success, bg: colors.successDim },
-  Completed: { color: colors.success, bg: colors.successDim },
-  Paid: { color: colors.success, bg: colors.successDim },
-  Active: { color: colors.success, bg: colors.successDim },
-  Enabled: { color: colors.success, bg: colors.successDim },
-  "To Deliver and Bill": { color: colors.info, bg: colors.infoDim },
-  "To Bill": { color: colors.info, bg: colors.infoDim },
-  "To Deliver": { color: colors.info, bg: colors.infoDim },
-  Draft: { color: colors.text.muted, bg: colors.bg.elevated },
-  Pending: { color: colors.warning, bg: colors.warningDim },
-  Open: { color: colors.warning, bg: colors.warningDim },
-  "Partly Paid": { color: colors.warning, bg: colors.warningDim },
-  "Partly Delivered": { color: colors.warning, bg: colors.warningDim },
-  Cancelled: { color: colors.error, bg: colors.errorDim },
-  Overdue: { color: colors.error, bg: colors.errorDim },
-  Closed: { color: colors.text.faint, bg: colors.bg.elevated },
-  Disabled: { color: colors.text.faint, bg: colors.bg.elevated },
-};
+import type { ComponentChildren } from "preact";
+import { type Tone, TONE_BADGE, toneForStatus } from "~/shared/status";
 
 export function StatusCell({ value }: { value: string }) {
-  const scheme = DOC_STATUS[value];
-  if (!scheme) return <span>{value}</span>;
-  return <span style={styles.badge(scheme.color, scheme.bg)}>{value}</span>;
+  return <StatusBadge tone={toneForStatus(value)}>{value}</StatusBadge>;
+}
+
+export function StatusBadge(
+  { tone, children, pill }: {
+    tone: Tone;
+    children: ComponentChildren;
+    /** En narrow (mobile/panel) le badge prend la forme pill (radius-pill = 13px). */
+    pill?: boolean;
+  },
+) {
+  return (
+    <span
+      class={`inline-flex shrink-0 font-mono text-micro uppercase tracking-chip ${
+        pill ? "rounded-pill py-[3px] px-2" : "rounded-badge px-[7px] py-0.5"
+      } ${TONE_BADGE[tone]}`}
+    >
+      {children}
+    </span>
+  );
 }

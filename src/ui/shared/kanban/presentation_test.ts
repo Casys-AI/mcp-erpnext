@@ -63,13 +63,13 @@ Deno.test("kanban presentation - keeps blocking errors for empty boards", () => 
 Deno.test("kanban presentation - labels paginated counts as loaded lower bounds", () => {
   assertEquals(
     formatBoardSummary(makeBoard()),
-    "5+ cards loaded · Task · move tool erpnext_kanban_move_card",
+    "5+ cards loaded · Task",
   );
 });
 
 Deno.test("kanban presentation - normalizes timeout errors for move failures", () => {
   assertEquals(
     normalizeMoveFailureMessage(new Error("Tool call timed out after 10000ms")),
-    "La mise a jour a expire, veuillez reessayer.",
+    "Move timed out, please retry.",
   );
 });

@@ -1,22 +1,21 @@
+/** @jsxImportSource preact */
 /**
- * Invoice Viewer — Sales/Purchase Invoice display
- *
- * Inspired by mcp-einvoice pattern:
- * - Party columns (Customer/Supplier + Company)
- * - Inline dates
- * - Clickable item rows with drill-down panel
- * - Action buttons with loading state tracking
- * - sendMessage navigation with loading feedback
- * - FeedbackBanner for errors/success
- *
- * @module lib/erpnext/src/ui/invoice-viewer
+ * Invoice viewer — Direction B v2.
+ * Présentation portée depuis la maquette (lignes 310-438 wide, 1624-1738 mobile).
+ * Logique métier inchangée : handshake ext-apps, refresh, callServerTool, parsing.
  */
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
-import { colors, fonts, formatCurrency, styles } from "~/shared/theme";
-import { ErpNextBrandFooter, ErpNextBrandHeader } from "~/shared/ErpNextBrand";
-import { ActionButton } from "~/shared/ActionButton";
+import { bindHostContext } from "~/shared/host-context-hook";
+import {
+  Button,
+  CasysCredit,
+  cx,
+  StateMessage,
+  ViewerShell,
+} from "~/shared/ui";
+import { useViewerLayout } from "~/shared/useViewerLayout";
+import { formatCurrency, formatNumber } from "~/shared/format";
 import {
   canRequestUiRefresh,
   extractToolResultText,
@@ -25,206 +24,41 @@ import {
   type ToolResultPayload,
   type UiRefreshRequestData,
 } from "~/shared/refresh";
+import { useT } from "~/shared/i18n-hook";
 import { StatusBadge } from "./components/StatusBadge";
 import { ItemDetailPanel } from "./components/ItemDetailPanel";
-
-// ============================================================================
-// MCP App
-// ============================================================================
+import { INVOICE_FIXTURE, isFixtureMode } from "./fixture.ts";
+import type { InvoiceData, InvoiceItem, InvoicePayload } from "./types.ts";
 
 const app = new App({ name: "Invoice Viewer", version: "3.0.0" });
 const REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
-// ============================================================================
-// Types
-// ============================================================================
-
-interface InvoiceItem {
-  item_code: string;
-  item_name?: string;
-  qty: number;
-  rate: number;
-  amount: number;
-}
-
-interface InvoiceData {
-  name: string;
-  customer?: string;
-  customer_name?: string;
-  supplier?: string;
-  supplier_name?: string;
-  company?: string;
-  posting_date: string;
-  due_date?: string;
-  status: string;
-  docstatus?: number;
-  grand_total: number;
-  net_total?: number;
-  total_taxes_and_charges?: number;
-  outstanding_amount?: number;
-  currency?: string;
-  items?: InvoiceItem[];
-  contact_email?: string;
-  address_display?: string;
-}
-
-interface InvoicePayload {
-  data?: InvoiceData;
-  refreshRequest?: UiRefreshRequestData;
-  [key: string]: unknown;
-}
-
-// ============================================================================
-// Sub-components
-// ============================================================================
-
-function LoadingSkeleton() {
-  return (
-    <div style={{ padding: 24 }}>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div
-          key={i}
-          className="skeleton"
-          style={{
-            height: i === 1 ? 32 : 20,
-            width: `${40 + i * 10}%`,
-            marginBottom: 8,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function InvoiceEmptyState() {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "48px 24px",
-        color: colors.text.muted,
-        gap: 12,
-        flex: 1,
-      }}
-    >
-      <svg
-        width="56"
-        height="56"
-        viewBox="0 0 56 56"
-        fill="none"
-        style={{ opacity: 0.35 }}
-      >
-        <rect
-          x="12"
-          y="6"
-          width="32"
-          height="44"
-          rx="3"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-        <path
-          d="M20 16h16M20 22h12M20 28h14M20 34h8"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity="0.6"
-        />
-      </svg>
-      <div style={{ fontSize: 13 }}>No invoice data</div>
-    </div>
-  );
-}
-
-function FeedbackBanner(
-  { type, message, onDismiss }: {
-    type: "error" | "success";
-    message: string;
-    onDismiss?: () => void;
-  },
-) {
-  const isError = type === "error";
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "8px 12px",
-        marginBottom: 12,
-        borderRadius: 8,
-        fontSize: 12,
-        background: isError ? colors.errorDim : colors.successDim,
-        color: isError ? colors.error : colors.success,
-        border: `1px solid ${
-          isError ? colors.error + "30" : colors.success + "30"
-        }`,
-      }}
-    >
-      <span>{message}</span>
-      {onDismiss && (
-        <button
-          onClick={onDismiss}
-          style={{
-            background: "none",
-            border: "none",
-            color: "inherit",
-            cursor: "pointer",
-            fontSize: 14,
-            padding: "0 4px",
-          }}
-        >
-          ✕
-        </button>
-      )}
-    </div>
-  );
-}
-
-function TotalRow(
-  { label, value, bold }: { label: string; value: string; bold?: boolean },
-) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        padding: "4px 0",
-        fontSize: bold ? 14 : 13,
-      }}
-    >
-      <span style={{ color: colors.text.secondary }}>{label}</span>
-      <span
-        style={{
-          fontFamily: fonts.mono,
-          fontWeight: bold ? 700 : 400,
-          color: bold ? colors.accent : colors.text.primary,
-        }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-// ============================================================================
-// Main Component
-// ============================================================================
+type LineRow = InvoiceItem & { idx: number };
 
 export function InvoiceViewer() {
-  const [data, setData] = useState<InvoiceData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // useViewerLayout au sommet — avant tout early return, les hooks doivent
+  // être appelés dans le même ordre à chaque rendu.
+  const { ref, layout } = useViewerLayout<HTMLDivElement>();
+  const t = useT();
+
+  const fixture = isFixtureMode();
+  const [data, setData] = useState<InvoiceData | null>(
+    fixture ? (INVOICE_FIXTURE.data ?? null) : null,
+  );
+  const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionIsError, setActionIsError] = useState(false);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-  const dataRef = useRef<InvoiceData | null>(null);
-  const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
+  const dataRef = useRef<InvoiceData | null>(
+    fixture ? (INVOICE_FIXTURE.data ?? null) : null,
+  );
+  const refreshRequestRef = useRef<UiRefreshRequestData | null>(
+    fixture ? resolveUiRefreshRequest(INVOICE_FIXTURE, null) : null,
+  );
   const refreshInFlightRef = useRef(false);
   const lastRefreshStartedAtRef = useRef(0);
 
@@ -236,7 +70,7 @@ export function InvoiceViewer() {
   function consumeToolResult(result: ToolResultPayload): boolean {
     if (result.isError) {
       const text = extractToolResultText(result);
-      setError(text ?? "Tool returned an error");
+      setError(text ?? t("invoice.error.tool_error"));
       setLoading(false);
       return false;
     }
@@ -253,13 +87,14 @@ export function InvoiceViewer() {
       setLoading(false);
       return true;
     } catch {
-      setError("Failed to parse invoice payload");
+      setError(t("invoice.error.parse_failed"));
       setLoading(false);
       return false;
     }
   }
 
   async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+    if (fixture) return;
     const request = refreshRequestRef.current;
     if (
       !canRequestUiRefresh({
@@ -286,7 +121,7 @@ export function InvoiceViewer() {
         arguments: request.arguments,
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
       if (!result.isError) consumeToolResult(result);
-      else setError("Refresh failed");
+      else setError(t("invoice.error.refresh_failed"));
     } catch (cause) {
       setError(normalizeUiRefreshFailureMessage(cause));
     } finally {
@@ -301,9 +136,10 @@ export function InvoiceViewer() {
     args: Record<string, unknown>,
     successMsg: string,
   ) {
-    if (!app.getHostCapabilities()?.serverTools) return;
+    if (fixture || !app.getHostCapabilities()?.serverTools) return;
     setActionLoading(key);
     setActionMessage(null);
+    setActionIsError(false);
     try {
       const result = await app.callServerTool({
         name: toolName,
@@ -311,40 +147,48 @@ export function InvoiceViewer() {
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
       if (result.isError) {
         const text = extractToolResultText(result);
-        setActionMessage(text ?? "Action failed");
+        setActionIsError(true);
+        setActionMessage(text ?? t("invoice.error.action_failed"));
       } else {
+        setActionIsError(false);
         setActionMessage(successMsg);
         setTimeout(() => void requestRefresh({ ignoreInterval: true }), 1500);
       }
     } catch {
-      setActionMessage("Action failed");
+      setActionIsError(true);
+      setActionMessage(t("invoice.error.action_failed"));
     } finally {
       setActionLoading(null);
     }
   }
 
   async function navigate(key: string, message: string) {
+    if (fixture) return;
     setActionLoading(key);
     try {
       await app.sendMessage({
         role: "user",
         content: [{ type: "text", text: message }],
       });
-    } catch {}
+    } catch {
+      // Hosts without sendMessage (Inspector) ignore this.
+    }
     setActionLoading(null);
   }
 
   useEffect(() => {
+    if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
       consumeToolResult(result);
     };
     app.ontoolinputpartial = () => {
       if (!dataRef.current) setLoading(true);
     };
-    app.connect().catch(() => {});
-  }, []);
+    app.connect().then(() => bindHostContext(app)).catch(() => {});
+  }, [fixture]);
 
   useEffect(() => {
+    if (fixture) return;
     const onFocus = () => void requestRefresh({ ignoreInterval: true });
     const onVis = () => {
       if (document.visibilityState === "visible") {
@@ -357,37 +201,27 @@ export function InvoiceViewer() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, []);
+  }, [fixture]);
 
-  // Reset expanded item when invoice changes
   useEffect(() => {
     setExpandedIdx(null);
   }, [data?.name]);
 
-  if (loading) {
+  /* ── Early returns ────────────────────────────────────────────── */
+
+  if (loading || !data) {
     return (
-      <div
-        style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
-      >
-        <ErpNextBrandHeader />
-        <LoadingSkeleton />
-        <ErpNextBrandFooter />
-      </div>
-    );
-  }
-  if (!data) {
-    return (
-      <div
-        style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
-      >
-        <ErpNextBrandHeader />
-        <InvoiceEmptyState />
-        <ErpNextBrandFooter />
-      </div>
+      <ViewerShell containerRef={ref}>
+        <StateMessage>
+          {loading ? t("invoice.loading") : t("invoice.no_data")}
+        </StateMessage>
+      </ViewerShell>
     );
   }
 
-  const ccy = data.currency ?? "USD";
+  /* ── Valeurs dérivées ─────────────────────────────────────────── */
+
+  const ccy = data.currency ?? "EUR";
   const isCustomer = !!data.customer;
   const doctype = isCustomer ? "Sales Invoice" : "Purchase Invoice";
   const partyName = data.customer_name ?? data.customer ?? data.supplier_name ??
@@ -396,425 +230,471 @@ export function InvoiceViewer() {
   const isPaid = outstanding <= 0;
   const items = data.items ?? [];
   const netTotal = data.net_total ?? items.reduce((s, i) => s + i.amount, 0);
-  const taxes = data.total_taxes_and_charges ?? (data.grand_total - netTotal);
+  const taxes = data.total_taxes_and_charges ??
+    ((data.grand_total ?? 0) - netTotal);
   const isDraft = data.status === "Draft" || data.docstatus === 0;
   const isSubmitted = data.docstatus === 1;
   const hasServerTools = app.getHostCapabilities()?.serverTools;
+  const canMutate = Boolean(hasServerTools) && !fixture;
+  const canExpand = canMutate || fixture;
+  const rows: LineRow[] = items.map((item, idx) => ({ ...item, idx }));
+  const previewTitle = fixture ? t("invoice.preview.title") : undefined;
 
-  return (
-    <div
-      style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
+  const isWide = layout === "wide";
+  const isMobile = layout === "mobile";
+  // panel = comme mobile, sans cibles tactiles 44px
+
+  /* ── Messages erreur / action ─────────────────────────────────── */
+
+  const messages = (
+    <>
+      {error && (
+        <div class="px-4 pt-3">
+          <StateMessage tone="bad">{error}</StateMessage>
+        </div>
+      )}
+      {!error && actionMessage && (
+        <div class="px-4 pt-3">
+          <StateMessage tone={actionIsError ? "bad" : "neutral"}>
+            {actionMessage}
+          </StateMessage>
+        </div>
+      )}
+    </>
+  );
+
+  /* ── Boutons d'action ─────────────────────────────────────────── */
+  // Logique inchangée, variantes visuelles Direction B v2.
+
+  const btnPayments = (canMutate || fixture) && (
+    <Button
+      variant="accent"
+      class={cx(
+        isMobile ? "min-h-[44px] rounded-touch text-body w-full" : "text-cell",
+      )}
+      disabled={fixture || actionLoading === "nav_payments"}
+      title={fixture ? previewTitle : t("invoice.btn.payments.title")}
+      onClick={() =>
+        void navigate(
+          "nav_payments",
+          t("invoice.nav.payments.message", { doctype, name: data.name }),
+        )}
     >
-      <ErpNextBrandHeader />
-      <div
-        style={{ padding: 16, fontFamily: fonts.sans, flex: 1, maxWidth: 720 }}
-      >
-        {/* Title + Status */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            marginBottom: 16,
-            flexWrap: "wrap",
-            gap: 8,
-          }}
+      {actionLoading === "nav_payments" ? "…" : t("invoice.btn.payments.label")}
+    </Button>
+  );
+
+  const btnParty = (canMutate || fixture) &&
+    (data.customer ?? data.supplier) && (
+    <Button
+      variant="secondary"
+      class={cx(
+        isMobile ? "flex-1 min-h-[44px] rounded-touch text-body" : "text-cell",
+      )}
+      disabled={fixture || actionLoading === "nav_party"}
+      title={fixture
+        ? previewTitle
+        : isCustomer
+        ? t("invoice.btn.party.title.customer")
+        : t("invoice.btn.party.title.supplier")}
+      onClick={() => {
+        const party = data.customer ?? data.supplier;
+        void navigate(
+          "nav_party",
+          t(
+            isCustomer
+              ? "invoice.nav.party.message.customer"
+              : "invoice.nav.party.message.supplier",
+            { party },
+          ),
+        );
+      }}
+    >
+      {actionLoading === "nav_party"
+        ? "…"
+        : isMobile
+        ? t("invoice.btn.party.label.mobile")
+        : isCustomer
+        ? t("invoice.btn.party.label.customer")
+        : t("invoice.btn.party.label.supplier")}
+    </Button>
+  );
+
+  const btnSubmit = isDraft && (canMutate || fixture) && (
+    <Button
+      variant="accent"
+      class={isMobile ? "min-h-[44px] rounded-touch text-body" : "text-cell"}
+      disabled={fixture || actionLoading === "submit"}
+      title={fixture ? previewTitle : t("invoice.btn.submit.title")}
+      onClick={() =>
+        void callAction("submit", "erpnext_doc_submit", {
+          doctype,
+          name: data.name,
+        }, t("invoice.action.submitted"))}
+    >
+      {actionLoading === "submit" ? "…" : t("invoice.btn.submit.label")}
+    </Button>
+  );
+
+  const btnCancel = isSubmitted && (canMutate || fixture) && (
+    <Button
+      variant="danger"
+      class={cx(
+        "border-bad/30",
+        isMobile ? "flex-1 min-h-[44px] rounded-touch text-body" : "text-cell",
+      )}
+      disabled={fixture || actionLoading === "cancel"}
+      title={fixture ? previewTitle : t("invoice.btn.cancel.title")}
+      onClick={() =>
+        void callAction("cancel", "erpnext_doc_cancel", {
+          doctype,
+          name: data.name,
+        }, t("invoice.action.cancelled"))}
+    >
+      {actionLoading === "cancel" ? "…" : t("invoice.btn.cancel.label")}
+    </Button>
+  );
+
+  /* ── Totaux ───────────────────────────────────────────────────── */
+
+  const totalsPanel = (
+    <div class="flex flex-col gap-1.5 bg-sunken border-l border-line px-4 py-3.5">
+      {/* Subtotal */}
+      <div class="flex items-baseline justify-between">
+        <span class="font-mono text-meta text-ink-faint">
+          {t("invoice.totals.subtotal")}
+        </span>
+        <span class="font-mono text-body tabular-nums text-ink-2">
+          {formatNumber(netTotal)}
+        </span>
+      </div>
+      {/* Taxes */}
+      <div class="flex items-baseline justify-between">
+        <span class="font-mono text-meta text-ink-faint">
+          {t("invoice.totals.taxes")}
+        </span>
+        <span class="font-mono text-body tabular-nums text-ink-faint">
+          {taxes !== 0 ? formatNumber(taxes) : "—"}
+        </span>
+      </div>
+      {/* Grand total */}
+      <div class="flex items-baseline justify-between border-t border-line-soft pt-2">
+        <span class="font-mono text-meta uppercase tracking-chip text-ink-muted">
+          {t("invoice.totals.grand_total")}
+        </span>
+        <span
+          class="font-display font-semibold tabular-nums text-ink"
+          style={{ fontSize: "19px" }}
         >
-          <div>
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: colors.text.muted,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                marginBottom: 4,
-              }}
-            >
+          {formatCurrency(data.grand_total, ccy)}
+        </span>
+      </div>
+    </div>
+  );
+
+  /* ══════════════════════════════════════════════════════════════
+     MISE EN PAGE LARGE — tableau 4 colonnes + footer grid 2 cols
+  ══════════════════════════════════════════════════════════════ */
+
+  if (isWide) {
+    return (
+      <ViewerShell containerRef={ref}>
+        {/* Header 2 colonnes */}
+        <div
+          class="grid gap-5 border-b border-line p-4"
+          style={{ gridTemplateColumns: "1fr auto" }}
+        >
+          {/* Colonne gauche : eyebrow + titre + badge·party */}
+          <div class="flex min-w-0 flex-col gap-1.5">
+            <span class="font-mono text-micro uppercase tracking-eyebrow text-ink-faint">
               {doctype}
-            </div>
-            <div
-              style={{
-                fontSize: 20,
-                fontWeight: 700,
-                color: colors.text.primary,
-                fontFamily: fonts.mono,
-              }}
+            </span>
+            <h2
+              class="m-0 font-display font-semibold text-doc text-ink"
+              style={{ letterSpacing: "-0.015em" }}
             >
               {data.name}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                marginTop: 6,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
+            </h2>
+            <div class="flex items-center gap-2">
               <StatusBadge status={data.status} />
-              {data.company && (
-                <span style={{ fontSize: 11, color: colors.text.faint }}>
-                  {data.company}
+              {refreshing && (
+                <span class="font-mono text-nano text-ink-faint">
+                  {t("common.refreshing")}
                 </span>
               )}
+              <span class="text-data text-ink-muted">
+                {partyName}
+                {data.company ? ` · ${data.company}` : ""}
+              </span>
             </div>
           </div>
-          <button
-            onClick={() => void requestRefresh({ ignoreInterval: true })}
-            disabled={refreshing}
-            style={styles.button}
-          >
-            {refreshing ? "…" : "Refresh"}
-          </button>
-        </div>
 
-        {/* Feedback */}
-        {error && (
-          <FeedbackBanner
-            type="error"
-            message={error}
-            onDismiss={() => setError(null)}
-          />
-        )}
-        {!error && actionMessage && (
-          <FeedbackBanner type="success" message={actionMessage} />
-        )}
-
-        {/* Parties — two columns */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 16,
-            marginBottom: 16,
-            borderBottom: `1px solid ${colors.border}`,
-            paddingBottom: 16,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 10,
-                color: colors.text.muted,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: 4,
-              }}
-            >
-              {isCustomer ? "Customer" : "Supplier"}
-            </div>
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: colors.text.primary,
-              }}
-            >
-              {partyName}
-            </div>
-            {data.contact_email && (
-              <div style={{ fontSize: 11, color: colors.text.secondary }}>
-                {data.contact_email}
-              </div>
-            )}
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: 10,
-                color: colors.text.muted,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: 4,
-              }}
-            >
-              Outstanding
-            </div>
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: isPaid ? colors.success : colors.error,
-                fontFamily: fonts.mono,
-              }}
+          {/* Colonne droite : outstanding hero */}
+          <div class="flex flex-col items-end gap-1 border-l border-line pl-6">
+            <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+              {t("invoice.header.outstanding")}
+            </span>
+            <span
+              class={cx(
+                "font-display font-semibold tabular-nums leading-[1.05]",
+                isPaid ? "text-ok" : "text-bad",
+              )}
+              style={{ fontSize: "30px" }}
             >
               {formatCurrency(outstanding, ccy)}
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: isPaid ? colors.success : colors.error,
-              }}
-            >
-              {isPaid ? "Paid" : "Unpaid"}
-            </div>
-          </div>
-        </div>
-
-        {/* Dates — inline */}
-        <div
-          style={{ display: "flex", gap: 24, marginBottom: 16, fontSize: 12 }}
-        >
-          <span>
-            <span style={{ color: colors.text.muted }}>Date</span>
-            <span style={{ color: colors.text.primary, fontWeight: 500 }}>
-              {data.posting_date}
             </span>
-          </span>
-          {data.due_date && (
-            <span>
-              <span style={{ color: colors.text.muted }}>Due</span>
-              <span style={{ color: colors.text.primary, fontWeight: 500 }}>
-                {data.due_date}
+            {data.due_date && (
+              <span class="font-mono text-meta text-ink-muted">
+                {t("invoice.header.due", { date: data.due_date })}
               </span>
-            </span>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Line Items — clickable for item drill-down */}
-        {items.length > 0 && (
-          <div
-            style={{
-              border: `1px solid ${colors.border}`,
-              borderRadius: 12,
-              overflowX: "auto",
-              marginBottom: 16,
-            }}
-          >
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th
-                    style={{
-                      ...styles.tableHeader,
-                      background: colors.bg.surface,
-                    }}
-                  >
-                    Item
-                  </th>
-                  <th
-                    style={{
-                      ...styles.tableHeader,
-                      background: colors.bg.surface,
-                      textAlign: "right",
-                    }}
-                  >
-                    Qty
-                  </th>
-                  <th
-                    style={{
-                      ...styles.tableHeader,
-                      background: colors.bg.surface,
-                      textAlign: "right",
-                    }}
-                  >
-                    Rate
-                  </th>
-                  <th
-                    style={{
-                      ...styles.tableHeader,
-                      background: colors.bg.surface,
-                      textAlign: "right",
-                    }}
-                  >
-                    Amount
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, idx) => {
-                  const isExpanded = expandedIdx === idx;
-                  return (
-                    <tr key={idx}>
-                      <td colSpan={4} style={{ padding: 0 }}>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "35% 15% 25% 25%",
-                            cursor: hasServerTools ? "pointer" : "default",
-                            transition: "background 0.1s",
-                            background: isExpanded
-                              ? colors.bg.hover
-                              : "transparent",
-                          }}
-                          onClick={hasServerTools
-                            ? () => setExpandedIdx(isExpanded ? null : idx)
-                            : undefined}
-                          onMouseEnter={(e) => {
-                            if (!isExpanded) {
-                              (e.currentTarget as HTMLElement).style
-                                .background = colors.bg.hover;
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isExpanded) {
-                              (e.currentTarget as HTMLElement).style
-                                .background = "transparent";
-                            }
-                          }}
-                        >
-                          <div style={styles.tableCell}>
-                            <div
-                              style={{
-                                fontWeight: 500,
-                                color: colors.text.primary,
-                              }}
-                            >
-                              {item.item_name ?? item.item_code}
-                            </div>
-                            {item.item_name && (
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: colors.text.faint,
-                                  fontFamily: fonts.mono,
-                                }}
-                              >
-                                {item.item_code}
-                              </div>
-                            )}
-                          </div>
-                          <div
-                            style={{
-                              ...styles.tableCell,
-                              textAlign: "right",
-                              fontFamily: fonts.mono,
-                            }}
-                          >
-                            {item.qty}
-                          </div>
-                          <div
-                            style={{
-                              ...styles.tableCell,
-                              textAlign: "right",
-                              fontFamily: fonts.mono,
-                              color: colors.text.secondary,
-                            }}
-                          >
-                            {formatCurrency(item.rate, ccy)}
-                          </div>
-                          <div
-                            style={{
-                              ...styles.tableCell,
-                              textAlign: "right",
-                              fontFamily: fonts.mono,
-                              fontWeight: 500,
-                            }}
-                          >
-                            {formatCurrency(item.amount, ccy)}
-                          </div>
-                        </div>
-                        {isExpanded && (
-                          <ItemDetailPanel
-                            app={app}
-                            itemCode={item.item_code}
-                            onClose={() => setExpandedIdx(null)}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {/* Messages */}
+        {messages}
 
-        {/* Totals — aligned right */}
+        {/* En-tête de tableau */}
         <div
+          class="grid border-b border-line bg-sunken"
           style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginBottom: 16,
+            gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
+            padding: "8px 16px",
           }}
         >
-          <div
-            style={{
-              minWidth: 220,
-              borderTop: `1px solid ${colors.border}`,
-              paddingTop: 8,
-            }}
-          >
-            <TotalRow label="Subtotal" value={formatCurrency(netTotal, ccy)} />
-            {taxes !== 0 && (
-              <TotalRow label="Taxes" value={formatCurrency(taxes, ccy)} />
-            )}
-            <TotalRow
-              label="Grand Total"
-              value={formatCurrency(data.grand_total, ccy)}
-              bold
-            />
-          </div>
+          <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+            {t("invoice.table.col.item")}
+          </span>
+          <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+            {t("invoice.table.col.qty")}
+          </span>
+          <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+            {t("invoice.table.col.rate")}
+          </span>
+          <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+            {t("invoice.table.col.amount")}
+          </span>
         </div>
 
-        {/* Actions */}
-        {hasServerTools && (
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              padding: "12px 0",
-              borderTop: `1px solid ${colors.border}`,
-            }}
-          >
-            {isDraft && (
-              <ActionButton
-                label="Submit"
-                variant="success"
-                confirm
-                loading={actionLoading === "submit"}
-                onClick={() =>
-                  callAction("submit", "erpnext_doc_submit", {
-                    doctype,
-                    name: data.name,
-                  }, "Submitted")}
-              />
-            )}
-            {isSubmitted && (
-              <ActionButton
-                label="Cancel"
-                variant="error"
-                confirm
-                loading={actionLoading === "cancel"}
-                onClick={() =>
-                  callAction("cancel", "erpnext_doc_cancel", {
-                    doctype,
-                    name: data.name,
-                  }, "Cancelled")}
-              />
-            )}
-            <ActionButton
-              label="Payments"
-              loading={actionLoading === "nav_payments"}
-              onClick={() =>
-                navigate(
-                  "nav_payments",
-                  `Show payment entries for ${doctype} ${data.name}`,
+        {/* Lignes article */}
+        {rows.map((row) => {
+          const isSelected = canExpand && expandedIdx === row.idx;
+          return (
+            <div key={`${row.idx}-${row.item_code}`}>
+              <div
+                class={cx(
+                  "grid items-center border-b border-line-soft focus-visible:outline-2 focus-visible:outline-accent",
+                  canExpand ? "cursor-pointer" : "",
+                  isSelected ? "bg-row-selected" : "hover:bg-row-hover",
                 )}
-            />
-            {(data.customer ?? data.supplier) && (
-              <ActionButton
-                label={isCustomer ? "Customer invoices" : "Supplier invoices"}
-                loading={actionLoading === "nav_party"}
-                onClick={() => {
-                  const party = data.customer ?? data.supplier;
-                  navigate(
-                    "nav_party",
-                    `Show all ${
-                      isCustomer ? "sales" : "purchase"
-                    } invoices for ${
-                      isCustomer ? "customer" : "supplier"
-                    } ${party}`,
-                  );
+                style={{
+                  gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
+                  padding: "10px 16px",
+                  borderLeft: `2px solid ${
+                    isSelected ? "var(--color-accent)" : "transparent"
+                  }`,
                 }}
-              />
+                role={canExpand ? "button" : undefined}
+                tabIndex={canExpand ? 0 : undefined}
+                aria-expanded={canExpand ? isSelected : undefined}
+                onClick={canExpand
+                  ? () =>
+                    setExpandedIdx(expandedIdx === row.idx ? null : row.idx)
+                  : undefined}
+                onKeyDown={canExpand
+                  ? (e: KeyboardEvent) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    setExpandedIdx(expandedIdx === row.idx ? null : row.idx);
+                  }
+                  : undefined}
+              >
+                {/* Cellule item : nom + sous-ligne code */}
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-body text-ink">
+                    {row.item_name ?? row.item_code}
+                  </span>
+                  <span class="font-mono text-chip text-ink-faint">
+                    {row.item_code}
+                  </span>
+                </div>
+                {/* Qty */}
+                <span class="font-mono text-cell tabular-nums text-ink-2 text-right">
+                  {formatNumber(row.qty)}
+                </span>
+                {/* Rate */}
+                <span class="font-mono text-cell tabular-nums text-ink-muted text-right">
+                  {formatNumber(row.rate)}
+                </span>
+                {/* Amount */}
+                <span class="font-mono text-cell font-medium tabular-nums text-ink text-right">
+                  {formatNumber(row.amount)}
+                </span>
+              </div>
+
+              {/* Panneau de détail article (wide seulement) */}
+              {isSelected && (
+                <ItemDetailPanel
+                  app={app}
+                  itemCode={row.item_code}
+                  fixture={fixture}
+                  onClose={() => setExpandedIdx(null)}
+                  lineIndex={row.idx}
+                  lineCount={rows.length}
+                  lineQty={row.qty}
+                />
+              )}
+            </div>
+          );
+        })}
+
+        {/* Footer : boutons gauche | totaux droite */}
+        <div
+          class="grid border-t border-line"
+          style={{ gridTemplateColumns: "1fr 300px" }}
+        >
+          <div class="flex items-center gap-2 px-4 py-3.5">
+            {btnSubmit}
+            {btnPayments}
+            {btnParty}
+            {btnCancel}
+          </div>
+          {totalsPanel}
+        </div>
+
+        {/* Pied de marque */}
+        <div class="flex justify-end border-t border-line px-4 py-[9px]">
+          <CasysCredit />
+        </div>
+      </ViewerShell>
+    );
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     MISE EN PAGE ÉTROITE — mobile (cartes) et panel (idem sans 44px)
+     La maquette ne montre pas le panel pour invoice-viewer :
+     on applique le layout mobile sans les cibles tactiles de 44 px.
+  ══════════════════════════════════════════════════════════════ */
+
+  return (
+    <ViewerShell containerRef={ref}>
+      {/* Header flex-col */}
+      <div class="flex flex-col gap-[10px] border-b border-line px-3 py-[13px]">
+        {/* Identité doc */}
+        <div class="flex flex-col gap-[3px]">
+          <span class="font-mono text-nano uppercase tracking-eyebrow text-ink-faint">
+            {doctype}
+          </span>
+          <h3 class="m-0 font-display font-semibold text-title text-ink tracking-title">
+            {data.name}
+          </h3>
+          <span class="text-data text-ink-muted">{partyName}</span>
+        </div>
+
+        {/* Ligne outstanding */}
+        <div class="flex items-end justify-between gap-3 border-t border-line-soft pt-[10px]">
+          {/* Gauche : label + montant */}
+          <div class="flex flex-col gap-0.5">
+            <span class="font-mono text-nano uppercase tracking-label text-ink-faint">
+              {t("invoice.header.outstanding")}
+            </span>
+            <span
+              class={cx(
+                "font-display font-semibold text-amount tabular-nums leading-[1.05]",
+                isPaid ? "text-ok" : "text-bad",
+              )}
+            >
+              {formatCurrency(outstanding, ccy)}
+            </span>
+          </div>
+          {/* Droite : badge + date */}
+          <div class="flex flex-col items-end gap-[5px]">
+            <StatusBadge status={data.status} />
+            {data.due_date && (
+              <span class="font-mono text-chip text-ink-muted">
+                {t("invoice.header.due", { date: data.due_date.slice(5) })}
+              </span>
             )}
           </div>
-        )}
+        </div>
       </div>
-      <ErpNextBrandFooter />
-    </div>
+
+      {/* Messages */}
+      {messages}
+
+      {/* Section lignes — cartes */}
+      <div class="flex flex-col gap-[7px] border-b border-line px-3 py-[11px]">
+        <span class="font-mono text-nano uppercase tracking-label text-ink-faint">
+          {t("invoice.lines.count", {
+            n: rows.length,
+            s: rows.length > 1 ? "s" : "",
+          })}
+        </span>
+        {rows.map((row, i) => (
+          <div
+            key={`${row.idx}-${row.item_code}`}
+            class="flex flex-col gap-[5px] rounded-chip border border-line bg-row-hover"
+            style={{
+              padding: "10px 11px",
+              borderLeft: `2px solid ${
+                i === 0 ? "var(--color-accent)" : "transparent"
+              }`,
+            }}
+          >
+            <span
+              class={cx(
+                "text-cell",
+                i === 0 ? "text-ink" : "text-ink-2",
+              )}
+            >
+              {row.item_name ?? row.item_code}
+            </span>
+            <div class="flex items-baseline justify-between gap-[10px]">
+              <span class="font-mono text-chip text-ink-faint">
+                {formatNumber(row.qty)} × {formatNumber(row.rate)}
+              </span>
+              <span
+                class={cx(
+                  "font-mono text-cell tabular-nums text-ink",
+                  i === 0 ? "font-medium" : "",
+                )}
+              >
+                {formatNumber(row.amount)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Bande grand total */}
+      <div class="flex items-baseline justify-between border-b border-line bg-sunken px-3 py-[11px]">
+        <span class="font-mono text-micro uppercase tracking-chip text-ink-muted">
+          {t("invoice.totals.grand_total")}
+        </span>
+        <span class="font-display text-title font-semibold tabular-nums text-ink">
+          {formatCurrency(data.grand_total, ccy)}
+        </span>
+      </div>
+
+      {/* CTA section */}
+      {(canMutate || fixture) && (
+        <div class="flex flex-col gap-[7px] px-3 py-[11px]">
+          {/* Paiements — pleine largeur */}
+          {btnPayments}
+          {/* Ligne de boutons secondaires */}
+          <div class="flex gap-[7px]">
+            {btnParty}
+            {btnCancel}
+          </div>
+          {/* Submit (rare en mobile, mais logique métier conservée) */}
+          {btnSubmit}
+        </div>
+      )}
+
+      {/* Pied de marque */}
+      <div class="flex justify-end border-t border-line px-3 py-[9px]">
+        <CasysCredit compact />
+      </div>
+    </ViewerShell>
   );
 }

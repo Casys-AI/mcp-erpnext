@@ -39,6 +39,26 @@ export function createKanbanInitialState(): KanbanViewerState {
   };
 }
 
+/**
+ * Le type promet des tableaux ; le JSON d'ERPNext ne promet rien.
+ *
+ * Tout board entre par ici — résultat d'outil, rafraîchissement, fixture.
+ * Normaliser une fois à l'entrée vaut mieux que garder chaque `.filter` et
+ * chaque `.find` en aval : trois accès à `allowedTransitions` existaient sans
+ * garde, dont un dans le chemin du glisser-déposer, et une seule garde oubliée
+ * suffit à blanchir la vue.
+ */
+function normalizeBoard(board: KanbanBoardData): KanbanBoardData {
+  return {
+    ...board,
+    columns: Array.isArray(board.columns) ? board.columns : [],
+    cards: Array.isArray(board.cards) ? board.cards : [],
+    allowedTransitions: Array.isArray(board.allowedTransitions)
+      ? board.allowedTransitions
+      : [],
+  };
+}
+
 export function kanbanStateReducer(
   state: KanbanViewerState,
   action: KanbanViewerAction,
@@ -48,7 +68,7 @@ export function kanbanStateReducer(
       return { ...state, loading: true, error: null };
     case "hydrate-board":
       return {
-        board: action.board,
+        board: normalizeBoard(action.board),
         loading: false,
         error: null,
         detail: state.detail,

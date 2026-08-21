@@ -1,21 +1,20 @@
+/** @jsxImportSource preact */
 /**
- * KPI Viewer — Single metric card for ERPNext KPI tools
- *
- * Renders one KPI metric card with:
- * - Big number (formatted as currency or plain)
- * - Delta badge (green/red with arrow)
- * - Optional sparkline (SVG polyline, no libraries)
- *
- * Data shape: KpiData (see interface below)
- * Protocol: MCP Apps ext-apps SDK
- *
- * @module lib/erpnext/ui/kpi-viewer
+ * KPI viewer — Direction B v2.
+ * Rendu fait main : aucune dépendance à @casys/mcp-view.
+ * Handshake reste sur ext-apps (refresh / callServerTool / sendMessage).
  */
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
-import { fonts, formatCurrency, formatNumber } from "~/shared/theme";
-import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
+import { bindHostContext } from "~/shared/host-context-hook";
+import {
+  CasysCredit,
+  cx,
+  Skeleton,
+  StateMessage,
+  ViewerShell,
+} from "~/shared/ui";
+import { useViewerLayout } from "~/shared/useViewerLayout";
 import {
   canRequestUiRefresh,
   extractToolResultText,
@@ -24,363 +23,593 @@ import {
   type ToolResultPayload,
   type UiRefreshRequestData,
 } from "~/shared/refresh";
-
-// ============================================================================
-// MCP App
-// ============================================================================
+import { isFixtureMode, KPI_FIXTURE } from "./fixture.ts";
+import type { KpiData } from "./types.ts";
+import { currentLocale, formatNumber, toNumber } from "~/shared/format";
+import { t } from "~/shared/i18n.ts";
+import { useT } from "~/shared/i18n-hook.ts";
+import {
+  type DrillDownChannel,
+  drillDownChannel,
+  sharedLabel,
+  shareSelection,
+} from "~/shared/drill-down";
 
 const app = new App({ name: "KPI Viewer", version: "1.0.0" });
 const KPI_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
-// ============================================================================
-// Types
-// ============================================================================
+/* ── Formatage ────────────────────────────────────────────────────── */
 
-interface KpiData {
-  label: string;
-  value: number;
-  formattedValue?: string;
-  unit?: string;
-  currency?: string;
-  delta?: number;
-  deltaLabel?: string;
-  trend?: "up" | "down" | "flat";
-  trendIsGood?: boolean;
-  sparkline?: number[];
-  color?: string;
-  icon?: string;
-  refreshRequest?: UiRefreshRequestData;
-  /** sendMessage text when clicking the big number (drill into exceptions) */
-  _drillDown?: string;
-  /** sendMessage text when clicking the sparkline (drill into trend) */
-  _trendDrillDown?: string;
-}
-
-// ============================================================================
-// Sparkline — pure SVG polyline
-// ============================================================================
-
-function Sparkline({ data, color }: { data: number[]; color: string }) {
-  if (data.length < 2) return null;
-
-  const width = 60;
-  const height = 24;
-  const padding = 2;
-
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-
-  const points = data
-    .map((v, i) => {
-      const x = padding + (i / (data.length - 1)) * (width - padding * 2);
-      const y = padding + (1 - (v - min) / range) * (height - padding * 2);
-      return `${x},${y}`;
+/**
+ * Retourne le montant et l'unité séparément pour permettre le rendu
+ * bipolaire 46px/26px (montant gros, unité faufilée à droite).
+ */
+function formatKpiParts(data: KpiData): { amount: string; unit: string } {
+  // Normalise la valeur — null, undefined, NaN sont traités comme 0, jamais une exception.
+  const v = toNumber(data.value) ?? 0;
+  if (data.currency) {
+    const amount = formatNumber(v, 2);
+    // Extraire le symbole monétaire depuis Intl sans le chiffre.
+    const symbol = new Intl.NumberFormat(currentLocale(), {
+      style: "currency",
+      currency: data.currency,
     })
-    .join(" ");
-
-  return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      style={{ flexShrink: 0 }}
-      aria-hidden="true"
-    >
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+      .formatToParts(0)
+      .find((p) => p.type === "currency")?.value ?? data.currency;
+    return { amount, unit: symbol };
+  }
+  if (data.unit === "%") {
+    const decimals = v % 1 === 0 ? 0 : 1;
+    return { amount: formatNumber(v, decimals), unit: "%" };
+  }
+  const decimals = v % 1 === 0 ? 0 : 2;
+  return { amount: formatNumber(v, decimals), unit: data.unit ?? "" };
 }
 
-// ============================================================================
-// Delta Badge
-// ============================================================================
+/**
+ * Formate la valeur de comparaison (deltaValue) de la même manière
+ * que la valeur principale, mais sans scinder en deux éléments.
+ */
+function formatDeltaValue(data: KpiData): string {
+  // Garde == null (double égal) : capture à la fois null et undefined.
+  if (data.deltaValue == null) return "";
+  const v = toNumber(data.deltaValue) ?? 0;
+  if (data.currency) {
+    const amount = formatNumber(v, 2);
+    const symbol = new Intl.NumberFormat(currentLocale(), {
+      style: "currency",
+      currency: data.currency,
+    })
+      .formatToParts(0)
+      .find((p) => p.type === "currency")?.value ?? data.currency;
+    return `${amount} ${symbol}`;
+  }
+  return formatNumber(v, 2);
+}
 
-function DeltaBadge({ delta, deltaLabel, trend, trendIsGood }: {
-  delta: number;
-  deltaLabel?: string;
-  trend?: "up" | "down" | "flat";
+/* ── Accessibilité clavier ────────────────────────────────────────── */
+
+/** Rend un élément cliquable accessible au clavier (Entrée / Espace). */
+function activationHandlers(onActivate?: () => void) {
+  if (!onActivate) return {};
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    onClick: onActivate,
+    onKeyDown: (event: KeyboardEvent) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      onActivate();
+    },
+  };
+}
+
+/* ── Ramp chromatique sparkline ───────────────────────────────────── */
+
+/**
+ * Répartit les barres en 4 niveaux de luminosité (chart-4 → chart-1)
+ * en suivant la ramp de la maquette pour n=8 barres.
+ *
+ * Les classes sont énumérées statiquement ici pour que Tailwind les
+ * détecte au scan (règle : jamais de classe composée à l'exécution).
+ */
+const _SPARKLINE_CLASSES_ANCHOR = "bg-chart-1 bg-chart-2 bg-chart-3 bg-chart-4";
+
+function sparklineBarClass(idx: number, total: number): string {
+  if (total <= 1) return "bg-chart-1";
+  const ratio = idx / (total - 1); // 0 = plus vieux, 1 = plus récent
+  if (ratio < 0.25) return "bg-chart-4";
+  if (ratio < 0.625) return "bg-chart-3";
+  if (ratio < 0.875) return "bg-chart-2";
+  return "bg-chart-1";
+}
+
+/* ── Calcul de la hauteur d'une barre ────────────────────────────── */
+
+function sparklineHeights(values: number[]): number[] {
+  const max = Math.max(...values);
+  if (max === 0) return values.map(() => 0);
+  return values.map((v) => Math.round((v / max) * 100));
+}
+
+/* ── Dot de statut (pastille colorée dans le label) ──────────────── */
+
+function StatusDot({ trend, trendIsGood }: {
+  trend?: KpiData["trend"];
   trendIsGood?: boolean;
 }) {
-  const direction = trend ?? (delta > 0 ? "up" : delta < 0 ? "down" : "flat");
-  const arrow = direction === "up"
-    ? "\u25B2"
-    : direction === "down"
-    ? "\u25BC"
-    : "\u25C6";
-
-  // Determine color: good = green, bad = red, flat = muted
-  let badgeColor: string;
-  let badgeBg: string;
-  if (direction === "flat") {
-    badgeColor = "var(--text-muted)";
-    badgeBg = "var(--bg-hover)";
-  } else if (trendIsGood === undefined) {
-    // No opinion on good/bad — use neutral accent
-    badgeColor = "var(--info)";
-    badgeBg = "var(--info-dim)";
-  } else {
-    const isPositiveDirection = direction === "up";
-    const isGood = trendIsGood ? isPositiveDirection : !isPositiveDirection;
-    badgeColor = isGood ? "var(--success)" : "var(--error)";
-    badgeBg = isGood ? "var(--success-dim)" : "var(--error-dim)";
-  }
-
-  const sign = delta > 0 ? "+" : "";
-  const formatted = `${sign}${
-    formatNumber(Math.abs(delta), Math.abs(delta) < 10 ? 1 : 0)
-  }`;
+  // Vert = ok (up+good ou down+mauvais attendu mais bon), orange/rouge sinon.
+  const isGood = trendIsGood === undefined
+    ? true
+    : trendIsGood
+    ? trend === "up"
+    : trend === "down";
 
   return (
     <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        padding: "2px 8px",
-        fontSize: 11,
-        fontWeight: 600,
-        fontFamily: fonts.mono,
-        borderRadius: 4,
-        color: badgeColor,
-        background: badgeBg,
-        letterSpacing: "0.02em",
-      }}
-    >
-      <span style={{ fontSize: 8 }}>{arrow}</span>
-      {formatted}%
-      {deltaLabel && (
-        <span
-          style={{
-            fontWeight: 400,
-            fontFamily: fonts.sans,
-            opacity: 0.75,
-            marginLeft: 2,
-          }}
-        >
-          {deltaLabel}
-        </span>
+      aria-hidden="true"
+      class={cx(
+        "inline-block size-[5px] shrink-0 rounded-full",
+        trend === "flat" || trendIsGood === undefined
+          ? "bg-ok"
+          : isGood
+          ? "bg-ok"
+          : "bg-bad",
       )}
+    />
+  );
+}
+
+/* ── Barres sparkline ─────────────────────────────────────────────── */
+
+function SparklineBars({ values, height, gap }: {
+  values: number[];
+  /** Hauteur totale du conteneur en px. */
+  height: number;
+  gap: number;
+}) {
+  const pcts = sparklineHeights(values);
+  return (
+    <div
+      class="flex items-end rounded-bar"
+      style={{ height: `${height}px`, gap: `${gap}px` }}
+    >
+      {pcts.map((h, i) => (
+        <div
+          key={i}
+          class={cx("flex-1 rounded-bar", sparklineBarClass(i, values.length))}
+          style={{ height: `${Math.max(h, 4)}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ── Badge delta ──────────────────────────────────────────────────── */
+
+function DeltaBadge({ delta, trend, trendIsGood }: {
+  delta: number;
+  trend?: KpiData["trend"];
+  trendIsGood?: boolean;
+}) {
+  const direction = trend ?? (delta > 0 ? "up" : delta < 0 ? "down" : "flat");
+  const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "—";
+  // delta est un ratio : 2.83 → 283 %.
+  const pct = Math.round(Math.abs(delta) * 100);
+  const isGood = trendIsGood === undefined
+    ? true
+    : trendIsGood
+    ? direction === "up"
+    : direction === "down";
+  const tone = direction === "flat" || trendIsGood === undefined
+    ? "neutral"
+    : isGood
+    ? "ok"
+    : "bad";
+
+  return (
+    <span
+      class={cx(
+        "inline-flex font-mono text-[12px] font-medium px-2 py-[3px] rounded-badge",
+        tone === "ok" && "bg-ok/[.14] text-ok",
+        tone === "bad" && "bg-bad/[.14] text-bad",
+        tone === "neutral" && "bg-ink-ghost/20 text-ink-muted",
+      )}
+    >
+      {arrow} {pct} %
     </span>
   );
 }
 
-// ============================================================================
-// Loading Skeleton
-// ============================================================================
+/* ── Bloc d'erreur inline ─────────────────────────────────────────── */
 
-function LoadingSkeleton() {
+/**
+ * Erreur inline (quand des données sont déjà affichées).
+ * Doctrine : bande gauche border-l-2 border-bad, jamais un StateMessage cadré.
+ */
+function InlineError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry?: () => void;
+}) {
+  const t = useT();
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <div className="skeleton" style={{ height: 12, width: "35%" }} />
-        <div className="skeleton" style={{ height: 36, width: "55%" }} />
-        <div className="skeleton" style={{ height: 16, width: "40%" }} />
+    <div class="flex flex-col gap-[6px] border-l-2 border-bad pl-[10px]">
+      <div class="flex items-center gap-[5px]">
+        <span class="inline-block size-[5px] shrink-0 rounded-full bg-bad" />
+        <span class="text-[12.5px] text-ink leading-snug">{message}</span>
       </div>
+      {onRetry && (
+        <button
+          type="button"
+          class="self-start rounded-control border border-line bg-surface px-[10px] py-[5px] font-mono text-[10.5px] text-ink-muted hover:border-line-hover hover:text-ink"
+          onClick={onRetry}
+        >
+          {t("common.retry")}
+        </button>
+      )}
     </div>
   );
 }
 
-// ============================================================================
-// KPI Card Content
-// ============================================================================
+/* ── Confirmation visuelle après drill-down ───────────────────────── */
 
-function KpiContent(
-  { data, error, refreshing, onRefresh }: {
-    data: KpiData;
-    error: string | null;
-    refreshing: boolean;
-    onRefresh: () => void;
-  },
-) {
-  const accentColor = data.color ?? "var(--accent)";
-  const hasServerTools = app.getHostCapabilities()?.serverTools;
+function DrillDownConfirm({ channel }: { channel: DrillDownChannel }) {
+  return (
+    <div class="flex items-center gap-[5px] mt-[4px]">
+      {/* Arc SVG → signal d'envoi vers la conversation */}
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 10 10"
+        fill="none"
+        class="shrink-0"
+      >
+        <path
+          d="M1 9 Q5 1 9 5"
+          stroke="var(--color-accent-edge)"
+          stroke-width="1.2"
+          stroke-linecap="round"
+          fill="none"
+        />
+        <path
+          d="M9 5 L7.5 3.5 M9 5 L7.5 6.5"
+          stroke="var(--color-accent-edge)"
+          stroke-width="1.2"
+          stroke-linecap="round"
+          fill="none"
+        />
+      </svg>
+      <span class="font-mono text-[10.5px] text-ink-faint">
+        {sharedLabel(channel)}
+      </span>
+    </div>
+  );
+}
+
+/* ── État chargement KPI ──────────────────────────────────────────── */
+
+function KpiLoadingSkeleton() {
+  const t = useT();
+  return (
+    <>
+      <div class="flex flex-col gap-[10px] p-[18px_16px]">
+        {/* Label skeleton */}
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-micro uppercase tracking-eyebrow text-ink-faint">
+            {t("kpi.skeleton.label")}
+          </span>
+          <span class="inline-block size-[5px] shrink-0 rounded-full bg-amber-400/70" />
+        </div>
+        {/* Valeur principale skeleton (deux lignes : 70% et 38%) */}
+        <Skeleton class="h-[14px] rounded-bar" style={{ width: "70%" }} />
+        <Skeleton class="h-[14px] rounded-bar" style={{ width: "38%" }} />
+        {/* Lignes fines (4) */}
+        <div class="flex flex-col gap-[5px] mt-[4px]">
+          <Skeleton class="h-[9px] rounded-bar w-full" />
+          <Skeleton class="h-[9px] rounded-bar w-full" />
+          <Skeleton class="h-[9px] rounded-bar w-full" />
+          <Skeleton class="h-[9px] rounded-bar" style={{ width: "60%" }} />
+        </div>
+      </div>
+      <footer class="flex justify-end border-t border-line px-4 py-[9px]">
+        <CasysCredit />
+      </footer>
+    </>
+  );
+}
+
+/* ── État vide KPI ────────────────────────────────────────────────── */
+
+function KpiEmptyState() {
+  const t = useT();
+  return (
+    <>
+      <div class="flex flex-col items-center gap-2 p-[34px_24px]">
+        {/* Mini-barres fantômes */}
+        <div class="flex items-end gap-[4px] h-[28px]">
+          <div
+            class="w-[7px] bg-chart-3 opacity-40 rounded-bar"
+            style={{ height: "40%" }}
+          />
+          <div
+            class="w-[7px] bg-chart-3 opacity-40 rounded-bar"
+            style={{ height: "70%" }}
+          />
+          <div
+            class="w-[7px] bg-chart-3 opacity-40 rounded-bar"
+            style={{ height: "55%" }}
+          />
+        </div>
+        <span class="text-[12.5px] text-ink-muted text-center leading-snug">
+          {t("kpi.empty.title")}
+        </span>
+        <span class="font-mono text-[10.5px] text-ink-faint text-center leading-relaxed">
+          {t("kpi.empty.hint")}
+        </span>
+      </div>
+      <footer class="flex justify-end border-t border-line px-4 py-[9px]">
+        <CasysCredit />
+      </footer>
+    </>
+  );
+}
+
+/* ── Contenu KPI ─────────────────────────────────────────────────── */
+
+function KpiContent({
+  data,
+  error,
+  layout,
+  onRefresh,
+}: {
+  data: KpiData;
+  error: string | null;
+  layout: "wide" | "panel" | "mobile";
+  onRefresh?: () => void;
+}) {
+  const t = useT();
+  const canDrill = drillDownChannel(app.getHostCapabilities()) !== "none";
+  const sparkline = data.sparkline && data.sparkline.length >= 2
+    ? data.sparkline
+    : undefined;
+
+  const [shared, setShared] = useState<DrillDownChannel | null>(null);
 
   async function drillDown(message: string) {
-    try {
-      await app.sendMessage({
-        role: "user",
-        content: [{ type: "text", text: message }],
-      });
-    } catch {}
+    if (!canDrill) return;
+    const { amount, unit } = formatKpiParts(data);
+    const channel = await shareSelection(app, {
+      view: "KPI",
+      label: data.label,
+      value: [amount, unit].filter(Boolean).join(" "),
+      suggested: message,
+    });
+    if (channel === "none") return;
+    setShared(channel);
+    setTimeout(() => setShared(null), 1500);
   }
 
-  // Format the main value
-  let displayValue: string;
-  if (data.formattedValue) {
-    displayValue = data.formattedValue;
-  } else if (data.currency) {
-    displayValue = formatCurrency(data.value, data.currency);
-  } else if (data.unit === "%") {
-    displayValue = `${formatNumber(data.value, data.value % 1 === 0 ? 0 : 1)}%`;
-  } else {
-    const decimals = data.value % 1 === 0 ? 0 : 2;
-    displayValue = formatNumber(data.value, decimals);
-    if (data.unit) displayValue += ` ${data.unit}`;
-  }
+  const { amount, unit } = formatKpiParts(data);
+  const compact = layout !== "wide";
+  const periodLabel = sparkline
+    ? t("kpi.sparkline.weeks", { n: sparkline.length })
+    : undefined;
 
-  // Sparkline color: use real hex because CSS vars don't work in SVG stroke
-  // Map common accent colors or fall back to a default
-  const sparklineColor = data.color ?? "#60a5fa";
-
-  return (
-    <div
-      style={{
-        fontFamily: fonts.sans,
-        background: "var(--bg-root)",
-        overflow: "hidden",
-      }}
-    >
-      <ErpNextBrandHeader />
-
-      <div style={{ padding: "12px 16px 14px" }}>
-        {/* Layout: text left, sparkline right */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-          }}
-        >
-          {/* Left side: label + value + delta */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Label */}
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                color: "var(--text-muted)",
-                marginBottom: 6,
-              }}
-            >
+  /* ── Layout mobile / panel ─────────────────────────────────────── */
+  if (compact) {
+    return (
+      <>
+        <div class="flex flex-col gap-[10px] p-[14px_12px]">
+          {/* Label + dot */}
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-nano uppercase tracking-eyebrow text-ink-faint">
               {data.label}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 6,
-              }}
-            >
-              <button
-                onClick={onRefresh}
-                disabled={refreshing}
-                style={{
-                  border: "1px solid var(--border)",
-                  background: "var(--bg-elevated)",
-                  color: "var(--text-secondary)",
-                  borderRadius: 6,
-                  padding: "4px 8px",
-                  fontSize: 11,
-                  fontFamily: fonts.sans,
-                  cursor: refreshing ? "default" : "pointer",
-                }}
-              >
-                {refreshing ? "Refreshing" : "Refresh"}
-              </button>
-              <div
-                aria-live="polite"
-                style={{
-                  fontSize: 11,
-                  color: error
-                    ? "var(--error)"
-                    : refreshing
-                    ? "var(--text-muted)"
-                    : "var(--text-faint)",
-                }}
-              >
-                {error ??
-                  (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
-              </div>
-            </div>
-
-            {/* Big number — clickable for drill-down */}
-            <div
-              onClick={hasServerTools && data._drillDown
-                ? () => drillDown(data._drillDown!)
-                : undefined}
-              style={{
-                fontSize: 32,
-                fontWeight: 700,
-                fontFamily: fonts.mono,
-                color: accentColor,
-                lineHeight: 1.1,
-                marginBottom: 8,
-                cursor: hasServerTools && data._drillDown
-                  ? "pointer"
-                  : "default",
-                transition: "opacity 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                if (data._drillDown) {(e.currentTarget as HTMLElement).style
-                    .opacity = "0.75";}
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "1";
-              }}
-              title={data._drillDown ? "Click to drill down" : undefined}
-            >
-              {displayValue}
-            </div>
-
-            {/* Delta badge */}
-            {data.delta !== undefined && (
-              <DeltaBadge
-                delta={data.delta}
-                deltaLabel={data.deltaLabel}
-                trend={data.trend}
-                trendIsGood={data.trendIsGood}
-              />
+            </span>
+            {data.trend !== undefined && (
+              <StatusDot trend={data.trend} trendIsGood={data.trendIsGood} />
             )}
           </div>
 
-          {/* Right side: sparkline */}
-          {data.sparkline && data.sparkline.length >= 2 && (
-            <div
-              style={{
-                paddingTop: 20,
-                paddingLeft: 12,
-                cursor: hasServerTools && data._trendDrillDown
-                  ? "pointer"
-                  : "default",
-              }}
-              onClick={hasServerTools && data._trendDrillDown
-                ? () => drillDown(data._trendDrillDown!)
-                : undefined}
-              title={data._trendDrillDown
-                ? "Click to see trend details"
-                : undefined}
-            >
-              <Sparkline data={data.sparkline} color={sparklineColor} />
+          {/* Valeur principale */}
+          <span
+            class={cx(
+              "font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
+              "text-[length:var(--text-metric-compact)]",
+              canDrill && data._drillDown
+                ? "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
+                : "",
+            )}
+            aria-label={canDrill && data._drillDown
+              ? t("kpi.drilldown.aria_detail", { label: data.label })
+              : undefined}
+            {...activationHandlers(
+              canDrill && data._drillDown
+                ? () => void drillDown(data._drillDown!)
+                : undefined,
+            )}
+          >
+            {amount}{" "}
+            <span class="text-[length:var(--text-metric-unit)] text-ink-faint">
+              {unit}
+            </span>
+          </span>
+
+          {/* Delta */}
+          {data.delta !== undefined && (
+            <div class="flex items-center gap-2">
+              <DeltaBadge
+                delta={data.delta}
+                trend={data.trend}
+                trendIsGood={data.trendIsGood}
+              />
+              {data.deltaValue != null && (
+                <span class="text-[11.5px] text-ink-muted">
+                  {t("kpi.delta.vs_label")} {formatDeltaValue(data)}
+                </span>
+              )}
+              {data.deltaValue == null && data.deltaLabel && (
+                <span class="text-[11.5px] text-ink-muted">
+                  {data.deltaLabel}
+                </span>
+              )}
             </div>
           )}
+
+          {/* Confirmation drill-down */}
+          {shared && <DrillDownConfirm channel={shared} />}
+
+          {/* Sparkline inline */}
+          {sparkline && (
+            <div class="border-t border-line-soft pt-1.5">
+              <SparklineBars values={sparkline} height={44} gap={4} />
+            </div>
+          )}
+
+          {/* Erreur inline — doctrine : bloc border-l-2, pas un StateMessage */}
+          {error && <InlineError message={error} onRetry={onRefresh} />}
         </div>
+
+        {/* Pied de marque — présent dans toutes les mises en page. */}
+        <footer class="flex justify-end border-t border-line px-3 py-[9px]">
+          <CasysCredit compact />
+        </footer>
+      </>
+    );
+  }
+
+  /* ── Layout wide ──────────────────────────────────────────────── */
+  return (
+    <>
+      {/* Grille 2 colonnes */}
+      <div
+        class="grid min-h-0"
+        style={{ gridTemplateColumns: "1fr 300px" }}
+      >
+        {/* Colonne gauche */}
+        <div class="flex flex-col gap-[10px] p-[18px_16px]">
+          {/* Label + dot */}
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-micro uppercase tracking-eyebrow text-ink-faint">
+              {data.label}
+            </span>
+            {data.trend !== undefined && (
+              <StatusDot trend={data.trend} trendIsGood={data.trendIsGood} />
+            )}
+          </div>
+
+          {/* Valeur principale — H1 : souligné pointillé au survol, pas de changement de couleur */}
+          <span
+            class={cx(
+              "font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
+              "text-[length:var(--text-metric)]",
+              canDrill && data._drillDown
+                ? "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
+                : "",
+            )}
+            style={canDrill && data._drillDown
+              ? {
+                /* style inline légal : valeur de layout/interaction, pas une couleur brute */
+                borderBottom: "1px dashed var(--color-accent-edge)",
+                paddingBottom: "1px",
+              }
+              : undefined}
+            aria-label={canDrill && data._drillDown
+              ? t("kpi.drilldown.aria_detail", { label: data.label })
+              : undefined}
+            {...activationHandlers(
+              canDrill && data._drillDown
+                ? () => void drillDown(data._drillDown!)
+                : undefined,
+            )}
+          >
+            {amount} <span class="text-[26px] text-ink-faint">{unit}</span>
+          </span>
+
+          {/* Delta */}
+          {data.delta !== undefined && (
+            <div class="flex items-center gap-[9px]">
+              <DeltaBadge
+                delta={data.delta}
+                trend={data.trend}
+                trendIsGood={data.trendIsGood}
+              />
+              <span class="text-[12px] text-ink-muted">
+                {data.deltaValue != null
+                  ? `${t("kpi.delta.vs_label")} ${formatDeltaValue(data)}${
+                    data.deltaLabel ? ` ${data.deltaLabel}` : ""
+                  }`
+                  : data.deltaLabel}
+              </span>
+            </div>
+          )}
+
+          {/* Confirmation drill-down — H7 */}
+          {shared && <DrillDownConfirm channel={shared} />}
+
+          {/* Erreur inline — H5 : bloc border-l-2, pas une simple ligne colorée */}
+          {error && <InlineError message={error} onRetry={onRefresh} />}
+        </div>
+
+        {/* Colonne droite — panneau sunken avec sparkline — H2 */}
+        {sparkline && (
+          <div
+            class={cx(
+              "flex flex-col justify-between gap-[10px] border-l border-line bg-sunken p-[18px_16px]",
+              "hover:outline hover:outline-1 hover:outline-accent-edge",
+              canDrill && data._trendDrillDown
+                ? "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
+                : "",
+            )}
+            style={{ outlineOffset: "-1px" }}
+            aria-label={canDrill && data._trendDrillDown
+              ? t("kpi.drilldown.aria_trend", { label: data.label })
+              : undefined}
+            {...activationHandlers(
+              canDrill && data._trendDrillDown
+                ? () => void drillDown(data._trendDrillDown!)
+                : undefined,
+            )}
+          >
+            {/* Label période + "tendance →" en flex justify-between — H2 */}
+            <div class="flex items-center justify-between">
+              {periodLabel && (
+                <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+                  {periodLabel}
+                </span>
+              )}
+              <span class="font-mono text-micro text-accent">
+                {t("kpi.sparkline.trend_label")}
+              </span>
+            </div>
+            <SparklineBars values={sparkline} height={56} gap={5} />
+          </div>
+        )}
       </div>
-    </div>
+
+      {/* Footer flush */}
+      <footer class="flex justify-end border-t border-line px-4 py-[9px]">
+        <CasysCredit />
+      </footer>
+    </>
   );
 }
 
-// ============================================================================
-// Main Component
-// ============================================================================
+/* ── Viewer ───────────────────────────────────────────────────────── */
 
 export function KpiViewer() {
-  const [data, setData] = useState<KpiData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const fixture = isFixtureMode();
+  const { ref: shellRef, layout } = useViewerLayout<HTMLDivElement>();
+
+  const [data, setData] = useState<KpiData | null>(
+    fixture ? KPI_FIXTURE : null,
+  );
+  const [loading, setLoading] = useState(!fixture);
   const [error, setError] = useState<string | null>(null);
-  const dataRef = useRef<KpiData | null>(null);
+  const dataRef = useRef<KpiData | null>(fixture ? KPI_FIXTURE : null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshInFlightRef = useRef(false);
   const lastRefreshStartedAtRef = useRef(0);
@@ -397,22 +626,21 @@ export function KpiViewer() {
   function consumeToolResult(result: ToolResultPayload): boolean {
     const text = extractToolResultText(result);
     if (!text) return false;
-
     try {
-      const parsed = JSON.parse(text) as KpiData;
-      hydrateData(parsed);
+      hydrateData(JSON.parse(text) as KpiData);
       setError(null);
       setLoading(false);
       return true;
     } catch (cause) {
       console.error("Parse error:", cause);
-      setError("Failed to parse KPI payload");
+      setError(t("common.error.parse_failed"));
       setLoading(false);
       return false;
     }
   }
 
   async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+    if (fixture) return false;
     const request = resolveUiRefreshRequest(
       dataRef.current,
       refreshRequestRef.current,
@@ -431,99 +659,87 @@ export function KpiViewer() {
     ) {
       return false;
     }
-
-    if (!request || !app.getHostCapabilities()?.serverTools) {
-      return false;
-    }
+    if (!request || !app.getHostCapabilities()?.serverTools) return false;
 
     refreshInFlightRef.current = true;
     lastRefreshStartedAtRef.current = Date.now();
-    setRefreshing(true);
-
     try {
       const result = await app.callServerTool({
         name: request.toolName,
         arguments: request.arguments,
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
-
       if (result.isError) {
-        setError("Refresh failed");
+        setError(t("common.error.refresh_failed"));
         return false;
       }
-
       if (!consumeToolResult(result)) {
-        setError("Refresh returned no data");
+        setError(t("common.error.refresh_no_data"));
         return false;
       }
-
       return true;
     } catch (cause) {
       setError(normalizeUiRefreshFailureMessage(cause));
       return false;
     } finally {
       refreshInFlightRef.current = false;
-      setRefreshing(false);
     }
   }
 
   useEffect(() => {
+    if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
       consumeToolResult(result);
     };
-
     app.ontoolinputpartial = () => {
-      if (!dataRef.current) {
-        setLoading(true);
-      }
+      if (!dataRef.current) setLoading(true);
     };
-
-    app.connect().catch(() => {});
-  }, []);
+    app.connect().then(() => bindHostContext(app)).catch(() => {});
+  }, [fixture]);
 
   useEffect(() => {
+    if (fixture) return;
     function handleWindowFocus() {
       void requestRefresh({ ignoreInterval: true });
     }
-
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
         void requestRefresh({ ignoreInterval: true });
       }
     }
-
     window.addEventListener("focus", handleWindowFocus);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
       window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [fixture]);
 
-  if (loading) return <LoadingSkeleton />;
+  /* ── État chargement — H3 : skeleton KPI-shaped, pas un StateMessage ── */
+  if (loading) {
+    return (
+      <ViewerShell containerRef={shellRef}>
+        <KpiLoadingSkeleton />
+      </ViewerShell>
+    );
+  }
 
+  /* ── État vide — H4 : mini-barres fantômes, pas un StateMessage ── */
   if (!data) {
     return (
-      <div
-        style={{
-          padding: 32,
-          textAlign: "center",
-          color: "var(--text-muted)",
-          fontSize: 13,
-          fontFamily: fonts.sans,
-        }}
-      >
-        No KPI data — run an analytics KPI tool
-      </div>
+      <ViewerShell containerRef={shellRef}>
+        <KpiEmptyState />
+      </ViewerShell>
     );
   }
 
   return (
-    <KpiContent
-      data={data}
-      error={error}
-      refreshing={refreshing}
-      onRefresh={() => void requestRefresh({ ignoreInterval: true })}
-    />
+    <ViewerShell containerRef={shellRef}>
+      <KpiContent
+        data={data}
+        error={error}
+        layout={layout}
+        onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+      />
+    </ViewerShell>
   );
 }

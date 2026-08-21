@@ -112,3 +112,22 @@ Deno.test("kanban state - detail-error sets error on detail", () => {
   assertEquals(state.detail.detailError, "Network error");
   assertEquals(state.detail.selectedCardId, "TASK-0001");
 });
+
+Deno.test("kanban state - hydrate-board tolerates missing arrays from ERPNext", () => {
+  // Un payload réel peut omettre allowedTransitions, ou le renvoyer null.
+  // Sans normalisation, le premier .find() du glisser-déposer blanchit la vue.
+  const partial = {
+    doctype: "Task",
+    columns: null,
+    cards: undefined,
+    allowedTransitions: null,
+  } as unknown as KanbanBoardData;
+  const state = kanbanStateReducer(createKanbanInitialState(), {
+    type: "hydrate-board",
+    board: partial,
+  });
+  assertEquals(state.board?.columns, []);
+  assertEquals(state.board?.cards, []);
+  assertEquals(state.board?.allowedTransitions, []);
+  assertEquals(state.loading, false);
+});

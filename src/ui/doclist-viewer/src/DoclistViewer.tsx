@@ -1,25 +1,27 @@
+/** @jsxImportSource preact */
 /**
- * Doclist Viewer — Generic ERPNext DocType table
- *
- * Features: auto-detect columns, sorting, filtering, pagination,
- * CSV export, status badges, inline detail panels with server actions,
- * cross-viewer navigation via sendMessage, and chip filters.
- *
- * @module lib/erpnext/src/ui/doclist-viewer
+ * Doclist Viewer — generic ERPNext DocType table.
+ * Handshake stays on ext-apps (refresh / callServerTool / sendMessage).
  */
-
 import {
-  CSSProperties,
-  Fragment,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-} from "react";
+} from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
-import { colors, fonts, styles } from "~/shared/theme";
-import { ErpNextBrandFooter, ErpNextBrandHeader } from "~/shared/ErpNextBrand";
+import { bindHostContext } from "~/shared/host-context-hook";
+import {
+  StateMessage,
+  ToolButton,
+  TotalRow,
+  ViewerFooter,
+  ViewerHeader,
+  ViewerShell,
+} from "~/shared/ui";
+import { useViewerLayout } from "~/shared/useViewerLayout";
+import { useT } from "~/shared/i18n-hook";
 import {
   canRequestUiRefresh,
   extractToolResultText,
@@ -39,31 +41,30 @@ import {
   isStatusField,
   selectVisibleColumns,
 } from "./helpers";
-import { StatusCell } from "./components/StatusCell";
+import { pickAmountColumn, sumColumn } from "./columns";
 import { LoadingSkeleton } from "./components/LoadingSkeleton";
 import { DoclistEmptyState } from "./components/EmptyState";
 import { InlineDetailPanel } from "./components/InlineDetailPanel";
 import { ChipFilters } from "./components/ChipFilters";
-import { PagBtn } from "./components/PagBtn";
-
-// ============================================================================
-// MCP App
-// ============================================================================
+import { DoclistTable } from "./components/DoclistTable";
+import { SearchControl, SearchRow } from "./components/SearchControl";
+import { DOCLIST_FIXTURE, isFixtureMode } from "./fixture.ts";
 
 const app = new App({ name: "Doclist Viewer", version: "2.0.0" });
 const DOCLIST_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
-
-// ============================================================================
-// Main Component (page shell)
-// ============================================================================
+const PAGE_SIZE = 20;
 
 export function DoclistViewer() {
-  const [data, setData] = useState<DoclistData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const t = useT();
+  const fixture = isFixtureMode();
+  const [data, setData] = useState<DoclistData | null>(
+    fixture ? DOCLIST_FIXTURE : null,
+  );
+  const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dataRef = useRef<DoclistData | null>(null);
+  const dataRef = useRef<DoclistData | null>(fixture ? DOCLIST_FIXTURE : null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshInFlightRef = useRef(false);
   const lastRefreshStartedAtRef = useRef(0);
@@ -80,7 +81,7 @@ export function DoclistViewer() {
   function consumeToolResult(result: ToolResultPayload): boolean {
     if (result.isError) {
       const text = extractToolResultText(result);
-      setError(text ?? "Tool returned an error");
+      setError(text ?? t("doclist.error.tool_error"));
       setLoading(false);
       return false;
     }
@@ -101,13 +102,14 @@ export function DoclistViewer() {
       setLoading(false);
       return true;
     } catch {
-      setError("Failed to parse doclist payload");
+      setError(t("doclist.error.parse_payload"));
       setLoading(false);
       return false;
     }
   }
 
   async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+    if (fixture) return;
     const request = resolveUiRefreshRequest(
       dataRef.current,
       refreshRequestRef.current,
@@ -136,8 +138,10 @@ export function DoclistViewer() {
         { name: request.toolName, arguments: request.arguments },
         { timeout: TOOL_CALL_TIMEOUT_MS },
       );
-      if (result.isError) setError("Refresh failed");
-      else if (!consumeToolResult(result)) setError("Refresh returned no data");
+      if (result.isError) setError(t("common.error.refresh_failed"));
+      else if (!consumeToolResult(result)) {
+        setError(t("common.error.refresh_no_data"));
+      }
     } catch (cause) {
       setError(normalizeUiRefreshFailureMessage(cause));
     } finally {
@@ -147,16 +151,18 @@ export function DoclistViewer() {
   }
 
   useEffect(() => {
+    if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
       consumeToolResult(result);
     };
     app.ontoolinputpartial = () => {
       if (!dataRef.current) setLoading(true);
     };
-    app.connect().catch(() => {});
-  }, []);
+    app.connect().then(() => bindHostContext(app)).catch(() => {});
+  }, [fixture]);
 
   useEffect(() => {
+    if (fixture) return;
     const onFocus = () => void requestRefresh({ ignoreInterval: true });
     const onVis = () => {
       if (document.visibilityState === "visible") {
@@ -169,47 +175,55 @@ export function DoclistViewer() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, []);
+  }, [fixture]);
+
+  if (loading) {
+    return <LoadingSkeleton />;
+  }
+
+  if (!data) {
+    return <DoclistEmptyState />;
+  }
 
   return (
-    <div
-      style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
-      aria-busy={refreshing}
-    >
-      <ErpNextBrandHeader />
-      <div style={{ flex: 1 }}>
-        {loading
-          ? <LoadingSkeleton />
-          : !data
-          ? <DoclistEmptyState />
-          : (
-            <DoclistContent
-              data={data}
-              error={error}
-              refreshing={refreshing}
-              onRefresh={() => void requestRefresh({ ignoreInterval: true })}
-              onError={setError}
-            />
-          )}
-      </div>
-      <ErpNextBrandFooter />
-    </div>
+    <DoclistContent
+      data={data}
+      error={error}
+      refreshing={refreshing}
+      fixture={fixture}
+      onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+      onError={setError}
+    />
   );
 }
 
-// ============================================================================
-// DoclistContent (organism — table + filters + detail)
-// ============================================================================
+function resolveRowId(
+  row: Record<string, unknown>,
+  rowAction: DoclistData["_rowAction"],
+  fallback: string,
+): string {
+  if (rowAction) {
+    return String(getNestedValue(row, rowAction.idField) ?? fallback);
+  }
+  return String(row._id ?? row.name ?? fallback);
+}
 
-const PAGE_SIZE = 20;
-
-function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
+function DoclistContent({
+  data,
+  error,
+  refreshing,
+  fixture,
+  onRefresh,
+  onError,
+}: {
   data: DoclistData;
   error: string | null;
   refreshing: boolean;
+  fixture: boolean;
   onRefresh: () => void;
   onError: (msg: string | null) => void;
 }) {
+  const t = useT();
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filter, setFilter] = useState("");
@@ -222,18 +236,18 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
   const [chipFilters, setChipFilters] = useState<Record<string, string>>({});
   const actionTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const pendingRowIdRef = useRef<string | null>(null);
+  const { ref: shellRef, layout } = useViewerLayout<HTMLDivElement>();
+  const [searchOpen, setSearchOpen] = useState(false);
+  // Les deux mises en page étroites partagent tout sauf le rendu des lignes.
+  const narrow = layout !== "wide";
 
   const rowAction = data._rowAction;
   const rows = data.data ?? [];
   const hasLocalDetail = rows.length > 0 && rows[0]._detail != null;
   const isClickable = !!rowAction || hasLocalDetail;
 
-  // ── Row click handler ────────────────────────────────────
-
   async function onRowClick(row: Record<string, unknown>) {
-    const rowId = rowAction
-      ? String(getNestedValue(row, rowAction.idField) ?? "")
-      : String(row._id ?? row.name ?? "");
+    const rowId = resolveRowId(row, rowAction, "");
     if (!rowId) return;
 
     if (expandedId === rowId) {
@@ -242,9 +256,12 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
       return;
     }
 
-    if (!rowAction && row._detail) {
+    if (fixture || (!rowAction && row._detail)) {
       setExpandedId(rowId);
-      setExpandedData(row._detail as Record<string, unknown>);
+      setExpandedData(
+        (row._detail as Record<string, unknown> | undefined) ??
+          row,
+      );
       return;
     }
     if (!rowAction) return;
@@ -260,7 +277,6 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
         { name: rowAction.toolName, arguments: toolArgs },
         { timeout: TOOL_CALL_TIMEOUT_MS },
       );
-      // Guard against stale response if user clicked another row
       if (pendingRowIdRef.current !== rowId) return;
       if (!result.isError) {
         const text = extractToolResultText(result);
@@ -270,12 +286,14 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
           onError(null);
         }
       } else {
-        onError("Failed to load details");
+        onError(t("doclist.error.load_details"));
         setExpandedId(null);
       }
     } catch (err) {
       if (pendingRowIdRef.current !== rowId) return;
-      onError(err instanceof Error ? err.message : "Failed to load details");
+      onError(
+        err instanceof Error ? err.message : t("doclist.error.load_details"),
+      );
       setExpandedId(null);
     } finally {
       if (pendingRowIdRef.current === rowId) setExpandedLoading(false);
@@ -286,6 +304,7 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<boolean> {
+    if (fixture) return false;
     try {
       const result = await app.callServerTool({
         name: toolName,
@@ -295,7 +314,6 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
       const currentId = expandedId;
       clearTimeout(actionTimerRef.current);
       actionTimerRef.current = setTimeout(async () => {
-        // Only refresh if the same row is still expanded
         if (currentId && rowAction && pendingRowIdRef.current === currentId) {
           try {
             const r = await app.callServerTool({
@@ -327,8 +345,6 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
     setExpandedData(null);
   }, [sortKey, sortDir, filter, page, chipFilters]);
 
-  // ── Filterable columns ───────────────────────────────────
-
   const filterableColumns = useMemo(() => {
     if (rows.length < 2) return [];
     const candidates: { col: string; values: string[] }[] = [];
@@ -347,8 +363,6 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
     return candidates;
   }, [rows]);
 
-  // ── Visible columns (capped at MAX_VISIBLE_COLUMNS) ─────
-
   const columns = useMemo(() => {
     if (rows.length === 0) return [];
     const allKeys = new Set<string>();
@@ -359,8 +373,6 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
     }
     return selectVisibleColumns(Array.from(allKeys));
   }, [rows]);
-
-  // ── Filter + sort + paginate ─────────────────────────────
 
   const filtered = useMemo(() => {
     let result = rows;
@@ -401,372 +413,225 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
     }
   }, [sortKey]);
 
-  const title = data._title ?? data.doctype ?? "Documents";
+  const title = data._title ?? data.doctype ?? t("doclist.title.default");
 
-  // ── Render ───────────────────────────────────────────────
+  /**
+   * Une colonne est numérique dès qu'une seule ligne y porte un nombre : la
+   * maquette aligne ces colonnes à droite en chiffres tabulaires, et un
+   * alignement qui change de ligne en ligne serait pire qu'un faux positif.
+   */
+  const tableColumns = useMemo(
+    () =>
+      columns.map((col) => ({
+        id: col,
+        label: col.replace(/_/g, " "),
+        numeric: rows.some((row) => typeof row[col] === "number"),
+      })),
+    [columns, rows],
+  );
+
+  /** Les chips portent leur effectif — compté sur l'ensemble, pas sur la page. */
+  const chipCounts = useMemo(() => {
+    const counts: Record<string, Record<string, number>> = {};
+    for (const { col, values } of filterableColumns) {
+      counts[col] = Object.fromEntries(values.map((value) => [value, 0]));
+      for (const row of rows) {
+        const value = row[col];
+        if (typeof value === "string" && value in counts[col]) {
+          counts[col][value] += 1;
+        }
+      }
+    }
+    return counts;
+  }, [filterableColumns, rows]);
+
+  const amountKey = useMemo(() => pickAmountColumn(tableColumns), [
+    tableColumns,
+  ]);
+
+  /**
+   * Le total porte sur l'ensemble filtré, pas sur la page : « total dû » perd
+   * son sens s'il ne compte que les vingt lignes qu'on voit.
+   */
+  const amountTotal = useMemo(
+    () => sumColumn(sorted, amountKey),
+    [sorted, amountKey],
+  );
+
+  const inspecting = expandedId !== null;
 
   return (
-    <div style={{ padding: 16, fontFamily: fonts.sans }}>
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 12,
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontSize: 16,
-              fontWeight: 700,
-              color: colors.text.primary,
-            }}
-          >
-            {title}
-          </div>
-          <div style={{ fontSize: 12, color: colors.text.muted }}>
-            {sorted.length} of {data.count ?? rows.length} records
-          </div>
-          <div
-            aria-live="polite"
-            style={{
-              fontSize: 11,
-              color: error ? colors.error : colors.text.faint,
-              marginTop: 4,
-            }}
-          >
-            {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            type="text"
-            placeholder="Search..."
-            value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value);
-              setPage(0);
-            }}
-            style={{ ...styles.input, maxWidth: 200 }}
-            onFocus={(e) => {
-              (e.target as HTMLInputElement).style.borderColor = colors.accent;
-            }}
-            onBlur={(e) => {
-              (e.target as HTMLInputElement).style.borderColor = colors.border;
-            }}
-          />
-          <button
-            onClick={onRefresh}
-            disabled={refreshing}
-            style={styles.button}
-            onMouseEnter={(e) => {
-              if (!refreshing) {
-                (e.currentTarget as HTMLElement).style.borderColor =
-                  colors.accent;
-                (e.currentTarget as HTMLElement).style.color = colors.accent;
-              }
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor =
-                colors.border;
-              (e.currentTarget as HTMLElement).style.color =
-                colors.text.secondary;
-            }}
-          >
-            <span
-              style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path
-                  d="M10 6a4 4 0 1 1-1.1-2.76"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M10 2v2.8H7.2"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              {refreshing ? "Refreshing" : "Refresh"}
-            </span>
-          </button>
-          <button
-            onClick={() => exportCsv(columns, sorted, data.doctype)}
-            style={styles.button}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor =
-                colors.accent;
-              (e.currentTarget as HTMLElement).style.color = colors.accent;
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor =
-                colors.border;
-              (e.currentTarget as HTMLElement).style.color =
-                colors.text.secondary;
-            }}
-          >
-            <span
-              style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path
-                  d="M6 1v8M6 9l-3-3M6 9l3-3M2 11h8"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                />
-              </svg>
-              CSV
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* Chip Filters */}
-      <ChipFilters
-        columns={filterableColumns}
-        chipFilters={chipFilters}
-        onFilterChange={(col, value) => {
-          setChipFilters((prev) => {
-            if (value === null) {
-              const next = { ...prev };
-              delete next[col];
-              return next;
-            }
-            return { ...prev, [col]: value };
-          });
-          setPage(0);
-        }}
+    <ViewerShell class="h-screen" containerRef={shellRef}>
+      <ViewerHeader
+        title={title}
+        count={data.count ?? rows.length}
+        live={!fixture && !error}
+        layout={layout}
+        actions={
+          <>
+            <SearchControl
+              value={filter}
+              layout={layout}
+              open={searchOpen}
+              onOpenChange={setSearchOpen}
+              onInput={(next) => {
+                setFilter(next);
+                setPage(0);
+              }}
+            />
+            {layout === "wide" && (
+              <>
+                <ToolButton
+                  disabled={refreshing || fixture}
+                  title={fixture
+                    ? t("doclist.preview.no_refresh")
+                    : t("common.refresh")}
+                  onClick={onRefresh}
+                >
+                  {refreshing ? "…" : "↻"}
+                </ToolButton>
+                <ToolButton
+                  onClick={() => exportCsv(columns, sorted, data.doctype)}
+                >
+                  CSV
+                </ToolButton>
+              </>
+            )}
+          </>
+        }
       />
 
-      {/* Table */}
+      {layout === "mobile" && searchOpen && (
+        <SearchRow
+          value={filter}
+          onInput={(next) => {
+            setFilter(next);
+            setPage(0);
+          }}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
+
+      {layout !== "panel" && (
+        <ChipFilters
+          columns={filterableColumns}
+          chipFilters={chipFilters}
+          counts={chipCounts}
+          total={rows.length}
+          pill={layout === "mobile"}
+          onFilterChange={(col, value) => {
+            setChipFilters((prev) => {
+              if (value === null) {
+                const next = { ...prev };
+                delete next[col];
+                return next;
+              }
+              return { ...prev, [col]: value };
+            });
+            setPage(0);
+          }}
+        />
+      )}
+
+      {error && <StateMessage tone="bad">{error}</StateMessage>}
+
+      {
+        /*
+        En large, l'inspecteur prend une colonne à côté de la liste. En étroit
+        il n'y a pas de place pour deux colonnes : il remplace la liste, et sa
+        croix y fait office de retour. La maquette ne montre pas ce cas — c'est
+        le pli maître-détail habituel, extrapolé.
+      */
+      }
       <div
-        style={{
-          border: `1px solid ${colors.border}`,
-          borderRadius: 8,
-          overflow: "hidden",
-        }}
+        class={`grid min-h-0 flex-1 ${
+          inspecting && !narrow ? "grid-cols-[1fr_268px]" : "grid-cols-1"
+        }`}
       >
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              minWidth: Math.max(600, columns.length * 120),
-            }}
+        {!(inspecting && narrow) && (
+          <div
+            class={`flex min-h-0 flex-col ${
+              inspecting && !narrow ? "border-r border-line" : ""
+            }`}
           >
-            <thead>
-              <tr>
-                {columns.map((col) => (
-                  <th
-                    key={col}
-                    onClick={() => handleSort(col)}
-                    style={{
-                      ...styles.tableHeader,
-                      background: colors.bg.surface,
-                      color: sortKey === col
-                        ? colors.accent
-                        : colors.text.muted,
-                    }}
-                  >
-                    {col.replace(/_/g, " ")}
-                    <span
-                      style={{
-                        marginLeft: 4,
-                        opacity: sortKey === col ? 1 : 0.3,
-                        fontSize: 10,
-                      }}
-                    >
-                      {sortKey === col
-                        ? (sortDir === "asc" ? "\u25B2" : "\u25BC")
-                        : "\u21C5"}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.length === 0
-                ? (
-                  <tr>
-                    <td
-                      colSpan={columns.length}
-                      style={{
-                        ...styles.tableCell,
-                        textAlign: "center",
-                        color: colors.text.muted,
-                        padding: 32,
-                      }}
-                    >
-                      No matching records
-                    </td>
-                  </tr>
-                )
-                : pageRows.map((row, idx) => {
-                  const rowId = rowAction
-                    ? String(getNestedValue(row, rowAction.idField) ?? "")
-                    : String(row._id ?? row.name ?? idx);
-                  const isExpanded = expandedId === rowId && rowId !== "";
-                  return (
-                    <Fragment key={idx}>
-                      <tr
-                        style={{
-                          transition: "background 0.1s",
-                          cursor: isClickable ? "pointer" : "default",
-                          background: isExpanded
-                            ? colors.bg.hover
-                            : "transparent",
-                        }}
-                        onClick={isClickable
-                          ? () => void onRowClick(row)
-                          : undefined}
-                        onMouseEnter={(e) => {
-                          if (!isExpanded) {
-                            (e.currentTarget as HTMLElement).style.background =
-                              colors.bg.hover;
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!isExpanded) {
-                            (e.currentTarget as HTMLElement)
-                              .style.background = "transparent";
-                          }
-                        }}
-                      >
-                        {columns.map((col, colIdx) => {
-                          const val = row[col];
-                          const isNum = typeof val === "number";
-                          const isStatus = isStatusField(col) &&
-                            typeof val === "string";
-                          return (
-                            <td
-                              key={col}
-                              style={{
-                                ...styles.tableCell,
-                                ...(isNum
-                                  ? {
-                                    textAlign: "right",
-                                    fontFamily: fonts.mono,
-                                    fontSize: 12,
-                                  }
-                                  : {}),
-                                ...(col === "name" ? { fontWeight: 500 } : {}),
-                                maxWidth: 250,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              } as CSSProperties}
-                            >
-                              <span
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 6,
-                                  justifyContent: isNum
-                                    ? "flex-end"
-                                    : "flex-start",
-                                }}
-                              >
-                                {expandedLoading && isExpanded &&
-                                  colIdx === 0 && (
-                                  <span
-                                    className="skeleton"
-                                    style={{
-                                      width: 12,
-                                      height: 12,
-                                      borderRadius: "50%",
-                                      display: "inline-block",
-                                      flexShrink: 0,
-                                    }}
-                                  />
-                                )}
-                                {isStatus
-                                  ? <StatusCell value={val as string} />
-                                  : formatCell(val)}
-                              </span>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td
-                            colSpan={columns.length}
-                            style={{
-                              padding: 0,
-                              borderBottom: `1px solid ${colors.border}`,
-                            }}
-                          >
-                            <InlineDetailPanel
-                              app={app}
-                              data={expandedData}
-                              loading={expandedLoading}
-                              doctype={data.doctype}
-                              sendMessageHints={data._sendMessageHints}
-                              onClose={() => {
-                                setExpandedId(null);
-                                setExpandedData(null);
-                              }}
-                              onAction={handleDetailAction}
-                            />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
+            {/* Seul le tableau défile : le total doit rester sous les yeux. */}
+            <div class="scroll-slim min-h-0 flex-1 overflow-y-auto">
+              <DoclistTable
+                columns={tableColumns}
+                rows={pageRows}
+                rowId={(row, index) =>
+                  resolveRowId(row, rowAction, String(index))}
+                selectedId={expandedId}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={handleSort}
+                onSelect={isClickable
+                  ? (row) => void onRowClick(row)
+                  : undefined}
+                layout={layout}
+                amountKey={amountKey}
+              />
+            </div>
+
+            {
+              /*
+              Le total clôt la colonne de liste, pas la vue : dans la maquette
+              il s'arrête au bord de l'inspecteur. Il compte l'ensemble filtré
+              et non la page — « total dû » perdrait son sens sur vingt lignes.
+            */
+            }
+            {amountTotal !== null && (
+              <TotalRow
+                layout={layout}
+                label={amountKey?.replace(/_/g, " ") ?? t("common.total")}
+              >
+                {formatCell(amountTotal)}
+              </TotalRow>
+            )}
+          </div>
+        )}
+
+        {inspecting && (
+          <InlineDetailPanel
+            app={app}
+            data={expandedData}
+            loading={expandedLoading}
+            doctype={data.doctype}
+            sendMessageHints={data._sendMessageHints}
+            fixture={fixture}
+            layout={layout}
+            onClose={() => {
+              setExpandedId(null);
+              setExpandedData(null);
+            }}
+            onAction={handleDetailAction}
+          />
+        )}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: 12,
-            flexWrap: "wrap",
-            gap: 8,
-          }}
-        >
-          <div style={{ fontSize: 12, color: colors.text.muted }}>
-            Page {page + 1} of {totalPages}
-          </div>
-          <div style={{ display: "flex", gap: 4 }}>
-            <PagBtn
-              label="First"
+      <ViewerFooter layout={layout}>
+        {totalPages > 1 && (
+          <>
+            <ToolButton
               disabled={page === 0}
-              onClick={() => setPage(0)}
-            />
-            <PagBtn
-              label="Prev"
-              disabled={page === 0}
+              aria-label={t("common.pagination.prev")}
               onClick={() => setPage((p) => p - 1)}
-            />
-            <PagBtn
-              label="Next"
+            >
+              ‹
+            </ToolButton>
+            <span class="font-mono text-meta text-ink-muted">
+              {page + 1} / {totalPages}
+            </span>
+            <ToolButton
               disabled={page >= totalPages - 1}
+              aria-label={t("common.pagination.next")}
               onClick={() => setPage((p) => p + 1)}
-            />
-            <PagBtn
-              label="Last"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage(totalPages - 1)}
-            />
-          </div>
-        </div>
-      )}
-    </div>
+            >
+              ›
+            </ToolButton>
+          </>
+        )}
+      </ViewerFooter>
+    </ViewerShell>
   );
 }

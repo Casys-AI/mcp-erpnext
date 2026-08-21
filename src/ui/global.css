@@ -1,136 +1,163 @@
 /**
- * ERPNext MCP Apps UI — Global Styles
+ * ERPNext MCP Apps UI — feuille racine.
  *
- * Light/dark dual theme with CSS custom properties.
- * No Tailwind — plain CSS variables + utility classes.
+ * tokens.css tire Tailwind, les polices embarquées et la charte Direction B v2.
+ * Ici on ne garde que ce qui relève du document lui-même : la vue est rendue
+ * dans une iframe d'hôte MCP, donc <html> porte le fond et le rayon de la carte.
  */
 
-/* ── Shared tokens ──────────────────────────────────────────────── */
-:root {
-  --accent: #0089ff;
-  --accent-dim: rgba(0, 137, 255, 0.15);
-  --accent-border: rgba(0, 137, 255, 0.3);
+@import "./shared/tokens.css";
 
-  --success: #16a34a;
-  --success-dim: rgba(22, 163, 74, 0.10);
-  --error: #dc2626;
-  --error-dim: rgba(220, 38, 38, 0.10);
-  --warning: #d97706;
-  --warning-dim: rgba(217, 119, 6, 0.10);
-  --info: #2563eb;
-  --info-dim: rgba(37, 99, 235, 0.10);
+@layer base {
+  /**
+   * Surtout ne pas poser de font-size ici : `rem` se rapporte à la racine, et
+   * l'echelle d'espacement de Tailwind est en rem. Un `html { font-size:13px }`
+   * rétrécirait tout paddings, tailles et rayons compris de 19 %, et les cibles
+   * tactiles de 40 px de la maquette n'en feraient plus que 32.
+   */
+  html {
+    overflow: hidden;
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+  }
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  body {
+    overflow: auto;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "SF Mono", "Cascadia Code", "Fira Code", monospace;
-
-  /* ── Light mode (default) ──────────────────────────────────── */
-  --bg-root: #ffffff;
-  --bg-surface: #f9fafb;
-  --bg-elevated: #f3f4f6;
-  --bg-hover: #e5e7eb;
-  --bg-active: #d1d5db;
-
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #6b7280;
-  --text-faint: #9ca3af;
-
-  --border: #e5e7eb;
-  --border-subtle: #f3f4f6;
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-/* ── Dark mode ─────────────────────────────────────────────────── */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-root: #08080a;
-    --bg-surface: #111113;
-    --bg-elevated: #18181b;
-    --bg-hover: #1f1f23;
-    --bg-active: #27272a;
-
-    --text-primary: #e7e5e4;
-    --text-secondary: #a8a29e;
-    --text-muted: #78716c;
-    --text-faint: #57534e;
-
-    --border: #27272a;
-    --border-subtle: #1f1f23;
-
-    --success: #4ade80;
-    --success-dim: rgba(74, 222, 128, 0.12);
-    --error: #f87171;
-    --error-dim: rgba(248, 113, 113, 0.12);
-    --warning: #fbbf24;
-    --warning-dim: rgba(251, 191, 36, 0.12);
-    --info: #60a5fa;
-    --info-dim: rgba(96, 165, 250, 0.12);
-
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  /**
+   * Les chiffres s'alignent verticalement partout où ils sont en colonne —
+   * montants, quantités, totaux. La maquette applique tabular-nums sur chaque
+   * cellule numérique ; le poser sur la police mono évite de le répéter.
+   */
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-html,
-body {
-  background: var(--bg-root);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-body {
-  overflow: auto;
-}
-
-#app {}
-
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-faint);
-}
-
-/* Animations */
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.4;
+@layer utilities {
+  /**
+   * Barre dégradée de 2 px en tête de chaque vue — le motif signature de la
+   * direction, cyan → violet Casys. Utilitaire plutôt que composant : le
+   * gradient a besoin des deux tokens à la fois, ce qu'aucune classe Tailwind
+   * ne compose seule.
+   */
+  .brand-rule {
+    height: 2px;
+    flex-shrink: 0;
+    background: linear-gradient(
+      90deg,
+      var(--color-accent) 0%,
+      var(--color-brand) 100%
+    );
   }
-  50% {
-    opacity: 0.15;
+
+  /* Ascenseurs discrets : dans une iframe étroite, la barre native mange la colonne. */
+  .scroll-slim::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scroll-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-slim::-webkit-scrollbar-thumb {
+    border-radius: 3px;
+    background: var(--color-line);
+  }
+  .scroll-slim::-webkit-scrollbar-thumb:hover {
+    background: var(--color-line-hover);
+  }
+
+  /**
+   * Bord droit estompé d'une bande qui défile horizontalement.
+   *
+   * La maquette signale la suite d'une liste de chips en coupant le dernier à
+   * 40 % d'opacité, dans un conteneur `overflow:hidden`. Pris au pied de la
+   * lettre, les filtres tronqués deviendraient inatteignables — or le mobile
+   * est le contexte où filtrer compte le plus. On garde donc le défilement et
+   * on reproduit le signal par un dégradé : même lecture, sans impasse.
+   */
+  .fade-edge-r {
+    mask-image: linear-gradient(
+      to right,
+      #000 calc(100% - 32px),
+      transparent 100%
+    );
+  }
+
+  /**
+   * Chevron des listes déroulantes.
+   *
+   * `appearance-none` retire celui du système — seule pièce de l'interface
+   * dessinée par l'OS, et la plus visible en thème sombre où il arrive gris
+   * clair sur fond noir. On le redessine ici plutôt qu'en valeur arbitraire
+   * Tailwind : les guillemets d'un `url()` ne survivent pas au parseur de
+   * classes, et le résultat serait un select sans aucune affordance.
+   *
+   * `currentColor` n'existe pas dans une image de fond, d'où le masque : la
+   * teinte vient du token et suit donc le thème.
+   */
+  .select-chevron {
+    appearance: none;
+    padding-right: 2rem;
+    background-image: none;
+  }
+
+  .select-chevron::-ms-expand {
+    display: none;
+  }
+
+  .select-chevron-wrap {
+    position: relative;
+    display: block;
+  }
+
+  .select-chevron-wrap::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 0.7rem;
+    width: 11px;
+    height: 11px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    background-color: var(--color-ink-muted);
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'><path d='M3 4.5 6 7.5 9 4.5'/></svg>");
+    mask-repeat: no-repeat;
+    mask-size: contain;
+  }
+
+  /* Conteneurs à défilement par glisser — aucune barre visible. */
+  .drag-scroll {
+    scrollbar-width: none;
+  }
+  .drag-scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  .skeleton {
+    border-radius: var(--radius-chip);
+    background: linear-gradient(
+      90deg,
+      var(--color-sunken) 25%,
+      var(--color-row-hover) 50%,
+      var(--color-sunken) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
   }
 }
 
@@ -143,121 +170,8 @@ body {
   }
 }
 
-.animate-pulse {
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--bg-elevated) 25%,
-    var(--bg-hover) 50%,
-    var(--bg-elevated) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: var(--radius-sm);
-}
-
-/* Drag-scroll containers — no visible scrollbar */
-.drag-scroll::-webkit-scrollbar {
-  display: none;
-}
-.drag-scroll {
-  scrollbar-width: none;
-}
-
-/* Kanban card action buttons */
-article button:hover:not(:disabled) {
-  background: var(--bg-hover) !important;
-  color: var(--text-primary) !important;
-}
-article[draggable="true"]:active {
-  cursor: grabbing;
-  opacity: 0.85;
-}
-
-/* Kanban detail modal */
-.kanban-detail-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 20px 12px;
-  overflow-y: auto;
-  backdrop-filter: blur(2px);
-}
-
-.kanban-detail-panel {
-  background: var(--bg-root);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  max-width: 520px;
-  width: 100%;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-.kanban-detail-panel .detail-field-row {
-  transition: background 0.1s;
-}
-.kanban-detail-panel .detail-field-row:hover {
-  background: var(--bg-surface);
-}
-
-.kanban-detail-panel .detail-field-cell {
-  transition: background 0.1s;
-  border-radius: 4px;
-}
-.kanban-detail-panel .detail-field-cell:hover {
-  background: var(--bg-surface);
-}
-.kanban-detail-panel .detail-field-cell:hover input,
-.kanban-detail-panel .detail-field-cell:hover select {
-  border-color: var(--border) !important;
-  background: var(--bg-elevated) !important;
-}
-
-.kanban-detail-panel select:focus {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px var(--accent-dim);
-  outline: none;
-}
-
-.kanban-detail-panel input:focus {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px var(--accent-dim);
-  outline: none;
-}
-
-.kanban-detail-panel textarea:focus {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px var(--accent-dim);
-  outline: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  .kanban-detail-backdrop {
-    background: rgba(0, 0, 0, 0.65);
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
   }
-  .kanban-detail-panel {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
-  }
-}
-
-/* Clickable card title */
-.kanban-card-title-link {
-  cursor: pointer;
-  text-decoration: none;
-  color: inherit;
-}
-.kanban-card-title-link:hover {
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
 }

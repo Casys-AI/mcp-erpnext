@@ -1,5 +1,8 @@
-import { createRoot } from "react-dom/client";
+/** @jsxImportSource preact */
+import { render } from "preact";
 import "~/global.css";
+import { applyCasysTheme, themeFromSearch } from "~/shared/casys-theme";
 import { ChartViewer } from "./ChartViewer";
 
-createRoot(document.getElementById("app")!).render(<ChartViewer />);
+applyCasysTheme(themeFromSearch());
+render(<ChartViewer />, document.getElementById("app")!);

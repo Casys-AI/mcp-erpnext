@@ -1,6 +1,7 @@
 /** Doclist Viewer helpers */
 
-import { formatNumber } from "~/shared/theme";
+import { formatNumber } from "~/shared/format";
+import { t } from "~/shared/i18n";
 
 export const STATUS_FIELDS = new Set(["status", "docstatus", "workflow_state"]);
 export const HIDDEN_FIELDS = new Set([
@@ -75,7 +76,9 @@ export function formatCell(value: unknown): string {
   if (typeof value === "number") {
     return formatNumber(value, value % 1 === 0 ? 0 : 2);
   }
-  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "boolean") {
+    return value ? t("common.yes") : t("common.no");
+  }
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }

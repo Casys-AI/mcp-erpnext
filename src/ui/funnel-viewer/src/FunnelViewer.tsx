@@ -34,7 +34,7 @@ import {
 } from "~/shared/drill-down";
 import { useViewerNav } from "~/shared/useViewerNav";
 import { PathBar } from "~/shared/PathBar";
-import { canJump, jumpFromHint } from "~/shared/jumps";
+import { jumpFromHint } from "~/shared/jumps";
 import { LevelBody } from "~/shared/levels/LevelBody";
 import { stageIsJumpable } from "./funnel-nav.ts";
 

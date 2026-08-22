@@ -24,8 +24,8 @@ export interface ToolCall {
 
 /**
  * L'état d'interface qu'un niveau garde et restaure : celui d'une liste
- * (tri, filtre, page, ligne active, chips). Une clé nommée ici est une clé
- * que le fil sait décrire.
+ * (tri, filtre, page, ligne active, chips) — le fil les décrit — et ce qui
+ * ne se décrit pas (la recherche ouverte).
  */
 export interface LevelUi {
   sortKey?: string | null;

@@ -37,7 +37,6 @@ import { type NavHint } from "~/shared/jumps";
 import { useViewerNav } from "~/shared/useViewerNav";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
-import { useDoclist } from "~/shared/doclist/useDoclist";
 import { StatusBadge } from "./components/StatusBadge";
 import { ItemDetailPanel } from "./components/ItemDetailPanel";
 import { INVOICE_FIXTURE, isFixtureMode } from "./fixture.ts";

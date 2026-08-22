@@ -33,6 +33,13 @@ export function describeLevel(level: NavLevel, t: TFunction): string {
   if (typeof ui.filter === "string" && ui.filter) {
     parts.push(t("nav.ui.filter", { q: ui.filter }));
   }
+  for (const [col, value] of Object.entries(ui.chipFilters ?? {})) {
+    if (value) {
+      parts.push(
+        t("nav.ui.filter", { q: `${col.replace(/_/g, " ")} ${value}` }),
+      );
+    }
+  }
   if (typeof ui.page === "number" && ui.page > 0) {
     parts.push(t("nav.ui.page", { n: ui.page + 1 }));
   }

@@ -19,7 +19,6 @@ import { useViewerNav } from "~/shared/useViewerNav";
 import { PathBar } from "~/shared/PathBar";
 import { type Jump } from "~/shared/jumps";
 import { LevelBody } from "~/shared/levels/LevelBody";
-import { useDoclist } from "~/shared/doclist/useDoclist";
 import {
   canRequestUiRefresh,
   extractToolResultText,

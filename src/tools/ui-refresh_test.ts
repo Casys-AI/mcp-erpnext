@@ -1,5 +1,9 @@
 import { assertEquals, assertNotStrictEquals } from "@std/assert";
-import { withUiRefreshRequest } from "./ui-refresh.ts";
+import { allTools } from "./mod.ts";
+import {
+  DOCTYPE_SEND_MESSAGE_HINTS,
+  withUiRefreshRequest,
+} from "./ui-refresh.ts";
 
 // ── refreshRequest injection ─────────────────────────────────────────────────
 
@@ -258,5 +262,45 @@ Deno.test("ui refresh - all major doctypes get correct _rowAction", () => {
       expectedTool,
       `${doctype} should use ${expectedTool}`,
     );
+  }
+});
+
+// ── contrat hints ↔ schémas d'outils ──────────────────────────────────────────
+
+Deno.test("ui refresh - every navigation hint targets a real tool with valid args", () => {
+  const byName = new Map(allTools.map((tool) => [tool.name, tool]));
+  for (const [doctype, hints] of Object.entries(DOCTYPE_SEND_MESSAGE_HINTS)) {
+    for (const hint of hints) {
+      assertEquals(typeof hint.key, "string", `${doctype}/${hint.label}: key`);
+      if (!hint.tool) continue;
+      const tool = byName.get(hint.tool);
+      if (!tool) {
+        throw new Error(`${doctype}/${hint.label}: unknown tool ${hint.tool}`);
+      }
+      const schema = tool.inputSchema as {
+        properties?: Record<string, unknown>;
+        required?: string[];
+      };
+      const props = Object.keys(schema.properties ?? {});
+      const args = hint.args ?? {};
+      for (const key of Object.keys(args)) {
+        if (!props.includes(key)) {
+          throw new Error(
+            `${doctype}/${hint.label}: ${hint.tool} has no arg ${key}`,
+          );
+        }
+      }
+      for (const key of schema.required ?? []) {
+        if (!(key in args)) {
+          throw new Error(
+            `${doctype}/${hint.label}: ${hint.tool} requires ${key}`,
+          );
+        }
+      }
+      // Règle du handler, pas du schéma : party_name sans opportunity_from est refusé.
+      if (hint.tool === "erpnext_opportunity_list" && "party_name" in args) {
+        assertEquals(args.opportunity_from, "Lead", `${doctype}/${hint.label}`);
+      }
+    }
   }
 });

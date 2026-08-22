@@ -13,6 +13,7 @@ import { useState } from "preact/hooks";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { Button, InfoRow, Label, Skeleton } from "~/shared/ui";
 import { useT } from "~/shared/i18n-hook";
+import { ConfirmSheet, useConfirm } from "~/shared/confirm";
 import { TONE_AMOUNT, toneForStatus } from "~/shared/status";
 import { StatusBadge, StatusCell } from "./StatusCell";
 import type { SendMessageHint } from "../types";
@@ -52,6 +53,7 @@ export function InlineDetailPanel(
   const t = useT();
   const narrow = layout !== "wide";
   const [actLoading, setActLoading] = useState<string | null>(null);
+  const confirm = useConfirm();
   const [actMsg, setActMsg] = useState<string | null>(null);
   const [actOk, setActOk] = useState(true);
 
@@ -130,8 +132,16 @@ export function InlineDetailPanel(
   const lead = entries.filter((entry) => LEAD_FIELDS.includes(entry.id));
   const rest = entries.filter((entry) => !LEAD_FIELDS.includes(entry.id));
 
+  /* Le libellé vient du catalogue quand le serveur donne une clé, sinon du
+     serveur lui-même (anglais). */
+  const hintLabel = (hint: SendMessageHint) => {
+    const key = hint.key ? `doclist.hint.${hint.key}` : null;
+    const translated = key ? t(key) : null;
+    return translated && translated !== key ? translated : hint.label;
+  };
   const hints = sendMessageHints?.map((hint) => ({
     ...hint,
+    label: hintLabel(hint),
     message: hint.message
       .replace(/\{id\}/g, docName)
       .replace(/\{doctype\}/g, doctype ?? ""),
@@ -271,10 +281,17 @@ export function InlineDetailPanel(
                 ? "min-h-[44px] rounded-control text-body"
                 : undefined}
               onClick={() =>
-                void act("submit", "erpnext_doc_submit", {
-                  doctype: doctype ?? "",
-                  name: docName,
-                }, t("doclist.detail.action.submit_ok"))}
+                confirm.request({
+                  subject: `${doctype ?? ""} ${docName}`.trim(),
+                  title: t("doclist.confirm.submit"),
+                  detail: t("doclist.confirm.submit.detail"),
+                  actionLabel: t("doclist.confirm.submit.action"),
+                  onConfirm: () =>
+                    void act("submit", "erpnext_doc_submit", {
+                      doctype: doctype ?? "",
+                      name: docName,
+                    }, t("doclist.detail.action.submit_ok")),
+                })}
             >
               {actLoading === "submit" ? "…" : t("common.submit")}
             </Button>
@@ -290,10 +307,17 @@ export function InlineDetailPanel(
                 ? "min-h-[44px] rounded-control text-body"
                 : undefined}
               onClick={() =>
-                void act("cancel", "erpnext_doc_cancel", {
-                  doctype: doctype ?? "",
-                  name: docName,
-                }, t("doclist.detail.action.cancel_ok"))}
+                confirm.request({
+                  subject: `${doctype ?? ""} ${docName}`.trim(),
+                  title: t("doclist.confirm.cancel"),
+                  detail: t("doclist.confirm.cancel.detail"),
+                  actionLabel: t("doclist.confirm.cancel.action"),
+                  onConfirm: () =>
+                    void act("cancel", "erpnext_doc_cancel", {
+                      doctype: doctype ?? "",
+                      name: docName,
+                    }, t("doclist.detail.action.cancel_ok")),
+                })}
             >
               {actLoading === "cancel"
                 ? "…"
@@ -302,6 +326,7 @@ export function InlineDetailPanel(
           )}
         </div>
       </div>
+      <ConfirmSheet confirm={confirm} />
     </InspectorFrame>
   );
 }

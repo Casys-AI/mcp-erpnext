@@ -540,7 +540,8 @@ export const operationsTools: ErpNextTool[] = [
         filters: {
           type: "array",
           description:
-            "Frappe filters as array of [fieldname, operator, value] tuples. " +
+            "Frappe filters as array of [fieldname, operator, value] tuples, or " +
+            "[child doctype, fieldname, operator, value] to filter on a child table. " +
             'Example: [["status","=","Open"],["company","=","Acme"]]',
           items: {
             type: "array",

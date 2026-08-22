@@ -16,9 +16,21 @@ interface RowAction {
   extraArgs?: Record<string, unknown>;
 }
 
+/**
+ * Un bouton de navigation attaché à un résultat de liste.
+ *
+ * La vue affiche `label` (ou le libellé traduit `doclist.hint.<key>`) et
+ * envoie `message` à la conversation, `{id}` et `{doctype}` remplis avec le
+ * document sélectionné. `tool` + `args` décrivent l'outil qui répondrait à
+ * la même question : aucune vue ne les appelle aujourd'hui — c'est un
+ * contrat réservé aux hôtes et agents, vérifié par le test de contrat.
+ */
 interface SendMessageHint {
+  key: string;
   label: string;
   message: string;
+  tool?: string;
+  args?: Record<string, unknown>;
 }
 
 interface UiRefreshableResult {
@@ -86,43 +98,187 @@ const DOCTYPE_GET_TOOLS: Record<string, string> = {
  * Cross-viewer navigation hints by DocType.
  * Shown as buttons in the InlineDetailPanel via sendMessage.
  */
-const DOCTYPE_SEND_MESSAGE_HINTS: Record<string, SendMessageHint[]> = {
+export const DOCTYPE_SEND_MESSAGE_HINTS: Record<string, SendMessageHint[]> = {
   "Customer": [
-    { label: "Orders", message: "Show sales orders for customer {id}" },
-    { label: "Invoices", message: "Show sales invoices for customer {id}" },
+    {
+      key: "orders",
+      label: "Orders",
+      message: "Show sales orders for customer {id}",
+      tool: "erpnext_sales_order_list",
+      args: { customer: "{id}", limit: 20 },
+    },
+    {
+      key: "invoices",
+      label: "Invoices",
+      message: "Show sales invoices for customer {id}",
+      tool: "erpnext_sales_invoice_list",
+      args: { customer: "{id}", limit: 20 },
+    },
   ],
   "Sales Order": [
-    { label: "Invoice", message: "Show invoices linked to sales order {id}" },
-    { label: "Delivery", message: "Show delivery notes for sales order {id}" },
+    {
+      key: "invoice",
+      label: "Invoice",
+      message: "Show invoices linked to sales order {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Sales Invoice",
+        fields: ["name", "customer", "posting_date", "status", "grand_total"],
+        filters: [["Sales Invoice Item", "sales_order", "=", "{id}"]],
+        limit: 20,
+      },
+    },
+    {
+      key: "delivery",
+      label: "Delivery",
+      message: "Show delivery notes for sales order {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Delivery Note",
+        fields: ["name", "customer", "posting_date", "status"],
+        filters: [["Delivery Note Item", "against_sales_order", "=", "{id}"]],
+        limit: 20,
+      },
+    },
   ],
   "Sales Invoice": [
-    { label: "Payments", message: "Show payment entries for invoice {id}" },
+    {
+      key: "payments",
+      label: "Payments",
+      message: "Show payment entries for invoice {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Payment Entry",
+        fields: [
+          "name",
+          "posting_date",
+          "paid_amount",
+          "mode_of_payment",
+          "docstatus",
+        ],
+        filters: [["Payment Entry Reference", "reference_name", "=", "{id}"]],
+        limit: 20,
+      },
+    },
   ],
   "Item": [
-    { label: "Stock", message: "Show stock balance for item {id}" },
-    { label: "Orders", message: "Show sales orders containing item {id}" },
+    {
+      key: "stock",
+      label: "Stock",
+      message: "Show stock balance for item {id}",
+      tool: "erpnext_stock_balance",
+      args: { item_code: "{id}" },
+    },
+    {
+      key: "orders",
+      label: "Orders",
+      message: "Show sales orders containing item {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Sales Order",
+        fields: ["name", "customer", "transaction_date", "status"],
+        filters: [["Sales Order Item", "item_code", "=", "{id}"]],
+        limit: 20,
+      },
+    },
   ],
   "Supplier": [
-    { label: "PO", message: "Show purchase orders for supplier {id}" },
-    { label: "Invoices", message: "Show purchase invoices for supplier {id}" },
+    {
+      key: "po",
+      label: "PO",
+      message: "Show purchase orders for supplier {id}",
+      tool: "erpnext_purchase_order_list",
+      args: { supplier: "{id}", limit: 20 },
+    },
+    {
+      key: "invoices",
+      label: "Invoices",
+      message: "Show purchase invoices for supplier {id}",
+      tool: "erpnext_purchase_invoice_list",
+      args: { supplier: "{id}", limit: 20 },
+    },
   ],
   "Purchase Order": [
-    { label: "Receipt", message: "Show purchase receipts for order {id}" },
-    { label: "Invoice", message: "Show purchase invoices for order {id}" },
+    {
+      key: "receipt",
+      label: "Receipt",
+      message: "Show purchase receipts for order {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Purchase Receipt",
+        fields: ["name", "supplier", "posting_date", "status"],
+        filters: [["Purchase Receipt Item", "purchase_order", "=", "{id}"]],
+        limit: 20,
+      },
+    },
+    {
+      key: "invoice",
+      label: "Invoice",
+      message: "Show purchase invoices for order {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Purchase Invoice",
+        fields: ["name", "supplier", "posting_date", "status", "grand_total"],
+        filters: [["Purchase Invoice Item", "purchase_order", "=", "{id}"]],
+        limit: 20,
+      },
+    },
   ],
   "Employee": [
-    { label: "Attendance", message: "Show attendance for employee {id}" },
-    { label: "Leaves", message: "Show leave applications for employee {id}" },
+    {
+      key: "attendance",
+      label: "Attendance",
+      message: "Show attendance for employee {id}",
+      tool: "erpnext_attendance_list",
+      args: { employee: "{id}", limit: 20 },
+    },
+    {
+      key: "leaves",
+      label: "Leaves",
+      message: "Show leave applications for employee {id}",
+      tool: "erpnext_leave_application_list",
+      args: { employee: "{id}", limit: 20 },
+    },
   ],
   "Project": [
-    { label: "Tasks", message: "Show tasks for project {id}" },
-    { label: "Timesheets", message: "Show timesheets for project {id}" },
+    {
+      key: "tasks",
+      label: "Tasks",
+      message: "Show tasks for project {id}",
+      tool: "erpnext_task_list",
+      args: { project: "{id}", limit: 20 },
+    },
+    {
+      key: "timesheets",
+      label: "Timesheets",
+      message: "Show timesheets for project {id}",
+      tool: "erpnext_timesheet_list",
+      args: { project: "{id}", limit: 20 },
+    },
   ],
   "Task": [
-    { label: "Timesheets", message: "Show timesheets for task {id}" },
+    {
+      key: "timesheets",
+      label: "Timesheets",
+      message: "Show timesheets for task {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Timesheet",
+        fields: ["name", "employee", "start_date", "total_hours", "status"],
+        filters: [["Timesheet Detail", "task", "=", "{id}"]],
+        limit: 20,
+      },
+    },
   ],
   "Lead": [
-    { label: "Opportunities", message: "Show opportunities for lead {id}" },
+    {
+      key: "opportunities",
+      label: "Opportunities",
+      message: "Show opportunities for lead {id}",
+      tool: "erpnext_opportunity_list",
+      // Le handler exige opportunity_from avec party_name.
+      args: { opportunity_from: "Lead", party_name: "{id}", limit: 20 },
+    },
   ],
 };
 

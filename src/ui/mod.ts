@@ -32,6 +32,9 @@ function discoverUiResources(): Record<string, UIResourceMeta> {
 
   try {
     for (const uiName of readDirSync(distPath)) {
+      // Seuls les viewers sont des ressources ; dist/ héberge aussi le banc
+      // d'essai (dev-host) et des pages de relecture.
+      if (!uiName.endsWith("-viewer")) continue;
       if (statSync(`${distPath}/${uiName}/index.html`)) {
         const meta: UIResourceMeta = {
           name: uiName
@@ -102,6 +105,8 @@ function uriToPath(uri: string): string | null {
   const match = uri.match(/^ui:\/\/[^/]+\/(.+)$/);
   if (match) {
     const uiName = match[1];
+    // Même règle que la découverte : rien d'autre qu'un viewer ne se sert.
+    if (!uiName.endsWith("-viewer")) return null;
     const distPath =
       new URL(`./dist/${uiName}/index.html`, import.meta.url).pathname;
     if (statSync(distPath)) {

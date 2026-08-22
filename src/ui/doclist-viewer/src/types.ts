@@ -12,7 +12,10 @@ export interface RowAction {
 }
 
 /** Navigation hint for sendMessage cross-viewer links */
+/** Hint de navigation attaché par le serveur (`src/tools/ui-refresh.ts`). */
 export interface SendMessageHint {
+  /** Clé de libellé côté vue (`doclist.hint.<key>`), `label` en repli. */
+  key?: string;
   label: string;
   message: string;
 }

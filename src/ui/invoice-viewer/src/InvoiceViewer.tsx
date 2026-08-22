@@ -25,6 +25,7 @@ import {
   type UiRefreshRequestData,
 } from "~/shared/refresh";
 import { useT } from "~/shared/i18n-hook";
+import { ConfirmSheet, useConfirm } from "~/shared/confirm";
 import { StatusBadge } from "./components/StatusBadge";
 import { ItemDetailPanel } from "./components/ItemDetailPanel";
 import { INVOICE_FIXTURE, isFixtureMode } from "./fixture.ts";
@@ -53,6 +54,7 @@ export function InvoiceViewer() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionIsError, setActionIsError] = useState(false);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const confirm = useConfirm();
   const dataRef = useRef<InvoiceData | null>(
     fixture ? (INVOICE_FIXTURE.data ?? null) : null,
   );
@@ -215,6 +217,7 @@ export function InvoiceViewer() {
         <StateMessage>
           {loading ? t("invoice.loading") : t("invoice.no_data")}
         </StateMessage>
+        <ConfirmSheet confirm={confirm} />
       </ViewerShell>
     );
   }
@@ -327,10 +330,17 @@ export function InvoiceViewer() {
       disabled={fixture || actionLoading === "submit"}
       title={fixture ? previewTitle : t("invoice.btn.submit.title")}
       onClick={() =>
-        void callAction("submit", "erpnext_doc_submit", {
-          doctype,
-          name: data.name,
-        }, t("invoice.action.submitted"))}
+        confirm.request({
+          subject: data.name,
+          title: t("invoice.confirm.submit"),
+          detail: t("invoice.confirm.submit.detail"),
+          actionLabel: t("invoice.confirm.submit.action"),
+          onConfirm: () =>
+            void callAction("submit", "erpnext_doc_submit", {
+              doctype,
+              name: data.name,
+            }, t("invoice.action.submitted")),
+        })}
     >
       {actionLoading === "submit" ? "…" : t("invoice.btn.submit.label")}
     </Button>
@@ -341,15 +351,25 @@ export function InvoiceViewer() {
       variant="danger"
       class={cx(
         "border-bad/30",
-        isMobile ? "flex-1 min-h-[44px] rounded-touch text-body" : "text-cell",
+        /* À l'écart des boutons de navigation : à droite, seul. */
+        isMobile
+          ? "w-full min-h-[44px] rounded-touch text-body"
+          : "ml-auto text-cell",
       )}
       disabled={fixture || actionLoading === "cancel"}
       title={fixture ? previewTitle : t("invoice.btn.cancel.title")}
       onClick={() =>
-        void callAction("cancel", "erpnext_doc_cancel", {
-          doctype,
-          name: data.name,
-        }, t("invoice.action.cancelled"))}
+        confirm.request({
+          subject: data.name,
+          title: t("invoice.confirm.cancel"),
+          detail: t("invoice.confirm.cancel.detail"),
+          actionLabel: t("invoice.confirm.cancel.action"),
+          onConfirm: () =>
+            void callAction("cancel", "erpnext_doc_cancel", {
+              doctype,
+              name: data.name,
+            }, t("invoice.action.cancelled")),
+        })}
     >
       {actionLoading === "cancel" ? "…" : t("invoice.btn.cancel.label")}
     </Button>
@@ -566,6 +586,7 @@ export function InvoiceViewer() {
         <div class="flex justify-end border-t border-line px-4 py-[9px]">
           <CasysCredit />
         </div>
+        <ConfirmSheet confirm={confirm} />
       </ViewerShell>
     );
   }
@@ -681,11 +702,12 @@ export function InvoiceViewer() {
         <div class="flex flex-col gap-[7px] px-3 py-[11px]">
           {/* Paiements — pleine largeur */}
           {btnPayments}
-          {/* Ligne de boutons secondaires */}
-          <div class="flex gap-[7px]">
-            {btnParty}
-            {btnCancel}
-          </div>
+          {
+            /* Ligne de boutons secondaires — le danger a sa propre ligne,
+              pleine largeur, loin de la navigation. */
+          }
+          <div class="flex gap-[7px]">{btnParty}</div>
+          {btnCancel}
           {/* Submit (rare en mobile, mais logique métier conservée) */}
           {btnSubmit}
         </div>
@@ -695,6 +717,7 @@ export function InvoiceViewer() {
       <div class="flex justify-end border-t border-line px-3 py-[9px]">
         <CasysCredit compact />
       </div>
+      <ConfirmSheet confirm={confirm} />
     </ViewerShell>
   );
 }

@@ -204,6 +204,37 @@ export const fr: Record<string, string> = {
     "Sélection partagée — demandez le détail dans la conversation",
   "drill.sent": "Envoyé à la conversation",
   "chart.tooltip.click": "clic",
+  // ── confirmation des actions irréversibles ──
+  "confirm.eyebrow": "Action irréversible",
+  "invoice.confirm.cancel.detail":
+    "La facture passera en statut Annulé et ses paiements seront déliés. ERPNext ne permet pas de revenir en arrière : il faudra l'amender.",
+  "invoice.confirm.cancel.action": "Annuler la facture",
+  "invoice.confirm.submit.detail":
+    "La facture sera soumise et figée : seuls une annulation puis un amendement pourront encore la modifier.",
+  "invoice.confirm.submit.action": "Soumettre la facture",
+  "doclist.confirm.cancel.detail":
+    "Le document passera en statut Annulé et ses liens seront défaits. ERPNext ne permet pas de revenir en arrière.",
+  "doclist.confirm.cancel.action": "Annuler le document",
+  "doclist.confirm.submit.detail":
+    "Le document sera soumis et figé : seuls une annulation puis un amendement pourront encore le modifier.",
+  "doclist.confirm.submit.action": "Soumettre le document",
+  "invoice.confirm.submit": "Soumettre la facture ?",
+  "invoice.confirm.cancel": "Annuler la facture ?",
+  "doclist.confirm.submit": "Soumettre ce document ?",
+  "doclist.confirm.cancel": "Annuler ce document ?",
+  "doclist.hint.orders": "Commandes",
+  "doclist.hint.invoices": "Factures",
+  "doclist.hint.invoice": "Facture",
+  "doclist.hint.delivery": "Livraison",
+  "doclist.hint.payments": "Paiements",
+  "doclist.hint.stock": "Stock",
+  "doclist.hint.po": "Commandes d'achat",
+  "doclist.hint.receipt": "Réception",
+  "doclist.hint.attendance": "Présences",
+  "doclist.hint.leaves": "Congés",
+  "doclist.hint.tasks": "Tâches",
+  "doclist.hint.timesheets": "Feuilles de temps",
+  "doclist.hint.opportunities": "Opportunités",
   // ── messages envoyés à la conversation (boutons explicites) ──
   "common.error.refresh_timeout": "Délai d'actualisation dépassé",
   "common.error.no_payload": "Aucun contenu renvoyé par l'outil",

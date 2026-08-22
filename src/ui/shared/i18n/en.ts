@@ -202,6 +202,37 @@ export const en: Record<string, string> = {
   "drill.shared": "Selection shared — ask for details in the conversation",
   "drill.sent": "Sent to the conversation",
   "chart.tooltip.click": "click",
+  // ── confirmation des actions irréversibles ──
+  "confirm.eyebrow": "Irreversible action",
+  "invoice.confirm.cancel.detail":
+    "The invoice will be set to Cancelled and its payments unlinked. ERPNext cannot undo this: the invoice would have to be amended.",
+  "invoice.confirm.cancel.action": "Cancel the invoice",
+  "invoice.confirm.submit.detail":
+    "The invoice will be submitted and frozen: only a cancellation followed by an amendment can change it afterwards.",
+  "invoice.confirm.submit.action": "Submit the invoice",
+  "doclist.confirm.cancel.detail":
+    "The document will be set to Cancelled and its links undone. ERPNext cannot undo this.",
+  "doclist.confirm.cancel.action": "Cancel the document",
+  "doclist.confirm.submit.detail":
+    "The document will be submitted and frozen: only a cancellation followed by an amendment can change it afterwards.",
+  "doclist.confirm.submit.action": "Submit the document",
+  "invoice.confirm.submit": "Submit this invoice?",
+  "invoice.confirm.cancel": "Cancel this invoice?",
+  "doclist.confirm.submit": "Submit this document?",
+  "doclist.confirm.cancel": "Cancel this document?",
+  "doclist.hint.orders": "Orders",
+  "doclist.hint.invoices": "Invoices",
+  "doclist.hint.invoice": "Invoice",
+  "doclist.hint.delivery": "Delivery",
+  "doclist.hint.payments": "Payments",
+  "doclist.hint.stock": "Stock",
+  "doclist.hint.po": "Purchase orders",
+  "doclist.hint.receipt": "Receipt",
+  "doclist.hint.attendance": "Attendance",
+  "doclist.hint.leaves": "Leaves",
+  "doclist.hint.tasks": "Tasks",
+  "doclist.hint.timesheets": "Timesheets",
+  "doclist.hint.opportunities": "Opportunities",
   // ── messages envoyés à la conversation (boutons explicites) ──
   "common.error.refresh_timeout": "Refresh timed out",
   "common.error.no_payload": "No text payload returned by tool call",

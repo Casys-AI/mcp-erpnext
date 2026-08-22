@@ -6,7 +6,7 @@
  * écrit l'état d'interface du niveau courant (tri, page, ligne active).
  */
 
-import { useCallback, useMemo, useRef, useState } from "preact/hooks";
+import { useCallback, useMemo, useState } from "preact/hooks";
 import type { Jump, ToolHost } from "./jumps";
 import { jumpInto, refreshCurrent, type StackStore } from "./nav-jump";
 import {
@@ -24,13 +24,10 @@ import {
 
 export function useNavStack(host: ToolHost, root: LevelInit) {
   const [stack, setStack] = useState<NavStack>(() => createStack(root));
-  const stackRef = useRef(stack);
-  stackRef.current = stack;
   const current = currentLevel(stack);
 
   // La pile vit dans l'état Preact ; l'orchestration, dans `nav-jump.ts`.
   const store = useMemo<StackStore>(() => ({
-    get: () => stackRef.current,
     set: (update) => setStack((s) => update(s)),
   }), []);
 

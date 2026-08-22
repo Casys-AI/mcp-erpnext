@@ -618,3 +618,16 @@ Deno.test("ui refresh - chart point jumps follow the handlers' labels and states
     limit: 50,
   });
 });
+
+Deno.test("ui refresh - chart point jumps skip the handlers' « Unknown » placeholder", () => {
+  const now = new Date(2026, 7, 22, 10);
+  const jumps = chartPointJumps("erpnext_sales_chart", { group_by: "item" }, [
+    "Unknown",
+    "Laptop",
+  ], now)!;
+  assertEquals(Object.keys(jumps), ["Laptop"]);
+  assertEquals(
+    chartPointJumps("erpnext_ar_aging", {}, ["Unknown"], now),
+    undefined,
+  );
+});

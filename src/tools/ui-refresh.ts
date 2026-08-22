@@ -729,8 +729,13 @@ export function chartPointJumps(
   now: Date,
 ): Record<string, NavJump> | undefined {
   const jumps: Record<string, NavJump> = {};
+  // « Unknown » est le libellé que les handlers posent quand le nom manque :
+  // aucune pièce ne porte ce nom, donc pas de saut.
   const byLabel = (make: (label: string) => NavJump) => {
-    for (const label of labels) jumps[label] = make(label);
+    for (const label of labels) {
+      if (label === "Unknown") continue;
+      jumps[label] = make(label);
+    }
   };
   switch (toolName) {
     case "erpnext_revenue_trend": {

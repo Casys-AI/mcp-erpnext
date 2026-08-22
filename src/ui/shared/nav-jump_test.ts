@@ -13,7 +13,6 @@ import {
 function memoryStore(initial: NavStack): StackStore & { stack: NavStack } {
   const store = {
     stack: initial,
-    get: () => store.stack,
     set: (update: (s: NavStack) => NavStack) => {
       store.stack = update(store.stack);
     },

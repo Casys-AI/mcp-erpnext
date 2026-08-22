@@ -24,8 +24,8 @@ export interface ToolCall {
 
 /**
  * L'état d'interface qu'un niveau garde et restaure : celui d'une liste
- * (tri, filtre, page, ligne active, chips) et, pour un tableau kanban, la
- * carte ouverte. Une clé nommée ici est une clé que le fil sait décrire.
+ * (tri, filtre, page, ligne active, chips). Une clé nommée ici est une clé
+ * que le fil sait décrire.
  */
 export interface LevelUi {
   sortKey?: string | null;
@@ -35,7 +35,6 @@ export interface LevelUi {
   expandedId?: string | null;
   chipFilters?: Record<string, string>;
   searchOpen?: boolean;
-  openCard?: string | null;
 }
 
 export interface NavLevel {

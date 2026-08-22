@@ -18,15 +18,18 @@ import {
   currentLevel,
   findLevelByKey,
   levelKey,
+  type NavLevel,
   type NavStack,
   patchLevel,
   popToLevel,
   pushLevel,
 } from "./nav-stack.ts";
 
-/** Où la pile vit : un lecteur et un écrivain, fonctionnel ou non. */
+/**
+ * Où la pile vit : un écrivain fonctionnel, qui reçoit l'état le plus
+ * récent (le `setState` de Preact, ou une variable en test).
+ */
 export interface StackStore {
-  get(): NavStack;
   set(update: (stack: NavStack) => NavStack): void;
 }
 
@@ -37,17 +40,29 @@ export async function jumpInto(
   host: ToolHost,
   jump: Jump,
 ): Promise<JumpOutcome> {
-  // Un saut à la fois : un double clic n'empile pas deux niveaux.
-  if (currentLevel(store.get()).loading) return "ignored";
-  // La pile se replie sur elle-même : une cible déjà ouverte, on y remonte.
-  const existing = findLevelByKey(store.get(), levelKey(jump.tool));
-  if (existing >= 0) {
-    store.set((s) => popToLevel(s, existing));
-    return "popped";
-  }
-  const next = pushLevel(store.get(), levelFromJump(jump));
-  const id = currentLevel(next).id;
-  store.set(() => next);
+  const init = levelFromJump(jump);
+  const key = levelKey(jump.tool);
+  // Un porteur mutable : TypeScript ne voit pas les écritures faites dans
+  // la mise à jour fonctionnelle, un `let` serait rétréci à sa valeur initiale.
+  const decision = { outcome: "ignored" as JumpOutcome, id: "" };
+  // Tout se décide sur l'état que l'écrivain fournit — jamais sur une
+  // lecture d'avant : deux sauts du même tick voient chacun le précédent.
+  store.set((s) => {
+    // Un saut à la fois : un double clic n'empile pas deux niveaux.
+    if (currentLevel(s).loading) return s;
+    // La pile se replie sur elle-même : une cible déjà ouverte, on y remonte.
+    const existing = findLevelByKey(s, key);
+    if (existing >= 0) {
+      decision.outcome = "popped";
+      return popToLevel(s, existing);
+    }
+    const next = pushLevel(s, init);
+    decision.id = currentLevel(next).id;
+    decision.outcome = "pushed";
+    return next;
+  });
+  if (decision.outcome !== "pushed") return decision.outcome;
+  const id = decision.id;
   const loaded = await loadLevelBody(host, jump.tool);
   // `patchLevel` ne fait rien si le niveau a disparu entre-temps.
   store.set((s) =>
@@ -58,7 +73,7 @@ export async function jumpInto(
       error: loaded.error,
     })
   );
-  return "pushed";
+  return decision.outcome;
 }
 
 /**
@@ -69,11 +84,19 @@ export async function refreshCurrent(
   store: StackStore,
   host: ToolHost,
 ): Promise<boolean> {
-  const level = currentLevel(store.get());
-  if (!level.tool) return false;
-  const id = level.id;
-  store.set((s) => patchLevel(s, id, { loading: true, error: undefined }));
-  const loaded = await loadLevelBody(host, level.tool);
+  const target: { id: string; tool?: NonNullable<NavLevel["tool"]> } = {
+    id: "",
+  };
+  store.set((s) => {
+    const level = currentLevel(s);
+    if (!level.tool) return s;
+    target.id = level.id;
+    target.tool = level.tool;
+    return patchLevel(s, level.id, { loading: true, error: undefined });
+  });
+  if (!target.tool) return false;
+  const { id, tool } = target;
+  const loaded = await loadLevelBody(host, tool);
   store.set((s) =>
     clearStale(
       patchLevel(s, id, {

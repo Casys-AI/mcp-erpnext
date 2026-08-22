@@ -99,6 +99,7 @@ async function mount() {
     const payload = cannedResult(viewer, params.name, args);
     note("tool", `tools/call ${params.name}`, args);
     if (payload === null) {
+      note("info", `${params.name} : non simulé → isError`);
       return {
         isError: true,
         content: [{

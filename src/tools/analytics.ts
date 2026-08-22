@@ -1145,7 +1145,13 @@ export const analyticsTools: ErpNextTool[] = [
     category: "analytics",
     inputSchema: { type: "object", properties: {} },
     handler: async (_input, ctx) => {
-      const today = new Date().toISOString().split("T")[0];
+      // Heure locale, comme `monthRange` côté sauts : le KPI et sa liste
+      // « en retard » regardent le même jour.
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${
+        pad(now.getDate())
+      }`;
 
       const invoices = await ctx.client.list("Sales Invoice", {
         fields: ["outstanding_amount", "due_date"],

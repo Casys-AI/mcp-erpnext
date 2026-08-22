@@ -1,4 +1,5 @@
 /** @jsxImportSource preact */
+import { type Jump, jumpFromHint, type NavHint } from "~/shared/jumps";
 import { useEffect, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { Button, cx, StateMessage } from "~/shared/ui";
@@ -19,6 +20,8 @@ export function ItemDetailPanel({
   taxRate,
   availableQty,
   lineQty,
+  hints,
+  onJump,
 }: {
   app: App;
   itemCode: string;
@@ -34,8 +37,28 @@ export function ItemDetailPanel({
   availableQty?: number;
   /** Qté facturée — sert à colorier dispo. en text-warn si insuffisante. */
   lineQty?: number;
+  /** Les hints de la pièce (le serveur y met « item » et « stock », avec `{item}`). */
+  hints?: NavHint[];
+  /** Présent quand l'hôte relaie les outils : les boutons deviennent des sauts. */
+  onJump?: (jump: Jump) => void;
 }) {
   const t = useT();
+  const vars = { item: itemCode };
+  const subtitle = t("nav.linked_to", { id: itemCode });
+  const stockJump = onJump
+    ? jumpFromHint(
+      hints?.find((h) => h.key === "stock") ?? { label: "" },
+      vars,
+      subtitle,
+    )
+    : null;
+  const itemJump = onJump
+    ? jumpFromHint(
+      hints?.find((h) => h.key === "item") ?? { label: "" },
+      vars,
+      subtitle,
+    )
+    : null;
 
   const [itemData, setItemData] = useState<ItemRecord | null>(null);
   const [stockData, setStockData] = useState<StockRow[] | null>(null);
@@ -236,10 +259,21 @@ export function ItemDetailPanel({
           title={fixture
             ? t("invoice.preview.title")
             : t("invoice.item.btn.stock.title")}
-          onClick={() =>
-            void send(t("invoice.item.stock.message", { itemCode }))}
+          class="group"
+          onClick={() => {
+            if (stockJump) onJump!(stockJump);
+            else void send(t("invoice.item.stock.message", { itemCode }));
+          }}
         >
           {t("invoice.item.btn.stock.label")}
+          {stockJump && (
+            <span
+              aria-hidden="true"
+              class="ml-1 text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+            >
+              ›
+            </span>
+          )}
         </Button>
         <Button
           variant="secondary"
@@ -247,10 +281,21 @@ export function ItemDetailPanel({
           title={fixture
             ? t("invoice.preview.title")
             : t("invoice.item.btn.details.title")}
-          onClick={() =>
-            void send(t("invoice.item.details.message", { itemCode }))}
+          class="group"
+          onClick={() => {
+            if (itemJump) onJump!(itemJump);
+            else void send(t("invoice.item.details.message", { itemCode }));
+          }}
         >
           {t("invoice.item.btn.details.label")}
+          {itemJump && (
+            <span
+              aria-hidden="true"
+              class="ml-1 text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+            >
+              ›
+            </span>
+          )}
         </Button>
       </div>
     </div>

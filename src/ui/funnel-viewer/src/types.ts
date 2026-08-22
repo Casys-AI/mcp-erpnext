@@ -1,4 +1,5 @@
 import type { UiRefreshRequestData } from "~/shared/refresh";
+import type { NavHint } from "~/shared/jumps";
 
 export interface FunnelStage {
   label: string;
@@ -16,4 +17,10 @@ export interface FunnelData {
   stages: FunnelStage[];
   currency?: string;
   refreshRequest?: UiRefreshRequestData;
+  /**
+   * Sauts serveur par libellé d'étape.
+   * Injecté par withUiRefreshRequest → FUNNEL_STAGE_JUMPS.
+   * Chaque valeur est un NavHint compatible jumpFromHint().
+   */
+  _stageJumps?: Record<string, NavHint>;
 }

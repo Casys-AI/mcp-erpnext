@@ -1,7 +1,43 @@
 import type { StockData, StockItemDetail } from "./types.ts";
 
-/** Mock payload so the bundled HTML can be opened without a host. */
+/**
+ * Mock payload so the bundled HTML can be opened without a host.
+ * `_sendMessageHints` est une copie de STOCK_HINTS (src/tools/ui-refresh.ts)
+ * pour que la vue voie les hints en mode fixture — les sauts restent
+ * désactivés car jumpsEnabled = !fixture && canJump(...).
+ */
 export const STOCK_FIXTURE: StockData = {
+  _sendMessageHints: [
+    {
+      key: "item",
+      label: "Item",
+      message: "Show item {id}",
+      tool: "erpnext_item_get",
+      args: { name: "{id}" },
+      kind: "record",
+    },
+    {
+      key: "movements",
+      label: "Stock entries",
+      message: "Show stock entries for item {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Stock Entry",
+        fields: ["name", "posting_date", "stock_entry_type", "docstatus"],
+        filters: [["Stock Entry Detail", "item_code", "=", "{id}"]],
+        limit: 20,
+      },
+      kind: "list",
+    },
+    {
+      key: "warehouse",
+      label: "Warehouse stock",
+      message: "Show stock chart for warehouse {warehouse}",
+      tool: "erpnext_stock_chart",
+      args: { warehouse: "{warehouse}", limit: 10 },
+      kind: "chart",
+    },
+  ],
   count: 4,
   data: [
     {

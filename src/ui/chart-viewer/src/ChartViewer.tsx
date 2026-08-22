@@ -53,6 +53,10 @@ import {
   ViewerShell,
 } from "~/shared/ui";
 import { useViewerLayout, type ViewerLayout } from "~/shared/useViewerLayout";
+import { useViewerNav } from "~/shared/useViewerNav";
+import { PathBar } from "~/shared/PathBar";
+import { LevelBody } from "~/shared/levels/LevelBody";
+import { type Jump, jumpFromHint } from "~/shared/jumps";
 import {
   canRequestUiRefresh,
   extractToolResultText,
@@ -1069,17 +1073,21 @@ function TreemapView({ data }: { data: ChartData }) {
 }
 
 function ChartRouter(
-  { data, onShared }: {
+  { data, onShared, tryJump }: {
     data: ChartData;
     onShared?: (channel: DrillDownChannel) => void;
+    /** Un saut dans la vue pour ce libellé ; `true` s'il a été pris. */
+    tryJump?: (label: string) => boolean;
   },
 ) {
   const type = data.type ?? "bar";
   const canDrill = drillDownChannel(app.getHostCapabilities()) !== "none";
 
-  const onDataClick = (canDrill && data._drillDown)
+  const onDataClick = (tryJump || (canDrill && data._drillDown))
     ? (label: string) => {
-      const suggested = data._drillDown!.replace(/\{label\}/g, label);
+      if (tryJump?.(label)) return;
+      if (!canDrill || !data._drillDown) return;
+      const suggested = data._drillDown.replace(/\{label\}/g, label);
       shareSelection(app, { view: data.title, label, suggested })
         .then((channel) => onShared?.(channel));
     }
@@ -1137,6 +1145,32 @@ function ChartContent(
     setTimeout(() => setShared(null), 1500);
   }
   const narrow = layout !== "wide";
+  const t = useT();
+  const fixture = isFixtureMode();
+  const viewerNav = useViewerNav(app, {
+    title: data.title,
+    kind: "root",
+    origin: "chart",
+  }, { fixture });
+  const nav = viewerNav.nav;
+  const { current, isRoot } = nav;
+  const { jumpsEnabled } = viewerNav;
+  const { list } = viewerNav;
+  const [levelError, setLevelError] = useState<string | null>(null);
+  const { ask } = viewerNav;
+  // Un point, une barre, une part : quand le serveur a décrit le saut de ce
+  // libellé et que l'hôte relaie les outils, on empile ; sinon le contexte.
+  const tryJump = jumpsEnabled && data._pointJumps
+    ? (label: string): boolean => {
+      const hint = data._pointJumps?.[label];
+      const jump: Jump | null = hint
+        ? jumpFromHint(hint, {}, t("nav.linked_to", { id: label }))
+        : null;
+      if (!jump) return false;
+      void nav.jump(jump);
+      return true;
+    }
+    : undefined;
 
   return (
     <ViewerShell containerRef={containerRef}>
@@ -1156,15 +1190,15 @@ function ChartContent(
           {narrow
             ? (
               <h3 class="truncate font-display font-semibold text-ink text-[--text-card-title]">
-                {data.title}
+                {isRoot ? data.title : current.title}
               </h3>
             )
             : (
               <h2 class="truncate font-display font-semibold text-ink text-[--text-title] tracking-title">
-                {data.title}
+                {isRoot ? data.title : current.title}
               </h2>
             )}
-          {data.subtitle && (
+          {isRoot && data.subtitle && (
             <span
               class={cx(
                 "font-mono text-ink-faint tracking-[0.04em]",
@@ -1181,42 +1215,68 @@ function ChartContent(
           : <span class="size-[5px] shrink-0 rounded-full bg-ok" />}
       </header>
 
+      <PathBar
+        stack={nav.stack}
+        onBack={nav.pop}
+        onJump={nav.popTo}
+        loading={current.loading}
+        layout={layout}
+      />
+
       {/* Erreur éventuelle */}
       {error && <StateMessage tone="bad">{error}</StateMessage>}
+      {levelError && <StateMessage tone="bad">{levelError}</StateMessage>}
 
-      {/* Zone de rendu du chart */}
-      <div
-        class={cx(
-          "flex flex-col gap-[10px]",
-          narrow ? "px-3 py-[10px]" : "px-4 py-[18px]",
-        )}
-        style={CHART_STAGE_STYLE}
+      <LevelBody
+        level={current}
+        app={app}
+        list={list}
+        layout={layout}
+        fixture={fixture}
+        onJump={jumpsEnabled ? nav.jump : undefined}
+        onAsk={ask}
+        onError={setLevelError}
+        onMutated={nav.markStale}
+        onRefresh={() => void nav.refreshLevel()}
       >
-        {
-          /* Les libellés d'axes vivent en HTML, pas dans le SVG : la maquette
+        {/* Zone de rendu du chart */}
+        <div
+          class={cx(
+            "flex flex-col gap-[10px]",
+            narrow ? "px-3 py-[10px]" : "px-4 py-[18px]",
+          )}
+          style={CHART_STAGE_STYLE}
+        >
+          {
+            /* Les libellés d'axes vivent en HTML, pas dans le SVG : la maquette
             pose « % » en haut à droite du tracé, rien le long des axes. */
-        }
-        {(data.yAxisLabel || data.rightAxisLabel) && (
-          <div class="flex justify-between font-mono text-nano text-ink-faint">
-            <span>{data.yAxisLabel}</span>
-            <span>{data.rightAxisLabel}</span>
+          }
+          {(data.yAxisLabel || data.rightAxisLabel) && (
+            <div class="flex justify-between font-mono text-nano text-ink-faint">
+              <span>{data.yAxisLabel}</span>
+              <span>{data.rightAxisLabel}</span>
+            </div>
+          )}
+          <div class="min-h-0 flex-1">
+            <ChartRouter
+              data={data}
+              onShared={flashShared}
+              tryJump={tryJump}
+            />
           </div>
-        )}
-        <div class="min-h-0 flex-1">
-          <ChartRouter data={data} onShared={flashShared} />
+          {data.xAxisLabel && (
+            <div class="text-right font-mono text-nano text-ink-faint">
+              {data.xAxisLabel}
+            </div>
+          )}
+          <ChartLegend items={legendItems(data)} />
+          {shared && (
+            <span class="font-mono text-[10.5px] text-ink-faint">
+              {sharedLabel(shared)}
+            </span>
+          )}
         </div>
-        {data.xAxisLabel && (
-          <div class="text-right font-mono text-nano text-ink-faint">
-            {data.xAxisLabel}
-          </div>
-        )}
-        <ChartLegend items={legendItems(data)} />
-        {shared && (
-          <span class="font-mono text-[10.5px] text-ink-faint">
-            {sharedLabel(shared)}
-          </span>
-        )}
-      </div>
+      </LevelBody>
 
       {/* Pied de vue */}
       <ViewerFooter layout={layout} />

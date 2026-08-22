@@ -49,6 +49,12 @@ import {
 } from "~/shared/kanban/refresh";
 import { clampKanbanFocusIndex } from "~/shared/kanban/layout";
 import { extractToolResultText } from "~/shared/refresh";
+import { jumpFromHint, type NavHint } from "~/shared/jumps";
+import { useViewerNav } from "~/shared/useViewerNav";
+import { PathBar } from "~/shared/PathBar";
+import { LevelBody } from "~/shared/levels/LevelBody";
+import type { CardDetailState } from "~/shared/kanban/state";
+import { kanbanNavVars } from "./kanban-nav";
 import { CardDetailModal } from "./DetailModal";
 import {
   isFixtureMode,
@@ -756,123 +762,264 @@ function MobileColumnNavWrapper({
   );
 }
 
-/* ────────────────────────────── BoardView ────────────────────────────── */
+/* ────────────────────────────── Types locaux ────────────────────────────── */
 
-function BoardView({
+/** Extension runtime de KanbanBoardData : le serveur injecte ce champ via withUiRefreshRequest. */
+type BoardWithHints = KanbanBoardData & {
+  _sendMessageHints?: NavHint[];
+};
+
+/* ────────────────────────────── KanbanBoardWithNav ─────────────────────── */
+
+/**
+ * Vue principale du tableau kanban avec pile de navigation.
+ *
+ * Séparé de KanbanViewer pour que useNavStack soit toujours initialisé
+ * avec un board.title disponible (le parent garantit board non-null).
+ *
+ * Quand l'hôte relaie les outils (`jumpsEnabled`) et que le tableau
+ * porte `_sendMessageHints`, les boutons du panneau de détail deviennent
+ * des sauts qui empilent un niveau dans la vue.
+ * Sans serverTools, le comportement actuel (sendMessage) est strictement préservé.
+ */
+function KanbanBoardWithNav({
   board,
+  detail,
+  fixture,
   containerRef,
   layout,
+  liveMessage,
   inlineError,
   activeDropColumn,
-  fixture,
-  refreshing,
-  onRefresh,
   onMove,
   onDropCard,
   onDragStart,
   onDragEnd,
   onDragOverColumn,
   onTitleClick,
+  onClose,
+  onNavigate,
+  onSave,
+  onAssign,
+  onUnassign,
+  onLoadUsers,
+  onError,
 }: {
   board: KanbanBoardData;
+  detail: CardDetailState;
+  fixture: boolean;
   containerRef: Ref<HTMLDivElement>;
   layout: ViewerLayout;
+  liveMessage: string;
   inlineError: string | null;
   activeDropColumn: string | null;
-  fixture: boolean;
-  refreshing: boolean;
-  onRefresh: () => void;
   onMove: (card: KanbanCardData, toColumn: string, label: string) => void;
   onDropCard: (toColumn: string, event: KanbanDragEvent) => void;
   onDragStart: (card: KanbanCardData, event: KanbanDragEvent) => void;
   onDragEnd: () => void;
   onDragOverColumn: (columnId: string, event: KanbanDragEvent) => void;
-  onTitleClick?: (card: KanbanCardData) => void;
+  onTitleClick: (card: KanbanCardData) => void;
+  onClose: () => void;
+  onNavigate: (message: string) => Promise<void>;
+  onSave: (
+    doctype: string,
+    name: string,
+    data: Record<string, string>,
+  ) => Promise<void>;
+  onAssign: (
+    doctype: string,
+    name: string,
+    assignTo: string,
+  ) => Promise<void>;
+  onUnassign: (
+    doctype: string,
+    name: string,
+    assignee: string,
+  ) => Promise<void>;
+  onLoadUsers: () => Promise<Array<{ name: string; full_name?: string }>>;
+  onError: (msg: string) => void;
 }) {
+  const t = useT();
+  // La pile : racine = le tableau, niveaux empilés = résultats d'outils (listes, fiches, graphiques).
+  const viewerNav = useViewerNav(app, {
+    title: board.title,
+    kind: "root",
+    origin: "list",
+  }, { fixture });
+  const nav = viewerNav.nav;
+  // Liste du niveau courant (racine → vide ; niveau empilé liste → payload de l'outil).
+  const { list } = viewerNav;
+
+  // Sauts disponibles uniquement quand l'hôte relaie les outils serveur.
+  const { jumpsEnabled } = viewerNav;
+  const boardHints = (board as BoardWithHints)._sendMessageHints;
+  const hasHints = jumpsEnabled && !!boardHints && boardHints.length > 0;
+
   const narrow = layout !== "wide";
   const useFocusMode = narrow && board.columns.length > 1;
 
+  // Compte affiché dans l'en-tête : cartes au niveau racine, count du niveau empilé sinon.
+  const headerCount: number | undefined = nav.isRoot
+    ? board.cards.length
+    : nav.current.kind === "list"
+    ? nav.current.count
+    : undefined;
+
+  /** Envoie une question au modèle (fallback quand l'hôte ne relaie pas les outils). */
+  const { ask } = viewerNav;
+
+  /**
+   * Ferme la modale de détail puis empile le niveau correspondant au hint.
+   * Appelé uniquement quand jumpsEnabled && hasHints.
+   */
+  function handleModalJump(hint: NavHint, cardId: string): void {
+    const jump = jumpFromHint(
+      hint,
+      kanbanNavVars(cardId, board.doctype),
+      t("nav.linked_to", { id: cardId }),
+    );
+    // La popin fait partie de l'état du niveau : on ne la ferme pas, elle
+    // disparaît tant qu'on est plus bas et rouvre à l'identique au retour.
+    if (jump) void nav.jump(jump);
+  }
+
   return (
-    <ViewerShell containerRef={containerRef}>
-      {/* Header */}
-      <header
-        class={cx(
-          "flex shrink-0 items-center justify-between border-b border-line",
-          narrow ? "px-3 py-[11px] gap-[10px]" : "px-4 py-[13px] gap-3",
-        )}
-      >
-        <div class={cx("flex items-center", narrow ? "gap-2" : "gap-3")}>
-          <h2
-            class={cx(
-              "m-0 font-display font-semibold text-ink",
-              narrow ? "text-card-title" : "text-title tracking-title",
-            )}
-          >
-            {board.title}
-          </h2>
-          <CountBadge narrow={narrow}>{board.cards.length}</CountBadge>
-        </div>
-        {!narrow && (
-          <span class="font-mono text-chip text-ink-faint shrink-0">
-            {board.moveToolName}
-          </span>
-        )}
-      </header>
-
-      {/* Inline error */}
-      {inlineError && <StateMessage tone="bad">{inlineError}</StateMessage>}
-
-      {/* Board body */}
-      {useFocusMode
-        ? (
-          <MobileColumnNavWrapper
-            board={board}
-            layout={layout}
-            onMove={onMove}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-            onTitleClick={onTitleClick}
-          />
-        )
-        : (
-          <DragScrollContainer
-            style={{ overflowX: "auto", cursor: "grab" }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  `repeat(${board.columns.length}, minmax(220px, 1fr))`,
-                gap: 1,
-                background: "var(--color-line)",
-              }}
+    <>
+      <div aria-live="polite" style={hiddenLiveRegionStyle()}>
+        {liveMessage}
+      </div>
+      <ViewerShell containerRef={containerRef}>
+        {/* En-tête : titre du niveau courant + count */}
+        <header
+          class={cx(
+            "flex shrink-0 items-center justify-between border-b border-line",
+            narrow ? "px-3 py-[11px] gap-[10px]" : "px-4 py-[13px] gap-3",
+          )}
+        >
+          <div class={cx("flex items-center", narrow ? "gap-2" : "gap-3")}>
+            <h2
+              class={cx(
+                "m-0 font-display font-semibold text-ink",
+                narrow ? "text-card-title" : "text-title tracking-title",
+              )}
             >
-              {board.columns.map((column) => (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  board={board}
-                  cards={board.cards.filter((card) =>
-                    card.columnId === column.id
-                  )}
-                  activeDropColumn={activeDropColumn}
-                  onMove={onMove}
-                  onDropCard={onDropCard}
-                  onDragStart={onDragStart}
-                  onDragEnd={onDragEnd}
-                  onDragOverColumn={onDragOverColumn}
-                  onTitleClick={onTitleClick}
-                />
-              ))}
-            </div>
-          </DragScrollContainer>
-        )}
+              {nav.isRoot ? board.title : nav.current.title}
+            </h2>
+            {headerCount !== undefined && (
+              <CountBadge narrow={narrow}>{headerCount}</CountBadge>
+            )}
+          </div>
+          {!narrow && nav.isRoot && (
+            <span class="font-mono text-chip text-ink-faint shrink-0">
+              {board.moveToolName}
+            </span>
+          )}
+        </header>
 
-      {/* Footer */}
-      <footer class="flex shrink-0 items-center justify-end border-t border-line px-4 py-[9px]">
-        <CasysCredit compact={narrow} />
-      </footer>
-    </ViewerShell>
+        {/* Fil de navigation — invisible au niveau 1, visible dès le premier saut */}
+        <PathBar
+          layout={layout}
+          stack={nav.stack}
+          onBack={nav.pop}
+          onJump={nav.popTo}
+          loading={nav.current.loading}
+        />
+
+        {/* Corps du niveau courant : niveau 1 → tableau kanban ; autres → liste/fiche/barres */}
+        <LevelBody
+          level={nav.current}
+          app={app}
+          list={list}
+          layout={layout}
+          fixture={fixture}
+          onJump={jumpsEnabled ? nav.jump : undefined}
+          onAsk={ask}
+          onError={(msg) => {
+            if (msg !== null) onError(msg);
+          }}
+          onMutated={nav.markStale}
+          onRefresh={() => void nav.refreshLevel()}
+        >
+          {/* Contenu racine : le tableau kanban lui-même */}
+          {inlineError && <StateMessage tone="bad">{inlineError}</StateMessage>}
+          {useFocusMode
+            ? (
+              <MobileColumnNavWrapper
+                board={board}
+                layout={layout}
+                onMove={onMove}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onTitleClick={onTitleClick}
+              />
+            )
+            : (
+              <DragScrollContainer
+                style={{ overflowX: "auto", cursor: "grab" }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      `repeat(${board.columns.length}, minmax(220px, 1fr))`,
+                    gap: 1,
+                    background: "var(--color-line)",
+                  }}
+                >
+                  {board.columns.map((column) => (
+                    <KanbanColumn
+                      key={column.id}
+                      column={column}
+                      board={board}
+                      cards={board.cards.filter((card) =>
+                        card.columnId === column.id
+                      )}
+                      activeDropColumn={activeDropColumn}
+                      onMove={onMove}
+                      onDropCard={onDropCard}
+                      onDragStart={onDragStart}
+                      onDragEnd={onDragEnd}
+                      onDragOverColumn={onDragOverColumn}
+                      onTitleClick={onTitleClick}
+                    />
+                  ))}
+                </div>
+              </DragScrollContainer>
+            )}
+        </LevelBody>
+
+        {/* Pied de page — depuis un niveau, le chemin court vers la carte ouverte */}
+        <footer class="flex shrink-0 items-center justify-end gap-3 border-t border-line px-4 py-[9px]">
+          {!nav.isRoot && detail.selectedCardId && (
+            <button
+              type="button"
+              onClick={() => nav.popTo(0)}
+              class="mr-auto font-mono text-[11px] text-ink-muted transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              {t("kanban.nav.edit_card", { id: detail.selectedCardId })}
+            </button>
+          )}
+          <CasysCredit compact={narrow} />
+        </footer>
+      </ViewerShell>
+
+      {/* Panneau de détail de la carte sélectionnée */}
+      {detail.selectedCardId && nav.isRoot && (
+        <CardDetailModal
+          detail={detail}
+          board={board}
+          onClose={onClose}
+          onMove={onMove}
+          onSave={onSave}
+          onAssign={onAssign}
+          onUnassign={onUnassign}
+          onLoadUsers={onLoadUsers}
+          hints={hasHints ? boardHints : undefined}
+          onJump={hasHints ? handleModalJump : undefined}
+          onNavigate={!fixture ? onNavigate : undefined}
+        />
+      )}
+    </>
   );
 }
 
@@ -1601,39 +1748,28 @@ export function KanbanViewer() {
   }
 
   return (
-    <>
-      <div aria-live="polite" style={hiddenLiveRegionStyle()}>
-        {liveMessage}
-      </div>
-      <BoardView
-        board={state.board}
-        containerRef={containerRef}
-        layout={layout}
-        inlineError={errorPresentation.inlineError}
-        activeDropColumn={activeDropColumn}
-        fixture={fixture}
-        refreshing={refreshing}
-        onRefresh={() => void requestBoardRefresh({ ignoreInterval: true })}
-        onMove={requestMove}
-        onDropCard={handleDropCard}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragOverColumn={handleDragOverColumn}
-        onTitleClick={handleCardTitleClick}
-      />
-      {state.detail.selectedCardId && state.board && (
-        <CardDetailModal
-          detail={state.detail}
-          board={state.board}
-          onClose={closeDetail}
-          onMove={requestMove}
-          onSave={handleSaveDetail}
-          onAssign={handleAssignDetail}
-          onUnassign={handleUnassignDetail}
-          onLoadUsers={handleLoadAssignableUsers}
-          onNavigate={fixture ? undefined : handleNavigate}
-        />
-      )}
-    </>
+    <KanbanBoardWithNav
+      board={state.board}
+      detail={state.detail}
+      fixture={fixture}
+      containerRef={containerRef}
+      layout={layout}
+      liveMessage={liveMessage}
+      inlineError={errorPresentation.inlineError}
+      activeDropColumn={activeDropColumn}
+      onMove={requestMove}
+      onDropCard={handleDropCard}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOverColumn={handleDragOverColumn}
+      onTitleClick={handleCardTitleClick}
+      onClose={closeDetail}
+      onNavigate={handleNavigate}
+      onSave={handleSaveDetail}
+      onAssign={handleAssignDetail}
+      onUnassign={handleUnassignDetail}
+      onLoadUsers={handleLoadAssignableUsers}
+      onError={setError}
+    />
   );
 }

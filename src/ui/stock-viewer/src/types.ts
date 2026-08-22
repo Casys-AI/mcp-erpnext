@@ -1,4 +1,5 @@
 import type { UiRefreshRequestData } from "~/shared/refresh";
+import type { NavHint } from "~/shared/jumps";
 
 export interface StockEntry {
   item_code: string;
@@ -15,6 +16,8 @@ export interface StockData {
   data: StockEntry[];
   currency?: string;
   refreshRequest?: UiRefreshRequestData;
+  /** Hints de navigation attachés par le serveur (STOCK_HINTS). */
+  _sendMessageHints?: NavHint[];
 }
 
 export interface StockItemDetail {

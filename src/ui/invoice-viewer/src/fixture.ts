@@ -38,6 +38,57 @@ export const INVOICE_FIXTURE: InvoicePayload = {
     toolName: "erpnext_sales_invoice_get",
     arguments: { name: "ACC-SINV-2026-00042" },
   },
+  /**
+   * Copie de INVOICE_HINTS["Sales Invoice"] (src/tools/ui-refresh.ts).
+   * Sert à valider la mise en page de la PathBar et des boutons › en mode fixture.
+   * En mode fixture, jumpsEnabled = false donc les sauts sont désactivés —
+   * les boutons restent disabled et n'affichent pas le chevron.
+   */
+  _sendMessageHints: [
+    {
+      key: "payments",
+      label: "Payments",
+      message: "Show payment entries for invoice {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Payment Entry",
+        fields: [
+          "name",
+          "posting_date",
+          "paid_amount",
+          "mode_of_payment",
+          "docstatus",
+          {
+            key: "item",
+            label: "Item",
+            message: "Show item {item}",
+            tool: "erpnext_item_get",
+            args: { name: "{item}" },
+            kind: "record",
+          },
+          {
+            key: "stock",
+            label: "Stock",
+            message: "Show stock balance for item {item}",
+            tool: "erpnext_stock_balance",
+            args: { item_code: "{item}", limit: 50 },
+            kind: "list",
+          },
+        ],
+        filters: [["Payment Entry Reference", "reference_name", "=", "{id}"]],
+        limit: 20,
+      },
+      kind: "list",
+    },
+    {
+      key: "customer",
+      label: "Customer",
+      message: "Show customer {party}",
+      tool: "erpnext_customer_get",
+      args: { name: "{party}" },
+      kind: "record",
+    },
+  ],
 };
 
 export const ITEM_FIXTURES: Record<string, {

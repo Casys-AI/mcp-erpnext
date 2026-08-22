@@ -37,6 +37,37 @@ export const FUNNEL_FIXTURE: FunnelData = {
       _drillDown: "Show all sales orders",
     },
   ],
+  /**
+   * Copie de FUNNEL_STAGE_JUMPS (src/tools/ui-refresh.ts).
+   * Permet de voir les sauts en mode fixture, même si les clics sont désactivés
+   * (jumpsEnabled = !fixture && canJump → false en fixture).
+   */
+  _stageJumps: {
+    "Leads": {
+      label: "Leads",
+      tool: "erpnext_lead_list",
+      args: { limit: 20 },
+      kind: "list",
+    },
+    "Opportunities": {
+      label: "Opportunities",
+      tool: "erpnext_opportunity_list",
+      args: { limit: 20 },
+      kind: "list",
+    },
+    "Quotations": {
+      label: "Quotations",
+      tool: "erpnext_quotation_list",
+      args: { limit: 20 },
+      kind: "list",
+    },
+    "Orders": {
+      label: "Sales orders",
+      tool: "erpnext_sales_order_list",
+      args: { limit: 20 },
+      kind: "list",
+    },
+  },
 };
 
 export function isFixtureMode(): boolean {

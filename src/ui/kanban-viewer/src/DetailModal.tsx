@@ -26,6 +26,7 @@ import { getAvailableTargets } from "./KanbanViewer";
 import { LocalActionButton } from "./LocalActionButton";
 import { useT } from "~/shared/i18n-hook";
 import type { TFunction } from "~/shared/i18n-hook";
+import { hintLabel, type NavHint } from "~/shared/jumps";
 
 const DETAIL_SKIP_FIELDS = new Set([
   "doctype",
@@ -629,6 +630,8 @@ export function CardDetailModal({
   onUnassign,
   onLoadUsers,
   onNavigate,
+  hints,
+  onJump,
 }: {
   detail: CardDetailState;
   board: KanbanBoardData;
@@ -651,6 +654,16 @@ export function CardDetailModal({
   ) => Promise<void>;
   onLoadUsers?: () => Promise<AssignableUser[]>;
   onNavigate?: (message: string) => void;
+  /**
+   * Hints de navigation du tableau (issus de `_sendMessageHints`).
+   * Présents uniquement quand l'hôte relaie les outils serveur.
+   */
+  hints?: NavHint[];
+  /**
+   * Déclenche un saut de navigation dans la pile — disponible uniquement quand
+   * `hints` est fourni. La popin reste dans l'état du niveau ; le saut empile un niveau plein cadre.
+   */
+  onJump?: (hint: NavHint, cardId: string) => void;
 }) {
   const t = useT();
   const [editedFields, setEditedFields] = useState<Record<string, string>>({});
@@ -741,8 +754,20 @@ export function CardDetailModal({
    * - Rangée 2 : Déplacer vers + boutons colonnes + liens de navigation
    * SheetActions gère le filet via first:border-t-0.
    */
+  // Quand onJump est fourni (outils relayés) ET que le tableau a des hints,
+  // les boutons de navigation deviennent des sauts dans la pile.
+  // Sinon, on conserve les boutons sendMessage existants (fallback).
+  const hasJumpNav = !!onJump && (hints?.length ?? 0) > 0 &&
+    !!detail.selectedCardId;
+  // Les boutons d'origine restent : un saut s'ajoute, il ne remplace pas
+  // ce qui n'a pas d'équivalent dans les hints du serveur.
+  const hasSendMessageNav = !!onNavigate && !!detail.selectedCardId;
+  // Un bouton d'origine s'efface quand un saut porte la même clé : pas de doublon.
+  const jumpKeys = new Set(
+    (hasJumpNav ? hints! : []).map((hint) => hint.key).filter(Boolean),
+  );
   const hasSecondaryRow = (!!card && availableTargets.length > 0) ||
-    (!!onNavigate && !!detail.selectedCardId);
+    hasJumpNav || hasSendMessageNav;
 
   const footer = (
     <>
@@ -805,49 +830,65 @@ export function CardDetailModal({
                 {target.label}
               </Button>
             ))}
-          {onNavigate && detail.selectedCardId && (
+          {/* « Aller à » : les sauts, puis les phrases — sur leur propre ligne, distincts du déplacement */}
+          {(hasJumpNav || hasSendMessageNav) && (
+            <span class="mt-1 basis-full font-mono text-[10px] uppercase tracking-[0.09em] text-ink-faint">
+              {t("nav.goto")}
+            </span>
+          )}
+          {hasJumpNav && hints!.map((hint) => (
+            <LocalActionButton
+              key={hint.key ?? hint.label}
+              label={`${hintLabel(hint)} ›`}
+              variant="info"
+              onClick={() => onJump!(hint, detail.selectedCardId!)}
+            />
+          ))}
+          {/* Boutons sendMessage — comportement d'origine, sans outils */}
+          {hasSendMessageNav && (
             <>
               <LocalActionButton
                 label={t("kanban.modal.nav.view_list")}
                 variant="info"
                 onClick={() =>
-                  onNavigate(
+                  onNavigate!(
                     t("kanban.nav.view_list.message", {
                       doctype: board.doctype,
                       id: detail.selectedCardId,
                     }),
                   )}
               />
-              {board.doctype === "Task" && (
+              {board.doctype === "Task" && !jumpKeys.has("timesheets") && (
                 <LocalActionButton
                   label={t("kanban.modal.nav.timesheets")}
                   variant="info"
                   onClick={() =>
-                    onNavigate(
+                    onNavigate!(
                       t("kanban.nav.timesheets.message", {
                         id: detail.selectedCardId,
                       }),
                     )}
                 />
               )}
-              {board.doctype === "Opportunity" && (
-                <LocalActionButton
-                  label={t("kanban.modal.nav.quotations")}
-                  variant="info"
-                  onClick={() =>
-                    onNavigate(
-                      t("kanban.nav.quotations.message", {
-                        id: detail.selectedCardId,
-                      }),
-                    )}
-                />
-              )}
-              {board.doctype === "Issue" && (
+              {board.doctype === "Opportunity" && !jumpKeys.has("quotations") &&
+                (
+                  <LocalActionButton
+                    label={t("kanban.modal.nav.quotations")}
+                    variant="info"
+                    onClick={() =>
+                      onNavigate!(
+                        t("kanban.nav.quotations.message", {
+                          id: detail.selectedCardId,
+                        }),
+                      )}
+                  />
+                )}
+              {board.doctype === "Issue" && !jumpKeys.has("tasks") && (
                 <LocalActionButton
                   label={t("kanban.modal.nav.related_tasks")}
                   variant="info"
                   onClick={() =>
-                    onNavigate(
+                    onNavigate!(
                       t("kanban.nav.tasks.message", {
                         id: detail.selectedCardId,
                       }),

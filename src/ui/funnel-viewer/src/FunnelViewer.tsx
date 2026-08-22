@@ -3,6 +3,11 @@
  * Funnel viewer — Direction B v2.
  * Horizontal bar chart replacing the old trapezoid layout.
  * Handshake stays on ext-apps (refresh / callServerTool / sendMessage).
+ *
+ * Navigation : quand l'hôte relaie les outils serveur (`canJump` → true),
+ * un clic sur une étape qui a un `_stageJumps[label]` empile un niveau dans
+ * la vue (DoclistBody) plutôt que d'envoyer un message au chat.
+ * Sans serverTools, le comportement reste strictement identique à avant.
  */
 import { useEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
@@ -27,6 +32,11 @@ import {
   sharedLabel,
   shareSelection,
 } from "~/shared/drill-down";
+import { useViewerNav } from "~/shared/useViewerNav";
+import { PathBar } from "~/shared/PathBar";
+import { canJump, jumpFromHint } from "~/shared/jumps";
+import { LevelBody } from "~/shared/levels/LevelBody";
+import { stageIsJumpable } from "./funnel-nav.ts";
 
 const app = new App({ name: "Funnel Viewer", version: "1.0.0" });
 const FUNNEL_REFRESH_INTERVAL_MS = 15_000;
@@ -148,9 +158,11 @@ function WideConnector({ rate }: { rate: number }) {
 /* ── Wide layout ─────────────────────────────────────────────────────── */
 
 function WideFunnelChart(
-  { stages, canDrill, onDrillDown }: {
+  { stages, canDrill, hasNavJump, onDrillDown }: {
     stages: FunnelStage[];
     canDrill: boolean;
+    /** Indique si cette étape a un saut serveur disponible. */
+    hasNavJump: (label: string) => boolean;
     onDrillDown: (stage: FunnelStage) => Promise<DrillDownChannel>;
   },
 ) {
@@ -187,33 +199,37 @@ function WideFunnelChart(
           const radius = getBarRadius(idx, stages.length);
           const nextStage = stages[idx + 1];
           const hasConnector = nextStage?.conversionRate != null;
+          const jumpable = hasNavJump(stage.label);
+          const interactive = jumpable || canDrill;
 
           return (
             <>
               <div
                 key={`stage-${idx}`}
-                role={canDrill ? "button" : undefined}
-                tabIndex={canDrill ? 0 : undefined}
-                class={canDrill
-                  ? "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-[3px]"
-                  : undefined}
+                role={interactive ? "button" : undefined}
+                tabIndex={interactive ? 0 : undefined}
+                class={cx(
+                  "group",
+                  interactive &&
+                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-[3px]",
+                )}
                 style={{
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "flex-end",
                   flex: 1,
                   gap: 8,
-                  cursor: canDrill ? "pointer" : "default",
+                  cursor: interactive ? "pointer" : "default",
                 }}
-                onClick={canDrill ? () => onDrillDown(stage) : undefined}
-                onKeyDown={canDrill
+                onClick={interactive ? () => onDrillDown(stage) : undefined}
+                onKeyDown={interactive
                   ? (e: KeyboardEvent) => {
                     if (e.key !== "Enter" && e.key !== " ") return;
                     e.preventDefault();
                     onDrillDown(stage);
                   }
                   : undefined}
-                title={canDrill
+                title={interactive
                   ? t("funnel.stage.click_to_see", { label: stage.label })
                   : undefined}
               >
@@ -225,9 +241,21 @@ function WideFunnelChart(
                     color: "var(--color-ink)",
                     fontVariantNumeric: "tabular-nums",
                     lineHeight: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
                   }}
                 >
                   {stage.count}
+                  {/* Chevron de saut — visible uniquement au survol */}
+                  {jumpable && (
+                    <span
+                      class="font-mono text-[15px] text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                      aria-hidden="true"
+                    >
+                      ›
+                    </span>
+                  )}
                 </span>
                 <div
                   style={{
@@ -332,9 +360,11 @@ function SentArc() {
 }
 
 function MobileFunnelChart(
-  { stages, canDrill, onDrillDown, touch }: {
+  { stages, canDrill, hasNavJump, onDrillDown, touch }: {
     stages: FunnelStage[];
     canDrill: boolean;
+    /** Indique si cette étape a un saut serveur disponible. */
+    hasNavJump: (label: string) => boolean;
     onDrillDown: (stage: FunnelStage) => Promise<DrillDownChannel>;
     /** true = pointeur grossier → cibles tactiles min-height:38px */
     touch: boolean;
@@ -355,7 +385,9 @@ function MobileFunnelChart(
   }, [stages]);
 
   async function handleRowClick(stage: FunnelStage, idx: number) {
-    if (!canDrill) return;
+    const jumpable = hasNavJump(stage.label);
+    const interactive = jumpable || canDrill;
+    if (!interactive) return;
     setSelectedIdx(idx);
     const label = sharedLabel(await onDrillDown(stage));
     if (!label) return;
@@ -384,16 +416,19 @@ function MobileFunnelChart(
           ? Math.round((stage.count / firstCount) * 100)
           : 0;
 
+        const jumpable = hasNavJump(stage.label);
+        const interactive = jumpable || canDrill;
+
         return (
           <>
             <div
               key={`row-${idx}`}
-              role={canDrill ? "button" : undefined}
-              tabIndex={canDrill ? 0 : undefined}
+              role={interactive ? "button" : undefined}
+              tabIndex={interactive ? 0 : undefined}
               class={cx(
-                "rounded-[5px]",
-                canDrill && "hover:bg-row-hover cursor-pointer",
-                canDrill &&
+                "rounded-[5px] group",
+                interactive && "hover:bg-row-hover cursor-pointer",
+                interactive &&
                   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                 isSelected &&
                   "bg-sunken outline outline-1 outline-accent-edge outline-offset-0",
@@ -418,9 +453,21 @@ function MobileFunnelChart(
                   fontSize: 10.5,
                   textTransform: "uppercase",
                   color: "var(--color-ink-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
                 }}
               >
                 {label}
+                {/* Chevron de saut — visible uniquement au survol de la ligne */}
+                {jumpable && (
+                  <span
+                    class="text-[11px] text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                    aria-hidden="true"
+                  >
+                    ›
+                  </span>
+                )}
               </span>
               {/* Barre avec track de fond — hauteur 26px, overflow hidden */}
               <div class="h-[26px] w-full rounded-[3px] bg-sunken overflow-hidden">
@@ -500,21 +547,46 @@ function FunnelContent(
     data,
     error,
     refreshing: _refreshing,
-    fixture: _fixture,
+    fixture,
     onRefresh: _onRefresh,
+    onError,
   }: {
     data: FunnelData;
     error: string | null;
     refreshing: boolean;
     onRefresh: () => void;
     fixture: boolean;
+    onError: (msg: string | null) => void;
   },
 ) {
   const t = useT();
   const { ref: containerRef, layout } = useViewerLayout<HTMLDivElement>();
+
+  // ── Navigation (pile de niveaux) ──────────────────────────────────────
+  const viewerNav = useViewerNav(app, {
+    title: data.title,
+    kind: "root",
+    origin: "chart",
+  }, { fixture });
+  const nav = viewerNav.nav;
+  const { current: navCurrent, isRoot } = nav;
+
+  // jumpsEnabled = false en fixture (pas d'outils) ou si l'hôte ne relaie pas.
+  const { jumpsEnabled } = viewerNav;
+
+  // list doit être déclaré inconditionnellement avant tout return (règle hooks).
+  const { list } = viewerNav;
+
+  const { ask } = viewerNav;
+
   const stages = data.stages ?? [];
   const canDrill = drillDownChannel(app.getHostCapabilities()) !== "none";
 
+  /** Indique si une étape a un saut serveur disponible. */
+  const hasNavJump = (label: string): boolean =>
+    stageIsJumpable(data._stageJumps, label, jumpsEnabled);
+
+  /** Fallback : sendMessage / contexte (comportement d'avant). */
   function handleDrillDown(stage: FunnelStage): Promise<DrillDownChannel> {
     const msg = stage._drillDown ?? getStageDrillDown(stage.label, t);
     if (!msg) return Promise.resolve("none");
@@ -524,6 +596,28 @@ function FunnelContent(
       value: String(stage.count),
       suggested: msg,
     });
+  }
+
+  /**
+   * Dispatch : saut de pile quand possible, drill-down sinon.
+   *
+   * `jumpFromHint` retourne null si le hint n'a pas de `tool` — on ne sauterait
+   * jamais dans ce cas et on retomberait sur handleDrillDown.
+   */
+  function handleStageClick(stage: FunnelStage): Promise<DrillDownChannel> {
+    const navJumpHint = data._stageJumps?.[stage.label];
+    if (jumpsEnabled && navJumpHint) {
+      const jump = jumpFromHint(
+        navJumpHint,
+        {},
+        t("nav.linked_to", { id: stage.label }),
+      );
+      if (jump) {
+        void nav.jump(jump);
+        return Promise.resolve("none");
+      }
+    }
+    return handleDrillDown(stage);
   }
 
   if (stages.length === 0) {
@@ -565,7 +659,7 @@ function FunnelContent(
         </div>
       )}
 
-      {/* Header */}
+      {/* Header — adapte le titre et le badge selon le niveau de navigation */}
       <header
         style={{
           display: "flex",
@@ -576,66 +670,121 @@ function FunnelContent(
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h2
-            style={{
-              margin: 0,
-              fontFamily: "var(--font-display)",
-              fontSize: titleSize,
-              fontWeight: 600,
-              color: "var(--color-ink)",
-              lineHeight: 1.2,
-            }}
-          >
-            {data.title}
-          </h2>
-          {data.subtitle && (
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 10.5,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "var(--color-ink-faint)",
-              }}
-            >
-              {data.subtitle}
-            </span>
+        {isRoot
+          ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-display)",
+                    fontSize: titleSize,
+                    fontWeight: 600,
+                    color: "var(--color-ink)",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {data.title}
+                </h2>
+                {data.subtitle && (
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10.5,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "var(--color-ink-faint)",
+                    }}
+                  >
+                    {data.subtitle}
+                  </span>
+                )}
+              </div>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: isWide ? 11.5 : 10.5,
+                  padding: isWide ? "3px 8px" : "2px 7px",
+                  borderRadius: 3,
+                  background: badgeBg,
+                  color: badgeColor,
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                }}
+              >
+                {badgeText}
+              </span>
+            </>
+          )
+          : (
+            /* Niveau de navigation empilé : titre du niveau + compte si liste */
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <h2
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-display)",
+                  fontSize: titleSize,
+                  fontWeight: 600,
+                  color: "var(--color-ink)",
+                  lineHeight: 1.2,
+                }}
+              >
+                {navCurrent.title}
+              </h2>
+              {navCurrent.count !== undefined && navCurrent.kind === "list" && (
+                <span class="rounded-[3px] bg-count px-[7px] py-0.5 font-mono text-[11px] text-ink-muted">
+                  {navCurrent.count}
+                </span>
+              )}
+            </div>
           )}
-        </div>
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: isWide ? 11.5 : 10.5,
-            padding: isWide ? "3px 8px" : "2px 7px",
-            borderRadius: 3,
-            background: badgeBg,
-            color: badgeColor,
-            whiteSpace: "nowrap",
-            flexShrink: 0,
-          }}
-        >
-          {badgeText}
-        </span>
       </header>
 
-      {/* Chart body */}
-      {isWide
-        ? (
-          <WideFunnelChart
-            stages={stages}
-            canDrill={canDrill}
-            onDrillDown={handleDrillDown}
-          />
-        )
-        : (
-          <MobileFunnelChart
-            stages={stages}
-            canDrill={canDrill}
-            onDrillDown={handleDrillDown}
-            touch={isMobile}
-          />
-        )}
+      {/* PathBar — visible uniquement en profondeur (renvoie null au niveau 1) */}
+      <PathBar
+        layout={layout}
+        stack={nav.stack}
+        onBack={nav.pop}
+        onJump={nav.popTo}
+        loading={navCurrent.loading}
+      />
+
+      {
+        /* Corps : LevelBody rend les enfants au niveau racine, et les niveaux
+          empilés (DoclistBody, RecordLevel, BarsLevel) dans les autres cas. */
+      }
+      <LevelBody
+        level={navCurrent}
+        app={app}
+        list={list}
+        layout={layout}
+        fixture={fixture}
+        onJump={jumpsEnabled ? nav.jump : undefined}
+        onAsk={ask}
+        onError={onError}
+        onMutated={nav.markStale}
+        onRefresh={() => void nav.refreshLevel()}
+      >
+        {/* Contenu racine — funnel chart */}
+        {isWide
+          ? (
+            <WideFunnelChart
+              stages={stages}
+              canDrill={canDrill}
+              hasNavJump={hasNavJump}
+              onDrillDown={handleStageClick}
+            />
+          )
+          : (
+            <MobileFunnelChart
+              stages={stages}
+              canDrill={canDrill}
+              hasNavJump={hasNavJump}
+              onDrillDown={handleStageClick}
+              touch={isMobile}
+            />
+          )}
+      </LevelBody>
 
       {/* Footer */}
       <footer
@@ -809,6 +958,7 @@ export function FunnelViewer() {
       refreshing={refreshing}
       fixture={fixture}
       onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+      onError={setError}
     />
   );
 }

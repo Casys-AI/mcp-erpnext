@@ -13,6 +13,22 @@ export const KPI_FIXTURE: KpiData = {
   sparkline: [12_400, 13_100, 12_800, 14_200, 15_600, 18_400, 19_100, 21_653],
   _drillDown: "Show unpaid invoices for this period",
   _trendDrillDown: "Show revenue trend for the last 8 weeks",
+  // Littéral de KPI_JUMPS["erpnext_kpi_revenue"]({ from: "2026-08-01", to: "2026-08-31" })
+  // En mode fixture les sauts sont désactivés (jumpsEnabled=false).
+  _jumps: {
+    number: {
+      label: "Sales orders this month",
+      tool: "erpnext_sales_order_list",
+      args: { date_from: "2026-08-01", date_to: "2026-08-31", limit: 20 },
+      kind: "list" as const,
+    },
+    trend: {
+      label: "Revenue trend",
+      tool: "erpnext_revenue_trend",
+      args: { months: 12 },
+      kind: "chart" as const,
+    },
+  },
 };
 
 export function isFixtureMode(): boolean {

@@ -14,10 +14,14 @@ export interface RowAction {
 /** Navigation hint for sendMessage cross-viewer links */
 /** Hint de navigation attaché par le serveur (`src/tools/ui-refresh.ts`). */
 export interface SendMessageHint {
-  /** Clé de libellé côté vue (`doclist.hint.<key>`), `label` en repli. */
   key?: string;
   label: string;
   message: string;
+  /** Quand l'hôte relaie les outils : l'outil et ses arguments (avec `{id}` / `{doctype}`). */
+  tool?: string;
+  args?: Record<string, unknown>;
+  /** La forme du niveau qu'ouvre le saut — liste par défaut. */
+  kind?: "list" | "record" | "chart";
 }
 
 export interface DoclistData {

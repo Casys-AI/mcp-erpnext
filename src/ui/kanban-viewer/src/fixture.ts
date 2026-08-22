@@ -1,7 +1,25 @@
 import type { KanbanBoardData } from "../../shared/kanban/types.ts";
 
+/**
+ * Forme étendue du tableau en fixture : même que KanbanBoardData mais avec
+ * `_sendMessageHints` pour tester l'affichage des sauts de navigation.
+ * Le champ est injecté par withUiRefreshRequest en production.
+ */
+type KanbanFixtureHint = {
+  key?: string;
+  label: string;
+  message?: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  kind?: "list" | "record" | "chart";
+};
+
+type KanbanFixture = KanbanBoardData & {
+  _sendMessageHints?: KanbanFixtureHint[];
+};
+
 /** Mock payload so the bundled HTML can be opened without a host. */
-export const KANBAN_FIXTURE: KanbanBoardData = {
+export const KANBAN_FIXTURE: KanbanFixture = {
   boardId: "task-board",
   title: "Task Board",
   doctype: "Task",
@@ -135,6 +153,25 @@ export const KANBAN_FIXTURE: KanbanBoardData = {
     hasMore: false,
     total: 5,
   },
+  /**
+   * Copie de DOCTYPE_SEND_MESSAGE_HINTS["Task"] — injectée par withUiRefreshRequest
+   * en production, simulée ici pour que les sauts de navigation s'affichent
+   * en mode fixture (les outils sont désactivés, les boutons ne font rien).
+   */
+  _sendMessageHints: [
+    {
+      key: "timesheets",
+      label: "Timesheets",
+      message: "Show timesheets for task {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Timesheet",
+        fields: ["name", "employee", "start_date", "total_hours", "status"],
+        filters: [["Timesheet Detail", "task", "=", "{id}"]],
+        limit: 20,
+      },
+    },
+  ],
 };
 
 export const KANBAN_FIXTURE_DETAILS: Record<string, Record<string, unknown>> = {

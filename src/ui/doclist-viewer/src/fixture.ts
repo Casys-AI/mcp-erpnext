@@ -1,4 +1,4 @@
-import type { DoclistData } from "./types.ts";
+import type { DoclistData } from "~/shared/doclist/types";
 
 const STATUSES = [
   { status: "Draft", docstatus: 0 },

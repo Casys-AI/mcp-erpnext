@@ -1,4 +1,5 @@
 import type { UiRefreshRequestData } from "~/shared/refresh";
+import type { NavHint } from "~/shared/jumps";
 
 export interface KpiData {
   label: string;
@@ -18,4 +19,6 @@ export interface KpiData {
   refreshRequest?: UiRefreshRequestData;
   _drillDown?: string;
   _trendDrillDown?: string;
+  /** Sauts de pile : le nombre ouvre une liste, la courbe un graphique. */
+  _jumps?: { number?: NavHint; trend?: NavHint };
 }

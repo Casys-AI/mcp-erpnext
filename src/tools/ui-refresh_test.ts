@@ -1,6 +1,15 @@
 import { assertEquals, assertNotStrictEquals } from "@std/assert";
 import { allTools } from "./mod.ts";
 import {
+  chartPointJumps,
+  FUNNEL_STAGE_JUMPS,
+  INVOICE_HINTS,
+  KPI_JUMPS,
+  monthRange,
+  type NavJump,
+  STOCK_HINTS,
+} from "./ui-refresh.ts";
+import {
   DOCTYPE_SEND_MESSAGE_HINTS,
   withUiRefreshRequest,
 } from "./ui-refresh.ts";
@@ -163,7 +172,7 @@ Deno.test("ui refresh - injects _drillDown and _trendDrillDown for KPI tools", (
     {},
   ) as Record<string, unknown>;
 
-  assertEquals(result._drillDown, "Show all sales invoices for this month");
+  assertEquals(result._drillDown, "Show all sales orders for this month");
   assertEquals(
     result._trendDrillDown,
     "Show revenue trend chart for the last 12 months",
@@ -269,13 +278,25 @@ Deno.test("ui refresh - all major doctypes get correct _rowAction", () => {
 
 Deno.test("ui refresh - every navigation hint targets a real tool with valid args", () => {
   const byName = new Map(allTools.map((tool) => [tool.name, tool]));
-  for (const [doctype, hints] of Object.entries(DOCTYPE_SEND_MESSAGE_HINTS)) {
+  const allHints = {
+    ...DOCTYPE_SEND_MESSAGE_HINTS,
+    ...Object.fromEntries(
+      Object.entries(INVOICE_HINTS).map(([k, v]) => [`invoice:${k}`, v]),
+    ),
+    "stock:Bin": STOCK_HINTS,
+  };
+  for (const [doctype, hints] of Object.entries(allHints)) {
     for (const hint of hints) {
       assertEquals(typeof hint.key, "string", `${doctype}/${hint.label}: key`);
       if (!hint.tool) continue;
       const tool = byName.get(hint.tool);
       if (!tool) {
         throw new Error(`${doctype}/${hint.label}: unknown tool ${hint.tool}`);
+      }
+      if (tool.annotations?.readOnlyHint !== true) {
+        throw new Error(
+          `${doctype}/${hint.label}: ${hint.tool} is not read-only — a jump must never write`,
+        );
       }
       const schema = tool.inputSchema as {
         properties?: Record<string, unknown>;
@@ -303,4 +324,297 @@ Deno.test("ui refresh - every navigation hint targets a real tool with valid arg
       }
     }
   }
+});
+
+/** Chaque saut vise un outil réel, avec des arguments que son schéma accepte. */
+function assertJumpMatchesTool(jump: NavJump, where: string) {
+  const tool = allTools.find((t) => t.name === jump.tool);
+  if (!tool) throw new Error(`${where}: unknown tool ${jump.tool}`);
+  if (tool.annotations?.readOnlyHint !== true) {
+    throw new Error(
+      `${where}: ${jump.tool} is not read-only — a jump must never write`,
+    );
+  }
+  const schema = tool.inputSchema as {
+    properties?: Record<string, { enum?: unknown[] }>;
+    required?: string[];
+  };
+  const props = schema.properties ?? {};
+  for (const [key, value] of Object.entries(jump.args)) {
+    if (!(key in props)) {
+      throw new Error(`${where}: ${jump.tool} has no arg ${key}`);
+    }
+    const allowed = props[key].enum;
+    if (allowed && !allowed.includes(value)) {
+      throw new Error(`${where}: ${jump.tool}.${key}=${value} not in enum`);
+    }
+  }
+  for (const key of schema.required ?? []) {
+    if (!(key in jump.args)) {
+      throw new Error(`${where}: ${jump.tool} requires ${key}`);
+    }
+  }
+  assertEquals(["list", "record", "chart"].includes(jump.kind), true, where);
+}
+
+Deno.test("ui refresh - every KPI and funnel jump targets a real tool with valid args", () => {
+  const range = monthRange(new Date(2026, 7, 22, 10));
+  for (const [tool, jumps] of Object.entries(KPI_JUMPS)) {
+    const { number, trend } = jumps(range);
+    assertJumpMatchesTool(number, `${tool}/number`);
+    assertJumpMatchesTool(trend, `${tool}/trend`);
+  }
+  for (const [stage, jump] of Object.entries(FUNNEL_STAGE_JUMPS)) {
+    assertJumpMatchesTool(jump, `funnel/${stage}`);
+  }
+});
+
+Deno.test("ui refresh - monthRange covers the civil month of `now`, local clock", () => {
+  assertEquals(monthRange(new Date(2026, 1, 10, 12)), {
+    from: "2026-02-01",
+    to: "2026-02-28",
+    today: "2026-02-10",
+  });
+  assertEquals(monthRange(new Date(2026, 7, 31, 23, 59)), {
+    from: "2026-08-01",
+    to: "2026-08-31",
+    today: "2026-08-31",
+  });
+});
+
+Deno.test("ui refresh - injects _jumps for KPI tools with the month of `now`", () => {
+  const now = new Date(2026, 7, 22, 10);
+  const result = withUiRefreshRequest(
+    { value: 1, _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } } },
+    "erpnext_kpi_revenue",
+    {},
+    now,
+  ) as { _jumps?: { number: NavJump; trend: NavJump } };
+  assertEquals(result._jumps?.number.tool, "erpnext_doc_list");
+  assertEquals(result._jumps?.number.args.filters, [
+    ["transaction_date", ">=", "2026-08-01"],
+    ["transaction_date", "<=", "2026-08-31"],
+    ["docstatus", "<", 2],
+  ]);
+  assertEquals(result._jumps?.trend.kind, "chart");
+});
+
+Deno.test("ui refresh - injects _stageJumps for the funnel and nothing for charts", () => {
+  const funnel = withUiRefreshRequest(
+    {
+      stages: [],
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/funnel-viewer" } },
+    },
+    "erpnext_sales_funnel",
+    {},
+  ) as { _stageJumps?: Record<string, NavJump> };
+  assertEquals(Object.keys(funnel._stageJumps ?? {}), [
+    "Leads",
+    "Opportunities",
+    "Quotations",
+    "Orders",
+  ]);
+  const chart = withUiRefreshRequest(
+    {
+      labels: [],
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/chart-viewer" } },
+    },
+    "erpnext_revenue_trend",
+    {},
+  ) as { _jumps?: unknown; _stageJumps?: unknown };
+  assertEquals(chart._jumps, undefined);
+  assertEquals(chart._stageJumps, undefined);
+});
+
+Deno.test("ui refresh - invoice, stock and kanban results get typed hints", () => {
+  // La forme réelle d'un `_get` : le document sous `data`, le doctype dessus.
+  const invoice = withUiRefreshRequest(
+    {
+      data: { doctype: "Sales Invoice", name: "X" },
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+    },
+    "erpnext_sales_invoice_get",
+    {},
+  ) as { _sendMessageHints?: { key: string; kind?: string }[] };
+  assertEquals(invoice._sendMessageHints?.map((h) => h.key), [
+    "payments",
+    "customer",
+    "item",
+    "stock",
+  ]);
+  assertEquals(invoice._sendMessageHints?.[1].kind, "record");
+  const stock = withUiRefreshRequest(
+    {
+      doctype: "Bin",
+      count: 0,
+      data: [],
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/stock-viewer" } },
+    },
+    "erpnext_stock_balance",
+    {},
+  ) as { _sendMessageHints?: { key: string; kind?: string }[] };
+  assertEquals(stock._sendMessageHints?.map((h) => h.kind), [
+    "record",
+    "list",
+    "chart",
+  ]);
+  const kanban = withUiRefreshRequest(
+    {
+      doctype: "Task",
+      columns: [],
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/kanban-viewer" } },
+    },
+    "erpnext_kanban_get_board",
+    {},
+  ) as { _sendMessageHints?: { key: string }[] };
+  assertEquals(kanban._sendMessageHints?.map((h) => h.key), ["timesheets"]);
+});
+
+Deno.test("ui refresh - the outstanding and overdue jumps filter like the KPIs do", () => {
+  const r = monthRange(new Date(2026, 7, 22, 10));
+  const outstanding = KPI_JUMPS["erpnext_kpi_outstanding"](r).number;
+  assertEquals(outstanding.args.filters, [
+    ["outstanding_amount", ">", 0],
+    ["docstatus", "=", 1],
+  ]);
+  const overdue = KPI_JUMPS["erpnext_kpi_overdue"](r).number;
+  assertEquals(overdue.args.filters, [
+    ["due_date", "<", "2026-08-22"],
+    ["outstanding_amount", ">", 0],
+    ["docstatus", "=", 1],
+  ]);
+  // chaque saut porte une clé de libellé traduisible
+  for (const [tool, jumps] of Object.entries(KPI_JUMPS)) {
+    const { number, trend } = jumps(r);
+    assertEquals(typeof number.key, "string", `${tool}/number`);
+    assertEquals(typeof trend.key, "string", `${tool}/trend`);
+  }
+  for (const [stage, jump] of Object.entries(FUNNEL_STAGE_JUMPS)) {
+    assertEquals(typeof jump.key, "string", `funnel/${stage}`);
+  }
+});
+
+Deno.test("ui refresh - chart point jumps: every chart tool, every label, a real read-only tool", () => {
+  const now = new Date(2026, 7, 22, 10);
+  const cases: [string, Record<string, unknown>, string[]][] = [
+    ["erpnext_revenue_trend", { months: 3 }, ["Jun 26", "Jul 26", "Aug 26"]],
+    ["erpnext_profit_loss", {}, ["Mar 26", "Aug 26"]],
+    ["erpnext_sales_chart", {}, ["Acme Corp"]],
+    ["erpnext_sales_chart", { group_by: "item" }, ["SKU-001"]],
+    ["erpnext_sales_chart", { group_by: "status" }, ["Paid"]],
+    ["erpnext_order_breakdown", {}, ["Acme Corp"]],
+    ["erpnext_revenue_vs_orders", {}, ["Acme Corp"]],
+    ["erpnext_ar_aging", {}, ["Acme Corp"]],
+    ["erpnext_gross_profit", {}, ["SKU-001"]],
+    ["erpnext_gross_profit", { group_by: "customer" }, ["Acme Corp"]],
+    ["erpnext_stock_chart", {}, ["SKU-001"]],
+  ];
+  for (const [tool, args, labels] of cases) {
+    const jumps = chartPointJumps(tool, args, labels, now);
+    if (!jumps) throw new Error(`${tool}: no jumps`);
+    for (const label of labels) {
+      if (!jumps[label]) throw new Error(`${tool}: no jump for ${label}`);
+      assertJumpMatchesTool(jumps[label], `${tool}/${label}`);
+      assertEquals(jumps[label].label, label);
+    }
+  }
+  // pas de saut pour les formes sans pièce derrière
+  assertEquals(
+    chartPointJumps("erpnext_product_radar", {}, ["A"], now),
+    undefined,
+  );
+  // un libellé de mois que le graphique n'a pas reçu n'est pas inventé
+  assertEquals(
+    Object.keys(
+      chartPointJumps("erpnext_revenue_trend", { months: 2 }, ["Aug 26"], now)!,
+    ),
+    ["Aug 26"],
+  );
+});
+
+Deno.test("ui refresh - a month point opens exactly that civil month", () => {
+  const now = new Date(2026, 7, 22, 10);
+  const jumps = chartPointJumps("erpnext_revenue_trend", { months: 2 }, [
+    "Jul 26",
+    "Aug 26",
+  ], now)!;
+  assertEquals(jumps["Jul 26"].args.filters, [
+    ["transaction_date", ">=", "2026-07-01"],
+    ["transaction_date", "<=", "2026-07-31"],
+    ["docstatus", "<", 2],
+  ]);
+});
+
+Deno.test("ui refresh - injects _pointJumps on chart results only", () => {
+  const now = new Date(2026, 7, 22, 10);
+  const chart = withUiRefreshRequest(
+    {
+      type: "bar",
+      labels: ["Acme Corp"],
+      datasets: [],
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/chart-viewer" } },
+    },
+    "erpnext_order_breakdown",
+    {},
+    now,
+  ) as { _pointJumps?: Record<string, { tool: string }> };
+  assertEquals(chart._pointJumps?.["Acme Corp"].tool, "erpnext_doc_list");
+  const kpi = withUiRefreshRequest(
+    {
+      value: 1,
+      labels: ["x"],
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } },
+    },
+    "erpnext_kpi_revenue",
+    {},
+    now,
+  ) as { _pointJumps?: unknown };
+  assertEquals(kpi._pointJumps, undefined);
+});
+
+Deno.test("ui refresh - chart point jumps follow the handlers' labels and states", () => {
+  const now = new Date(2026, 7, 22, 10);
+  const item = chartPointJumps(
+    "erpnext_sales_chart",
+    { group_by: "item" },
+    ["Laptop Pro 14"],
+    now,
+  )!;
+  assertEquals(item["Laptop Pro 14"].args.filters, [
+    ["Sales Invoice Item", "item_name", "=", "Laptop Pro 14"],
+    ["docstatus", "=", 1],
+  ]);
+  const status = chartPointJumps(
+    "erpnext_sales_chart",
+    { group_by: "status" },
+    ["Draft"],
+    now,
+  )!;
+  assertEquals(status["Draft"].args.filters, [
+    ["status", "=", "Draft"],
+    ["docstatus", "<", 2],
+  ]);
+  const pl = chartPointJumps(
+    "erpnext_profit_loss",
+    { months: 1 },
+    ["Aug 26"],
+    now,
+  )!;
+  assertEquals(pl["Aug 26"].args.doctype, "Sales Order");
+  assertEquals(pl["Aug 26"].args.filters, [
+    ["transaction_date", ">=", "2026-08-01"],
+    ["transaction_date", "<=", "2026-08-31"],
+    ["docstatus", "=", 1],
+  ]);
+  const stock = chartPointJumps(
+    "erpnext_stock_chart",
+    { warehouse: "Stores - C" },
+    ["SKU-001"],
+    now,
+  )!;
+  assertEquals(stock["SKU-001"].args, {
+    item_code: "SKU-001",
+    warehouse: "Stores - C",
+    limit: 50,
+  });
 });

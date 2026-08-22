@@ -1,3 +1,4 @@
+import type { NavHint } from "../../shared/jumps.ts";
 import type { UiRefreshRequestData } from "~/shared/refresh";
 
 export interface InvoiceItem {
@@ -9,6 +10,8 @@ export interface InvoiceItem {
 }
 
 export interface InvoiceData {
+  /** Les sauts de la pièce (paiements, tiers, article, stock) — posés par le serveur. */
+  _sendMessageHints?: NavHint[];
   name: string;
   customer?: string;
   customer_name?: string;

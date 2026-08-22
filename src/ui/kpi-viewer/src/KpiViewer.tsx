@@ -1,8 +1,8 @@
 /** @jsxImportSource preact */
 /**
  * KPI viewer — Direction B v2.
- * Rendu fait main : aucune dépendance à @casys/mcp-view.
- * Handshake reste sur ext-apps (refresh / callServerTool / sendMessage).
+ * Pile de navigation câblée : sauts « › » quand l'hôte relaie les outils,
+ * comportement drillDown inchangé sinon.
  */
 import { useEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
@@ -11,10 +11,15 @@ import {
   CasysCredit,
   cx,
   Skeleton,
-  StateMessage,
+  ViewerHeader,
   ViewerShell,
 } from "~/shared/ui";
 import { useViewerLayout } from "~/shared/useViewerLayout";
+import { useViewerNav } from "~/shared/useViewerNav";
+import { PathBar } from "~/shared/PathBar";
+import { type Jump } from "~/shared/jumps";
+import { LevelBody } from "~/shared/levels/LevelBody";
+import { useDoclist } from "~/shared/doclist/useDoclist";
 import {
   canRequestUiRefresh,
   extractToolResultText,
@@ -34,6 +39,7 @@ import {
   sharedLabel,
   shareSelection,
 } from "~/shared/drill-down";
+import { kpiNumberAction, kpiTrendAction } from "./kpi-jumps.ts";
 
 const app = new App({ name: "KPI Viewer", version: "1.0.0" });
 const KPI_REFRESH_INTERVAL_MS = 15_000;
@@ -358,17 +364,26 @@ function KpiEmptyState() {
   );
 }
 
-/* ── Contenu KPI ─────────────────────────────────────────────────── */
+/* ── Carte KPI ───────────────────────────────────────────────────── */
 
-function KpiContent({
+/**
+ * La carte proprement dite — niveau racine de la vue.
+ * Câble les sauts de pile (jumpsEnabled) et conserve le comportement
+ * drillDown inchangé quand les outils ne sont pas relayés.
+ */
+function KpiCard({
   data,
   error,
   layout,
+  jumpsEnabled,
+  onJump,
   onRefresh,
 }: {
   data: KpiData;
   error: string | null;
   layout: "wide" | "panel" | "mobile";
+  jumpsEnabled: boolean;
+  onJump?: (jump: Jump) => void;
   onRefresh?: () => void;
 }) {
   const t = useT();
@@ -378,6 +393,18 @@ function KpiContent({
     : undefined;
 
   const [shared, setShared] = useState<DrillDownChannel | null>(null);
+
+  // ── Actions de clic (logique pure déléguée à kpi-jumps.ts) ───────
+  const numberAction = kpiNumberAction(
+    data._jumps,
+    data._drillDown,
+    jumpsEnabled,
+  );
+  const trendAction = kpiTrendAction(
+    data._jumps,
+    data._trendDrillDown,
+    jumpsEnabled,
+  );
 
   async function drillDown(message: string) {
     if (!canDrill) return;
@@ -392,6 +419,26 @@ function KpiContent({
     setShared(channel);
     setTimeout(() => setShared(null), 1500);
   }
+
+  // La couleur du chevron annonce le niveau qui arrive : accent pour une
+  // liste, brand pour un graphique.
+  const numberChevron = data._jumps?.number?.kind === "chart"
+    ? "text-brand"
+    : "text-accent";
+  const trendChevron = data._jumps?.trend?.kind === "chart"
+    ? "text-brand"
+    : "text-accent";
+  const handleNumber: (() => void) | undefined = numberAction?.kind === "jump"
+    ? () => onJump?.(numberAction.jump)
+    : numberAction?.kind === "drill" && canDrill
+    ? () => void drillDown(numberAction.message)
+    : undefined;
+
+  const handleTrend: (() => void) | undefined = trendAction?.kind === "jump"
+    ? () => onJump?.(trendAction.jump)
+    : trendAction?.kind === "drill" && canDrill
+    ? () => void drillDown(trendAction.message)
+    : undefined;
 
   const { amount, unit } = formatKpiParts(data);
   const compact = layout !== "wide";
@@ -419,20 +466,31 @@ function KpiContent({
             class={cx(
               "font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
               "text-[length:var(--text-metric-compact)]",
-              canDrill && data._drillDown
-                ? "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
-                : "",
+              numberAction?.kind === "jump" &&
+                "group/num cursor-pointer hover:underline decoration-dotted underline-offset-[6px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+              numberAction?.kind === "drill" && canDrill &&
+                "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
             )}
-            aria-label={canDrill && data._drillDown
+            style={numberAction?.kind === "drill" && canDrill
+              ? {
+                borderBottom: "1px dashed var(--color-accent-edge)",
+                paddingBottom: "1px",
+              }
+              : undefined}
+            aria-label={handleNumber
               ? t("kpi.drilldown.aria_detail", { label: data.label })
               : undefined}
-            {...activationHandlers(
-              canDrill && data._drillDown
-                ? () => void drillDown(data._drillDown!)
-                : undefined,
-            )}
+            {...activationHandlers(handleNumber)}
           >
-            {amount}{" "}
+            {amount}
+            {numberAction?.kind === "jump" && (
+              <span
+                aria-hidden="true"
+                class={`select-none opacity-0 group-hover/num:opacity-100 group-focus-visible/num:opacity-100 ml-0.5 text-[0.5em] align-middle ${numberChevron}`}
+              >
+                {" "}›
+              </span>
+            )}{" "}
             <span class="text-[length:var(--text-metric-unit)] text-ink-faint">
               {unit}
             </span>
@@ -462,9 +520,31 @@ function KpiContent({
           {/* Confirmation drill-down */}
           {shared && <DrillDownConfirm channel={shared} />}
 
-          {/* Sparkline inline */}
+          {/* Sparkline inline — cliquable si handleTrend est défini */}
           {sparkline && (
-            <div class="border-t border-line-soft pt-1.5">
+            <div
+              class={cx(
+                "border-t border-line-soft pt-1.5",
+                trendAction?.kind === "jump" &&
+                  "group/trend cursor-pointer rounded-[4px] hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+                trendAction?.kind === "drill" && canDrill &&
+                  "cursor-pointer rounded-[4px] hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+              )}
+              aria-label={handleTrend
+                ? t("kpi.drilldown.aria_trend", { label: data.label })
+                : undefined}
+              {...activationHandlers(handleTrend)}
+            >
+              {trendAction?.kind === "jump" && (
+                <div class="flex justify-end mb-0.5">
+                  <span
+                    aria-hidden="true"
+                    class={`font-mono text-micro opacity-0 group-hover/trend:opacity-100 group-focus-visible/trend:opacity-100 select-none ${trendChevron}`}
+                  >
+                    ›
+                  </span>
+                </div>
+              )}
               <SparklineBars values={sparkline} height={44} gap={4} />
             </div>
           )}
@@ -501,32 +581,37 @@ function KpiContent({
             )}
           </div>
 
-          {/* Valeur principale — H1 : souligné pointillé au survol, pas de changement de couleur */}
+          {/* Valeur principale — H1 : jump › ou soulignement pointillé au survol */}
           <span
             class={cx(
               "font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
               "text-[length:var(--text-metric)]",
-              canDrill && data._drillDown
-                ? "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
-                : "",
+              numberAction?.kind === "jump" &&
+                "group/num cursor-pointer hover:underline decoration-dotted underline-offset-[6px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+              numberAction?.kind === "drill" && canDrill &&
+                "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
             )}
-            style={canDrill && data._drillDown
+            style={numberAction?.kind === "drill" && canDrill
               ? {
                 /* style inline légal : valeur de layout/interaction, pas une couleur brute */
                 borderBottom: "1px dashed var(--color-accent-edge)",
                 paddingBottom: "1px",
               }
               : undefined}
-            aria-label={canDrill && data._drillDown
+            aria-label={handleNumber
               ? t("kpi.drilldown.aria_detail", { label: data.label })
               : undefined}
-            {...activationHandlers(
-              canDrill && data._drillDown
-                ? () => void drillDown(data._drillDown!)
-                : undefined,
-            )}
+            {...activationHandlers(handleNumber)}
           >
-            {amount} <span class="text-[26px] text-ink-faint">{unit}</span>
+            {amount}
+            {numberAction?.kind === "jump" && (
+              <span
+                aria-hidden="true"
+                class={`select-none opacity-0 group-hover/num:opacity-100 group-focus-visible/num:opacity-100 ml-0.5 text-[0.5em] align-middle ${numberChevron}`}
+              >
+                {" "}›
+              </span>
+            )} <span class="text-[26px] text-ink-faint">{unit}</span>
           </span>
 
           {/* Delta */}
@@ -560,29 +645,34 @@ function KpiContent({
             class={cx(
               "flex flex-col justify-between gap-[10px] border-l border-line bg-sunken p-[18px_16px]",
               "hover:outline hover:outline-1 hover:outline-accent-edge",
-              canDrill && data._trendDrillDown
-                ? "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
-                : "",
+              trendAction?.kind === "jump" &&
+                "group/trend cursor-pointer rounded-[4px] hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+              trendAction?.kind === "drill" && canDrill &&
+                "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
             )}
             style={{ outlineOffset: "-1px" }}
-            aria-label={canDrill && data._trendDrillDown
+            aria-label={handleTrend
               ? t("kpi.drilldown.aria_trend", { label: data.label })
               : undefined}
-            {...activationHandlers(
-              canDrill && data._trendDrillDown
-                ? () => void drillDown(data._trendDrillDown!)
-                : undefined,
-            )}
+            {...activationHandlers(handleTrend)}
           >
-            {/* Label période + "tendance →" en flex justify-between — H2 */}
+            {/* Label période + tendance → — H2 */}
             <div class="flex items-center justify-between">
               {periodLabel && (
                 <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
                   {periodLabel}
                 </span>
               )}
-              <span class="font-mono text-micro text-accent">
+              <span class="font-mono text-micro text-accent flex items-center gap-1">
                 {t("kpi.sparkline.trend_label")}
+                {trendAction?.kind === "jump" && (
+                  <span
+                    aria-hidden="true"
+                    class={`select-none opacity-0 group-hover/trend:opacity-100 group-focus-visible/trend:opacity-100 ${trendChevron}`}
+                  >
+                    {" "}›
+                  </span>
+                )}
               </span>
             </div>
             <SparklineBars values={sparkline} height={56} gap={5} />
@@ -598,11 +688,98 @@ function KpiContent({
   );
 }
 
-/* ── Viewer ───────────────────────────────────────────────────────── */
+/* ── Inner viewer — nav, layout, rendu ───────────────────────────── */
+
+/**
+ * Composant interne : tient la pile de navigation, le layout et les hooks
+ * qui doivent rester inconditionnels. Rendu uniquement quand `data` existe.
+ */
+function KpiViewerContent({
+  data,
+  error,
+  fixture,
+  onError,
+  onRefresh,
+}: {
+  data: KpiData;
+  error: string | null;
+  fixture: boolean;
+  onError: (msg: string | null) => void;
+  onRefresh: () => void;
+}) {
+  const { ref: shellRef, layout } = useViewerLayout<HTMLDivElement>();
+  const viewerNav = useViewerNav(app, {
+    title: data.label,
+    kind: "root",
+    origin: "chart",
+  }, { fixture });
+  const nav = viewerNav.nav;
+  const { current, isRoot } = nav;
+  // jumpsEnabled : les sauts sont désactivés en mode fixture (pas d'outils).
+  const { jumpsEnabled } = viewerNav;
+  // useDoclist tenu inconditionnellement : il retournera EMPTY_LIST à la racine.
+  const { list } = viewerNav;
+
+  /** Envoie une question au modèle (fallback « ~ » des niveaux empilés). */
+  const { ask } = viewerNav;
+
+  return (
+    <ViewerShell
+      class={cx(!isRoot && "h-screen")}
+      containerRef={shellRef}
+    >
+      {/* Aux niveaux empilés, un en-tête nomme le niveau ; le fil vient dessous. */}
+      {!isRoot && (
+        <ViewerHeader
+          title={nav.current.title}
+          count={nav.current.count}
+          layout={layout}
+        />
+      )}
+      {/* PathBar : null au niveau 1, visible dès le 2e niveau */}
+      <PathBar
+        layout={layout}
+        stack={nav.stack}
+        onBack={nav.pop}
+        onJump={nav.popTo}
+        loading={current.loading}
+      />
+      {
+        /*
+         * LevelBody :
+         *   - niveau 1 (root) → rend les enfants (KpiCard)
+         *   - niveaux empilés → skeleton, erreur, BarsLevel, RecordLevel, DoclistBody
+         */
+      }
+      <LevelBody
+        level={current}
+        app={app}
+        list={list}
+        layout={layout}
+        fixture={fixture}
+        onJump={jumpsEnabled ? nav.jump : undefined}
+        onAsk={ask}
+        onError={onError}
+        onMutated={nav.markStale}
+        onRefresh={() => void nav.refreshLevel()}
+      >
+        <KpiCard
+          data={data}
+          error={error}
+          layout={layout}
+          jumpsEnabled={jumpsEnabled}
+          onJump={jumpsEnabled ? nav.jump : undefined}
+          onRefresh={onRefresh}
+        />
+      </LevelBody>
+    </ViewerShell>
+  );
+}
+
+/* ── Outer viewer — connexion et états vide/chargement ────────────── */
 
 export function KpiViewer() {
   const fixture = isFixtureMode();
-  const { ref: shellRef, layout } = useViewerLayout<HTMLDivElement>();
 
   const [data, setData] = useState<KpiData | null>(
     fixture ? KPI_FIXTURE : null,
@@ -717,7 +894,7 @@ export function KpiViewer() {
   /* ── État chargement — H3 : skeleton KPI-shaped, pas un StateMessage ── */
   if (loading) {
     return (
-      <ViewerShell containerRef={shellRef}>
+      <ViewerShell>
         <KpiLoadingSkeleton />
       </ViewerShell>
     );
@@ -726,20 +903,19 @@ export function KpiViewer() {
   /* ── État vide — H4 : mini-barres fantômes, pas un StateMessage ── */
   if (!data) {
     return (
-      <ViewerShell containerRef={shellRef}>
+      <ViewerShell>
         <KpiEmptyState />
       </ViewerShell>
     );
   }
 
   return (
-    <ViewerShell containerRef={shellRef}>
-      <KpiContent
-        data={data}
-        error={error}
-        layout={layout}
-        onRefresh={() => void requestRefresh({ ignoreInterval: true })}
-      />
-    </ViewerShell>
+    <KpiViewerContent
+      data={data}
+      error={error}
+      fixture={fixture}
+      onError={setError}
+      onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+    />
   );
 }

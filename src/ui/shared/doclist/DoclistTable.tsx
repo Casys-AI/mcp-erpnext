@@ -23,10 +23,10 @@ import {
 } from "~/shared/status";
 import type { ViewerLayout } from "~/shared/useViewerLayout";
 import { useT } from "~/shared/i18n-hook";
-import { formatCell, isStatusField } from "../helpers";
-import { pickNarrowColumns, shortenId } from "../columns";
+import { formatCell, isStatusField } from "./helpers";
+import { pickNarrowColumns, shortenId } from "./columns";
 import { StatusCell } from "./StatusCell";
-import type { SortDir } from "../types";
+import type { SortDir } from "./types";
 
 export interface DoclistColumn {
   id: string;
@@ -39,6 +39,7 @@ interface RowShape {
   row: Record<string, unknown>;
   selected: boolean;
   tone: Tone;
+  struck: boolean;
 }
 
 interface CommonProps {
@@ -46,6 +47,8 @@ interface CommonProps {
   rows: Record<string, unknown>[];
   rowId: (row: Record<string, unknown>, index: number) => string;
   selectedId: string | null;
+  /** La ligne qu'une action vient de changer : barrée sur place, pas rechargée. */
+  struckId?: string | null;
   onSelect?: (row: Record<string, unknown>) => void;
 }
 
@@ -83,6 +86,7 @@ export function DoclistTable(
       id,
       row,
       selected: common.selectedId === id,
+      struck: common.struckId === id,
       tone: statusKey ? toneForStatus(String(row[statusKey] ?? "")) : "neutral",
     };
   };
@@ -125,9 +129,14 @@ function dueValue(row: Record<string, unknown>, amountKey?: string) {
  * Cinq états : repos, survol (fond), pressé (fond + bord droit sourd),
  * sélectionné (fond + bord droit accent), focus clavier (contour accent).
  */
-function rowClasses(selected: boolean, interactive: boolean): string {
+function rowClasses(
+  selected: boolean,
+  interactive: boolean,
+  struck = false,
+): string {
   return [
     "transition-colors",
+    struck && "line-through text-ink-faint",
     interactive && "cursor-pointer",
     selected ? "bg-row-selected" : "hover:bg-row-hover",
     // Le fond de sélection s'allume dès l'enfoncement, avant le relâchement :
@@ -245,13 +254,13 @@ function WideTable(
       </thead>
       <tbody>
         {rows.map((raw, index) => {
-          const { id, row, selected, tone } = shape(raw, index);
+          const { id, row, selected, tone, struck } = shape(raw, index);
           return (
             <tr
               key={id}
               aria-selected={onSelect ? selected : undefined}
               class={`border-b border-line-soft ${
-                rowClasses(selected, !!onSelect)
+                rowClasses(selected, !!onSelect, struck)
               }`}
               {...activationHandlers(onSelect && (() => onSelect(row)))}
             >
@@ -349,7 +358,7 @@ function CompactTable(
 
       <ul>
         {rows.map((raw, index) => {
-          const { id, row, selected, tone } = shape(raw, index);
+          const { id, row, selected, tone, struck } = shape(raw, index);
           const due = dueValue(row, amountKey);
 
           return (
@@ -362,7 +371,7 @@ function CompactTable(
                   `border-b border-line-soft border-l-2 ${TONE_RULE[tone]}`,
                   // Ici la ligne est une div : le bord droit tient dessus.
                   selectionEdge(selected, !!onSelect),
-                  rowClasses(selected, !!onSelect),
+                  rowClasses(selected, !!onSelect, struck),
                 ].join(" ")}
                 {...activationHandlers(onSelect && (() => onSelect(row)))}
               >
@@ -415,7 +424,7 @@ function StackedList(
   return (
     <ul class="flex flex-col">
       {rows.map((raw, index) => {
-        const { id, row, selected, tone } = shape(raw, index);
+        const { id, row, selected, tone, struck } = shape(raw, index);
         const due = dueValue(row, amountKey);
 
         return (
@@ -427,7 +436,7 @@ function StackedList(
                 "flex items-center justify-between gap-2.5 px-3 py-[9px]",
                 `border-b border-line-soft border-l-2 ${TONE_RULE[tone]}`,
                 selectionEdge(selected, !!onSelect),
-                rowClasses(selected, !!onSelect),
+                rowClasses(selected, !!onSelect, struck),
               ].join(" ")}
               {...activationHandlers(onSelect && (() => onSelect(row)))}
             >

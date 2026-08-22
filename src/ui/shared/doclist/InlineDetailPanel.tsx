@@ -16,9 +16,11 @@ import { useT } from "~/shared/i18n-hook";
 import { ConfirmSheet, useConfirm } from "~/shared/confirm";
 import { TONE_AMOUNT, toneForStatus } from "~/shared/status";
 import { StatusBadge, StatusCell } from "./StatusCell";
-import type { SendMessageHint } from "../types";
-import { formatCell } from "../helpers";
+import type { SendMessageHint } from "./types";
+import { formatCell } from "./helpers";
 import type { ViewerLayout } from "~/shared/useViewerLayout";
+import { type Jump, jumpFromHint } from "~/shared/jumps";
+import { JumpList } from "~/shared/levels/JumpList";
 
 /** Champs mis en avant sous le titre, dans cet ordre, avant le reste. */
 const LEAD_FIELDS = ["grand_total", "outstanding_amount", "total"];
@@ -33,6 +35,8 @@ export function InlineDetailPanel(
     fixture,
     layout,
     onClose,
+    onJump,
+    onAsk,
     onAction,
   }: {
     app: App;
@@ -44,6 +48,9 @@ export function InlineDetailPanel(
     /** Mise en page courante — détermine le header de l'inspecteur et les tailles. */
     layout?: ViewerLayout;
     onClose: () => void;
+    /** Présent quand l'hôte relaie les outils : les hints deviennent des sauts « › ». */
+    onJump?: (jump: Jump) => void;
+    onAsk?: (message: string) => void;
     onAction: (
       toolName: string,
       args: Record<string, unknown>,
@@ -139,6 +146,19 @@ export function InlineDetailPanel(
     const translated = key ? t(key) : null;
     return translated && translated !== key ? translated : hint.label;
   };
+  /* Quand l'hôte relaie les outils, chaque hint qui porte un outil devient
+     un saut dans la vue ; les autres restent des questions au modèle. */
+  const jumps = onJump
+    ? (sendMessageHints ?? [])
+      .map((hint) =>
+        jumpFromHint(
+          hint,
+          { id: docName, doctype: doctype ?? "" },
+          t("nav.linked_to", { id: docName }),
+        )
+      )
+      .filter((jump): jump is Jump => jump !== null)
+    : [];
   const hints = sendMessageHints?.map((hint) => ({
     ...hint,
     label: hintLabel(hint),
@@ -146,6 +166,19 @@ export function InlineDetailPanel(
       .replace(/\{id\}/g, docName)
       .replace(/\{doctype\}/g, doctype ?? ""),
   })) ?? [];
+  const asks = hints.filter((hint) => !hint.tool).map((hint) => ({
+    label: hint.label,
+    message: hint.message,
+  }));
+  if (asks.length === 0 && jumps.length === 0 && docName && doctype) {
+    asks.push({
+      label: t("doclist.detail.full_detail"),
+      message: t("doclist.detail.full_detail_message", {
+        doctype,
+        id: docName,
+      }),
+    });
+  }
 
   function ask(text: string) {
     void app.sendMessage({
@@ -235,41 +268,58 @@ export function InlineDetailPanel(
             narrow ? "gap-2" : "gap-1.5"
           }`}
         >
-          {hints.map((hint, index) => (
-            <Button
-              key={index}
-              variant={index === 0 ? "accent" : "secondary"}
-              disabled={fixture}
-              title={fixture ? t("doclist.preview.no_host") : hint.label}
-              class={narrow
-                ? "min-h-[44px] rounded-control text-body"
-                : undefined}
-              onClick={() => ask(hint.message)}
-            >
-              {hint.label}
-            </Button>
-          ))}
-          {docName && doctype && hints.length === 0 && (
-            <Button
-              variant="accent"
-              disabled={fixture}
-              title={fixture
-                ? t("doclist.preview.no_host")
-                : t("doclist.detail.full_detail")}
-              class={narrow
-                ? "min-h-[44px] rounded-control text-body"
-                : undefined}
-              onClick={() =>
-                ask(
-                  t("doclist.detail.full_detail_message", {
-                    doctype: doctype ?? "",
-                    id: docName,
-                  }),
+          {onJump
+            ? (
+              <>
+                {jumps.length > 0 && <Label>{t("nav.goto")}</Label>}
+                <JumpList
+                  narrow={layout !== "wide"}
+                  jumps={jumps}
+                  asks={asks}
+                  onJump={onJump}
+                  onAsk={onAsk ?? ask}
+                />
+              </>
+            )
+            : (
+              <>
+                {hints.map((hint, index) => (
+                  <Button
+                    key={index}
+                    variant={index === 0 ? "accent" : "secondary"}
+                    disabled={fixture}
+                    title={fixture ? t("doclist.preview.no_host") : hint.label}
+                    class={narrow
+                      ? "min-h-[44px] rounded-control text-body"
+                      : undefined}
+                    onClick={() => ask(hint.message)}
+                  >
+                    {hint.label}
+                  </Button>
+                ))}
+                {docName && doctype && hints.length === 0 && (
+                  <Button
+                    variant="accent"
+                    disabled={fixture}
+                    title={fixture
+                      ? t("doclist.preview.no_host")
+                      : t("doclist.detail.full_detail")}
+                    class={narrow
+                      ? "min-h-[44px] rounded-control text-body"
+                      : undefined}
+                    onClick={() =>
+                      ask(
+                        t("doclist.detail.full_detail_message", {
+                          doctype: doctype ?? "",
+                          id: docName,
+                        }),
+                      )}
+                  >
+                    {t("doclist.detail.full_detail")}
+                  </Button>
                 )}
-            >
-              {t("doclist.detail.full_detail")}
-            </Button>
-          )}
+              </>
+            )}
           {isDraft && docName && (
             <Button
               variant="secondary"

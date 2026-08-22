@@ -1,3 +1,4 @@
+import type { NavHint } from "../../shared/jumps.ts";
 import type { UiRefreshRequestData } from "~/shared/refresh";
 
 export type ChartType =
@@ -51,6 +52,8 @@ export interface TreeNode {
 }
 
 export interface ChartData {
+  /** Par libellé : le saut qu'un point, une barre ou une part ouvre. */
+  _pointJumps?: Record<string, NavHint>;
   title: string;
   subtitle?: string;
   type?: ChartType;

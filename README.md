@@ -10,9 +10,9 @@ English | [繁體中文](README.zh-TW.md)
 
 > [!IMPORTANT]
 > **Installing the 3.1 beta:** pin the prerelease while this UX is being
-> validated. For npm/Node use `npx -y @casys/mcp-erpnext@3.1.0-beta.2`; for Deno
-> use `deno run -A jsr:@casys/mcp-erpnext@3.1.0-beta.2/server`. The moving npm
-> alias is `@next`. Beta 2 adds the generic document viewer and attachment
+> validated. For npm/Node use `npx -y @casys/mcp-erpnext@3.1.0-beta.3`; for Deno
+> use `deno run -A jsr:@casys/mcp-erpnext@3.1.0-beta.3/server`. The moving npm
+> alias is `@next`. The beta adds the generic document viewer and attachment
 > workflows, so test it with the MCP host your users actually run before
 > replacing a stable deployment.
 
@@ -80,7 +80,7 @@ See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
 [latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for
 the current version's highlights.
 
-> **3.1 beta 2 preview:** the beta keeps the 3.0 tool surface and adds a generic
+> **3.1 beta preview:** the beta keeps the 3.0 tool surface and adds a generic
 > document viewer, child tables, document attachments, in-view navigation, and
 > active context. Features remain capability-gated by the MCP host. In
 > particular, downloads require both proxied server tools and the MCP Apps
@@ -235,7 +235,7 @@ tool is never replayed automatically. Overlapping or stale responses are ignored
 when a newer host payload or mutation has already won. A confirmed document
 change marks every potentially derived snapshot in the current navigation stack
 as stale; each marker is removed only when that surface has actually been read
-again. Separate MCP Apps are not synchronized automatically in beta 2.
+again. Separate MCP Apps are not synchronized automatically in the 3.1 beta.
 
 ### Building UI viewers
 

@@ -45,7 +45,7 @@ import { DOC_FIXTURE, DOC_FIXTURE_FILES, isFixtureMode } from "./fixture.ts";
 
 const app = new App({
   name: "ERPNext Document Viewer",
-  version: "3.1.0-beta.2",
+  version: "3.1.0-beta.3",
 });
 const REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;

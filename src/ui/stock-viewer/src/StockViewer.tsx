@@ -8,7 +8,13 @@
  * une ligne empile la fiche article dans la vue. Sans outils, le comportement
  * actuel (expansion inline) reste strictement identique.
  */
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
 import {
@@ -108,10 +114,13 @@ export function StockViewer() {
   );
   const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
+  const [rootFreshEvent, setRootFreshEvent] = useState(0);
+  const [rootMutationEvent, setRootMutationEvent] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const dataRef = useRef<StockData | null>(fixture ? STOCK_FIXTURE : null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshSequenceRef = useRef(createUiRefreshSequence());
+  const rootEventRef = useRef(0);
   const lastRefreshStartedAtRef = useRef(0);
 
   function hydrateData(nextData: StockData) {
@@ -121,6 +130,7 @@ export function StockViewer() {
       refreshRequestRef.current,
     );
     setData(nextData);
+    setRootFreshEvent(++rootEventRef.current);
   }
 
   function consumeToolResult(result: ToolResultPayload): boolean {
@@ -281,13 +291,38 @@ export function StockViewer() {
     );
   }
 
+  const rootRefreshRequest = resolveUiRefreshRequest(
+    data,
+    refreshRequestRef.current,
+  );
+  const canRefreshRoot = Boolean(
+    !fixture &&
+      rootRefreshRequest &&
+      app.getHostCapabilities()?.serverTools &&
+      data._availableTools?.includes(rootRefreshRequest.toolName),
+  );
+
   return (
     <StockContent
       data={data}
       error={error}
       refreshing={refreshing}
       fixture={fixture}
-      onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+      rootRefreshRequest={rootRefreshRequest}
+      rootFreshEvent={rootFreshEvent}
+      rootMutationEvent={rootMutationEvent}
+      canRefreshRoot={canRefreshRoot}
+      onRefresh={() =>
+        void requestRefresh({ ignoreInterval: true, force: true })}
+      onMutationInvalidate={() => {
+        setRootMutationEvent(++rootEventRef.current);
+        refreshSequenceRef.current = invalidateUiRefresh(
+          refreshSequenceRef.current,
+        );
+      }}
+      onMutationRefresh={canRefreshRoot
+        ? () => void requestRefresh({ ignoreInterval: true, force: true })
+        : undefined}
       onError={setError}
     />
   );
@@ -299,16 +334,28 @@ function StockContent(
   {
     data,
     error,
-    refreshing: _refreshing,
+    refreshing,
     fixture,
-    onRefresh: _onRefresh,
+    rootRefreshRequest,
+    rootFreshEvent,
+    rootMutationEvent,
+    canRefreshRoot,
+    onRefresh,
+    onMutationInvalidate,
+    onMutationRefresh,
     onError,
   }: {
     data: StockData;
     error: string | null;
     refreshing: boolean;
     fixture: boolean;
+    rootRefreshRequest: UiRefreshRequestData | null;
+    rootFreshEvent: number;
+    rootMutationEvent: number;
+    canRefreshRoot: boolean;
     onRefresh: () => void;
+    onMutationInvalidate: () => void;
+    onMutationRefresh?: () => void;
     onError: (msg: string | null) => void;
   },
 ) {
@@ -326,10 +373,18 @@ function StockContent(
     title: t("stock.title"),
     kind: "root",
     origin: "list",
-    key: viewerRootKey("stock", data.refreshRequest, { doctype: "Bin" }),
+    key: viewerRootKey("stock", rootRefreshRequest ?? undefined, {
+      doctype: "Bin",
+    }),
   }, { fixture });
   const nav = viewerNav.nav;
   const { isRoot, current } = nav;
+  useLayoutEffect(() => {
+    const root = nav.stack.levels[0];
+    if (rootFreshEvent > rootMutationEvent && root?.stale) {
+      nav.clearStale(root.id);
+    }
+  }, [rootFreshEvent, rootMutationEvent]);
   const { jumpsEnabled, messagesEnabled } = viewerNav;
   // list est nécessaire pour que LevelBody rende les niveaux liste.
   const { list } = viewerNav;
@@ -485,6 +540,35 @@ function StockContent(
         </div>
         {isRoot && (
           <div class="flex min-w-0 shrink-0 items-center gap-2">
+            {current.stale && (
+              <div
+                role="status"
+                title={t("nav.stale_title")}
+                class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+              >
+                <span
+                  aria-hidden="true"
+                  class="size-[5px] rounded-full bg-warn"
+                />
+                {!isMobile && (
+                  <span>
+                    {t("nav.stale_values", { at: current.stale.at })}
+                  </span>
+                )}
+                {canRefreshRoot && (
+                  <button
+                    type="button"
+                    disabled={refreshing}
+                    onClick={onRefresh}
+                    aria-label={t("nav.refresh")}
+                    title={t("nav.refresh")}
+                    class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                  >
+                    {refreshing ? "…" : "↻"}
+                  </button>
+                )}
+              </div>
+            )}
             {warehouse && (
               <span
                 class={cx(
@@ -534,6 +618,9 @@ function StockContent(
         onAsk={ask}
         onError={onError}
         onMutated={nav.markStale}
+        onDocumentChanged={nav.reportDocumentChange}
+        onMutationInvalidate={onMutationInvalidate}
+        onMutationRefresh={onMutationRefresh}
         onRefresh={() => void nav.refreshLevel()}
       >
         {/* ── Erreur de rafraîchissement — uniquement au niveau racine ── */}

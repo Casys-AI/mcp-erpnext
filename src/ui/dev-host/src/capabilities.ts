@@ -5,10 +5,15 @@ export type CapabilityProfile =
   | "message-only"
   | "none";
 
-export type HostChannel = "serverTools" | "updateModelContext" | "message";
+export type HostChannel =
+  | "serverTools"
+  | "downloadFile"
+  | "updateModelContext"
+  | "message";
 
 export interface DevHostCapabilities {
   serverTools?: Record<string, never>;
+  downloadFile?: Record<string, never>;
   updateModelContext?: { text: Record<string, never> };
   message?: { text: Record<string, never> };
 }
@@ -39,6 +44,7 @@ export function capabilitiesForProfile(
     case "full":
       return {
         serverTools: {},
+        downloadFile: {},
         updateModelContext: { text: {} },
         message: { text: {} },
       };

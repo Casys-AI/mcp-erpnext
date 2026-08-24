@@ -4,7 +4,7 @@
  * Pile de navigation câblée : sauts « › » quand l'hôte relaie les outils,
  * comportement drillDown inchangé sinon.
  */
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
 import {
@@ -809,18 +809,32 @@ function KpiViewerContent({
   data,
   error,
   fixture,
+  refreshing,
+  rootRefreshRequest,
+  rootFreshEvent,
+  rootMutationEvent,
+  canRefreshRoot,
   onError,
   onRefresh,
+  onMutationInvalidate,
+  onMutationRefresh,
 }: {
   data: KpiData;
   error: string | null;
   fixture: boolean;
+  refreshing: boolean;
+  rootRefreshRequest: UiRefreshRequestData | null;
+  rootFreshEvent: number;
+  rootMutationEvent: number;
+  canRefreshRoot: boolean;
   onError: (msg: string | null) => void;
   onRefresh: () => void;
+  onMutationInvalidate: () => void;
+  onMutationRefresh?: () => void;
 }) {
   const { ref: shellRef, layout } = useViewerLayout<HTMLDivElement>();
   const t = useT();
-  const rootKey = viewerRootKey("kpi", data.refreshRequest, {
+  const rootKey = viewerRootKey("kpi", rootRefreshRequest ?? undefined, {
     label: data.label,
   });
   const activeContext = useActiveContext(app, rootKey);
@@ -835,6 +849,12 @@ function KpiViewerContent({
   }, { fixture });
   const nav = viewerNav.nav;
   const { current, isRoot } = nav;
+  useLayoutEffect(() => {
+    const root = nav.stack.levels[0];
+    if (rootFreshEvent > rootMutationEvent && root?.stale) {
+      nav.clearStale(root.id);
+    }
+  }, [rootFreshEvent, rootMutationEvent]);
   // jumpsEnabled : les sauts sont désactivés en mode fixture (pas d'outils).
   const { jumpsEnabled } = viewerNav;
   // useDoclist tenu inconditionnellement : il retournera EMPTY_LIST à la racine.
@@ -891,17 +911,47 @@ function KpiViewerContent({
         onAsk={ask}
         onError={onError}
         onMutated={nav.markStale}
+        onDocumentChanged={nav.reportDocumentChange}
+        onMutationInvalidate={onMutationInvalidate}
+        onMutationRefresh={onMutationRefresh}
         onRefresh={() => void nav.refreshLevel()}
       >
-        <KpiCard
-          data={data}
-          error={error}
-          layout={layout}
-          jumpsEnabled={jumpsEnabled}
-          activeContext={activeContext}
-          onJump={jumpsEnabled ? nav.jump : undefined}
-          onRefresh={onRefresh}
-        />
+        <>
+          {isRoot && current.stale && (
+            <div
+              role="status"
+              title={t("nav.stale_title")}
+              class="flex shrink-0 items-center justify-end gap-1.5 px-3 pt-1 font-mono text-[9.5px] text-warn"
+            >
+              <span
+                aria-hidden="true"
+                class="size-[5px] rounded-full bg-warn"
+              />
+              <span>{t("nav.stale_values", { at: current.stale.at })}</span>
+              {canRefreshRoot && (
+                <button
+                  type="button"
+                  disabled={refreshing}
+                  onClick={onRefresh}
+                  aria-label={t("nav.refresh")}
+                  title={t("nav.refresh")}
+                  class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                >
+                  {refreshing ? "…" : "↻"}
+                </button>
+              )}
+            </div>
+          )}
+          <KpiCard
+            data={data}
+            error={error}
+            layout={layout}
+            jumpsEnabled={jumpsEnabled}
+            activeContext={activeContext}
+            onJump={jumpsEnabled ? nav.jump : undefined}
+            onRefresh={onRefresh}
+          />
+        </>
       </LevelBody>
     </ViewerShell>
   );
@@ -916,10 +966,14 @@ export function KpiViewer() {
     fixture ? KPI_FIXTURE : null,
   );
   const [loading, setLoading] = useState(!fixture);
+  const [refreshing, setRefreshing] = useState(false);
+  const [rootFreshEvent, setRootFreshEvent] = useState(0);
+  const [rootMutationEvent, setRootMutationEvent] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const dataRef = useRef<KpiData | null>(fixture ? KPI_FIXTURE : null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshSequenceRef = useRef(createUiRefreshSequence());
+  const rootEventRef = useRef(0);
   const lastRefreshStartedAtRef = useRef(0);
 
   function hydrateData(nextData: KpiData) {
@@ -929,6 +983,7 @@ export function KpiViewer() {
       refreshRequestRef.current,
     );
     setData(nextData);
+    setRootFreshEvent(++rootEventRef.current);
   }
 
   function consumeToolResult(result: ToolResultPayload): boolean {
@@ -947,27 +1002,14 @@ export function KpiViewer() {
     }
   }
 
-  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+  async function requestRefresh(
+    options: { ignoreInterval?: boolean; force?: boolean } = {},
+  ) {
     if (fixture) return false;
     const request = resolveUiRefreshRequest(
       dataRef.current,
       refreshRequestRef.current,
     );
-    const sequence = refreshSequenceRef.current;
-    if (
-      !canRequestUiRefresh({
-        request,
-        visibilityState: typeof document === "undefined"
-          ? "visible"
-          : document.visibilityState,
-        refreshInFlight: sequence.inFlight !== null,
-        now: Date.now(),
-        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
-        minIntervalMs: KPI_REFRESH_INTERVAL_MS,
-      }, options)
-    ) {
-      return false;
-    }
     if (
       !request ||
       !canCallViewerTool(
@@ -979,10 +1021,36 @@ export function KpiViewer() {
       return false;
     }
 
-    const started = beginUiRefresh(sequence);
+    const sequence = refreshSequenceRef.current;
+    if (sequence.inFlight !== null) {
+      if (options.force) {
+        refreshSequenceRef.current = beginUiRefresh(sequence, {
+          force: true,
+        }).state;
+      }
+      return false;
+    }
+    const forced = Boolean(options.force || sequence.pendingForced);
+    if (
+      !canRequestUiRefresh({
+        request,
+        visibilityState: typeof document === "undefined"
+          ? "visible"
+          : document.visibilityState,
+        refreshInFlight: false,
+        now: Date.now(),
+        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+        minIntervalMs: KPI_REFRESH_INTERVAL_MS,
+      }, { ignoreInterval: options.ignoreInterval || forced })
+    ) {
+      return false;
+    }
+
+    const started = beginUiRefresh(sequence, { force: forced });
     if (started.generation === null) return false;
     refreshSequenceRef.current = started.state;
     lastRefreshStartedAtRef.current = Date.now();
+    setRefreshing(true);
 
     let result: ToolResultPayload | null = null;
     let failure: { cause: unknown } | null = null;
@@ -1000,18 +1068,23 @@ export function KpiViewer() {
       started.generation,
     );
     refreshSequenceRef.current = completed.state;
+    let succeeded = false;
     if (completed.accept) {
       if (failure) {
         setError(normalizeUiRefreshFailureMessage(failure.cause));
       } else if (result?.isError) {
         setError(t("common.error.refresh_failed"));
       } else if (result && consumeToolResult(result)) {
-        return true;
+        succeeded = true;
       } else {
         setError(t("common.error.refresh_no_data"));
       }
     }
-    return false;
+    setRefreshing(false);
+    if (completed.runPending) {
+      void requestRefresh({ ignoreInterval: true, force: true });
+    }
+    return succeeded;
   }
 
   useEffect(() => {
@@ -1064,13 +1137,39 @@ export function KpiViewer() {
     );
   }
 
+  const rootRefreshRequest = resolveUiRefreshRequest(
+    data,
+    refreshRequestRef.current,
+  );
+  const canRefreshRoot = Boolean(
+    !fixture &&
+      rootRefreshRequest &&
+      app.getHostCapabilities()?.serverTools &&
+      readAvailableTools(data)?.includes(rootRefreshRequest.toolName),
+  );
+
   return (
     <KpiViewerContent
       data={data}
       error={error}
       fixture={fixture}
+      refreshing={refreshing}
+      rootRefreshRequest={rootRefreshRequest}
+      rootFreshEvent={rootFreshEvent}
+      rootMutationEvent={rootMutationEvent}
+      canRefreshRoot={canRefreshRoot}
       onError={setError}
-      onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+      onRefresh={() =>
+        void requestRefresh({ ignoreInterval: true, force: true })}
+      onMutationInvalidate={() => {
+        setRootMutationEvent(++rootEventRef.current);
+        refreshSequenceRef.current = invalidateUiRefresh(
+          refreshSequenceRef.current,
+        );
+      }}
+      onMutationRefresh={canRefreshRoot
+        ? () => void requestRefresh({ ignoreInterval: true, force: true })
+        : undefined}
     />
   );
 }

@@ -7,8 +7,9 @@
  */
 
 import { useCallback, useLayoutEffect, useMemo, useState } from "preact/hooks";
-import type { Jump, ToolHost } from "./jumps";
-import { jumpInto, refreshCurrent, type StackStore } from "./nav-jump";
+import type { DocumentChangeEvent } from "./document-events.ts";
+import type { Jump, ToolHost } from "./jumps.ts";
+import { jumpInto, refreshCurrent, type StackStore } from "./nav-jump.ts";
 import {
   clearStale,
   createStack,
@@ -22,7 +23,8 @@ import {
   popLevel,
   popToLevel,
   reconcileRoot,
-} from "./nav-stack";
+  reportDocumentChange as reportDocumentChangeLevels,
+} from "./nav-stack.ts";
 
 export function useNavStack(host: ToolHost, root: LevelInit) {
   const [stack, setStack] = useState<NavStack>(() => createStack(root));
@@ -61,6 +63,17 @@ export function useNavStack(host: ToolHost, root: LevelInit) {
   }, []);
 
   /**
+   * Conserve la mutation canonique dans chaque snapshot potentiellement périmé.
+   * Le transport éventuel de l'événement reste extérieur à cette pile.
+   */
+  const reportDocumentChange = useCallback((event: DocumentChangeEvent) => {
+    const committedAt = new Date(event.committedAt);
+    setStack((s) =>
+      reportDocumentChangeLevels(s, timeLabel(committedAt), event)
+    );
+  }, []);
+
+  /**
    * Recharge le niveau courant s'il sait comment (un outil) ; la racine
    * relève de la vue, qui garde son propre rafraîchissement.
    */
@@ -83,6 +96,7 @@ export function useNavStack(host: ToolHost, root: LevelInit) {
     popTo,
     patchUi,
     markStale,
+    reportDocumentChange,
     refreshLevel,
     clearStale: clearStaleLevel,
   };

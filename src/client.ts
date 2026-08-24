@@ -36,6 +36,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * The attachment download tool returns an already-formed MCP result. Keep the
+ * guard deliberately narrow so an ordinary business object with a `content`
+ * property cannot bypass viewer enrichment or JSON serialization.
+ */
+function isSingleEmbeddedBlobResult(value: unknown): boolean {
+  if (!isRecord(value) || !Array.isArray(value.content)) return false;
+  if (Object.keys(value).some((key) => key !== "content")) return false;
+  if (value.content.length !== 2) return false;
+
+  const [summary, embedded] = value.content;
+  if (
+    !isRecord(summary) || summary.type !== "text" ||
+    typeof summary.text !== "string"
+  ) {
+    return false;
+  }
+  if (!isRecord(embedded) || embedded.type !== "resource") return false;
+  if (!isRecord(embedded.resource)) return false;
+
+  const resource = embedded.resource;
+  return typeof resource.uri === "string" &&
+    resource.uri.startsWith("file:///") &&
+    typeof resource.mimeType === "string" &&
+    typeof resource.blob === "string";
+}
+
+/**
  * A mutating tool may opt into viewer refresh only by returning an explicit,
  * valid request for a safe read-back tool. Read-only tools keep the generic
  * same-tool refresh behaviour.
@@ -250,6 +277,12 @@ export class ErpNextToolsClient {
         ) {
           return execution.result;
         }
+        if (
+          tool.name === "erpnext_file_download" &&
+          isSingleEmbeddedBlobResult(execution.result)
+        ) {
+          return execution.result;
+        }
         const result = withSafeUiRefresh(
           execution.result,
           tool,
@@ -293,6 +326,12 @@ export class ErpNextToolsClient {
     }
     const client = getFrappeClient();
     const result = await tool.handler(args, { client });
+    if (
+      tool.name === "erpnext_file_download" &&
+      isSingleEmbeddedBlobResult(result)
+    ) {
+      return result;
+    }
     return withSafeUiRefresh(
       result,
       tool,

@@ -1,5 +1,5 @@
-import type { UiRefreshRequestData } from "~/shared/refresh";
-import type { NavHint } from "~/shared/jumps";
+import type { UiRefreshRequestData } from "../../shared/refresh.ts";
+import type { NavHint } from "../../shared/jumps.ts";
 
 export interface FunnelStage {
   label: string;
@@ -17,6 +17,8 @@ export interface FunnelData {
   stages: FunnelStage[];
   currency?: string;
   refreshRequest?: UiRefreshRequestData;
+  /** Outils exacts autorisés par le registre serveur pour ce viewer. */
+  _availableTools?: string[];
   /**
    * Sauts serveur par libellé d'étape.
    * Injecté par withUiRefreshRequest → FUNNEL_STAGE_JUMPS.

@@ -9,7 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveItem } from "../api/resolve.ts";
 
 export const manufacturingTools: ErpNextTool[] = [
@@ -93,6 +93,7 @@ export const manufacturingTools: ErpNextTool[] = [
   {
     name: "erpnext_bom_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single BOM by name (e.g. BOM-ITEM-00001). Returns full document with raw materials and operations.",
     category: "manufacturing",
@@ -108,7 +109,7 @@ export const manufacturingTools: ErpNextTool[] = [
         throw new Error("[erpnext_bom_get] 'name' is required");
       }
       const doc = await ctx.client.get("BOM", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "BOM" } };
     },
   },
 
@@ -195,6 +196,7 @@ export const manufacturingTools: ErpNextTool[] = [
   {
     name: "erpnext_work_order_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Work Order by name (e.g. MFG-WO-00001). Returns full document with operations and materials.",
     category: "manufacturing",
@@ -213,7 +215,7 @@ export const manufacturingTools: ErpNextTool[] = [
         throw new Error("[erpnext_work_order_get] 'name' is required");
       }
       const doc = await ctx.client.get("Work Order", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Work Order" } };
     },
   },
 
@@ -342,6 +344,7 @@ export const manufacturingTools: ErpNextTool[] = [
   {
     name: "erpnext_job_card_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Job Card by name. Returns full document with time logs and material transfers.",
     category: "manufacturing",
@@ -357,7 +360,7 @@ export const manufacturingTools: ErpNextTool[] = [
         throw new Error("[erpnext_job_card_get] 'name' is required");
       }
       const doc = await ctx.client.get("Job Card", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Job Card" } };
     },
   },
 ];

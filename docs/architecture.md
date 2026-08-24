@@ -1,6 +1,6 @@
 # Repository layout
 
-Where things live. Tool counts are per file and sum to 124.
+Where things live. Tool counts are per file and sum to 126.
 
 ```
 server.ts           # MCP server (stdio + HTTP + inspector)
@@ -25,7 +25,7 @@ src/
     manufacturing.ts  # 7 manufacturing tools
     crm.ts            # 8 CRM tools
     assets.ts         # 8 asset tools
-    operations.ts     # 10 generic operations tools
+    operations.ts     # 12 generic operations and file tools
     setup.ts          # 3 company/setup tools
     kanban.ts         # 2 read-write kanban tools
     analytics.ts      # 17 analytics tools (charts, KPIs, funnel)
@@ -38,6 +38,7 @@ src/
   *_test.ts           # Tests are colocated with source files
   ui/
     shared/           # ActionButton, InfoField, theme, branding, refresh
+    doc-viewer/       # Generic document fields, child tables, attachments
     doclist-viewer/   # Generic document list (inline detail, chip filters)
     invoice-viewer/   # Invoice display (item drill-down, actions)
     stock-viewer/     # Stock balance (detail panel, sendMessage)

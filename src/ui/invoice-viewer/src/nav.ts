@@ -9,6 +9,7 @@
  */
 import type { Jump, NavHint } from "../../shared/jumps.ts";
 import { jumpFromHint } from "../../shared/jumps.ts";
+import type { DocumentChangeEvent } from "../../shared/document-events.ts";
 import { hasAvailableTool } from "../../shared/viewer-tools.ts";
 
 export interface InvoiceJumps {
@@ -29,6 +30,23 @@ export interface InvoiceMutationActions {
 export type InvoiceMutationLifecycleEvent =
   | "mutation-committed"
   | "canonical-hydrated";
+
+export type InvoiceRootMutation = "submit" | "cancel";
+
+export function invoiceRootDocumentChange(
+  doctype: string,
+  name: string,
+  mutation: InvoiceRootMutation,
+  committedAt: string,
+): DocumentChangeEvent {
+  return {
+    doctype,
+    name,
+    mutation,
+    committedAt,
+    source: "invoice-viewer",
+  };
+}
 
 /**
  * Une mutation réussie verrouille l'ancien docstatus. Seule l'hydratation

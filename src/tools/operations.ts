@@ -10,7 +10,7 @@
 
 import type { FrappeFile, FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import {
   roundedTotalFallbackWarning,
   withRoundedTotalFallback,
@@ -23,6 +23,17 @@ import {
   removeAssignment,
   validateAssignees,
 } from "./assignment.ts";
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 32 * 1024;
+  let binary = "";
+  for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
+    binary += String.fromCharCode(
+      ...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.byteLength)),
+    );
+  }
+  return btoa(binary);
+}
 
 export const operationsTools: ErpNextTool[] = [
   // ── File Attachments ───────────────────────────────────────────────────────
@@ -112,6 +123,80 @@ export const operationsTools: ErpNextTool[] = [
           modified: file.modified,
           owner: file.owner,
         })),
+      };
+    },
+  },
+
+  {
+    name: "erpnext_file_download",
+    annotations: { readOnlyHint: true },
+    _meta: {
+      ui: {
+        resourceUri: DOC_META.ui!.resourceUri,
+        visibility: ["app"],
+      },
+    },
+    description:
+      "Download one ERPNext attachment for the document viewer. The tool accepts a File ID, verifies its document attachment, and returns one embedded binary resource.",
+    category: "operations",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file_id: {
+          type: "string",
+          description: "Native ERPNext File.name identifier, never a URL.",
+          minLength: 1,
+        },
+        attached_to_doctype: {
+          type: "string",
+          description: "Expected parent document DocType.",
+          minLength: 1,
+        },
+        attached_to_name: {
+          type: "string",
+          description: "Expected parent document name/ID.",
+          minLength: 1,
+        },
+      },
+      required: ["file_id", "attached_to_doctype", "attached_to_name"],
+      additionalProperties: false,
+    },
+    handler: async (input, ctx) => {
+      for (
+        const field of [
+          "file_id",
+          "attached_to_doctype",
+          "attached_to_name",
+        ] as const
+      ) {
+        if (typeof input[field] !== "string" || !input[field].trim()) {
+          throw new Error(
+            `[erpnext_file_download] '${field}' must be a non-empty string`,
+          );
+        }
+      }
+
+      const file = await ctx.client.downloadFile({
+        fileId: (input.file_id as string).trim(),
+        attachedToDoctype: (input.attached_to_doctype as string).trim(),
+        attachedToName: (input.attached_to_name as string).trim(),
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Prepared ${file.fileName} for download (${file.bytes.byteLength} bytes).`,
+          },
+          {
+            type: "resource",
+            resource: {
+              uri: `file:///${encodeURIComponent(file.fileName)}`,
+              mimeType: file.mimeType,
+              blob: bytesToBase64(file.bytes),
+            },
+          },
+        ],
       };
     },
   },
@@ -479,6 +564,7 @@ export const operationsTools: ErpNextTool[] = [
   {
     name: "erpnext_doc_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get any ERPNext document by DocType and name. Useful for DocTypes not covered " +
       "by dedicated tools. Returns the full document with all fields.",
@@ -498,18 +584,19 @@ export const operationsTools: ErpNextTool[] = [
       required: ["doctype", "name"],
     },
     handler: async (input, ctx) => {
-      if (!input.doctype) {
+      if (typeof input.doctype !== "string" || !input.doctype.trim()) {
         throw new Error("[erpnext_doc_get] 'doctype' is required");
       }
-      if (!input.name) {
+      if (typeof input.name !== "string" || !input.name.trim()) {
         throw new Error("[erpnext_doc_get] 'name' is required");
       }
 
+      const doctype = input.doctype.trim();
       const doc = await ctx.client.get(
-        input.doctype as string,
-        input.name as string,
+        doctype,
+        input.name.trim(),
       );
-      return { data: doc };
+      return { data: { ...doc, doctype } };
     },
   },
 

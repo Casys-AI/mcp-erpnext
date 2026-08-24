@@ -3,9 +3,10 @@ import { UI_VIEWERS } from "./viewers.ts";
 
 Deno.test("UI_VIEWERS includes the canonical kanban viewer", () => {
   assert(UI_VIEWERS.includes("kanban-viewer"));
+  assert(UI_VIEWERS.includes("doc-viewer"));
   assertEquals(
     (UI_VIEWERS as readonly string[]).includes("order-pipeline-viewer"),
     false,
   );
-  assertEquals(UI_VIEWERS.length, 7);
+  assertEquals(UI_VIEWERS.length, 8);
 });

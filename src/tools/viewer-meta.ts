@@ -17,6 +17,7 @@ const viewer = (name: string): MCPToolMeta => ({
 });
 
 export const DOCLIST_META = viewer("doclist-viewer");
+export const DOC_META = viewer("doc-viewer");
 export const INVOICE_META = viewer("invoice-viewer");
 export const STOCK_META = viewer("stock-viewer");
 export const CHART_META = viewer("chart-viewer");

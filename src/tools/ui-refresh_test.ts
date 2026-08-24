@@ -693,6 +693,39 @@ Deno.test("ui refresh - viewer capabilities expose only referenced registered to
   );
 });
 
+Deno.test("ui refresh - doc viewer exposes only registered document actions", () => {
+  const result = withUiRefreshRequest(
+    {
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doc-viewer" } },
+      data: { doctype: "Task", name: "TASK-1" },
+    },
+    "erpnext_task_get",
+    { name: "TASK-1" },
+    new Date(2026, 7, 24),
+    new Set([
+      "erpnext_task_get",
+      "erpnext_file_list",
+      "erpnext_file_upload",
+      "erpnext_file_download",
+      "erpnext_doc_submit",
+      "unrelated_tool",
+    ]),
+  ) as {
+    _availableTools?: string[];
+    _sendMessageHints?: { key?: string }[];
+  };
+
+  assertEquals(result._availableTools, [
+    "erpnext_file_download",
+    "erpnext_file_list",
+    "erpnext_file_upload",
+    "erpnext_task_get",
+  ]);
+  assertEquals(result._sendMessageHints?.map((hint) => hint.key), [
+    "timesheets",
+  ]);
+});
+
 Deno.test("ui refresh - mutation capabilities are bounded by the explicit doctype", () => {
   const available = new Set([
     "erpnext_doc_submit",
@@ -706,6 +739,9 @@ Deno.test("ui refresh - mutation capabilities are bounded by the explicit doctyp
   };
   const doclistUri = {
     ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" },
+  };
+  const docUri = {
+    ui: { resourceUri: "ui://mcp-erpnext/doc-viewer" },
   };
 
   assertEquals(
@@ -752,6 +788,13 @@ Deno.test("ui refresh - mutation capabilities are bounded by the explicit doctyp
       _meta: doclistUri,
       doctype: "Quotation",
       data: [],
+    }, available),
+    ["erpnext_doc_cancel", "erpnext_doc_submit"],
+  );
+  assertEquals(
+    availableViewerToolNames({
+      _meta: docUri,
+      data: { doctype: "BOM", name: "BOM-1" },
     }, available),
     ["erpnext_doc_cancel", "erpnext_doc_submit"],
   );

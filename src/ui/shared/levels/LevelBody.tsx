@@ -6,18 +6,25 @@
 
 import type { App } from "@modelcontextprotocol/ext-apps";
 import type { ComponentChildren } from "preact";
+import { AttachmentsSection } from "../document/AttachmentsSection.tsx";
+import { documentCapabilities } from "../document/capabilities.ts";
+import { documentModelOf } from "../document/model.ts";
+import { DocumentSurface } from "../document/DocumentSurface.tsx";
+import type { DocumentEnvelope } from "../document/types.ts";
+import { useAttachments } from "../document/useAttachments.ts";
+import type { DocumentChangeEvent } from "../document-events.ts";
 import { DoclistBody } from "../doclist/DoclistBody";
 import { LoadingSkeleton } from "../doclist/LoadingSkeleton";
 import type { DoclistData } from "../doclist/types";
 import type { DoclistState } from "../doclist/useDoclist";
-import { type Jump, jumpFromHint } from "../jumps";
+import { fillTemplate, hintLabel, type Jump, jumpFromHint } from "../jumps";
 import type { NavLevel } from "../nav-stack";
 import { useT } from "../i18n-hook";
-import { StateMessage } from "../ui";
+import { Label, StateMessage } from "../ui";
 import type { ViewerLayout } from "../useViewerLayout";
 import { BarsLevel } from "./BarsLevel";
 import { chartHintAt, chartOf, listOf, recordOf } from "./bodies";
-import { RecordLevel } from "./RecordLevel";
+import { JumpList } from "./JumpList";
 
 export const EMPTY_LIST: DoclistData = { count: 0, data: [] };
 
@@ -39,6 +46,7 @@ export function LevelBody(
     onError,
     onRefresh,
     onMutated,
+    onDocumentChanged,
     onMutationInvalidate,
     onMutationRefresh,
     children,
@@ -56,6 +64,8 @@ export function LevelBody(
     onRefresh?: () => void;
     /** Une action d'un niveau vient de changer `subject`. */
     onMutated?: (subject: string) => void;
+    /** Changement canonique structuré, indépendant de son transport futur. */
+    onDocumentChanged?: (event: DocumentChangeEvent) => void;
     /** Invalider puis relire la racine autour d'une mutation de liste. */
     onMutationInvalidate?: () => void;
     onMutationRefresh?: () => void;
@@ -73,24 +83,21 @@ export function LevelBody(
     <StateMessage tone="bad">{t("nav.unexpected_body")}</StateMessage>
   );
   if (level.kind === "record") {
-    const record = recordOf(level.body);
-    if (!record) return unexpected;
-    const name = typeof record.name === "string" ? record.name : undefined;
-    const doctype = typeof record.doctype === "string" ? record.doctype : "";
-    const asks = onAsk && name
-      ? [{
-        label: t("nav.ask"),
-        message: t("doclist.detail.full_detail_message", { doctype, id: name }),
-      }]
-      : undefined;
+    const envelope = recordOf(level.body);
+    if (!envelope) return unexpected;
     return (
-      <RecordLevel
-        record={record}
-        jumps={level.jumps}
-        asks={asks}
+      <RecordDocumentLevel
+        key={`${envelope.doctype}\u0000${envelope.name}`}
+        app={app}
+        envelope={envelope}
+        levelJumps={level.jumps}
+        layout={layout}
         onJump={onJump}
         onAsk={onAsk}
-        narrow={narrow}
+        onMutated={onMutated}
+        onDocumentChanged={onDocumentChanged}
+        onMutationInvalidate={onMutationInvalidate}
+        onMutationRefresh={onMutationRefresh}
       />
     );
   }
@@ -152,8 +159,126 @@ export function LevelBody(
       stale={level.stale}
       onRefresh={onRefresh}
       onMutated={onMutated}
+      onDocumentChanged={onDocumentChanged}
       onMutationInvalidate={onMutationInvalidate}
       onMutationRefresh={onMutationRefresh}
+    />
+  );
+}
+
+function RecordDocumentLevel({
+  app,
+  envelope,
+  levelJumps,
+  layout,
+  onJump,
+  onAsk,
+  onMutated,
+  onDocumentChanged,
+  onMutationInvalidate,
+  onMutationRefresh,
+}: {
+  app: App;
+  envelope: DocumentEnvelope;
+  levelJumps?: Jump[];
+  layout: ViewerLayout;
+  onJump?: (jump: Jump) => void;
+  onAsk?: (message: string) => void;
+  onMutated?: (subject: string) => void;
+  onDocumentChanged?: (event: DocumentChangeEvent) => void;
+  onMutationInvalidate?: () => void;
+  onMutationRefresh?: () => void;
+}) {
+  const t = useT();
+  const model = documentModelOf(envelope);
+  const capabilities = documentCapabilities(
+    app.getHostCapabilities(),
+    envelope.availableTools,
+    envelope.refreshRequest,
+  );
+  const changed = (event: DocumentChangeEvent) => {
+    onMutated?.(event.name);
+    onDocumentChanged?.(event);
+    onMutationInvalidate?.();
+    onMutationRefresh?.();
+  };
+  const attachments = useAttachments({
+    app,
+    envelope,
+    capabilities,
+    onDocumentChanged: changed,
+  });
+
+  const vars = {
+    id: envelope.name,
+    name: envelope.name,
+    doctype: envelope.doctype,
+  };
+  const hints = envelope.sendMessageHints ?? [];
+  const exactTools = envelope.availableTools;
+  const hintJumps = onJump
+    ? hints
+      .filter((hint) =>
+        hint.tool && app.getHostCapabilities()?.serverTools && exactTools &&
+        exactTools.includes(hint.tool)
+      )
+      .map((hint) =>
+        jumpFromHint(
+          hint,
+          vars,
+          t("nav.linked_to", { id: envelope.name }),
+        )
+      )
+      .filter((jump): jump is Jump => jump !== null)
+    : [];
+  const jumps = [...(levelJumps ?? []), ...hintJumps];
+  const asks = onAsk
+    ? hints.flatMap((hint) => {
+      if (!hint.message || (onJump && hint.tool)) return [];
+      return [{
+        label: hintLabel(hint),
+        message: fillTemplate(hint.message, vars),
+      }];
+    })
+    : [];
+  if (onAsk && asks.length === 0 && jumps.length === 0) {
+    asks.push({
+      label: t("nav.ask"),
+      message: t("doclist.detail.full_detail_message", {
+        doctype: envelope.doctype,
+        id: envelope.name,
+      }),
+    });
+  }
+  const actions = jumps.length > 0 || asks.length > 0
+    ? (
+      <div class="flex flex-col gap-2">
+        {jumps.length > 0 && <Label>{t("nav.goto")}</Label>}
+        <JumpList
+          narrow={layout !== "wide"}
+          jumps={jumps}
+          asks={asks}
+          onJump={onJump}
+          onAsk={onAsk}
+        />
+      </div>
+    )
+    : undefined;
+
+  return (
+    <DocumentSurface
+      model={model}
+      layout={layout}
+      attachments={capabilities.canListAttachments
+        ? (
+          <AttachmentsSection
+            controller={attachments}
+            capabilities={capabilities}
+            layout={layout}
+          />
+        )
+        : undefined}
+      actions={actions}
     />
   );
 }

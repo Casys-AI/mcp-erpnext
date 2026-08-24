@@ -6,16 +6,17 @@ The viewer and tooling layer is mature. This phase turns mcp-erpnext from a
 single-instance stdio/HTTP server into a multi-tenant, ERP-agnostic platform
 reachable through a shared MCP bridge with real identity.
 
-| Item                    | Description                                                                                                                                                                                                                      | Status      |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| **MCP bridge wiring**   | Connect to a Deno Deploy relay (local tunnel → cloud → host) so viewers and KPI feeds can be published and shared outside a single host session, not just spawned per-client over stdio.                                         | In progress |
-| **ERP-agnostic core**   | Extract the Frappe/ERPNext REST client behind an adapter interface so the same tool catalog and viewers can target other ERP backends. ERPNext becomes the first adapter rather than a hard dependency.                          | Next        |
-| **Zitadel auth (OIDC)** | Wire [Zitadel](https://zitadel.com) as the OAuth2/OIDC provider for the HTTP transport: JWT/JWKS validation and per-tool scope enforcement (`erpnext:read` vs `erpnext:write`). Prerequisite for multi-tenant bridge deployment. | Done        |
+| Item                    | Description                                                                                                                                                                                                                    | Status      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| **MCP bridge wiring**   | Connect to a Deno Deploy relay (local tunnel → cloud → host) so viewers and KPI feeds can be published and shared outside a single host session, not just spawned per-client over stdio.                                       | In progress |
+| **ERP-agnostic core**   | Extract the Frappe/ERPNext REST client behind an adapter interface so the same tool catalog and viewers can target other ERP backends. ERPNext becomes the first adapter rather than a hard dependency.                        | Next        |
+| **Zitadel auth (OIDC)** | Generic HTTP Bearer/JWT/JWKS validation and RFC 9728 metadata are wired. Validate the Zitadel deployment profile and add per-tool scope enforcement (`erpnext:read` vs `erpnext:write`) before multi-tenant bridge deployment. | In progress |
 
 ## Interactive Additions (P0)
 
-Core mutations and drill-down navigation are shipped across all seven viewers.
-What remains:
+Core mutations and drill-down navigation are shipped across all eight viewers.
+The generic document surface and attachment list/upload/download workflow ship
+in 3.1.0-beta.2. What remains:
 
 | Interaction                | Viewer                         | Tool Called                            | Description                                                                                            |
 | -------------------------- | ------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -40,6 +41,12 @@ What remains:
 
 ## Ideas / Nice-to-have (P2)
 
+- Experimental coordination transport for versioned `erpnext.document.changed`
+  facts between independently mounted MCP Apps. Keep ephemeral UI signals
+  separate, bind facts to an ERP authority, prevent loops, and let each
+  subscriber invalidate then perform its own canonical read. Dependency topics
+  stay explicit; do not infer which KPI or aggregate a document mutation
+  affects.
 - Manufacturing dashboard (Work Order status, machine utilization)
 - Multi-currency reconciliation viewer
 - Approval queue viewer (pending approvals across doctypes)

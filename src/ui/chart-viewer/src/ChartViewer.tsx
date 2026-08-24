@@ -4,7 +4,7 @@
  * Handshake stays on ext-apps (refresh / callServerTool / sendMessage).
  */
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Ref } from "preact";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
@@ -1320,11 +1320,32 @@ function ChartRouter(
  * automatique (interval + focus + visibilitychange).
  */
 function ChartContent(
-  { data, error, layout, containerRef }: {
+  {
+    data,
+    error,
+    layout,
+    containerRef,
+    refreshing,
+    rootRefreshRequest,
+    rootFreshEvent,
+    rootMutationEvent,
+    canRefreshRoot,
+    onRefreshRoot,
+    onMutationInvalidate,
+    onMutationRefresh,
+  }: {
     data: ChartData;
     error: string | null;
     layout: ViewerLayout;
     containerRef: Ref<HTMLDivElement>;
+    refreshing: boolean;
+    rootRefreshRequest: UiRefreshRequestData | null;
+    rootFreshEvent: number;
+    rootMutationEvent: number;
+    canRefreshRoot: boolean;
+    onRefreshRoot: () => void;
+    onMutationInvalidate: () => void;
+    onMutationRefresh: () => void;
   },
 ) {
   const [shared, setShared] = useState<DrillDownChannel | null>(null);
@@ -1337,7 +1358,7 @@ function ChartContent(
   const narrow = layout !== "wide";
   const t = useT();
   const fixture = isFixtureMode();
-  const rootKey = viewerRootKey("chart", data.refreshRequest, {
+  const rootKey = viewerRootKey("chart", rootRefreshRequest ?? undefined, {
     title: data.title,
   });
   const activeContext = useActiveContext(app, rootKey);
@@ -1353,6 +1374,12 @@ function ChartContent(
   const { list } = viewerNav;
   const [levelError, setLevelError] = useState<string | null>(null);
   const { ask } = viewerNav;
+  useLayoutEffect(() => {
+    const root = nav.stack.levels[0];
+    if (rootFreshEvent > rootMutationEvent && root?.stale) {
+      nav.clearStale(root.id);
+    }
+  }, [rootFreshEvent, rootMutationEvent]);
   // Un point, une barre, une part : le segment exact prime sur le saut plus
   // général de sa catégorie. Sans saut typé, la sélection reste du contexte.
   const tryJump = jumpsEnabled &&
@@ -1475,6 +1502,33 @@ function ChartContent(
           )}
         </div>
         <div class="flex min-w-0 shrink-0 items-center gap-2">
+          {isRoot && current.stale && (
+            <div
+              role="status"
+              title={t("nav.stale_title")}
+              class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+            >
+              <span
+                aria-hidden="true"
+                class="size-[5px] rounded-full bg-warn"
+              />
+              {!narrow && (
+                <span>{t("nav.stale_values", { at: current.stale.at })}</span>
+              )}
+              {canRefreshRoot && (
+                <button
+                  type="button"
+                  disabled={refreshing}
+                  onClick={onRefreshRoot}
+                  aria-label={t("nav.refresh")}
+                  title={t("nav.refresh")}
+                  class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                >
+                  {refreshing ? "…" : "↻"}
+                </button>
+              )}
+            </div>
+          )}
           <ActiveContextChip
             compact={narrow}
             selections={activeContext.selections}
@@ -1512,6 +1566,9 @@ function ChartContent(
         onAsk={ask}
         onError={setLevelError}
         onMutated={nav.markStale}
+        onDocumentChanged={nav.reportDocumentChange}
+        onMutationInvalidate={onMutationInvalidate}
+        onMutationRefresh={onMutationRefresh}
         onRefresh={() => void nav.refreshLevel()}
       >
         {/* Zone de rendu du chart */}
@@ -1572,12 +1629,15 @@ export function ChartViewer() {
   );
   const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
+  const [rootFreshEvent, setRootFreshEvent] = useState(0);
+  const [rootMutationEvent, setRootMutationEvent] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const dataRef = useRef<ChartData | null>(
     fixture ? fixtureFromSearch() : null,
   );
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshSequenceRef = useRef(createUiRefreshSequence());
+  const rootEventRef = useRef(0);
   const lastRefreshStartedAtRef = useRef(0);
 
   const { ref: containerRef, layout } = useViewerLayout<HTMLDivElement>();
@@ -1589,6 +1649,7 @@ export function ChartViewer() {
       refreshRequestRef.current,
     );
     setData(nextData);
+    setRootFreshEvent(++rootEventRef.current);
   }
 
   function consumeToolResult(result: ToolResultPayload): boolean {
@@ -1611,28 +1672,14 @@ export function ChartViewer() {
     }
   }
 
-  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+  async function requestRefresh(
+    options: { ignoreInterval?: boolean; force?: boolean } = {},
+  ) {
     if (fixture) return false;
     const request = resolveUiRefreshRequest(
       dataRef.current,
       refreshRequestRef.current,
     );
-    const sequence = refreshSequenceRef.current;
-    if (
-      !canRequestUiRefresh({
-        request,
-        visibilityState: typeof document === "undefined"
-          ? "visible"
-          : document.visibilityState,
-        refreshInFlight: sequence.inFlight !== null,
-        now: Date.now(),
-        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
-        minIntervalMs: CHART_REFRESH_INTERVAL_MS,
-      }, options)
-    ) {
-      return false;
-    }
-
     if (
       !request ||
       !canCallViewerTool(
@@ -1644,7 +1691,32 @@ export function ChartViewer() {
       return false;
     }
 
-    const started = beginUiRefresh(sequence);
+    const sequence = refreshSequenceRef.current;
+    if (sequence.inFlight !== null) {
+      if (options.force) {
+        refreshSequenceRef.current = beginUiRefresh(sequence, {
+          force: true,
+        }).state;
+      }
+      return false;
+    }
+    const forced = Boolean(options.force || sequence.pendingForced);
+    if (
+      !canRequestUiRefresh({
+        request,
+        visibilityState: typeof document === "undefined"
+          ? "visible"
+          : document.visibilityState,
+        refreshInFlight: false,
+        now: Date.now(),
+        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+        minIntervalMs: CHART_REFRESH_INTERVAL_MS,
+      }, { ignoreInterval: options.ignoreInterval || forced })
+    ) {
+      return false;
+    }
+
+    const started = beginUiRefresh(sequence, { force: forced });
     if (started.generation === null) return false;
     refreshSequenceRef.current = started.state;
     lastRefreshStartedAtRef.current = Date.now();
@@ -1679,6 +1751,9 @@ export function ChartViewer() {
       }
     }
     setRefreshing(false);
+    if (completed.runPending) {
+      void requestRefresh({ ignoreInterval: true, force: true });
+    }
     return succeeded;
   }
 
@@ -1737,12 +1812,41 @@ export function ChartViewer() {
     );
   }
 
+  const rootRefreshRequest = resolveUiRefreshRequest(
+    data,
+    refreshRequestRef.current,
+  );
+  const canRefreshRoot = Boolean(
+    !fixture &&
+      rootRefreshRequest &&
+      app.getHostCapabilities()?.serverTools &&
+      readAvailableTools(data)?.includes(rootRefreshRequest.toolName),
+  );
+
   return (
     <ChartContent
       data={data}
       error={error}
       layout={layout}
       containerRef={containerRef}
+      refreshing={refreshing}
+      rootRefreshRequest={rootRefreshRequest}
+      rootFreshEvent={rootFreshEvent}
+      rootMutationEvent={rootMutationEvent}
+      canRefreshRoot={canRefreshRoot}
+      onRefreshRoot={() =>
+        void requestRefresh({ ignoreInterval: true, force: true })}
+      onMutationInvalidate={() => {
+        setRootMutationEvent(++rootEventRef.current);
+        refreshSequenceRef.current = invalidateUiRefresh(
+          refreshSequenceRef.current,
+        );
+      }}
+      onMutationRefresh={() => {
+        if (canRefreshRoot) {
+          void requestRefresh({ ignoreInterval: true, force: true });
+        }
+      }}
     />
   );
 }

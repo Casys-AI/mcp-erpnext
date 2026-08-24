@@ -1,4 +1,4 @@
-# Tools Reference (125)
+# Tools Reference (126)
 
 Full reference for all ERPNext MCP tools. See [README](../README.md) for
 overview.
@@ -11,7 +11,7 @@ overview.
 | `erpnext_company_list`   | Company | List companies                                 |
 | `erpnext_company_create` | Company | Create (name, abbr, currency, country, domain) |
 
-## Sales (17) → doclist-viewer / invoice-viewer
+## Sales (17) → doclist-viewer / doc-viewer / invoice-viewer
 
 | Tool                           | DocType       | Operations                                   |
 | ------------------------------ | ------------- | -------------------------------------------- |
@@ -33,7 +33,7 @@ overview.
 | `erpnext_quotation_get`        | Quotation     | Get with line items                          |
 | `erpnext_quotation_create`     | Quotation     | Create (Customer/Lead + items)               |
 
-## Inventory (9) → doclist-viewer / stock-viewer
+## Inventory (9) → doclist-viewer / doc-viewer / stock-viewer
 
 | Tool                         | DocType     | Operations                                   |
 | ---------------------------- | ----------- | -------------------------------------------- |
@@ -47,7 +47,7 @@ overview.
 | `erpnext_stock_entry_get`    | Stock Entry | Get with item details                        |
 | `erpnext_stock_entry_create` | Stock Entry | Create (type + items + warehouses)           |
 
-## Purchasing (11) → doclist-viewer / invoice-viewer
+## Purchasing (11) → doclist-viewer / doc-viewer
 
 | Tool                              | DocType            | Operations                                    |
 | --------------------------------- | ------------------ | --------------------------------------------- |
@@ -63,7 +63,7 @@ overview.
 | `erpnext_purchase_receipt_get`    | Purchase Receipt   | Get with received items                       |
 | `erpnext_supplier_quotation_list` | Supplier Quotation | List + filters                                |
 
-## Accounting (6) → doclist-viewer
+## Accounting (6) → doclist-viewer / doc-viewer
 
 | Tool                           | DocType       | Operations                                        |
 | ------------------------------ | ------------- | ------------------------------------------------- |
@@ -74,7 +74,7 @@ overview.
 | `erpnext_payment_entry_list`   | Payment Entry | List + filters (type, party, dates)               |
 | `erpnext_payment_entry_get`    | Payment Entry | Get with references                               |
 
-## HR (12) → doclist-viewer
+## HR (12) → doclist-viewer / doc-viewer
 
 | Tool                               | DocType           | Operations                                   |
 | ---------------------------------- | ----------------- | -------------------------------------------- |
@@ -91,7 +91,7 @@ overview.
 | `erpnext_expense_claim_create`     | Expense Claim     | Create (employee + expenses[])               |
 | `erpnext_leave_balance`            | Leave Allocation  | Get allocations by employee                  |
 
-## Project (9) → doclist-viewer
+## Project (9) → doclist-viewer / doc-viewer
 
 | Tool                     | DocType   | Operations                                           |
 | ------------------------ | --------- | ---------------------------------------------------- |
@@ -105,7 +105,7 @@ overview.
 | `erpnext_timesheet_list` | Timesheet | List + filters (employee, project, status)           |
 | `erpnext_timesheet_get`  | Timesheet | Get with time log details                            |
 
-## Delivery (5) → doclist-viewer
+## Delivery (5) → doclist-viewer / doc-viewer
 
 | Tool                           | DocType       | Operations                                      |
 | ------------------------------ | ------------- | ----------------------------------------------- |
@@ -115,7 +115,7 @@ overview.
 | `erpnext_shipment_list`        | Shipment      | List + filters (status, carrier, dates)         |
 | `erpnext_shipment_get`         | Shipment      | Get with parcels                                |
 
-## Manufacturing (7) → doclist-viewer
+## Manufacturing (7) → doclist-viewer / doc-viewer
 
 | Tool                        | DocType    | Operations                                      |
 | --------------------------- | ---------- | ----------------------------------------------- |
@@ -127,7 +127,7 @@ overview.
 | `erpnext_job_card_list`     | Job Card   | List + filters (work_order, status, operation)  |
 | `erpnext_job_card_get`      | Job Card   | Get with time logs + material transfers         |
 
-## CRM (8) → doclist-viewer
+## CRM (8) → doclist-viewer / doc-viewer
 
 | Tool                       | DocType     | Operations                                   |
 | -------------------------- | ----------- | -------------------------------------------- |
@@ -140,7 +140,7 @@ overview.
 | `erpnext_contact_get`      | Contact     | Get by name                                  |
 | `erpnext_campaign_list`    | Campaign    | List + filters (campaign_type)               |
 
-## Assets (8) → doclist-viewer
+## Assets (8) → doclist-viewer / doc-viewer
 
 | Tool                             | DocType           | Operations                                            |
 | -------------------------------- | ----------------- | ----------------------------------------------------- |
@@ -153,21 +153,22 @@ overview.
 | `erpnext_asset_maintenance_get`  | Asset Maintenance | Get with maintenance tasks                            |
 | `erpnext_asset_category_list`    | Asset Category    | List all categories                                   |
 
-## Generic Operations (11) → doclist-viewer
+## Generic Operations (12) → doc-viewer / doclist-viewer
 
-| Tool                   | Operation | Notes                                             |
-| ---------------------- | --------- | ------------------------------------------------- |
-| `erpnext_doc_create`   | Create    | Any DocType — essential for master data setup     |
-| `erpnext_doc_get`      | Get       | Any document by DocType + name                    |
-| `erpnext_doc_list`     | List      | Any DocType with fields, filters, limit, order_by |
-| `erpnext_doc_update`   | Update    | Partial patch — pass only fields to change        |
-| `erpnext_doc_delete`   | Delete    | Draft documents only                              |
-| `erpnext_doc_submit`   | Submit    | Any submittable document                          |
-| `erpnext_doc_cancel`   | Cancel    | Any submitted document                            |
-| `erpnext_doc_assign`   | Assign    | Native assignment (ToDo + notification) to users  |
-| `erpnext_doc_unassign` | Unassign  | Remove one user's native assignment               |
-| `erpnext_file_list`    | List      | Read attachments and native File metadata         |
-| `erpnext_file_upload`  | Upload    | Attach base64 data as a native File               |
+| Tool                    | Operation | Notes                                                   |
+| ----------------------- | --------- | ------------------------------------------------------- |
+| `erpnext_doc_create`    | Create    | Any DocType — essential for master data setup           |
+| `erpnext_doc_get`       | Get       | Any document by DocType + name                          |
+| `erpnext_doc_list`      | List      | Any DocType with fields, filters, limit, order_by       |
+| `erpnext_doc_update`    | Update    | Partial patch — pass only fields to change              |
+| `erpnext_doc_delete`    | Delete    | Draft documents only                                    |
+| `erpnext_doc_submit`    | Submit    | Any submittable document                                |
+| `erpnext_doc_cancel`    | Cancel    | Any submitted document                                  |
+| `erpnext_doc_assign`    | Assign    | Native assignment (ToDo + notification) to users        |
+| `erpnext_doc_unassign`  | Unassign  | Remove one user's native assignment                     |
+| `erpnext_file_list`     | List      | Read attachments and native File metadata               |
+| `erpnext_file_upload`   | Upload    | Attach base64 data as a native File                     |
+| `erpnext_file_download` | Download  | App-only, authenticated and bounded attachment download |
 
 `erpnext_file_list` requires `attached_to_doctype` and `attached_to_name`. Its
 optional `limit` is an integer from 1 to 500 and defaults to 50.
@@ -178,6 +179,15 @@ Files are private by default (`is_private: false` makes them public), accept no
 local path or URL, are capped at 10 MiB decoded by default (override with
 positive-integer-byte `ERPNEXT_MAX_UPLOAD_BYTES`), require write permission on
 the DocType, and return native `File` metadata.
+
+`erpnext_file_download` is hidden from model tool lists and is callable only by
+an MCP App. It accepts the native `File.name` plus the expected parent DocType
+and document name, re-fetches that File row without cache, verifies its exact
+attachment and private/public path, and downloads it through Frappe's
+authenticated handler. It never follows redirects or accepts an arbitrary URL.
+The response contains one inline MCP resource for the host's `downloadFile`
+channel. Downloads are capped at 10 MiB by default; override the positive byte
+limit with `ERPNEXT_MAX_DOWNLOAD_BYTES`.
 
 ## Kanban (2) → kanban-viewer
 

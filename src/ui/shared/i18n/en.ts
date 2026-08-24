@@ -36,6 +36,50 @@ export const en: Record<string, string> = {
   "common.progress.label": "Progress",
   "common.assignees.label": "Assignees",
 
+  // ── Generic document surface ─────────────────────────────────────────────
+  "document.header": "Document header",
+  "document.docstatus": "docstatus {value}",
+  "document.sections": "Document sections",
+  "document.fields": "Fields",
+  "document.attachments": "Attachments",
+  "document.surface": "Document {name}",
+  "document.sidebar": "Document actions and attachments",
+  "document.empty_value": "—",
+  "document.boolean.true": "Yes",
+  "document.boolean.false": "No",
+  "document.progress_value": "{value}%",
+  "document.system_fields": "System fields",
+  "document.table.no_columns": "No displayable columns",
+  "document.json": "Raw document JSON",
+  "document.action.refresh_pending":
+    "Change committed — refresh is still pending",
+  "document.attachments.add": "Add file",
+  "document.attachments.refresh": "Refresh attachments",
+  "document.attachments.loading": "Loading attachments…",
+  "document.attachments.empty": "No attachments yet",
+  "document.attachments.unavailable":
+    "Attachments are not available in this host",
+  "document.attachments.private": "Private",
+  "document.attachments.public": "Public",
+  "document.attachments.privacy": "Attachment privacy",
+  "document.attachments.private_hint":
+    "Only authenticated ERPNext users with access can retrieve this file",
+  "document.attachments.public_hint":
+    "ERPNext will expose this file from its public files area",
+  "document.attachments.download": "Download {name}",
+  "document.attachments.reading": "Reading file…",
+  "document.attachments.reading_progress": "Reading {value}%",
+  "document.attachments.uploading": "Uploading…",
+  "document.attachments.relisting": "Verifying…",
+  "document.attachments.dismiss_error": "Dismiss attachment error",
+  "document.attachments.error.list": "Could not load attachments",
+  "document.attachments.error.upload": "Could not upload this file",
+  "document.attachments.error.relist":
+    "File added, but the attachment list could not be verified",
+  "document.attachments.error.download": "Could not download this file",
+  "document.attachments.error.host_denied":
+    "The host cancelled or refused the download",
+
   // ── Mise en page / marqueurs ─────────────────────────────────────────────
   "layout.live": "live",
 

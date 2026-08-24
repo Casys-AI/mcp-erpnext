@@ -1,13 +1,10 @@
 import type { InvoicePayload, ItemRecord, StockRow } from "./types.ts";
+import type { DocumentAttachment } from "../../shared/document/attachment-results.ts";
 
 /** Mock payload so the bundled HTML can be opened without a host. */
 export const INVOICE_FIXTURE: InvoicePayload = {
-  _availableTools: [
-    "erpnext_doc_submit",
-    "erpnext_doc_cancel",
-    "erpnext_item_get",
-    "erpnext_stock_balance",
-  ],
+  // Le mode fixture documente le rendu, mais ne simule aucune action hôte.
+  _availableTools: [],
   data: {
     doctype: "Sales Invoice",
     name: "ACC-SINV-2026-00042",
@@ -97,6 +94,21 @@ export const INVOICE_FIXTURE: InvoicePayload = {
     },
   ],
 };
+
+export const INVOICE_ATTACHMENT_FIXTURES: readonly DocumentAttachment[] = [
+  {
+    id: "FILE-SINV-00042-PDF",
+    fileName: "ACC-SINV-2026-00042.pdf",
+    fileSize: 184_320,
+    isPrivate: true,
+  },
+  {
+    id: "FILE-SINV-00042-DELIVERY",
+    fileName: "signed-delivery-note.png",
+    fileSize: 426_812,
+    isPrivate: false,
+  },
+];
 
 export const ITEM_FIXTURES: Record<string, {
   item: ItemRecord;

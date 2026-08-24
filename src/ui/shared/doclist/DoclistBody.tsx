@@ -6,8 +6,11 @@
 
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { useEffect, useRef, useState } from "preact/hooks";
+import type { DocumentChangeEvent } from "../document-events.ts";
+import type { DocumentEnvelope } from "../document/types.ts";
 import { useT } from "../i18n-hook";
 import type { Jump } from "../jumps";
+import { documentChangeForTool, recordOf } from "../levels/bodies.ts";
 import { extractToolResultText } from "../refresh";
 import { StateMessage, ToolButton, TotalRow } from "../ui";
 import type { ViewerLayout } from "../useViewerLayout";
@@ -51,6 +54,7 @@ export function DoclistBody(
     onMutationInvalidate,
     onMutationRefresh,
     onMutated,
+    onDocumentChanged,
   }: {
     app: App;
     data: DoclistData;
@@ -73,6 +77,8 @@ export function DoclistBody(
     onMutationRefresh?: () => void;
     /** Une action d'ici (valider, annuler) vient de changer `subject`. */
     onMutated?: (subject: string) => void;
+    /** Changement canonique structuré, indépendant de son transport futur. */
+    onDocumentChanged?: (event: DocumentChangeEvent) => void;
   },
 ) {
   const t = useT();
@@ -86,7 +92,11 @@ export function DoclistBody(
     )
     ? payloadRowAction
     : undefined;
-  type Expanded = { id: string | null; data: Row | null; loading: boolean };
+  type Expanded = {
+    id: string | null;
+    data: DocumentEnvelope | null;
+    loading: boolean;
+  };
   const [expanded, setExpandedState] = useState<Expanded>({
     id: null,
     data: null,
@@ -118,9 +128,18 @@ export function DoclistBody(
     );
     if (!row) return;
     if (fixture || (!rowAction && row._detail)) {
+      const envelope = recordOf(
+        (row._detail as Row | undefined) ?? row,
+        { doctype: data.doctype, name: expandedId },
+      );
+      if (!envelope) {
+        onError(t("doclist.error.load_details"));
+        list.setExpandedId(null);
+        return;
+      }
       setExpanded({
         id: expandedId,
-        data: (row._detail as Row | undefined) ?? row,
+        data: envelope,
         loading: false,
       });
       return;
@@ -145,9 +164,14 @@ export function DoclistBody(
           const text = extractToolResultText(result);
           if (text) {
             const parsed = JSON.parse(text);
+            const envelope = recordOf(parsed, {
+              doctype: data.doctype,
+              name: expandedId,
+            });
+            if (!envelope) throw new Error("document envelope is invalid");
             setExpanded({
               id: expandedId,
-              data: parsed.data ?? parsed,
+              data: envelope,
               loading: false,
             });
             onError(null);
@@ -174,7 +198,7 @@ export function DoclistBody(
         }
       }
     })();
-  }, [expandedId, rows, rowAction, fixture]);
+  }, [expandedId, rows, rowAction, fixture, data.doctype]);
 
   function onRowClick(row: Row) {
     const rowId = resolveRowId(row, rowAction, "");
@@ -182,13 +206,26 @@ export function DoclistBody(
     list.setExpandedId(expandedId === rowId ? null : rowId);
   }
 
+  function notifyDocumentChanged(event: DocumentChangeEvent) {
+    onMutated?.(event.name);
+    onDocumentChanged?.(event);
+  }
+
+  function handleAttachmentDocumentChanged(event: DocumentChangeEvent) {
+    notifyDocumentChanged(event);
+    onMutationInvalidate?.();
+    onMutationRefresh?.();
+  }
+
   async function handleDetailAction(
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<boolean> {
+    const actionEnvelope = expandedRef.current.data;
     if (
       fixture ||
-      !canCallViewerTool(serverTools, data._availableTools, toolName)
+      !serverTools ||
+      !actionEnvelope?.availableTools?.includes(toolName)
     ) return false;
     try {
       const result = await app.callServerTool({
@@ -197,7 +234,17 @@ export function DoclistBody(
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
       if (result.isError) return false;
       const currentId = expandedId;
-      if (currentId) onMutated?.(currentId);
+      const currentEnvelope = actionEnvelope;
+      const event = currentEnvelope
+        ? documentChangeForTool(
+          currentEnvelope,
+          toolName,
+          new Date().toISOString(),
+          "doclist.inline-detail",
+        )
+        : null;
+      if (event) notifyDocumentChanged(event);
+      else if (currentId) onMutated?.(currentId);
       onMutationInvalidate?.();
 
       // Le bouton reste busy pendant la fenêtre de cohérence ERPNext. Il ne
@@ -223,9 +270,16 @@ export function DoclistBody(
         const text = extractToolResultText(readBack);
         if (!text) throw new Error("canonical read-back is empty");
         const parsed = JSON.parse(text);
+        const envelope = recordOf(parsed, {
+          doctype: currentEnvelope?.doctype ?? data.doctype,
+          name: currentEnvelope?.name ?? currentId,
+        });
+        if (!envelope) {
+          throw new Error("canonical document envelope is invalid");
+        }
         setExpanded({
           id: currentId,
-          data: parsed.data ?? parsed,
+          data: envelope,
           loading: false,
         });
         onError(null);
@@ -357,17 +411,15 @@ export function DoclistBody(
         {inspecting && (
           <InlineDetailPanel
             app={app}
-            data={expanded.data}
+            envelope={expanded.data}
             loading={expanded.loading}
-            doctype={data.doctype}
-            sendMessageHints={data._sendMessageHints}
             fixture={fixture}
-            availableTools={serverTools ? data._availableTools : []}
             layout={layout}
             onClose={() => list.setExpandedId(null)}
             onAction={handleDetailAction}
             onJump={onJump}
             onAsk={onAsk}
+            onDocumentChanged={handleAttachmentDocumentChanged}
           />
         )}
       </div>

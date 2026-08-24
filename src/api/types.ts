@@ -66,6 +66,30 @@ export interface FrappeFileUploadInput {
   isPrivate?: boolean;
 }
 
+/** Input for a bounded, authenticated download of an attached Frappe File. */
+export interface FrappeFileDownloadInput {
+  /** Native `File.name` identifier. Never a URL. */
+  fileId: string;
+  /** Expected parent DocType. Used to prevent cross-document downloads. */
+  attachedToDoctype: string;
+  /** Expected parent document name. Used to prevent cross-document downloads. */
+  attachedToName: string;
+}
+
+/** Bytes and trusted metadata returned by a bounded Frappe File download. */
+export interface FrappeFileDownload {
+  /** Native `File.name` identifier. */
+  fileId: string;
+  /** Sanitized filename safe to expose through a `file:///` resource URI. */
+  fileName: string;
+  /** Response MIME type, or `application/octet-stream` when unavailable. */
+  mimeType: string;
+  /** Fully read file bytes, bounded by the configured download limit. */
+  bytes: Uint8Array;
+  /** Whether the File row is private. */
+  isPrivate: boolean;
+}
+
 /** Frappe list API response wrapper. Returned by `GET /api/resource/{doctype}`. */
 export interface FrappeListResponse<T extends FrappeDoc = FrappeDoc> {
   /** Array of documents matching the query */

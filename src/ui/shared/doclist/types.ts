@@ -1,6 +1,6 @@
 /** Doclist Viewer types */
 
-import type { UiRefreshRequestData } from "~/shared/refresh";
+import type { UiRefreshRequestData } from "../refresh.ts";
 
 /** Server-driven row action — injected in tool payload to make rows clickable */
 export interface RowAction {

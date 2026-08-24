@@ -33,6 +33,50 @@ export const fr: Record<string, string> = {
   "common.progress.label": "Progression",
   "common.assignees.label": "Responsables",
 
+  // ── Fiche documentaire générique ─────────────────────────────────────────
+  "document.header": "En-tête du document",
+  "document.docstatus": "docstatus {value}",
+  "document.sections": "Sections du document",
+  "document.fields": "Champs",
+  "document.attachments": "Pièces jointes",
+  "document.surface": "Document {name}",
+  "document.sidebar": "Actions et pièces jointes du document",
+  "document.empty_value": "—",
+  "document.boolean.true": "Oui",
+  "document.boolean.false": "Non",
+  "document.progress_value": "{value} %",
+  "document.system_fields": "Champs système",
+  "document.table.no_columns": "Aucune colonne affichable",
+  "document.json": "JSON brut du document",
+  "document.action.refresh_pending":
+    "Modification enregistrée — le rafraîchissement reste en attente",
+  "document.attachments.add": "Ajouter un fichier",
+  "document.attachments.refresh": "Rafraîchir les pièces jointes",
+  "document.attachments.loading": "Chargement des pièces jointes…",
+  "document.attachments.empty": "Aucune pièce jointe",
+  "document.attachments.unavailable":
+    "Les pièces jointes ne sont pas disponibles dans cet hôte",
+  "document.attachments.private": "Privé",
+  "document.attachments.public": "Public",
+  "document.attachments.privacy": "Confidentialité de la pièce jointe",
+  "document.attachments.private_hint":
+    "Seuls les utilisateurs ERPNext authentifiés et autorisés pourront récupérer ce fichier",
+  "document.attachments.public_hint":
+    "ERPNext exposera ce fichier depuis son espace de fichiers publics",
+  "document.attachments.download": "Télécharger {name}",
+  "document.attachments.reading": "Lecture du fichier…",
+  "document.attachments.reading_progress": "Lecture {value} %",
+  "document.attachments.uploading": "Envoi…",
+  "document.attachments.relisting": "Vérification…",
+  "document.attachments.dismiss_error": "Fermer l'erreur de pièce jointe",
+  "document.attachments.error.list": "Impossible de charger les pièces jointes",
+  "document.attachments.error.upload": "Impossible d'envoyer ce fichier",
+  "document.attachments.error.relist":
+    "Fichier ajouté, mais la liste des pièces jointes n'a pas pu être vérifiée",
+  "document.attachments.error.download": "Impossible de télécharger ce fichier",
+  "document.attachments.error.host_denied":
+    "L'hôte a annulé ou refusé le téléchargement",
+
   // ── Mise en page / marqueurs ─────────────────────────────────────────────
   "layout.live": "live",
 

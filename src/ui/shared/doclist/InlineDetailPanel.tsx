@@ -8,79 +8,90 @@
  * plus quand on ouvre une pièce.
  */
 
+import type { App } from "@modelcontextprotocol/ext-apps";
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
-import type { App } from "@modelcontextprotocol/ext-apps";
-import { Button, InfoRow, Label, Skeleton } from "~/shared/ui";
-import { useT } from "~/shared/i18n-hook";
 import { ConfirmSheet, useConfirm } from "~/shared/confirm";
-import { TONE_AMOUNT, toneForStatus } from "~/shared/status";
-import { StatusBadge, StatusCell } from "./StatusCell";
-import type { SendMessageHint } from "./types";
-import { formatCell } from "./helpers";
-import type { ViewerLayout } from "~/shared/useViewerLayout";
-import { type Jump, jumpFromHint } from "~/shared/jumps";
+import { AttachmentsSection } from "~/shared/document/AttachmentsSection.tsx";
+import { documentCapabilities } from "~/shared/document/capabilities.ts";
+import {
+  documentEnvelopeOf,
+  documentModelOf,
+} from "~/shared/document/model.ts";
+import { DocumentSurface } from "~/shared/document/DocumentSurface.tsx";
+import type { DocumentEnvelope } from "~/shared/document/types.ts";
+import { useAttachments } from "~/shared/document/useAttachments.ts";
+import type { DocumentChangeEvent } from "~/shared/document-events.ts";
+import { useT } from "~/shared/i18n-hook";
+import {
+  fillTemplate,
+  hintLabel,
+  type Jump,
+  jumpFromHint,
+} from "~/shared/jumps";
 import { JumpList } from "~/shared/levels/JumpList";
-import { hasAvailableTool } from "~/shared/viewer-tools";
+import { Button, Label, Skeleton } from "~/shared/ui";
+import type { ViewerLayout } from "~/shared/useViewerLayout";
+import type { SendMessageHint } from "./types";
 
-/** Champs mis en avant sous le titre, dans cet ordre, avant le reste. */
-const LEAD_FIELDS = ["grand_total", "outstanding_amount", "total"];
+interface InlineDetailPanelProps {
+  app: App;
+  /** Enveloppe canonique de la fiche enfant, seule source de capacités. */
+  envelope?: DocumentEnvelope | null;
+  loading: boolean;
+  fixture?: boolean;
+  /** Mise en page courante — détermine le header de l'inspecteur et les tailles. */
+  layout?: ViewerLayout;
+  onClose: () => void;
+  /** Présent quand l'hôte relaie les outils : les hints deviennent des sauts « › ». */
+  onJump?: (jump: Jump) => void;
+  onAsk?: (message: string) => void;
+  onAction: (
+    toolName: string,
+    args: Record<string, unknown>,
+  ) => Promise<boolean>;
+  onDocumentChanged?: (event: DocumentChangeEvent) => void;
+  /** @deprecated Utiliser `envelope`; conservé pour les anciens appelants. */
+  data?: Record<string, unknown> | null;
+  /** @deprecated Complète uniquement l'identité de l'ancien `data`. */
+  doctype?: string;
+  /** @deprecated Une capacité parent ne peut pas autoriser la fiche enfant. */
+  availableTools?: readonly string[];
+  /** @deprecated Les hints doivent appartenir à l'enveloppe enfant. */
+  sendMessageHints?: SendMessageHint[];
+}
+
+function legacyEnvelopeOf(
+  data: Record<string, unknown> | null | undefined,
+  doctype: string | undefined,
+): DocumentEnvelope | null {
+  if (!data) return null;
+  const exact = documentEnvelopeOf(data);
+  if (exact) return exact;
+  const name = typeof data.name === "string" ? data.name.trim() : "";
+  if (!doctype?.trim() || !name) return null;
+  return documentEnvelopeOf({
+    data: { ...data, doctype: doctype.trim(), name },
+  });
+}
 
 export function InlineDetailPanel(
   {
+    app,
+    envelope,
     data,
-    loading,
     doctype,
-    sendMessageHints,
+    loading,
     fixture,
-    availableTools,
     layout,
     onClose,
     onJump,
     onAsk,
     onAction,
-  }: {
-    app: App;
-    data: Record<string, unknown> | null;
-    loading: boolean;
-    doctype?: string;
-    sendMessageHints?: SendMessageHint[];
-    fixture?: boolean;
-    /** Contrat serveur borné : seules ces mutations peuvent être proposées. */
-    availableTools?: readonly string[];
-    /** Mise en page courante — détermine le header de l'inspecteur et les tailles. */
-    layout?: ViewerLayout;
-    onClose: () => void;
-    /** Présent quand l'hôte relaie les outils : les hints deviennent des sauts « › ». */
-    onJump?: (jump: Jump) => void;
-    onAsk?: (message: string) => void;
-    onAction: (
-      toolName: string,
-      args: Record<string, unknown>,
-    ) => Promise<boolean>;
-  },
+    onDocumentChanged,
+  }: InlineDetailPanelProps,
 ) {
-  const t = useT();
   const narrow = layout !== "wide";
-  const [actLoading, setActLoading] = useState<string | null>(null);
-  const confirm = useConfirm();
-  const [actMsg, setActMsg] = useState<string | null>(null);
-  const [actOk, setActOk] = useState(true);
-
-  async function act(
-    key: string,
-    tool: string,
-    args: Record<string, unknown>,
-    msg: string,
-  ) {
-    if (fixture || !hasAvailableTool(availableTools, tool)) return;
-    setActLoading(key);
-    setActMsg(null);
-    const ok = await onAction(tool, args);
-    setActOk(ok);
-    setActMsg(ok ? msg : t("doclist.detail.action_failed"));
-    setActLoading(null);
-  }
 
   if (loading) {
     return (
@@ -96,294 +107,257 @@ export function InlineDetailPanel(
       </InspectorFrame>
     );
   }
-  if (!data) return null;
+  const documentEnvelope = envelope ?? legacyEnvelopeOf(data, doctype);
+  if (!documentEnvelope) return null;
+  return (
+    <InlineDocument
+      key={`${documentEnvelope.doctype}\u0000${documentEnvelope.name}`}
+      app={app}
+      envelope={documentEnvelope}
+      fixture={fixture}
+      outerLayout={layout ?? "panel"}
+      onClose={onClose}
+      onJump={onJump}
+      onAsk={onAsk}
+      onAction={onAction}
+      onDocumentChanged={onDocumentChanged}
+    />
+  );
+}
 
-  const entries: { id: string; label: string; value: string }[] = [];
-  for (const [key, value] of Object.entries(data)) {
-    if (key.startsWith("_") || key === "refreshRequest" || key === "doctype") {
-      continue;
-    }
-    if (value == null) continue;
-    const label = key.replace(/_/g, " ").replace(/\./g, " > ");
-    if (Array.isArray(value)) {
-      entries.push({
-        id: key,
-        label,
-        value: t("doclist.detail.array_count", {
-          n: value.length,
-          s: value.length > 1 ? "s" : "",
-        }),
-      });
-    } else if (typeof value === "object") {
-      for (
-        const [sub, subValue] of Object.entries(
-          value as Record<string, unknown>,
-        )
-      ) {
-        if (subValue != null && typeof subValue !== "object") {
-          entries.push({
-            id: `${key}.${sub}`,
-            label: `${label} > ${sub.replace(/_/g, " ")}`,
-            value: String(subValue),
-          });
-        }
-      }
-    } else {
-      entries.push({ id: key, label, value: formatCell(value) });
-    }
-  }
+function InlineDocument({
+  app,
+  envelope,
+  fixture,
+  outerLayout,
+  onClose,
+  onJump,
+  onAsk,
+  onAction,
+  onDocumentChanged,
+}: {
+  app: App;
+  envelope: DocumentEnvelope;
+  fixture?: boolean;
+  outerLayout: ViewerLayout;
+  onClose: () => void;
+  onJump?: (jump: Jump) => void;
+  onAsk?: (message: string) => void;
+  onAction: (
+    toolName: string,
+    args: Record<string, unknown>,
+  ) => Promise<boolean>;
+  onDocumentChanged?: (event: DocumentChangeEvent) => void;
+}) {
+  const t = useT();
+  const confirm = useConfirm();
+  const [actLoading, setActLoading] = useState<string | null>(null);
+  const [actMsg, setActMsg] = useState<string | null>(null);
+  const [actOk, setActOk] = useState(true);
+  const surfaceLayout: ViewerLayout = outerLayout === "mobile"
+    ? "mobile"
+    : "panel";
+  const outerNarrow = outerLayout !== "wide";
+  const model = documentModelOf(envelope);
+  const capabilities = documentCapabilities(
+    app.getHostCapabilities(),
+    envelope.availableTools,
+    envelope.refreshRequest,
+  );
+  const attachments = useAttachments({
+    app,
+    envelope,
+    capabilities,
+    onDocumentChanged,
+  });
 
-  const docName = String(data.name ?? "");
-  const status = String(data.status ?? "");
-  const tone = toneForStatus(status);
-  const isDraft = status === "Draft" || data.docstatus === 0;
-  const isSubmitted = data.docstatus === 1;
-  const canSubmit = hasAvailableTool(availableTools, "erpnext_doc_submit");
-  const canCancel = hasAvailableTool(availableTools, "erpnext_doc_cancel");
-
-  const lead = entries.filter((entry) => LEAD_FIELDS.includes(entry.id));
-  const rest = entries.filter((entry) => !LEAD_FIELDS.includes(entry.id));
-
-  /* Le libellé vient du catalogue quand le serveur donne une clé, sinon du
-     serveur lui-même (anglais). */
-  const hintLabel = (hint: SendMessageHint) => {
-    const key = hint.key ? `doclist.hint.${hint.key}` : null;
-    const translated = key ? t(key) : null;
-    return translated && translated !== key ? translated : hint.label;
+  const vars = {
+    id: envelope.name,
+    name: envelope.name,
+    doctype: envelope.doctype,
   };
-  /* Quand l'hôte relaie les outils, chaque hint qui porte un outil devient
-     un saut dans la vue ; les autres restent des questions au modèle. */
-  const jumps = onJump
-    ? (sendMessageHints ?? [])
-      .filter((hint) =>
-        typeof hint.tool === "string" &&
-        hasAvailableTool(availableTools, hint.tool)
+  const hints = envelope.sendMessageHints ?? [];
+  const exactTools = envelope.availableTools;
+  const canRouteHint = (toolName: string) =>
+    Boolean(
+      onJump && app.getHostCapabilities()?.serverTools && exactTools &&
+        exactTools.includes(toolName),
+    );
+  const jumps = hints
+    .filter((hint) => hint.tool && canRouteHint(hint.tool))
+    .map((hint) =>
+      jumpFromHint(
+        hint,
+        vars,
+        t("nav.linked_to", { id: envelope.name }),
       )
-      .map((hint) =>
-        jumpFromHint(
-          hint,
-          { id: docName, doctype: doctype ?? "" },
-          t("nav.linked_to", { id: docName }),
-        )
-      )
-      .filter((jump): jump is Jump => jump !== null)
-    : [];
-  const hints = sendMessageHints?.map((hint) => ({
-    ...hint,
-    label: hintLabel(hint),
-    message: hint.message
-      .replace(/\{id\}/g, docName)
-      .replace(/\{doctype\}/g, doctype ?? ""),
-  })) ?? [];
+    )
+    .filter((jump): jump is Jump => jump !== null);
   const asks = onAsk
-    ? hints.filter((hint) => !hint.tool).map((hint) => ({
-      label: hint.label,
-      message: hint.message,
-    }))
+    ? hints.flatMap((hint) => {
+      if (!hint.message || (onJump && hint.tool)) return [];
+      return [{
+        label: hintLabel(hint),
+        message: fillTemplate(hint.message, vars),
+      }];
+    })
     : [];
-  if (
-    onAsk && asks.length === 0 && jumps.length === 0 && docName && doctype
-  ) {
+  if (onAsk && asks.length === 0 && jumps.length === 0) {
     asks.push({
       label: t("doclist.detail.full_detail"),
       message: t("doclist.detail.full_detail_message", {
-        doctype,
-        id: docName,
+        doctype: envelope.doctype,
+        id: envelope.name,
       }),
     });
   }
 
-  return (
-    <InspectorFrame narrow={narrow} onClose={onClose}>
-      <div class="flex flex-col gap-3.5 p-3.5">
-        <div class="flex flex-col gap-1.5">
-          <span class="break-all font-display text-[15px] font-semibold text-ink">
-            {docName || t("doclist.detail.document_fallback")}
-          </span>
-          <div class="flex items-center gap-[7px]">
-            {/* En narrow le badge adopte la forme pill (radius-pill 13px) pour la maquette mobile. */}
-            {status && narrow
-              ? (
-                <StatusBadge tone={toneForStatus(status)} pill>
-                  {status}
-                </StatusBadge>
-              )
-              : status
-              ? <StatusCell value={status} />
-              : null}
-            {data.docstatus != null && (
-              <span class="font-mono text-chip text-ink-faint">
-                docstatus {String(data.docstatus)}
-              </span>
-            )}
-          </div>
-        </div>
+  const isDraft = model.status === "Draft" || model.docstatus === 0;
+  const isSubmitted = model.docstatus === 1;
+  const showSubmit = isDraft && (fixture || capabilities.canSubmit);
+  const showCancel = isSubmitted && (fixture || capabilities.canCancel);
 
-        {rest.length > 0 && (
-          <div class="flex flex-col gap-[9px] border-t border-line-soft pt-3">
-            {rest.slice(0, 10).map((entry) => (
-              <InfoRow key={entry.id} label={entry.label}>
-                {entry.value}
-              </InfoRow>
-            ))}
-          </div>
+  async function act(
+    key: string,
+    tool: string,
+    args: Record<string, unknown>,
+    msg: string,
+  ) {
+    if (fixture) return;
+    const allowed = key === "submit"
+      ? capabilities.canSubmit
+      : key === "cancel"
+      ? capabilities.canCancel
+      : false;
+    if (!allowed) return;
+    setActLoading(key);
+    setActMsg(null);
+    const ok = await onAction(tool, args);
+    setActOk(ok);
+    setActMsg(ok ? msg : t("doclist.detail.action_failed"));
+    setActLoading(null);
+  }
+
+  const hasActions = jumps.length > 0 || asks.length > 0 || showSubmit ||
+    showCancel || actMsg !== null;
+  const actions = hasActions
+    ? (
+      <div class="flex flex-col gap-2">
+        {jumps.length > 0 && <Label>{t("nav.goto")}</Label>}
+        {(jumps.length > 0 || asks.length > 0) && (
+          <JumpList
+            narrow
+            jumps={jumps}
+            asks={asks}
+            onJump={onJump}
+            onAsk={onAsk}
+          />
         )}
-
-        {lead.length > 0 && (
-          <div class="flex flex-col gap-1.5 border-t border-line-soft pt-3">
-            {lead.map((entry, index) => (
-              <div
-                key={entry.id}
-                class="flex items-baseline justify-between gap-2.5"
-              >
-                <span class="font-mono text-chip text-ink-faint">
-                  {entry.label}
-                </span>
-                <span
-                  class={[
-                    "font-mono tabular-nums",
-                    // Le dernier montant de la pile est le chiffre qui compte.
-                    // En narrow il monte à 20 px (text-metric-unit) pour la lisibilité mobile.
-                    index === lead.length - 1
-                      ? `${
-                        narrow
-                          ? "text-metric-unit tracking-tight"
-                          : "text-total"
-                      } font-semibold ${TONE_AMOUNT[tone]}`
-                      : "text-body text-ink-2",
-                  ].join(" ")}
-                >
-                  {entry.value}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
         {actMsg && (
-          <p
-            class={`font-mono text-chip ${actOk ? "text-ok" : "text-bad"}`}
-          >
+          <p class={`font-mono text-chip ${actOk ? "text-ok" : "text-bad"}`}>
             {actMsg}
           </p>
         )}
-
-        {/* En narrow les boutons ont une cible tactile min-h-[44px] (maquette mobile). */}
-        <div
-          class={`flex flex-col border-t border-line-soft pt-3 ${
-            narrow ? "gap-2" : "gap-1.5"
-          }`}
-        >
-          {onJump
-            ? (
-              <>
-                {jumps.length > 0 && <Label>{t("nav.goto")}</Label>}
-                <JumpList
-                  narrow={layout !== "wide"}
-                  jumps={jumps}
-                  asks={asks}
-                  onJump={onJump}
-                  onAsk={onAsk}
-                />
-              </>
-            )
-            : (
-              <>
-                {onAsk && hints.map((hint, index) => (
-                  <Button
-                    key={index}
-                    variant={index === 0 ? "accent" : "secondary"}
-                    disabled={fixture}
-                    title={fixture ? t("doclist.preview.no_host") : hint.label}
-                    class={narrow
-                      ? "min-h-[44px] rounded-control text-body"
-                      : undefined}
-                    onClick={() => onAsk(hint.message)}
-                  >
-                    {hint.label}
-                  </Button>
-                ))}
-                {onAsk && docName && doctype && hints.length === 0 && (
-                  <Button
-                    variant="accent"
-                    disabled={fixture}
-                    title={fixture
-                      ? t("doclist.preview.no_host")
-                      : t("doclist.detail.full_detail")}
-                    class={narrow
-                      ? "min-h-[44px] rounded-control text-body"
-                      : undefined}
-                    onClick={() =>
-                      onAsk(
-                        t("doclist.detail.full_detail_message", {
-                          doctype: doctype ?? "",
-                          id: docName,
-                        }),
-                      )}
-                  >
-                    {t("doclist.detail.full_detail")}
-                  </Button>
-                )}
-              </>
-            )}
-          {isDraft && docName && (fixture || canSubmit) && (
-            <Button
-              variant="secondary"
-              disabled={actLoading === "submit" || fixture}
-              title={fixture
-                ? t("doclist.preview.no_host")
-                : t("doclist.detail.action.submit_title")}
-              class={narrow
-                ? "min-h-[44px] rounded-control text-body"
-                : undefined}
-              onClick={() =>
-                confirm.request({
-                  subject: `${doctype ?? ""} ${docName}`.trim(),
-                  title: t("doclist.confirm.submit"),
-                  detail: t("doclist.confirm.submit.detail"),
-                  actionLabel: t("doclist.confirm.submit.action"),
-                  onConfirm: () =>
-                    void act("submit", "erpnext_doc_submit", {
-                      doctype: doctype ?? "",
-                      name: docName,
-                    }, t("doclist.detail.action.submit_ok")),
-                })}
-            >
-              {actLoading === "submit" ? "…" : t("common.submit")}
-            </Button>
-          )}
-          {isSubmitted && docName && (fixture || canCancel) && (
-            <Button
-              variant="danger"
-              disabled={actLoading === "cancel" || fixture}
-              title={fixture
-                ? t("doclist.preview.no_host")
-                : t("doclist.detail.action.cancel_label")}
-              class={narrow
-                ? "min-h-[44px] rounded-control text-body"
-                : undefined}
-              onClick={() =>
-                confirm.request({
-                  subject: `${doctype ?? ""} ${docName}`.trim(),
-                  title: t("doclist.confirm.cancel"),
-                  detail: t("doclist.confirm.cancel.detail"),
-                  actionLabel: t("doclist.confirm.cancel.action"),
-                  onConfirm: () =>
-                    void act("cancel", "erpnext_doc_cancel", {
-                      doctype: doctype ?? "",
-                      name: docName,
-                    }, t("doclist.detail.action.cancel_ok")),
-                })}
-            >
-              {actLoading === "cancel"
-                ? "…"
-                : t("doclist.detail.action.cancel_label")}
-            </Button>
-          )}
-        </div>
+        {showSubmit && (
+          <Button
+            variant="secondary"
+            disabled={actLoading === "submit" || fixture}
+            title={fixture
+              ? t("doclist.preview.no_host")
+              : t("doclist.detail.action.submit_title")}
+            class="min-h-[44px] rounded-control text-body"
+            onClick={() =>
+              confirm.request({
+                subject: `${envelope.doctype} ${envelope.name}`,
+                title: t("doclist.confirm.submit"),
+                detail: t("doclist.confirm.submit.detail"),
+                actionLabel: t("doclist.confirm.submit.action"),
+                onConfirm: () =>
+                  void act("submit", "erpnext_doc_submit", {
+                    doctype: envelope.doctype,
+                    name: envelope.name,
+                  }, t("doclist.detail.action.submit_ok")),
+              })}
+          >
+            {actLoading === "submit" ? "…" : t("common.submit")}
+          </Button>
+        )}
+        {showCancel && (
+          <Button
+            variant="danger"
+            disabled={actLoading === "cancel" || fixture}
+            title={fixture
+              ? t("doclist.preview.no_host")
+              : t("doclist.detail.action.cancel_label")}
+            class="min-h-[44px] rounded-control text-body"
+            onClick={() =>
+              confirm.request({
+                subject: `${envelope.doctype} ${envelope.name}`,
+                title: t("doclist.confirm.cancel"),
+                detail: t("doclist.confirm.cancel.detail"),
+                actionLabel: t("doclist.confirm.cancel.action"),
+                onConfirm: () =>
+                  void act("cancel", "erpnext_doc_cancel", {
+                    doctype: envelope.doctype,
+                    name: envelope.name,
+                  }, t("doclist.detail.action.cancel_ok")),
+              })}
+          >
+            {actLoading === "cancel"
+              ? "…"
+              : t("doclist.detail.action.cancel_label")}
+          </Button>
+        )}
       </div>
+    )
+    : undefined;
+
+  const navigation = outerNarrow
+    ? (
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label={t("doclist.detail.back_to_list")}
+        class="font-mono text-chip text-accent-text transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        {t("doclist.detail.back_list_label")}
+      </button>
+    )
+    : undefined;
+  const headerActions = !outerNarrow
+    ? (
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label={t("doclist.detail.close_inspector")}
+        class="grid size-7 place-items-center rounded-control text-lede text-ink-faint transition-colors hover:bg-control hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+      >
+        ×
+      </button>
+    )
+    : undefined;
+
+  return (
+    <>
+      <DocumentSurface
+        model={model}
+        layout={surfaceLayout}
+        navigation={navigation}
+        headerActions={headerActions}
+        attachments={capabilities.canListAttachments
+          ? (
+            <AttachmentsSection
+              controller={attachments}
+              capabilities={capabilities}
+              layout={surfaceLayout}
+            />
+          )
+          : undefined}
+        actions={actions}
+        class="h-full"
+      />
       <ConfirmSheet confirm={confirm} />
-    </InspectorFrame>
+    </>
   );
 }
 

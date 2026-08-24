@@ -9,9 +9,15 @@ import {
   canOfferNavigation,
   invoiceJumps,
   invoiceMutationActions,
+  invoiceRootDocumentChange,
   nextInvoiceMutationCommitted,
 } from "./nav.ts";
-import { invoiceDataFromPayload } from "./types.ts";
+import { INVOICE_ATTACHMENT_FIXTURES, INVOICE_FIXTURE } from "./fixture.ts";
+import {
+  invoiceDataFromPayload,
+  invoiceDocumentEnvelope,
+  type InvoicePayload,
+} from "./types.ts";
 
 // Langue stable pour les libellés traduits ("Paiements" en fr)
 setLangSource(() => "en-US");
@@ -245,6 +251,92 @@ Deno.test("invoice payload : préfère le DocType explicite et tolère le payloa
       },
     })?.doctype,
     "Quotation",
+  );
+});
+
+Deno.test("invoice envelope : conserve document canonique, refresh et manifeste exact", () => {
+  const envelope = invoiceDocumentEnvelope({
+    data: {
+      doctype: "Sales Invoice",
+      name: "SINV-1",
+      status: "Draft",
+      grand_total: 42,
+    },
+    _availableTools: ["erpnext_file_list", "erpnext_file_list", ""],
+    refreshRequest: {
+      toolName: "erpnext_sales_invoice_get",
+      arguments: { name: "SINV-1" },
+    },
+  });
+
+  assertEquals(envelope?.doctype, "Sales Invoice");
+  assertEquals(envelope?.name, "SINV-1");
+  assertEquals(envelope?.document.name, "SINV-1");
+  assertEquals(envelope?.availableTools, ["erpnext_file_list"]);
+  assertEquals(envelope?.refreshRequest?.toolName, "erpnext_sales_invoice_get");
+});
+
+Deno.test("invoice envelope : manifeste absent reste legacy, manifeste malformé fail-close", () => {
+  const document = {
+    doctype: "Sales Invoice",
+    name: "SINV-1",
+    status: "Draft",
+    grand_total: 42,
+  };
+  assertEquals(
+    invoiceDocumentEnvelope({ data: document })?.availableTools,
+    undefined,
+  );
+  assertEquals(
+    invoiceDocumentEnvelope({
+      data: document,
+      _availableTools: "erpnext_file_upload",
+    } as unknown as InvoicePayload)?.availableTools,
+    [],
+  );
+});
+
+Deno.test("invoice mutations : événements typés indépendants des outils dédiés", () => {
+  assertEquals(
+    invoiceRootDocumentChange(
+      "Sales Invoice",
+      "SINV-1",
+      "submit",
+      "2026-08-24T10:00:00.000Z",
+    ),
+    {
+      doctype: "Sales Invoice",
+      name: "SINV-1",
+      mutation: "submit",
+      committedAt: "2026-08-24T10:00:00.000Z",
+      source: "invoice-viewer",
+    },
+  );
+  assertEquals(
+    invoiceRootDocumentChange(
+      "Sales Order",
+      "SO-1",
+      "cancel",
+      "2026-08-24T10:01:00.000Z",
+    ),
+    {
+      doctype: "Sales Order",
+      name: "SO-1",
+      mutation: "cancel",
+      committedAt: "2026-08-24T10:01:00.000Z",
+      source: "invoice-viewer",
+    },
+  );
+});
+
+Deno.test("invoice fixture : pièces jointes visuelles sans action hôte", () => {
+  assertEquals(INVOICE_FIXTURE._availableTools, []);
+  assertEquals(
+    INVOICE_ATTACHMENT_FIXTURES.map((file) => [file.fileName, file.isPrivate]),
+    [
+      ["ACC-SINV-2026-00042.pdf", true],
+      ["signed-delivery-note.png", false],
+    ],
   );
 });
 

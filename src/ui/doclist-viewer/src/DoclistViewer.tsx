@@ -368,6 +368,7 @@ function DoclistContent({
         onAsk={ask}
         onError={onError}
         onMutated={nav.markStale}
+        onDocumentChanged={nav.reportDocumentChange}
         onMutationInvalidate={refreshAvailable
           ? onMutationInvalidate
           : undefined}
@@ -388,6 +389,7 @@ function DoclistContent({
             : undefined}
           onMutationRefresh={refreshAvailable ? onMutationRefresh : undefined}
           onMutated={nav.markStale}
+          onDocumentChanged={nav.reportDocumentChange}
           onError={onError}
           onJump={jumpsEnabled ? nav.jump : undefined}
           onAsk={ask}

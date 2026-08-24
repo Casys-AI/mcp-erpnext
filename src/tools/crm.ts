@@ -9,7 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveDynamicLink } from "../api/resolve.ts";
 
 export const crmTools: ErpNextTool[] = [
@@ -74,6 +74,7 @@ export const crmTools: ErpNextTool[] = [
   {
     name: "erpnext_lead_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single CRM Lead by name. Returns all lead details including contact info.",
     category: "crm",
@@ -89,7 +90,7 @@ export const crmTools: ErpNextTool[] = [
         throw new Error("[erpnext_lead_get] 'name' is required");
       }
       const doc = await ctx.client.get("Lead", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Lead" } };
     },
   },
 
@@ -237,6 +238,7 @@ export const crmTools: ErpNextTool[] = [
   {
     name: "erpnext_opportunity_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single CRM Opportunity by name. Returns full details including items and competitors.",
     category: "crm",
@@ -252,7 +254,7 @@ export const crmTools: ErpNextTool[] = [
         throw new Error("[erpnext_opportunity_get] 'name' is required");
       }
       const doc = await ctx.client.get("Opportunity", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Opportunity" } };
     },
   },
 
@@ -313,6 +315,7 @@ export const crmTools: ErpNextTool[] = [
   {
     name: "erpnext_contact_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description: "Get a single Contact by name. Returns all contact details.",
     category: "crm",
     inputSchema: {
@@ -327,7 +330,7 @@ export const crmTools: ErpNextTool[] = [
         throw new Error("[erpnext_contact_get] 'name' is required");
       }
       const doc = await ctx.client.get("Contact", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Contact" } };
     },
   },
 

@@ -8,7 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import {
   applyAssignment,
   ASSIGNMENT_INPUT_PROPERTIES,
@@ -89,6 +89,7 @@ export const projectTools: ErpNextTool[] = [
   {
     name: "erpnext_project_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Project by name. Returns full document including tasks summary.",
     category: "project",
@@ -104,7 +105,7 @@ export const projectTools: ErpNextTool[] = [
         throw new Error("[erpnext_project_get] 'name' is required");
       }
       const doc = await ctx.client.get("Project", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Project" } };
     },
   },
 
@@ -283,6 +284,7 @@ export const projectTools: ErpNextTool[] = [
   {
     name: "erpnext_task_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Task by name. Returns full document including description and dependencies.",
     category: "project",
@@ -298,7 +300,7 @@ export const projectTools: ErpNextTool[] = [
         throw new Error("[erpnext_task_get] 'name' is required");
       }
       const doc = await ctx.client.get("Task", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Task" } };
     },
   },
 
@@ -493,6 +495,7 @@ export const projectTools: ErpNextTool[] = [
   {
     name: "erpnext_timesheet_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Timesheet by name. Returns full document with time log details.",
     category: "project",
@@ -508,7 +511,7 @@ export const projectTools: ErpNextTool[] = [
         throw new Error("[erpnext_timesheet_get] 'name' is required");
       }
       const doc = await ctx.client.get("Timesheet", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Timesheet" } };
     },
   },
 

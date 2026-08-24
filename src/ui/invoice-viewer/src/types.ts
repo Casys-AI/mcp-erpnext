@@ -1,5 +1,8 @@
 import type { NavHint } from "../../shared/jumps.ts";
+import { documentEnvelopeOf } from "../../shared/document/model.ts";
+import type { DocumentEnvelope } from "../../shared/document/types.ts";
 import type { UiRefreshRequestData } from "../../shared/refresh.ts";
+import { readAvailableTools } from "../../shared/viewer-tools.ts";
 
 export interface InvoiceItem {
   item_code: string;
@@ -35,6 +38,11 @@ export interface InvoiceData {
   items?: InvoiceItem[];
   contact_email?: string;
   address_display?: string;
+  [key: string]: unknown;
+}
+
+export interface InvoiceDocumentEnvelope extends DocumentEnvelope {
+  document: InvoiceData;
 }
 
 export interface InvoicePayload {
@@ -80,6 +88,22 @@ export function invoiceDataFromPayload(
     ...record,
     doctype: legacyDoctype(payload),
   } as unknown as InvoiceData;
+}
+
+/** Normalise aussi les payloads 3.0.x avant de construire l'enveloppe partagée. */
+export function invoiceDocumentEnvelope(
+  payload: InvoicePayload,
+): InvoiceDocumentEnvelope | null {
+  const document = invoiceDataFromPayload(payload);
+  if (!document) return null;
+  const envelope = documentEnvelopeOf({ ...payload, data: document });
+  if (!envelope) return null;
+  const availableTools = readAvailableTools(payload);
+  return {
+    ...envelope,
+    document: envelope.document as unknown as InvoiceData,
+    ...(availableTools !== undefined ? { availableTools } : {}),
+  };
 }
 
 export interface ItemRecord {

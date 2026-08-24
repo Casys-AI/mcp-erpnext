@@ -9,7 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveEmployee } from "../api/resolve.ts";
 
 export const assetsTools: ErpNextTool[] = [
@@ -110,6 +110,7 @@ export const assetsTools: ErpNextTool[] = [
   {
     name: "erpnext_asset_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Asset by name. Returns full details including depreciation schedule and maintenance logs.",
     category: "assets",
@@ -125,7 +126,7 @@ export const assetsTools: ErpNextTool[] = [
         throw new Error("[erpnext_asset_get] 'name' is required");
       }
       const doc = await ctx.client.get("Asset", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Asset" } };
     },
   },
 
@@ -273,6 +274,7 @@ export const assetsTools: ErpNextTool[] = [
   {
     name: "erpnext_asset_movement_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Asset Movement by name. Returns full details including assets moved.",
     category: "assets",
@@ -288,7 +290,7 @@ export const assetsTools: ErpNextTool[] = [
         throw new Error("[erpnext_asset_movement_get] 'name' is required");
       }
       const doc = await ctx.client.get("Asset Movement", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Asset Movement" } };
     },
   },
 
@@ -353,6 +355,7 @@ export const assetsTools: ErpNextTool[] = [
   {
     name: "erpnext_asset_maintenance_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Asset Maintenance record by name. Returns full details including maintenance tasks.",
     category: "assets",
@@ -371,7 +374,7 @@ export const assetsTools: ErpNextTool[] = [
         "Asset Maintenance",
         input.name as string,
       );
-      return { data: doc };
+      return { data: { ...doc, doctype: "Asset Maintenance" } };
     },
   },
 

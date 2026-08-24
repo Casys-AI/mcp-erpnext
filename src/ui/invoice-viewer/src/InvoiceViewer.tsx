@@ -1,242 +1,157 @@
+/** @jsxImportSource preact */
 /**
- * Invoice Viewer — Sales/Purchase Invoice display
+ * Invoice viewer — Direction B v2 avec pile de navigation.
  *
- * Inspired by mcp-einvoice pattern:
- * - Party columns (Customer/Supplier + Company)
- * - Inline dates
- * - Clickable item rows with drill-down panel
- * - Action buttons with loading state tracking
- * - sendMessage navigation with loading feedback
- * - FeedbackBanner for errors/success
+ * Niveau 1 : la facture telle qu'aujourd'hui.
+ * Niveau 2+ : liste des paiements (DoclistBody) ou fiche client/fournisseur
+ * (RecordLevel), selon le saut choisi. Sans serverTools, navigate() envoie une
+ * phrase au chat exactement comme avant.
  *
- * @module lib/erpnext/src/ui/invoice-viewer
+ * Découpage :
+ *  - InvoiceViewer : état, connexion, refresh, actions — sans hooks d'UI.
+ *  - InvoiceContent : rendu, pile de navigation, boutons — data toujours dispo.
  */
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
-import { colors, fonts, formatCurrency, styles } from "~/shared/theme";
-import { ErpNextBrandFooter, ErpNextBrandHeader } from "~/shared/ErpNextBrand";
-import { ActionButton } from "~/shared/ActionButton";
+import { bindHostContext } from "~/shared/host-context-hook";
 import {
+  Button,
+  CasysCredit,
+  cx,
+  StateMessage,
+  ViewerShell,
+} from "~/shared/ui";
+import { useViewerLayout, type ViewerLayout } from "~/shared/useViewerLayout";
+import { formatCurrency, formatNumber } from "~/shared/format";
+import {
+  beginUiRefresh,
   canRequestUiRefresh,
+  completeUiRefresh,
+  createUiRefreshSequence,
   extractToolResultText,
+  invalidateUiRefresh,
   normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
   type UiRefreshRequestData,
 } from "~/shared/refresh";
+import { useT } from "~/shared/i18n-hook";
+import { ConfirmSheet, type ConfirmState, useConfirm } from "~/shared/confirm";
+import { type NavHint } from "~/shared/jumps";
+import { useViewerNav } from "~/shared/useViewerNav";
+import { viewerRootKey } from "~/shared/nav-stack";
+import { PathBar } from "~/shared/PathBar";
+import { LevelBody } from "~/shared/levels/LevelBody";
+import { canSendTextMessage, sendTextMessage } from "~/shared/host-message";
+import { hasAvailableTool, readAvailableTools } from "~/shared/viewer-tools";
 import { StatusBadge } from "./components/StatusBadge";
 import { ItemDetailPanel } from "./components/ItemDetailPanel";
-
-// ============================================================================
-// MCP App
-// ============================================================================
+import { INVOICE_FIXTURE, isFixtureMode } from "./fixture.ts";
+import {
+  canOfferNavigation,
+  invoiceJumps,
+  invoiceMutationActions,
+  nextInvoiceMutationCommitted,
+} from "./nav.ts";
+import {
+  type InvoiceData,
+  invoiceDataFromPayload,
+  type InvoiceItem,
+  type InvoicePayload,
+} from "./types.ts";
 
 const app = new App({ name: "Invoice Viewer", version: "3.0.0" });
 const REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
-// ============================================================================
-// Types
-// ============================================================================
+type LineRow = InvoiceItem & { idx: number };
 
-interface InvoiceItem {
-  item_code: string;
-  item_name?: string;
-  qty: number;
-  rate: number;
-  amount: number;
+/* ─── Props de l'inner component ──────────────────────────────────────────── */
+
+interface InvoiceContentProps {
+  data: InvoiceData;
+  /** Hints du serveur ; null = pas de sauts disponibles. */
+  hints: NavHint[] | null;
+  availableTools: readonly string[] | undefined;
+  mutationCommitted: boolean;
+  error: string | null;
+  refreshing: boolean;
+  fixture: boolean;
+  confirm: ConfirmState;
+  actionLoading: string | null;
+  actionMessage: string | null;
+  actionIsError: boolean;
+  callAction: (
+    key: string,
+    toolName: string,
+    args: Record<string, unknown>,
+    successMsg: string,
+  ) => Promise<void>;
+  onNavigate: (key: string, message: string) => Promise<boolean>;
+  setError: (msg: string | null) => void;
 }
 
-interface InvoiceData {
-  name: string;
-  customer?: string;
-  customer_name?: string;
-  supplier?: string;
-  supplier_name?: string;
-  company?: string;
-  posting_date: string;
-  due_date?: string;
-  status: string;
-  docstatus?: number;
-  grand_total: number;
-  net_total?: number;
-  total_taxes_and_charges?: number;
-  outstanding_amount?: number;
-  currency?: string;
-  items?: InvoiceItem[];
-  contact_email?: string;
-  address_display?: string;
-}
-
-interface InvoicePayload {
-  data?: InvoiceData;
-  refreshRequest?: UiRefreshRequestData;
-  [key: string]: unknown;
-}
-
-// ============================================================================
-// Sub-components
-// ============================================================================
-
-function LoadingSkeleton() {
-  return (
-    <div style={{ padding: 24 }}>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div
-          key={i}
-          className="skeleton"
-          style={{
-            height: i === 1 ? 32 : 20,
-            width: `${40 + i * 10}%`,
-            marginBottom: 8,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function InvoiceEmptyState() {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "48px 24px",
-        color: colors.text.muted,
-        gap: 12,
-        flex: 1,
-      }}
-    >
-      <svg
-        width="56"
-        height="56"
-        viewBox="0 0 56 56"
-        fill="none"
-        style={{ opacity: 0.35 }}
-      >
-        <rect
-          x="12"
-          y="6"
-          width="32"
-          height="44"
-          rx="3"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-        <path
-          d="M20 16h16M20 22h12M20 28h14M20 34h8"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity="0.6"
-        />
-      </svg>
-      <div style={{ fontSize: 13 }}>No invoice data</div>
-    </div>
-  );
-}
-
-function FeedbackBanner(
-  { type, message, onDismiss }: {
-    type: "error" | "success";
-    message: string;
-    onDismiss?: () => void;
-  },
-) {
-  const isError = type === "error";
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "8px 12px",
-        marginBottom: 12,
-        borderRadius: 8,
-        fontSize: 12,
-        background: isError ? colors.errorDim : colors.successDim,
-        color: isError ? colors.error : colors.success,
-        border: `1px solid ${
-          isError ? colors.error + "30" : colors.success + "30"
-        }`,
-      }}
-    >
-      <span>{message}</span>
-      {onDismiss && (
-        <button
-          onClick={onDismiss}
-          style={{
-            background: "none",
-            border: "none",
-            color: "inherit",
-            cursor: "pointer",
-            fontSize: 14,
-            padding: "0 4px",
-          }}
-        >
-          ✕
-        </button>
-      )}
-    </div>
-  );
-}
-
-function TotalRow(
-  { label, value, bold }: { label: string; value: string; bold?: boolean },
-) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        padding: "4px 0",
-        fontSize: bold ? 14 : 13,
-      }}
-    >
-      <span style={{ color: colors.text.secondary }}>{label}</span>
-      <span
-        style={{
-          fontFamily: fonts.mono,
-          fontWeight: bold ? 700 : 400,
-          color: bold ? colors.accent : colors.text.primary,
-        }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-// ============================================================================
-// Main Component
-// ============================================================================
+/* ══════════════════════════════════════════════════════════════════════════════
+   InvoiceViewer — état, connexion, refresh, actions
+══════════════════════════════════════════════════════════════════════════════ */
 
 export function InvoiceViewer() {
-  const [data, setData] = useState<InvoiceData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const t = useT();
+  const fixture = isFixtureMode();
+
+  /* ── État ─────────────────────────────────────────────────────────────── */
+
+  const [data, setData] = useState<InvoiceData | null>(
+    fixture ? (INVOICE_FIXTURE.data ?? null) : null,
+  );
+  const [hints, setHints] = useState<NavHint[] | null>(
+    fixture ? (INVOICE_FIXTURE._sendMessageHints as NavHint[] ?? null) : null,
+  );
+  const [availableTools, setAvailableTools] = useState<string[] | undefined>(
+    fixture ? readAvailableTools(INVOICE_FIXTURE) : undefined,
+  );
+  const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-  const dataRef = useRef<InvoiceData | null>(null);
-  const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
-  const refreshInFlightRef = useRef(false);
+  const [actionIsError, setActionIsError] = useState(false);
+  const [mutationCommitted, setMutationCommitted] = useState(false);
+  const confirm = useConfirm();
+
+  /* ── Refs ─────────────────────────────────────────────────────────────── */
+
+  const loadingRef = useRef<HTMLDivElement>(null);
+  const dataRef = useRef<InvoiceData | null>(
+    fixture ? (INVOICE_FIXTURE.data ?? null) : null,
+  );
+  const refreshRequestRef = useRef<UiRefreshRequestData | null>(
+    fixture ? resolveUiRefreshRequest(INVOICE_FIXTURE, null) : null,
+  );
+  const refreshSequenceRef = useRef(createUiRefreshSequence());
+  const refreshPromiseRef = useRef<Promise<boolean> | null>(null);
   const lastRefreshStartedAtRef = useRef(0);
+  const availableToolsRef = useRef<string[] | undefined>(
+    fixture ? readAvailableTools(INVOICE_FIXTURE) : undefined,
+  );
+  const actionInFlightRef = useRef(false);
+  const mutationCommittedRef = useRef(false);
+
+  /* ── Hydratation ──────────────────────────────────────────────────────── */
 
   function hydrateData(nextData: InvoiceData) {
     dataRef.current = nextData;
     setData(nextData);
+    mutationCommittedRef.current = false;
+    setMutationCommitted((current) =>
+      nextInvoiceMutationCommitted(current, "canonical-hydrated")
+    );
   }
 
   function consumeToolResult(result: ToolResultPayload): boolean {
     if (result.isError) {
       const text = extractToolResultText(result);
-      setError(text ?? "Tool returned an error");
+      setError(text ?? t("invoice.error.tool_error"));
       setLoading(false);
       return false;
     }
@@ -244,56 +159,131 @@ export function InvoiceViewer() {
     if (!text) return false;
     try {
       const parsed = JSON.parse(text) as InvoicePayload;
+      const nextData = invoiceDataFromPayload(parsed);
+      if (!nextData) throw new Error("Missing explicit document identity");
+      const nextAvailableTools = readAvailableTools(parsed);
+      availableToolsRef.current = nextAvailableTools;
+      setAvailableTools(nextAvailableTools);
       refreshRequestRef.current = resolveUiRefreshRequest(
         parsed,
         refreshRequestRef.current,
       );
-      hydrateData((parsed.data ?? parsed) as InvoiceData);
+      // Extraire les hints de navigation du payload serveur.
+      const nextHints = parsed._sendMessageHints;
+      setHints(Array.isArray(nextHints) ? nextHints as NavHint[] : null);
+      hydrateData(nextData);
       setError(null);
       setLoading(false);
       return true;
     } catch {
-      setError("Failed to parse invoice payload");
+      setError(t("invoice.error.parse_failed"));
       setLoading(false);
       return false;
     }
   }
 
-  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
-    const request = refreshRequestRef.current;
-    if (
-      !canRequestUiRefresh({
-        request,
-        visibilityState: typeof document === "undefined"
-          ? "visible"
-          : document.visibilityState,
-        refreshInFlight: refreshInFlightRef.current,
-        now: Date.now(),
-        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
-        minIntervalMs: REFRESH_INTERVAL_MS,
-      }, options)
-    ) return;
+  /* ── Refresh ──────────────────────────────────────────────────────────── */
 
-    if (!request || !app.getHostCapabilities()?.serverTools) return;
+  async function requestRefresh(
+    options: { ignoreInterval?: boolean; force?: boolean } = {},
+  ): Promise<boolean> {
+    if (fixture) return false;
 
-    refreshInFlightRef.current = true;
-    lastRefreshStartedAtRef.current = Date.now();
-    setRefreshing(true);
+    const current = refreshSequenceRef.current;
+    if (options.force) {
+      if (current.inFlight !== null) {
+        // Invalide immédiatement le read antérieur et coalesce toutes les
+        // mutations derrière son unique drain canonique.
+        refreshSequenceRef.current = beginUiRefresh(current, {
+          force: true,
+        }).state;
+        return refreshPromiseRef.current ?? false;
+      }
 
-    try {
-      const result = await app.callServerTool({
-        name: request.toolName,
-        arguments: request.arguments,
-      }, { timeout: TOOL_CALL_TIMEOUT_MS });
-      if (!result.isError) consumeToolResult(result);
-      else setError("Refresh failed");
-    } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
-    } finally {
-      refreshInFlightRef.current = false;
-      setRefreshing(false);
+      // Conserve la relecture obligatoire si elle ne peut pas partir tout de
+      // suite (vue masquée ou capacité momentanément absente).
+      refreshSequenceRef.current = {
+        ...invalidateUiRefresh(current),
+        pendingForced: true,
+      };
+    } else if (current.inFlight !== null) {
+      return false;
     }
+
+    const operation = (async (): Promise<boolean> => {
+      try {
+        while (true) {
+          const sequence = refreshSequenceRef.current;
+          const request = refreshRequestRef.current;
+          const forced = sequence.pendingForced;
+
+          if (
+            !request ||
+            !app.getHostCapabilities()?.serverTools ||
+            !hasAvailableTool(availableToolsRef.current, request.toolName) ||
+            !canRequestUiRefresh({
+              request,
+              visibilityState: typeof document === "undefined"
+                ? "visible"
+                : document.visibilityState,
+              refreshInFlight: false,
+              now: Date.now(),
+              lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+              minIntervalMs: REFRESH_INTERVAL_MS,
+            }, { ignoreInterval: options.ignoreInterval || forced })
+          ) return false;
+
+          const started = beginUiRefresh(sequence, { force: forced });
+          if (started.generation === null) return false;
+          refreshSequenceRef.current = started.state;
+          lastRefreshStartedAtRef.current = Date.now();
+          setRefreshing(true);
+
+          let result: ToolResultPayload | null = null;
+          let failure: { cause: unknown } | null = null;
+          try {
+            result = await app.callServerTool({
+              name: request.toolName,
+              arguments: request.arguments,
+            }, { timeout: TOOL_CALL_TIMEOUT_MS });
+          } catch (cause) {
+            failure = { cause };
+          }
+
+          const completed = completeUiRefresh(
+            refreshSequenceRef.current,
+            started.generation,
+          );
+          refreshSequenceRef.current = completed.state;
+          let succeeded = false;
+          if (completed.accept) {
+            if (failure) {
+              setError(normalizeUiRefreshFailureMessage(failure.cause));
+            } else if (result?.isError) {
+              setError(t("invoice.error.refresh_failed"));
+            } else if (result) {
+              succeeded = consumeToolResult(result);
+            }
+          }
+
+          if (!completed.runPending) return succeeded;
+          // La boucle revalide requête, visibilité et capacité. Tant qu'elle
+          // ne peut pas repartir, pendingForced reste posé pour le focus futur.
+        }
+      } finally {
+        setRefreshing(false);
+      }
+    })();
+    refreshPromiseRef.current = operation;
+    void operation.finally(() => {
+      if (refreshPromiseRef.current === operation) {
+        refreshPromiseRef.current = null;
+      }
+    });
+    return operation;
   }
+
+  /* ── Actions ──────────────────────────────────────────────────────────── */
 
   async function callAction(
     key: string,
@@ -301,9 +291,16 @@ export function InvoiceViewer() {
     args: Record<string, unknown>,
     successMsg: string,
   ) {
-    if (!app.getHostCapabilities()?.serverTools) return;
+    if (
+      fixture ||
+      actionInFlightRef.current ||
+      !app.getHostCapabilities()?.serverTools ||
+      !hasAvailableTool(availableToolsRef.current, toolName)
+    ) return;
+    actionInFlightRef.current = true;
     setActionLoading(key);
     setActionMessage(null);
+    setActionIsError(false);
     try {
       const result = await app.callServerTool({
         name: toolName,
@@ -311,40 +308,70 @@ export function InvoiceViewer() {
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
       if (result.isError) {
         const text = extractToolResultText(result);
-        setActionMessage(text ?? "Action failed");
+        setActionIsError(true);
+        setActionMessage(text ?? t("invoice.error.action_failed"));
       } else {
+        mutationCommittedRef.current = true;
+        setMutationCommitted((current) =>
+          nextInvoiceMutationCommitted(current, "mutation-committed")
+        );
+        const refreshPromise = requestRefresh({
+          ignoreInterval: true,
+          force: true,
+        });
+        setActionIsError(false);
         setActionMessage(successMsg);
-        setTimeout(() => void requestRefresh({ ignoreInterval: true }), 1500);
+        const refreshed = await refreshPromise;
+        if (!refreshed && mutationCommittedRef.current) {
+          setActionIsError(true);
+          setActionMessage(t("invoice.error.refresh_failed"));
+        }
       }
     } catch {
-      setActionMessage("Action failed");
+      setActionIsError(true);
+      setActionMessage(t("invoice.error.action_failed"));
     } finally {
+      actionInFlightRef.current = false;
       setActionLoading(null);
     }
   }
 
+  /**
+   * Chemin de secours quand l'hôte ne relaie pas les outils :
+   * envoie une phrase au chat — comportement identique à l'original.
+   */
   async function navigate(key: string, message: string) {
+    if (fixture) return false;
     setActionLoading(key);
-    try {
-      await app.sendMessage({
-        role: "user",
-        content: [{ type: "text", text: message }],
-      });
-    } catch {}
+    setActionMessage(null);
+    setActionIsError(false);
+    const sent = await sendTextMessage(app, message);
+    if (!sent) {
+      setActionIsError(true);
+      setActionMessage(t("invoice.error.action_failed"));
+    }
     setActionLoading(null);
+    return sent;
   }
 
+  /* ── Effets ───────────────────────────────────────────────────────────── */
+
   useEffect(() => {
+    if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
+      refreshSequenceRef.current = invalidateUiRefresh(
+        refreshSequenceRef.current,
+      );
       consumeToolResult(result);
     };
     app.ontoolinputpartial = () => {
       if (!dataRef.current) setLoading(true);
     };
-    app.connect().catch(() => {});
-  }, []);
+    app.connect().then(() => bindHostContext(app)).catch(() => {});
+  }, [fixture]);
 
   useEffect(() => {
+    if (fixture) return;
     const onFocus = () => void requestRefresh({ ignoreInterval: true });
     const onVis = () => {
       if (document.visibilityState === "visible") {
@@ -357,464 +384,713 @@ export function InvoiceViewer() {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, []);
+  }, [fixture]);
 
-  // Reset expanded item when invoice changes
-  useEffect(() => {
-    setExpandedIdx(null);
-  }, [data?.name]);
+  /* ── Early returns ────────────────────────────────────────────────────── */
 
-  if (loading) {
+  if (loading || !data) {
     return (
-      <div
-        style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
-      >
-        <ErpNextBrandHeader />
-        <LoadingSkeleton />
-        <ErpNextBrandFooter />
-      </div>
-    );
-  }
-  if (!data) {
-    return (
-      <div
-        style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
-      >
-        <ErpNextBrandHeader />
-        <InvoiceEmptyState />
-        <ErpNextBrandFooter />
-      </div>
+      <ViewerShell containerRef={loadingRef}>
+        <StateMessage>
+          {loading ? t("invoice.loading") : t("invoice.no_data")}
+        </StateMessage>
+        <ConfirmSheet confirm={confirm} />
+      </ViewerShell>
     );
   }
 
-  const ccy = data.currency ?? "USD";
-  const isCustomer = !!data.customer;
-  const doctype = isCustomer ? "Sales Invoice" : "Purchase Invoice";
+  /* ── Rendu ────────────────────────────────────────────────────────────── */
+
+  return (
+    <InvoiceContent
+      key={`${data.doctype}:${data.name}`}
+      data={data}
+      hints={hints}
+      availableTools={availableTools}
+      mutationCommitted={mutationCommitted}
+      error={error}
+      refreshing={refreshing}
+      fixture={fixture}
+      confirm={confirm}
+      actionLoading={actionLoading}
+      actionMessage={actionMessage}
+      actionIsError={actionIsError}
+      callAction={callAction}
+      onNavigate={navigate}
+      setError={setError}
+    />
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   InvoiceContent — rendu, pile de navigation, boutons
+   Reçoit `data` toujours défini → useNavStack initialisé avec le bon titre.
+   key={doctype:name} sur l'appelant réinitialise la pile à chaque nouvelle pièce.
+══════════════════════════════════════════════════════════════════════════════ */
+
+function InvoiceContent({
+  data,
+  hints,
+  availableTools,
+  mutationCommitted,
+  error,
+  refreshing,
+  fixture,
+  confirm,
+  actionLoading,
+  actionMessage,
+  actionIsError,
+  callAction,
+  onNavigate,
+  setError,
+}: InvoiceContentProps) {
+  /* ── Hooks d'UI (inconditionnels) ────────────────────────────────────── */
+
+  const { ref, layout } = useViewerLayout<HTMLDivElement>();
+  const t = useT();
+
+  // Pile de navigation : titre racine = nom de la pièce.
+  const viewerNav = useViewerNav(app, {
+    title: data.name,
+    kind: "root",
+    origin: "record",
+    key: viewerRootKey("invoice", undefined, {
+      doctype: data.doctype,
+      name: data.name,
+    }),
+  }, { fixture });
+  const nav = viewerNav.nav;
+
+  // useDoclist doit être appelé inconditionnellement avant tout return.
+  const { list } = viewerNav;
+
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+
+  /* ── Valeurs dérivées ─────────────────────────────────────────────────── */
+
+  const ccy = data.currency ?? "EUR";
+  const doctype = data.doctype;
+  const isCustomer = Boolean(
+    data.customer || (data.quotation_to === "Customer" && data.party_name),
+  );
   const partyName = data.customer_name ?? data.customer ?? data.supplier_name ??
-    data.supplier ?? "—";
+    data.supplier ?? data.party_name ?? "—";
   const outstanding = data.outstanding_amount ?? 0;
   const isPaid = outstanding <= 0;
   const items = data.items ?? [];
   const netTotal = data.net_total ?? items.reduce((s, i) => s + i.amount, 0);
-  const taxes = data.total_taxes_and_charges ?? (data.grand_total - netTotal);
+  const taxes = data.total_taxes_and_charges ??
+    ((data.grand_total ?? 0) - netTotal);
   const isDraft = data.status === "Draft" || data.docstatus === 0;
   const isSubmitted = data.docstatus === 1;
-  const hasServerTools = app.getHostCapabilities()?.serverTools;
+  const hasServerTools = Boolean(app.getHostCapabilities()?.serverTools);
+  const canInspectItem = hasServerTools && (
+    hasAvailableTool(availableTools, "erpnext_item_get") ||
+    hasAvailableTool(availableTools, "erpnext_stock_balance")
+  );
+  const messagesEnabled = !fixture &&
+    canSendTextMessage(app.getHostCapabilities());
+  const paymentMessagesEnabled = messagesEnabled &&
+    (doctype === "Sales Invoice" || doctype === "Purchase Invoice");
+  const canExpand = canInspectItem || messagesEnabled || fixture;
+  const rows: LineRow[] = items.map((item, idx) => ({ ...item, idx }));
+  const previewTitle = fixture ? t("invoice.preview.title") : undefined;
 
-  return (
-    <div
-      style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
+  const isWide = layout === "wide";
+  const isMobile = layout === "mobile";
+
+  /* ── Sauts de navigation ─────────────────────────────────────────────── */
+
+  /**
+   * jumpsEnabled = false en mode fixture et sans serverTools.
+   * Dans ce cas invoiceJumps reçoit null → sauts null → navigate() est utilisé.
+   */
+  const { jumpsEnabled } = viewerNav;
+  const party = data.customer ?? data.supplier ?? data.party_name ?? "";
+  const jumpSubtitle = t("nav.linked_to", { id: data.name });
+  const { payments: paymentsJump, party: partyJump } = invoiceJumps(
+    jumpsEnabled ? hints : null,
+    { id: data.name, doctype, party },
+    jumpSubtitle,
+    jumpsEnabled ? availableTools : [],
+  );
+  const mutations = invoiceMutationActions(
+    doctype,
+    data.name,
+    hasServerTools ? availableTools : [],
+    mutationCommitted,
+  );
+
+  /** Envoie une question au chat (chemin de secours sans outils). */
+  const { ask } = viewerNav;
+
+  /* ── Messages erreur / action ─────────────────────────────────────────── */
+
+  const messages = (
+    <>
+      {error && (
+        <div class="px-4 pt-3">
+          <StateMessage tone="bad">{error}</StateMessage>
+        </div>
+      )}
+      {!error && actionMessage && (
+        <div class="px-4 pt-3">
+          <StateMessage tone={actionIsError ? "bad" : "neutral"}>
+            {actionMessage}
+          </StateMessage>
+        </div>
+      )}
+    </>
+  );
+
+  /* ── Boutons d'action ─────────────────────────────────────────────────── */
+
+  /**
+   * Paiements : saut › si l'hôte relaie et que le hint est disponible,
+   * sinon navigate() envoie une phrase au chat — identique à l'original.
+   */
+  const btnPayments = canOfferNavigation(
+    paymentsJump,
+    paymentMessagesEnabled,
+    fixture,
+  ) && (
+    <Button
+      variant="accent"
+      class={cx(
+        "group",
+        isMobile ? "min-h-[44px] rounded-touch text-body w-full" : "text-cell",
+      )}
+      disabled={fixture || actionLoading === "nav_payments"}
+      title={fixture ? previewTitle : t("invoice.btn.payments.title")}
+      onClick={() => {
+        if (paymentsJump) {
+          void nav.jump(paymentsJump);
+        } else {
+          void onNavigate(
+            "nav_payments",
+            t("invoice.nav.payments.message", { doctype, name: data.name }),
+          );
+        }
+      }}
     >
-      <ErpNextBrandHeader />
-      <div
-        style={{ padding: 16, fontFamily: fonts.sans, flex: 1, maxWidth: 720 }}
-      >
-        {/* Title + Status */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            marginBottom: 16,
-            flexWrap: "wrap",
-            gap: 8,
-          }}
+      {actionLoading === "nav_payments" ? "…" : t("invoice.btn.payments.label")}
+      {paymentsJump && (
+        <span
+          aria-hidden="true"
+          class={cx(
+            "ml-1 text-accent",
+            !isMobile &&
+              "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
+          )}
         >
-          <div>
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: colors.text.muted,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                marginBottom: 4,
-              }}
-            >
+          ›
+        </span>
+      )}
+    </Button>
+  );
+
+  /**
+   * Tiers (client ou fournisseur) : saut › vers la fiche si l'hôte relaie,
+   * sinon navigate() envoie une phrase au chat — identique à l'original.
+   */
+  const btnParty = canOfferNavigation(partyJump, messagesEnabled, fixture) &&
+    (data.customer ?? data.supplier) && (
+    <Button
+      variant="secondary"
+      class={cx(
+        "group",
+        isMobile ? "flex-1 min-h-[44px] rounded-touch text-body" : "text-cell",
+      )}
+      disabled={fixture || actionLoading === "nav_party"}
+      title={fixture
+        ? previewTitle
+        : isCustomer
+        ? t("invoice.btn.party.title.customer")
+        : t("invoice.btn.party.title.supplier")}
+      onClick={() => {
+        if (partyJump) {
+          void nav.jump(partyJump);
+        } else {
+          void onNavigate(
+            "nav_party",
+            t(
+              isCustomer
+                ? "invoice.nav.party.message.customer"
+                : "invoice.nav.party.message.supplier",
+              { party: data.customer ?? data.supplier },
+            ),
+          );
+        }
+      }}
+    >
+      {
+        /* Un saut ouvre la fiche du tiers : il porte le libellé du hint (« Client »),
+          pas celui de la phrase (« Factures du client »). */
+      }
+      {actionLoading === "nav_party"
+        ? "…"
+        : partyJump
+        ? partyJump.label
+        : isMobile
+        ? t("invoice.btn.party.label.mobile")
+        : isCustomer
+        ? t("invoice.btn.party.label.customer")
+        : t("invoice.btn.party.label.supplier")}
+      {partyJump && (
+        <span
+          aria-hidden="true"
+          class={cx(
+            "ml-1 text-accent",
+            !isMobile &&
+              "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
+          )}
+        >
+          ›
+        </span>
+      )}
+    </Button>
+  );
+
+  const btnSubmit = isDraft && (mutations.submit || fixture) && (
+    <Button
+      variant="accent"
+      class={isMobile ? "min-h-[44px] rounded-touch text-body" : "text-cell"}
+      disabled={fixture || actionLoading === "submit"}
+      title={fixture ? previewTitle : t("invoice.btn.submit.title")}
+      onClick={() =>
+        confirm.request({
+          subject: data.name,
+          title: t("invoice.confirm.submit"),
+          detail: t("invoice.confirm.submit.detail"),
+          actionLabel: t("invoice.confirm.submit.action"),
+          onConfirm: () => {
+            if (!mutations.submit) return;
+            void callAction(
+              "submit",
+              mutations.submit.toolName,
+              mutations.submit.args,
+              t("invoice.action.submitted"),
+            );
+          },
+        })}
+    >
+      {actionLoading === "submit" ? "…" : t("invoice.btn.submit.label")}
+    </Button>
+  );
+
+  const btnCancel = isSubmitted && (mutations.cancel || fixture) && (
+    <Button
+      variant="danger"
+      class={cx(
+        "border-bad/30",
+        isMobile
+          ? "w-full min-h-[44px] rounded-touch text-body"
+          : "ml-auto text-cell",
+      )}
+      disabled={fixture || actionLoading === "cancel"}
+      title={fixture ? previewTitle : t("invoice.btn.cancel.title")}
+      onClick={() =>
+        confirm.request({
+          subject: data.name,
+          title: t("invoice.confirm.cancel"),
+          detail: t("invoice.confirm.cancel.detail"),
+          actionLabel: t("invoice.confirm.cancel.action"),
+          onConfirm: () => {
+            if (!mutations.cancel) return;
+            void callAction(
+              "cancel",
+              mutations.cancel.toolName,
+              mutations.cancel.args,
+              t("invoice.action.cancelled"),
+            );
+          },
+        })}
+    >
+      {actionLoading === "cancel" ? "…" : t("invoice.btn.cancel.label")}
+    </Button>
+  );
+  const hasActionButtons = Boolean(
+    btnPayments || btnParty || btnSubmit || btnCancel,
+  );
+
+  /* ── Totaux ───────────────────────────────────────────────────────────── */
+
+  const totalsPanel = (
+    <div class="flex flex-col gap-1.5 bg-sunken border-l border-line px-4 py-3.5">
+      <div class="flex items-baseline justify-between">
+        <span class="font-mono text-meta text-ink-faint">
+          {t("invoice.totals.subtotal")}
+        </span>
+        <span class="font-mono text-body tabular-nums text-ink-2">
+          {formatNumber(netTotal)}
+        </span>
+      </div>
+      <div class="flex items-baseline justify-between">
+        <span class="font-mono text-meta text-ink-faint">
+          {t("invoice.totals.taxes")}
+        </span>
+        <span class="font-mono text-body tabular-nums text-ink-faint">
+          {taxes !== 0 ? formatNumber(taxes) : "—"}
+        </span>
+      </div>
+      <div class="flex items-baseline justify-between border-t border-line-soft pt-2">
+        <span class="font-mono text-meta uppercase tracking-chip text-ink-muted">
+          {t("invoice.totals.grand_total")}
+        </span>
+        <span
+          class="font-display font-semibold tabular-nums text-ink"
+          style={{ fontSize: "19px" }}
+        >
+          {formatCurrency(data.grand_total, ccy)}
+        </span>
+      </div>
+    </div>
+  );
+
+  /* ══════════════════════════════════════════════════════════════
+     MISE EN PAGE LARGE
+  ══════════════════════════════════════════════════════════════ */
+
+  if (isWide) {
+    return (
+      <ViewerShell containerRef={ref}>
+        {/* Header 2 colonnes — toujours visible */}
+        <div
+          class="grid gap-5 border-b border-line p-4"
+          style={{ gridTemplateColumns: "1fr auto" }}
+        >
+          <div class="flex min-w-0 flex-col gap-1.5">
+            <span class="font-mono text-micro uppercase tracking-eyebrow text-ink-faint">
               {doctype}
-            </div>
-            <div
-              style={{
-                fontSize: 20,
-                fontWeight: 700,
-                color: colors.text.primary,
-                fontFamily: fonts.mono,
-              }}
+            </span>
+            <h2
+              class="m-0 font-display font-semibold text-doc text-ink"
+              style={{ letterSpacing: "-0.015em" }}
             >
-              {data.name}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                marginTop: 6,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <StatusBadge status={data.status} />
-              {data.company && (
-                <span style={{ fontSize: 11, color: colors.text.faint }}>
-                  {data.company}
+              {nav.isRoot ? data.name : nav.current.title}
+            </h2>
+            <div class="flex items-center gap-2">
+              {nav.isRoot && <StatusBadge status={data.status} />}
+              {refreshing && (
+                <span class="font-mono text-nano text-ink-faint">
+                  {t("common.refreshing")}
+                </span>
+              )}
+              {nav.isRoot && (
+                <span class="text-data text-ink-muted">
+                  {partyName}
+                  {data.company ? ` · ${data.company}` : ""}
                 </span>
               )}
             </div>
           </div>
-          <button
-            onClick={() => void requestRefresh({ ignoreInterval: true })}
-            disabled={refreshing}
-            style={styles.button}
-          >
-            {refreshing ? "…" : "Refresh"}
-          </button>
-        </div>
 
-        {/* Feedback */}
-        {error && (
-          <FeedbackBanner
-            type="error"
-            message={error}
-            onDismiss={() => setError(null)}
-          />
-        )}
-        {!error && actionMessage && (
-          <FeedbackBanner type="success" message={actionMessage} />
-        )}
-
-        {/* Parties — two columns */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 16,
-            marginBottom: 16,
-            borderBottom: `1px solid ${colors.border}`,
-            paddingBottom: 16,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 10,
-                color: colors.text.muted,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: 4,
-              }}
-            >
-              {isCustomer ? "Customer" : "Supplier"}
-            </div>
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: colors.text.primary,
-              }}
-            >
-              {partyName}
-            </div>
-            {data.contact_email && (
-              <div style={{ fontSize: 11, color: colors.text.secondary }}>
-                {data.contact_email}
-              </div>
-            )}
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: 10,
-                color: colors.text.muted,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: 4,
-              }}
-            >
-              Outstanding
-            </div>
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: isPaid ? colors.success : colors.error,
-                fontFamily: fonts.mono,
-              }}
-            >
-              {formatCurrency(outstanding, ccy)}
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: isPaid ? colors.success : colors.error,
-              }}
-            >
-              {isPaid ? "Paid" : "Unpaid"}
-            </div>
-          </div>
-        </div>
-
-        {/* Dates — inline */}
-        <div
-          style={{ display: "flex", gap: 24, marginBottom: 16, fontSize: 12 }}
-        >
-          <span>
-            <span style={{ color: colors.text.muted }}>Date</span>
-            <span style={{ color: colors.text.primary, fontWeight: 500 }}>
-              {data.posting_date}
-            </span>
-          </span>
-          {data.due_date && (
-            <span>
-              <span style={{ color: colors.text.muted }}>Due</span>
-              <span style={{ color: colors.text.primary, fontWeight: 500 }}>
-                {data.due_date}
+          {nav.isRoot && (
+            <div class="flex flex-col items-end gap-1 border-l border-line pl-6">
+              <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+                {t("invoice.header.outstanding")}
               </span>
-            </span>
+              <span
+                class={cx(
+                  "font-display font-semibold tabular-nums leading-[1.05]",
+                  isPaid ? "text-ok" : "text-bad",
+                )}
+                style={{ fontSize: "30px" }}
+              >
+                {formatCurrency(outstanding, ccy)}
+              </span>
+              {data.due_date && (
+                <span class="font-mono text-meta text-ink-muted">
+                  {t("invoice.header.due", { date: data.due_date })}
+                </span>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Line Items — clickable for item drill-down */}
-        {items.length > 0 && (
-          <div
-            style={{
-              border: `1px solid ${colors.border}`,
-              borderRadius: 12,
-              overflowX: "auto",
-              marginBottom: 16,
-            }}
-          >
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th
-                    style={{
-                      ...styles.tableHeader,
-                      background: colors.bg.surface,
-                    }}
-                  >
-                    Item
-                  </th>
-                  <th
-                    style={{
-                      ...styles.tableHeader,
-                      background: colors.bg.surface,
-                      textAlign: "right",
-                    }}
-                  >
-                    Qty
-                  </th>
-                  <th
-                    style={{
-                      ...styles.tableHeader,
-                      background: colors.bg.surface,
-                      textAlign: "right",
-                    }}
-                  >
-                    Rate
-                  </th>
-                  <th
-                    style={{
-                      ...styles.tableHeader,
-                      background: colors.bg.surface,
-                      textAlign: "right",
-                    }}
-                  >
-                    Amount
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, idx) => {
-                  const isExpanded = expandedIdx === idx;
-                  return (
-                    <tr key={idx}>
-                      <td colSpan={4} style={{ padding: 0 }}>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "35% 15% 25% 25%",
-                            cursor: hasServerTools ? "pointer" : "default",
-                            transition: "background 0.1s",
-                            background: isExpanded
-                              ? colors.bg.hover
-                              : "transparent",
-                          }}
-                          onClick={hasServerTools
-                            ? () => setExpandedIdx(isExpanded ? null : idx)
-                            : undefined}
-                          onMouseEnter={(e) => {
-                            if (!isExpanded) {
-                              (e.currentTarget as HTMLElement).style
-                                .background = colors.bg.hover;
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isExpanded) {
-                              (e.currentTarget as HTMLElement).style
-                                .background = "transparent";
-                            }
-                          }}
-                        >
-                          <div style={styles.tableCell}>
-                            <div
-                              style={{
-                                fontWeight: 500,
-                                color: colors.text.primary,
-                              }}
-                            >
-                              {item.item_name ?? item.item_code}
-                            </div>
-                            {item.item_name && (
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: colors.text.faint,
-                                  fontFamily: fonts.mono,
-                                }}
-                              >
-                                {item.item_code}
-                              </div>
-                            )}
-                          </div>
-                          <div
-                            style={{
-                              ...styles.tableCell,
-                              textAlign: "right",
-                              fontFamily: fonts.mono,
-                            }}
-                          >
-                            {item.qty}
-                          </div>
-                          <div
-                            style={{
-                              ...styles.tableCell,
-                              textAlign: "right",
-                              fontFamily: fonts.mono,
-                              color: colors.text.secondary,
-                            }}
-                          >
-                            {formatCurrency(item.rate, ccy)}
-                          </div>
-                          <div
-                            style={{
-                              ...styles.tableCell,
-                              textAlign: "right",
-                              fontFamily: fonts.mono,
-                              fontWeight: 500,
-                            }}
-                          >
-                            {formatCurrency(item.amount, ccy)}
-                          </div>
-                        </div>
-                        {isExpanded && (
-                          <ItemDetailPanel
-                            app={app}
-                            itemCode={item.item_code}
-                            onClose={() => setExpandedIdx(null)}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {/* PathBar — invisible au niveau 1 (crumbs.showBar = false) */}
+        <PathBar
+          layout={layout}
+          stack={nav.stack}
+          onBack={nav.pop}
+          onJump={nav.popTo}
+          loading={nav.current.loading}
+        />
 
-        {/* Totals — aligned right */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginBottom: 16,
-          }}
+        {/* Corps du niveau courant ; les enfants = contenu racine niveau 1 */}
+        <LevelBody
+          level={nav.current}
+          app={app}
+          list={list}
+          layout={layout as ViewerLayout}
+          fixture={fixture}
+          onJump={jumpsEnabled ? nav.jump : undefined}
+          onAsk={ask}
+          onError={setError}
+          onMutated={nav.markStale}
+          onRefresh={() => void nav.refreshLevel()}
         >
+          {/* ── Contenu racine (niveau 1 seulement) ── */}
+          {messages}
+
+          {/* En-tête de tableau */}
           <div
+            class="grid border-b border-line bg-sunken"
             style={{
-              minWidth: 220,
-              borderTop: `1px solid ${colors.border}`,
-              paddingTop: 8,
+              gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
+              padding: "8px 16px",
             }}
           >
-            <TotalRow label="Subtotal" value={formatCurrency(netTotal, ccy)} />
-            {taxes !== 0 && (
-              <TotalRow label="Taxes" value={formatCurrency(taxes, ccy)} />
-            )}
-            <TotalRow
-              label="Grand Total"
-              value={formatCurrency(data.grand_total, ccy)}
-              bold
-            />
+            <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+              {t("invoice.table.col.item")}
+            </span>
+            <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+              {t("invoice.table.col.qty")}
+            </span>
+            <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+              {t("invoice.table.col.rate")}
+            </span>
+            <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+              {t("invoice.table.col.amount")}
+            </span>
           </div>
+
+          {/* Lignes article */}
+          {rows.map((row) => {
+            const isSelected = canExpand && expandedIdx === row.idx;
+            return (
+              <div key={`${row.idx}-${row.item_code}`}>
+                <div
+                  class={cx(
+                    "grid items-center border-b border-line-soft focus-visible:outline-2 focus-visible:outline-accent",
+                    canExpand ? "cursor-pointer" : "",
+                    isSelected ? "bg-row-selected" : "hover:bg-row-hover",
+                  )}
+                  style={{
+                    gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
+                    padding: "10px 16px",
+                    borderLeft: `2px solid ${
+                      isSelected ? "var(--color-accent)" : "transparent"
+                    }`,
+                  }}
+                  role={canExpand ? "button" : undefined}
+                  tabIndex={canExpand ? 0 : undefined}
+                  aria-expanded={canExpand ? isSelected : undefined}
+                  onClick={canExpand
+                    ? () =>
+                      setExpandedIdx(expandedIdx === row.idx ? null : row.idx)
+                    : undefined}
+                  onKeyDown={canExpand
+                    ? (e: KeyboardEvent) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      setExpandedIdx(expandedIdx === row.idx ? null : row.idx);
+                    }
+                    : undefined}
+                >
+                  <div class="flex flex-col gap-0.5">
+                    <span class="text-body text-ink">
+                      {row.item_name ?? row.item_code}
+                    </span>
+                    <span class="font-mono text-chip text-ink-faint">
+                      {row.item_code}
+                    </span>
+                  </div>
+                  <span class="font-mono text-cell tabular-nums text-ink-2 text-right">
+                    {formatNumber(row.qty)}
+                  </span>
+                  <span class="font-mono text-cell tabular-nums text-ink-muted text-right">
+                    {formatNumber(row.rate)}
+                  </span>
+                  <span class="font-mono text-cell font-medium tabular-nums text-ink text-right">
+                    {formatNumber(row.amount)}
+                  </span>
+                </div>
+
+                {isSelected && (
+                  <ItemDetailPanel
+                    app={app}
+                    itemCode={row.item_code}
+                    fixture={fixture}
+                    availableTools={availableTools}
+                    hints={hints ?? undefined}
+                    onJump={jumpsEnabled ? nav.jump : undefined}
+                    onClose={() => setExpandedIdx(null)}
+                    lineIndex={row.idx}
+                    lineCount={rows.length}
+                    lineQty={row.qty}
+                  />
+                )}
+              </div>
+            );
+          })}
+
+          {/* Footer : boutons gauche | totaux droite */}
+          <div
+            class="grid border-t border-line"
+            style={{ gridTemplateColumns: "1fr 300px" }}
+          >
+            <div class="flex items-center gap-2 px-4 py-3.5">
+              {btnSubmit}
+              {btnPayments}
+              {btnParty}
+              {btnCancel}
+            </div>
+            {totalsPanel}
+          </div>
+        </LevelBody>
+
+        {/* Pied de marque — toujours visible */}
+        <div class="flex justify-end border-t border-line px-4 py-[9px]">
+          <CasysCredit />
+        </div>
+        <ConfirmSheet confirm={confirm} />
+      </ViewerShell>
+    );
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     MISE EN PAGE ÉTROITE — mobile et panel
+  ══════════════════════════════════════════════════════════════ */
+
+  return (
+    <ViewerShell containerRef={ref}>
+      {/* Header flex-col — toujours visible */}
+      <div class="flex flex-col gap-[10px] border-b border-line px-3 py-[13px]">
+        <div class="flex flex-col gap-[3px]">
+          <span class="font-mono text-nano uppercase tracking-eyebrow text-ink-faint">
+            {doctype}
+          </span>
+          <h3 class="m-0 font-display font-semibold text-title text-ink tracking-title">
+            {nav.isRoot ? data.name : nav.current.title}
+          </h3>
+          {nav.isRoot && (
+            <span class="text-data text-ink-muted">{partyName}</span>
+          )}
         </div>
 
-        {/* Actions */}
-        {hasServerTools && (
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              padding: "12px 0",
-              borderTop: `1px solid ${colors.border}`,
-            }}
-          >
-            {isDraft && (
-              <ActionButton
-                label="Submit"
-                variant="success"
-                confirm
-                loading={actionLoading === "submit"}
-                onClick={() =>
-                  callAction("submit", "erpnext_doc_submit", {
-                    doctype,
-                    name: data.name,
-                  }, "Submitted")}
-              />
-            )}
-            {isSubmitted && (
-              <ActionButton
-                label="Cancel"
-                variant="error"
-                confirm
-                loading={actionLoading === "cancel"}
-                onClick={() =>
-                  callAction("cancel", "erpnext_doc_cancel", {
-                    doctype,
-                    name: data.name,
-                  }, "Cancelled")}
-              />
-            )}
-            <ActionButton
-              label="Payments"
-              loading={actionLoading === "nav_payments"}
-              onClick={() =>
-                navigate(
-                  "nav_payments",
-                  `Show payment entries for ${doctype} ${data.name}`,
+        {nav.isRoot && (
+          <div class="flex items-end justify-between gap-3 border-t border-line-soft pt-[10px]">
+            <div class="flex flex-col gap-0.5">
+              <span class="font-mono text-nano uppercase tracking-label text-ink-faint">
+                {t("invoice.header.outstanding")}
+              </span>
+              <span
+                class={cx(
+                  "font-display font-semibold text-amount tabular-nums leading-[1.05]",
+                  isPaid ? "text-ok" : "text-bad",
                 )}
-            />
-            {(data.customer ?? data.supplier) && (
-              <ActionButton
-                label={isCustomer ? "Customer invoices" : "Supplier invoices"}
-                loading={actionLoading === "nav_party"}
-                onClick={() => {
-                  const party = data.customer ?? data.supplier;
-                  navigate(
-                    "nav_party",
-                    `Show all ${
-                      isCustomer ? "sales" : "purchase"
-                    } invoices for ${
-                      isCustomer ? "customer" : "supplier"
-                    } ${party}`,
-                  );
-                }}
-              />
-            )}
+              >
+                {formatCurrency(outstanding, ccy)}
+              </span>
+            </div>
+            <div class="flex flex-col items-end gap-[5px]">
+              <StatusBadge status={data.status} />
+              {data.due_date && (
+                <span class="font-mono text-chip text-ink-muted">
+                  {t("invoice.header.due", { date: data.due_date.slice(5) })}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>
-      <ErpNextBrandFooter />
-    </div>
+
+      {/* PathBar — invisible au niveau 1 */}
+      <PathBar
+        layout={layout}
+        stack={nav.stack}
+        onBack={nav.pop}
+        onJump={nav.popTo}
+        loading={nav.current.loading}
+      />
+
+      {/* Corps du niveau courant */}
+      <LevelBody
+        level={nav.current}
+        app={app}
+        list={list}
+        layout={layout as ViewerLayout}
+        fixture={fixture}
+        onJump={jumpsEnabled ? nav.jump : undefined}
+        onAsk={ask}
+        onError={setError}
+        onMutated={nav.markStale}
+        onRefresh={() => void nav.refreshLevel()}
+      >
+        {/* ── Contenu racine (niveau 1 seulement) ── */}
+        {messages}
+
+        {/* Section lignes — cartes */}
+        <div class="flex flex-col gap-[7px] border-b border-line px-3 py-[11px]">
+          <span class="font-mono text-nano uppercase tracking-label text-ink-faint">
+            {t("invoice.lines.count", {
+              n: rows.length,
+              s: rows.length > 1 ? "s" : "",
+            })}
+          </span>
+          {rows.map((row, i) => (
+            <div
+              key={`${row.idx}-${row.item_code}`}
+              class="flex flex-col gap-[5px] rounded-chip border border-line bg-row-hover"
+              style={{
+                padding: "10px 11px",
+                borderLeft: `2px solid ${
+                  i === 0 ? "var(--color-accent)" : "transparent"
+                }`,
+              }}
+            >
+              <span
+                class={cx(
+                  "text-cell",
+                  i === 0 ? "text-ink" : "text-ink-2",
+                )}
+              >
+                {row.item_name ?? row.item_code}
+              </span>
+              <div class="flex items-baseline justify-between gap-[10px]">
+                <span class="font-mono text-chip text-ink-faint">
+                  {formatNumber(row.qty)} × {formatNumber(row.rate)}
+                </span>
+                <span
+                  class={cx(
+                    "font-mono text-cell tabular-nums text-ink",
+                    i === 0 ? "font-medium" : "",
+                  )}
+                >
+                  {formatNumber(row.amount)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Bande grand total */}
+        <div class="flex items-baseline justify-between border-b border-line bg-sunken px-3 py-[11px]">
+          <span class="font-mono text-micro uppercase tracking-chip text-ink-muted">
+            {t("invoice.totals.grand_total")}
+          </span>
+          <span class="font-display text-title font-semibold tabular-nums text-ink">
+            {formatCurrency(data.grand_total, ccy)}
+          </span>
+        </div>
+
+        {/* CTA section */}
+        {hasActionButtons && (
+          <div class="flex flex-col gap-[7px] px-3 py-[11px]">
+            {btnPayments}
+            <div class="flex gap-[7px]">{btnParty}</div>
+            {btnCancel}
+            {btnSubmit}
+          </div>
+        )}
+      </LevelBody>
+
+      {/* Pied de marque — toujours visible */}
+      <div class="flex justify-end border-t border-line px-3 py-[9px]">
+        <CasysCredit compact />
+      </div>
+      <ConfirmSheet confirm={confirm} />
+    </ViewerShell>
   );
 }

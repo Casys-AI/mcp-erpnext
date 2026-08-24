@@ -1,0 +1,339 @@
+/**
+ * Direction B v2 — « Console bi-theme ».
+ *
+ * Le bloc @theme reprend le modèle de tokens de la maquette Claude Design
+ * (projet 4c8e8c9a, fichier « Direction B v2 - Console bi-theme.dc.html »),
+ * dont la légende est elle-même nommée @theme et suit le namespace --color-*
+ * de Tailwind v4.
+ *
+ * Le clair n'est pas le négatif du sombre : le cyan fonce pour tenir le
+ * contraste sur blanc (#3EC1CF → #0D7C8A), les fonds enfoncés deviennent un
+ * gris froid plutôt qu'un noir éclairci, et certains rôles se dédoublent —
+ * voir --color-warn-text.
+ */
+
+@import "tailwindcss";
+@import "./fonts.css";
+
+/**
+ * La racine Vite est le dossier du viewer en cours de build, donc la détection
+ * automatique ne voit pas shared/ — qui est son frère, pas son enfant. On le
+ * déclare. Les classes des primitives partagées atterrissent ainsi dans les
+ * sept bundles, ce qui coûte quelques centaines d'octets et évite qu'une vue
+ * perde ses styles selon l'ordre de build.
+ */
+@source "./";
+
+/**
+ * Garde contre l'élagage.
+ *
+ * Tailwind ne conserve un token que si une classe le référence. Or certaines
+ * couleurs ne peuvent PAS passer par une classe : Recharts pose ses teintes en
+ * attributs SVG, et une bordure qui bascule au clic est une valeur calculée.
+ * Ces cas légitimes consomment donc `var(--color-…)` en style inline — et
+ * seraient invisibles au scan.
+ *
+ * Aujourd'hui ils survivent par accident, parce qu'une classe existe ailleurs
+ * dans le code. Cette liste rend la garantie explicite : retirer le dernier
+ * `bg-ok` d'un viewer ne fera plus disparaître silencieusement la couleur d'une
+ * série de graphe — et seulement en thème clair, là où le token élagué perd sa
+ * valeur tout en gardant celle du bloc sombre écrit à la main.
+ */
+@source inline("bg-accent bg-bad bg-cat-1 bg-cat-2 bg-cat-3 bg-cat-4 bg-cat-5 bg-cat-6 bg-cat-7 bg-cat-8 bg-control bg-ink bg-ink-faint bg-ink-ghost bg-ink-muted bg-line bg-line-soft bg-ok bg-row-hover bg-surface");
+
+/**
+ * Le thème est piloté par [data-theme] sur <html>, posé par applyCasysTheme()
+ * au démarrage. On ne cible pas prefers-color-scheme dans la variante : elle
+ * ne sert qu'aux styles d'auteur (dark:…), et l'attribut est toujours présent.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  /* ── Surfaces ────────────────────────────────────────────────── */
+  --color-surface: #ffffff;
+  --color-sunken: #f4f7f8;
+
+  /* ── Encres ──────────────────────────────────────────────────── */
+  --color-ink: #101519;
+  --color-ink-2: #2c3740;
+  --color-ink-muted: #5b6a74;
+  /* 4.62:1 sur surface blanche : reste secondaire sans sacrifier le petit texte. */
+  --color-ink-faint: #687781;
+  --color-ink-ghost: #9aa5ad;
+  /**
+   * Encre des valeurs nulles en mobile. Plus lisible que --color-ink-ghost :
+   * un tiret lu à bout de bras sur un téléphone demande plus de contraste
+   * qu'un tiret lu à 50 cm sur un écran de bureau.
+   */
+  --color-ink-dim: #7b8892;
+
+  /**
+   * Deux niveaux de trait, pas un. La maquette sépare le filet inter-lignes
+   * d'un tableau (soft) du trait qui délimite une section (line) — les
+   * confondre écrase la hiérarchie du tableau.
+   */
+  --color-line: #dbe3e7;
+  --color-line-soft: #eef3f4;
+  --color-line-hover: #b6c4cb;
+  /**
+   * Trait interne d'un bloc déjà posé sur une surface — sous-champs dépliés
+   * d'une ligne de stock, séparateurs dans une carte. Entre `line` et
+   * `line-soft` : il doit se voir sur un fond déjà contrasté, sans découper
+   * le bloc en deux.
+   */
+  --color-line-inner: #e6edef;
+
+  /* ── Accent ──────────────────────────────────────────────────── */
+  --color-accent: #0d7c8a;
+  /* Le texte sur bouton accent n'est pas l'accent : il s'en écarte pour rester lisible. */
+  --color-accent-text: #0a6673;
+  --color-accent-edge: #86c0c8;
+
+  /* ── Marque Casys ────────────────────────────────────────────── */
+  --color-brand: #8a4fa3;
+  --color-brand-text: #73408a;
+
+  /* ── États ───────────────────────────────────────────────────── */
+  --color-ok: #12855f;
+  --color-warn: #d98b1f;
+  /* En clair, le texte warning fonce encore pour passer le contraste sur blanc. */
+  --color-warn-text: #a56815;
+  --color-bad: #c9453c;
+
+  /* ── Fonds de contrôle ───────────────────────────────────────── */
+  --color-row-hover: #f9fbfb;
+  --color-row-selected: #f2f7f8;
+  --color-control: #ffffff;
+  --color-count: #eef3f4;
+  --color-track: #e2e9ec;
+  /**
+   * Voile de modale. Pas une encre : --color-ink s'inverse entre les thèmes,
+   * et un voile qui s'inverse éclaircirait le fond au lieu de l'assombrir.
+   * C'est une couche d'assombrissement absolue, plus dense en sombre parce
+   * qu'il y a moins d'écart à creuser entre la surface et le fond.
+   */
+  --color-scrim: rgba(16, 21, 25, 0.45);
+  /**
+   * La modale se détache d'un fond déjà sombre : sa bordure s'éclaircit d'un
+   * cran par rapport au trait courant, sinon elle disparaît dans le voile.
+   */
+  --color-line-modal: #c3ced4;
+
+  /* ── Séries de graphique ─────────────────────────────────────── */
+  --color-chart-1: #0d7c8a;
+  --color-chart-2: #4c9faa;
+  --color-chart-3: #93c4cc;
+  --color-chart-4: #c4dde1;
+
+  /**
+   * Palette catégorielle — identité, pas magnitude.
+   *
+   * --color-chart-1..4 est une échelle d'UNE teinte : elle encode une grandeur
+   * (la sparkline, une série unique), et se lit du plus faible au plus fort.
+   * Une série catégorielle n'a pas d'ordre : il lui faut des teintes distinctes.
+   * Confondre les deux fait lire un classement là où il n'y en a pas.
+   *
+   * Ces huit-là sont la palette de référence de la méthode dataviz, validée
+   * contre nos deux surfaces : bande de clarté, plancher de chroma, séparation
+   * en vision daltonienne (ΔE ≥ 8 adjacent) et contraste. Elles ne sont pas
+   * inventées, et l'ordre compte — on assigne dans l'ordre, jamais en cycle.
+   *
+   * En clair, --color-cat-3, -4 et -5 passent sous 3:1 sur blanc : les formes
+   * qui les emploient doivent porter des étiquettes visibles ou un tableau.
+   * Au-delà de huit séries, on replie sur « Autres » — jamais une neuvième
+   * teinte générée.
+   */
+  --color-cat-1: #2a78d6;
+  --color-cat-2: #eb6834;
+  --color-cat-3: #1baf7a;
+  --color-cat-4: #eda100;
+  --color-cat-5: #e87ba4;
+  --color-cat-6: #008300;
+  --color-cat-7: #4a3aa7;
+  --color-cat-8: #e34948;
+
+  /* ── Typographie ─────────────────────────────────────────────── */
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /**
+   * L'échelle vit entre 10 et 17 px — celle de Tailwind commence à 12 et
+   * raisonne en rem. On la remplace par des rôles, en px : ces vues sont
+   * rendues dans une iframe d'hôte dont on ne contrôle pas la taille de base.
+   */
+  /* Le mobile passe sous le plancher de 10 px pour tenir trois colonnes en 390. */
+  --text-nano: 9.5px;
+  --text-micro: 10px;
+  --text-chip: 10.5px;
+  --text-meta: 11px;
+  --text-note: 11.5px;
+  --text-data: 12px;
+  --text-cell: 12.5px;
+  --text-body: 13px;
+  --text-lede: 14px;
+  --text-total: 16px;
+  --text-title: 17px;
+  /* Titre de carte en mobile — 15,5 px, distinct du 15 px du panneau latéral. */
+  --text-card-title: 15.5px;
+  --text-metric-unit: 20px;
+  --text-doc: 23px;
+  --text-amount: 24px;
+  /* La métrique KPI perd un tiers en mobile pour tenir dans 390 px. */
+  --text-metric-compact: 34px;
+  --text-metric: 46px;
+
+  --tracking-title: -0.01em;
+  --tracking-metric: -0.025em;
+  --tracking-chip: 0.06em;
+  --tracking-live: 0.08em;
+  --tracking-label: 0.1em;
+  --tracking-eyebrow: 0.12em;
+
+  /* ── Élévations ──────────────────────────────────────────────── */
+  /**
+   * Deux ombres seulement. Celle de la modale porte loin parce qu'elle doit
+   * décoller d'un voile ; celle de l'infobulle reste courte, elle ne fait que
+   * séparer d'un fond immédiat.
+   *
+   * En sombre l'ombre est du noir pur : une ombre teintée d'encre s'éclaircit
+   * au lieu de creuser, puisque l'encre y est presque blanche.
+   */
+  --shadow-modal: 0 16px 44px rgba(16, 21, 25, 0.24);
+  --shadow-tooltip: 0 2px 8px rgba(16, 21, 25, 0.16);
+
+  /* ── Formes ──────────────────────────────────────────────────── */
+  --radius-bar: 2px;
+  --radius-badge: 3px;
+  --radius-chip: 4px;
+  --radius-control: 5px;
+  /* Les contrôles tactiles s'arrondissent un peu plus que ceux à la souris. */
+  --radius-touch: 6px;
+  --radius-card: 8px;
+  /* Les chips deviennent des pilules en mobile. */
+  --radius-pill: 13px;
+}
+
+/**
+ * Thème sombre. Les utilitaires Tailwind émettent var(--color-…), donc
+ * redéfinir les variables ici suffit à faire basculer toute la charte —
+ * aucun utilitaire n'a besoin d'être dupliqué.
+ */
+[data-theme="dark"] {
+  --color-surface: #13161a;
+  --color-sunken: #0f1215;
+
+  --color-ink: #e6ecf0;
+  --color-ink-2: #c3ccd3;
+  --color-ink-muted: #8895a0;
+  /* 4.54:1 sur la surface sombre, y compris pour les micro-libellés. */
+  --color-ink-faint: #74818b;
+  --color-ink-ghost: #4a5661;
+  --color-ink-dim: #6f7c88;
+
+  --color-line: #262c33;
+  --color-line-soft: #1d2227;
+  --color-line-hover: #3d464f;
+  --color-line-inner: #232a30;
+
+  --color-accent: #3ec1cf;
+  --color-accent-text: #6fd7e2;
+  --color-accent-edge: #2b7f89;
+
+  --color-brand: #b47ec9;
+  --color-brand-text: #c99ad9;
+
+  --color-ok: #4fbf8b;
+  --color-warn: #e8a94f;
+  /* En sombre le warning est déjà assez clair : le rôle texte rejoint le rôle couleur. */
+  --color-warn-text: #e8a94f;
+  --color-bad: #f07067;
+
+  --color-row-hover: #181c21;
+  --color-row-selected: #1b2126;
+  --color-control: #1a1e23;
+  --color-count: #1d2329;
+  --color-track: #262c33;
+  --color-scrim: rgba(4, 6, 8, 0.66);
+  --color-line-modal: #2d353d;
+  --shadow-modal: 0 16px 44px rgba(0, 0, 0, 0.55);
+  --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.4);
+
+  --color-chart-1: #3ec1cf;
+  --color-chart-2: #3595a3;
+  --color-chart-3: #2f6b76;
+  --color-chart-4: #2b4a52;
+
+  --color-cat-1: #3987e5;
+  --color-cat-2: #d95926;
+  --color-cat-3: #199e70;
+  --color-cat-4: #c98500;
+  --color-cat-5: #d55181;
+  --color-cat-6: #008300;
+  --color-cat-7: #9085e9;
+  --color-cat-8: #e66767;
+
+  color-scheme: dark;
+}
+
+/**
+ * Filet de sécurité : si le script de thème n'a pas tourné, l'attribut est
+ * absent et la préférence système prend le relais. En marche normale
+ * applyCasysTheme() pose toujours [data-theme], donc ce bloc ne sert jamais.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --color-surface: #13161a;
+    --color-sunken: #0f1215;
+
+    --color-ink: #e6ecf0;
+    --color-ink-2: #c3ccd3;
+    --color-ink-muted: #8895a0;
+    --color-ink-faint: #5d6a74;
+    --color-ink-ghost: #4a5661;
+    --color-ink-dim: #6f7c88;
+
+    --color-line: #262c33;
+    --color-line-soft: #1d2227;
+    --color-line-hover: #3d464f;
+    --color-line-inner: #232a30;
+
+    --color-accent: #3ec1cf;
+    --color-accent-text: #6fd7e2;
+    --color-accent-edge: #2b7f89;
+
+    --color-brand: #b47ec9;
+    --color-brand-text: #c99ad9;
+
+    --color-ok: #4fbf8b;
+    --color-warn: #e8a94f;
+    --color-warn-text: #e8a94f;
+    --color-bad: #f07067;
+
+    --color-row-hover: #181c21;
+    --color-row-selected: #1b2126;
+    --color-control: #1a1e23;
+    --color-count: #1d2329;
+    --color-track: #262c33;
+    --color-scrim: rgba(4, 6, 8, 0.66);
+    --color-line-modal: #2d353d;
+    --shadow-modal: 0 16px 44px rgba(0, 0, 0, 0.55);
+    --shadow-tooltip: 0 2px 8px rgba(0, 0, 0, 0.4);
+
+    --color-chart-1: #3ec1cf;
+    --color-chart-2: #3595a3;
+    --color-chart-3: #2f6b76;
+    --color-chart-4: #2b4a52;
+
+    --color-cat-1: #3987e5;
+    --color-cat-2: #d95926;
+    --color-cat-3: #199e70;
+    --color-cat-4: #c98500;
+    --color-cat-5: #d55181;
+    --color-cat-6: #008300;
+    --color-cat-7: #9085e9;
+    --color-cat-8: #e66767;
+
+    color-scheme: dark;
+  }
+}

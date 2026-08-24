@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Work+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #191d21; font-family: 'Work Sans', system-ui, sans-serif; }
+    a { color: #3ec1cf; text-decoration: none; }
+    a:hover { color: #6fd7e2; }
+  </style>
+</helmet>
+
+<div style="display: flex; gap: 20px; align-items: flex-start; padding: 0; font-family: 'Work Sans', system-ui, sans-serif;">
+
+  <div style="width: 390px; background: #13161a; border: 1px solid #262c33; border-radius: 8px; overflow: hidden;">
+    <div style="height: 2px; background: linear-gradient(90deg, #3ec1cf 0%, #b47ec9 100%);"></div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px 9px;">
+      <button style="display: flex; align-items: center; gap: 6px; background: none; border: none; padding: 0; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6fd7e2; cursor: pointer;">‹ liste</button>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">BOM</span>
+      <span style="width: 6px; height: 6px; border-radius: 50%; background: #4fbf8b;"></span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 4px 12px 12px; border-bottom: 1px solid #262c33;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">BOM-CTRL-8-003</span>
+      <h3 style="margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 15.5px; font-weight: 600; color: #e6ecf0; text-wrap: pretty;">CTRL-8 · Contrôleur 8 voies</h3>
+      <div style="display: flex; align-items: center; gap: 7px;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 13px; background: rgba(79,191,139,0.14); color: #4fbf8b;">active</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #5d6a74;">docstatus 1</span>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 6px; padding: 10px 12px; overflow: hidden; border-bottom: 1px solid #262c33;">
+      <button style="background: #1a1e23; border: 1px solid #262c33; border-radius: 13px; padding: 4px 10px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; color: #8895a0; cursor: pointer; flex-shrink: 0;">champs</button>
+      <button style="background: rgba(62,193,207,0.14); border: 1px solid #3ec1cf; border-radius: 13px; padding: 4px 10px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; color: #3ec1cf; cursor: pointer; flex-shrink: 0;">items 5</button>
+      <button style="background: #1a1e23; border: 1px solid #262c33; border-radius: 13px; padding: 4px 10px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; color: #8895a0; cursor: pointer; flex-shrink: 0;">opérations 3</button>
+      <button style="background: #1a1e23; border: 1px solid #262c33; border-radius: 13px; padding: 4px 10px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; color: #8895a0; cursor: pointer; flex-shrink: 0; opacity: 0.4;">fich</button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 52px 82px; padding: 6px 12px; background: #0f1215; border-bottom: 1px solid #262c33;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">item</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74; text-align: right;">qté</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74; text-align: right;">montant</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 52px 82px; align-items: center; min-height: 40px; padding: 0 12px; border-left: 2px solid transparent; border-bottom: 1px solid #1d2227;">
+      <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 12px; color: #c3ccd3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Carte mère 8 voies</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">PCB-8CH</span></span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3; text-align: right; font-variant-numeric: tabular-nums;">1</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3; text-align: right; font-variant-numeric: tabular-nums;">184,00</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 52px 82px; align-items: center; min-height: 40px; padding: 0 12px; border-left: 2px solid transparent; border-bottom: 1px solid #1d2227;">
+      <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 12px; color: #c3ccd3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Boîtier IP67</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">BOX-IP67</span></span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3; text-align: right; font-variant-numeric: tabular-nums;">1</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3; text-align: right; font-variant-numeric: tabular-nums;">42,50</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 52px 82px; align-items: center; min-height: 40px; padding: 0 12px; border-left: 2px solid #e8a94f; border-bottom: 1px solid #1d2227; background: #1b2126; border-right: 2px solid #3ec1cf;">
+      <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 12px; color: #e6ecf0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Connecteur M12 femelle</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #e8a94f;">CONN-M12F · stock bas</span></span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e6ecf0; text-align: right; font-variant-numeric: tabular-nums;">8</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e6ecf0; text-align: right; font-variant-numeric: tabular-nums;">25,60</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 9px 12px 11px; background: #1b2126; border-top: 1px solid #232a30; border-bottom: 1px solid #1d2227;">
+      <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">taux</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3; font-variant-numeric: tabular-nums;">3,20</span></span>
+      <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">unité</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3;">Nos</span></span>
+      <span style="display: flex; flex-direction: column; gap: 3px;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">dispo.</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e8a94f; font-variant-numeric: tabular-nums;">5</span></span>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 52px 82px; align-items: center; min-height: 40px; padding: 0 12px; border-left: 2px solid transparent; border-bottom: 1px solid #1d2227;">
+      <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 12px; color: #c3ccd3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Câble blindé 10 m</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">CABLE-10M</span></span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3; text-align: right; font-variant-numeric: tabular-nums;">2</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3; text-align: right; font-variant-numeric: tabular-nums;">22,00</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 52px 82px; align-items: center; min-height: 40px; padding: 0 12px; border-left: 2px solid transparent; border-bottom: 1px solid #1d2227;">
+      <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 12px; color: #c3ccd3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Visserie inox M3</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">BOLT-M3</span></span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3; text-align: right; font-variant-numeric: tabular-nums;">24</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3; text-align: right; font-variant-numeric: tabular-nums;">3,60</span>
+    </div>
+
+    <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 11px 12px; background: #0f1215; border-top: 1px solid #262c33;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">coût matières</span>
+      <span style="font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 17px; font-weight: 600; color: #e6ecf0; font-variant-numeric: tabular-nums;">277,70 €</span>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-top: 1px solid #262c33;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">1 / 1</span>
+      <a href="https://casys.ai" style="display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;"><img src="casys-logo.svg" alt="" width="12" height="12" style="display: block; width: 12px; height: 12px;"><span>Powered by Casys.ai</span></a>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px; max-width: 300px; padding-top: 8px;">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">table enfant · mobile 390</span>
+    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 1.55; color: #8895a0;">
+      <span>— Même grille que le stock mobile : <span style="font-family: 'JetBrains Mono', monospace; color: #c3ccd3;">1fr 52px 82px</span>, lignes de 40 px, en-têtes gardés. « Les listes restent des tableaux. »</span>
+      <span>— Les pilules passent d'une section à l'autre : une seule table visible à la fois, jamais deux empilées sur un téléphone.</span>
+      <span>— Le reste d'une ligne s'ouvre au tap, sous elle, sur fond enfoncé — exactement le pli du stock. Bord droit cyan = sélection, bord gauche = statut.</span>
+      <span>— Le total de la table visible clôt la liste, en Space Grotesk 17 px comme tout total étroit.</span>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+</body>
+</html>

@@ -247,8 +247,9 @@ Viewers: `invoice-viewer`, `stock-viewer`, `doclist-viewer`, `chart-viewer`,
 `ui://mcp-erpnext/{viewer-name}`.
 
 Viewers use the MCP Apps SDK (`@modelcontextprotocol/ext-apps`). Interactive
-viewers use `app.callServerTool()` for mutations and `app.sendMessage()` for
-cross-viewer navigation.
+viewers use `app.callServerTool()` for mutations and typed in-view navigation,
+`app.updateModelContext()` for bounded selections, and `app.sendMessage()` as a
+capability-gated conversational fallback.
 
 All viewers carry a `refreshRequest` payload for safe revalidation (injected by
 `src/tools/ui-refresh.ts`).

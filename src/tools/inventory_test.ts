@@ -166,6 +166,34 @@ Deno.test("erpnext_stock_balance - applies item_code and warehouse filters", asy
   assertEquals(result.count, 1);
 });
 
+Deno.test("erpnext_stock_entry_list - declares and applies the exact child item_code filter", async () => {
+  let capturedDoctype = "";
+  let capturedFilters: unknown;
+  const mockClient = makeMockClient({
+    list: async (doctype: string, opts: { filters?: unknown }) => {
+      capturedDoctype = doctype;
+      capturedFilters = opts.filters;
+      return [];
+    },
+  });
+
+  const tool = getTool("erpnext_stock_entry_list");
+  assertEquals(
+    (tool.inputSchema.properties?.item_code as { type?: string })?.type,
+    "string",
+  );
+  await tool.handler(
+    { item_code: "WIDGET-1", stock_entry_type: "Material Issue" },
+    makeCtx(mockClient),
+  );
+
+  assertEquals(capturedDoctype, "Stock Entry");
+  assertEquals(capturedFilters, [
+    ["Stock Entry Detail", "item_code", "=", "WIDGET-1"],
+    ["stock_entry_type", "=", "Material Issue"],
+  ]);
+});
+
 // ── erpnext_stock_entry_create ───────────────────────────────────────────────
 
 Deno.test("erpnext_stock_entry_create - throws if stock_entry_type missing", async () => {

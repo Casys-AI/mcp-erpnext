@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Work+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #191d21; font-family: 'Work Sans', system-ui, sans-serif; }
+    a { color: #3ec1cf; text-decoration: none; }
+    a:hover { color: #6fd7e2; }
+  </style>
+</helmet>
+
+<div style="width: 390px; background: #13161a; border: 1px solid #262c33; border-radius: 8px; overflow: hidden; font-family: 'Work Sans', system-ui, sans-serif;">
+  <div style="height: 2px; background: linear-gradient(90deg, #3ec1cf 0%, #b47ec9 100%);"></div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px 9px;">
+    <button style="display: flex; align-items: center; gap: 6px; background: none; border: none; padding: 0; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6fd7e2; cursor: pointer;">‹ liste</button>
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">Task</span>
+    <span style="width: 6px; height: 6px; border-radius: 50%; background: #4fbf8b;"></span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; padding: 4px 12px 12px; border-bottom: 1px solid #262c33;">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">TASK-2026-0184</span>
+    <h3 style="margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 15.5px; font-weight: 600; color: #e6ecf0; text-wrap: pretty;">Draft qualification protocol</h3>
+    <div style="display: flex; align-items: center; gap: 7px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 13px; background: rgba(232,169,79,0.14); color: #e8a94f;">working</span>
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #5d6a74;">docstatus 0</span>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 6px; padding: 10px 12px; overflow: hidden; border-bottom: 1px solid #262c33;">
+    <button style="background: rgba(62,193,207,0.14); border: 1px solid #3ec1cf; border-radius: 13px; padding: 4px 10px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; color: #3ec1cf; cursor: pointer; flex-shrink: 0;">champs</button>
+    <button style="background: #1a1e23; border: 1px solid #262c33; border-radius: 13px; padding: 4px 10px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; color: #8895a0; cursor: pointer; flex-shrink: 0;">dépend de 2</button>
+    <button style="background: #1a1e23; border: 1px solid #262c33; border-radius: 13px; padding: 4px 10px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; color: #8895a0; cursor: pointer; flex-shrink: 0;">fichiers 3</button>
+    <button style="background: #1a1e23; border: 1px solid #262c33; border-radius: 13px; padding: 4px 10px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; text-transform: uppercase; color: #8895a0; cursor: pointer; flex-shrink: 0; opacity: 0.4;">resp</button>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; padding: 12px;">
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">général</span>
+      <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline; min-height: 24px;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #5d6a74;">project</span><span style="font-size: 12px; color: #c3ccd3;">Refonte catalogue</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline; min-height: 24px;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #5d6a74;">priority</span><span style="font-size: 12px; color: #c3ccd3;">High</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline; min-height: 24px;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #5d6a74;">exp end date</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #f07067;">2026-08-18</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline; min-height: 24px;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #5d6a74;">expected time</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c3ccd3;">8 h</span></div>
+      <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline; min-height: 24px;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #5d6a74;">owner</span><span style="font-size: 12px; color: #c3ccd3;">Administrator</span></div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid #1d2227;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">description</span>
+      <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #c3ccd3; text-wrap: pretty;">Write the qualification protocol for the Q1 batch. Cover incoming inspection, in-process checks at stations 2 and 4, and the final functional test.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid #1d2227;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #5d6a74;">progression</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8895a0;">20 %</span>
+      </div>
+      <div style="height: 3px; background: #262c33; border-radius: 2px; overflow: hidden;"><div style="width: 20%; height: 3px; background: #3ec1cf; border-radius: 2px;"></div></div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px; padding: 0 12px 12px;">
+    <button style="width: 100%; min-height: 44px; background: rgba(62,193,207,0.14); border: 1px solid #2b7f89; border-radius: 6px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 13px; font-weight: 500; color: #6fd7e2; cursor: pointer;">Ouvrir dans le kanban</button>
+    <div style="display: flex; gap: 6px;">
+      <button style="flex: 1; min-height: 44px; background: #1a1e23; border: 1px solid #262c33; border-radius: 6px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 13px; color: #8895a0; cursor: pointer;">Temps</button>
+      <button style="flex: 1; min-height: 44px; background: transparent; border: 1px solid rgba(240,112,103,0.3); border-radius: 6px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 13px; color: #f07067; cursor: pointer;">Annuler</button>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-top: 1px solid #262c33;">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;">1 / 1</span>
+    <a href="https://casys.ai" style="display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #5d6a74;"><img src="casys-logo.svg" alt="" width="12" height="12" style="display: block; width: 12px; height: 12px;"><span>Powered by Casys.ai</span></a>
+  </div>
+</div>
+
+</x-dc>
+</body>
+</html>

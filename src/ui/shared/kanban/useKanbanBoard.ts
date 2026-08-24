@@ -1,12 +1,19 @@
-import { useReducer } from "react";
+import { useReducer } from "preact/hooks";
 import { createKanbanInitialState, kanbanStateReducer } from "./state";
 import type { KanbanBoardData } from "./types";
 
-export function useKanbanBoard() {
+export function useKanbanBoard(initialBoard?: KanbanBoardData) {
   const [state, dispatch] = useReducer(
     kanbanStateReducer,
-    undefined,
-    createKanbanInitialState,
+    initialBoard,
+    // Tout board entre par le reducer : la fixture aussi est normalisée.
+    (board) =>
+      board
+        ? kanbanStateReducer(createKanbanInitialState(), {
+          type: "hydrate-board",
+          board,
+        })
+        : createKanbanInitialState(),
   );
 
   return {

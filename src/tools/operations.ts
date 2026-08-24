@@ -8,7 +8,7 @@
  * @module lib/erpnext/tools/operations
  */
 
-import type { FrappeFilter } from "../api/types.ts";
+import type { FrappeFile, FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
 import {
@@ -26,6 +26,95 @@ import {
 
 export const operationsTools: ErpNextTool[] = [
   // ── File Attachments ───────────────────────────────────────────────────────
+
+  {
+    name: "erpnext_file_list",
+    annotations: { readOnlyHint: true },
+    description: "List the files attached to an ERPNext document. " +
+      "Returns name, size, privacy and URL for each attachment. " +
+      "Pairs with erpnext_file_upload: that one attaches, this one reads back.",
+    category: "operations",
+    inputSchema: {
+      type: "object",
+      properties: {
+        attached_to_doctype: {
+          type: "string",
+          description: "DocType of the document whose attachments to list.",
+          minLength: 1,
+        },
+        attached_to_name: {
+          type: "string",
+          description: "Name/ID of the document whose attachments to list.",
+          minLength: 1,
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of files to return. Defaults to 50.",
+          minimum: 1,
+          maximum: 500,
+        },
+      },
+      required: ["attached_to_doctype", "attached_to_name"],
+    },
+    handler: async (input, ctx) => {
+      for (
+        const field of ["attached_to_doctype", "attached_to_name"] as const
+      ) {
+        if (typeof input[field] !== "string" || !input[field].trim()) {
+          throw new Error(
+            `[erpnext_file_list] '${field}' must be a non-empty string`,
+          );
+        }
+      }
+      if (
+        input.limit !== undefined &&
+        (typeof input.limit !== "number" || !Number.isInteger(input.limit) ||
+          input.limit < 1 || input.limit > 500)
+      ) {
+        throw new Error(
+          "[erpnext_file_list] 'limit' must be an integer between 1 and 500",
+        );
+      }
+
+      // Files always hang off a document in Frappe: the File doctype carries
+      // attached_to_doctype / attached_to_name. A list filtered on both is the
+      // whole query — no join, no method call.
+      const files = await ctx.client.list<FrappeFile>("File", {
+        fields: [
+          "name",
+          "file_name",
+          "file_url",
+          "file_size",
+          "is_private",
+          "attached_to_field",
+          "creation",
+          "modified",
+          "owner",
+        ],
+        filters: [
+          ["attached_to_doctype", "=", input.attached_to_doctype as string],
+          ["attached_to_name", "=", input.attached_to_name as string],
+        ],
+        order_by: "creation desc",
+        limit: (input.limit as number | undefined) ?? 50,
+      });
+
+      return {
+        count: files.length,
+        data: files.map((file) => ({
+          name: file.name,
+          file_name: file.file_name,
+          file_url: file.file_url,
+          file_size: file.file_size ?? null,
+          is_private: file.is_private === 1,
+          attached_to_field: file.attached_to_field ?? null,
+          creation: file.creation,
+          modified: file.modified,
+          owner: file.owner,
+        })),
+      };
+    },
+  },
 
   {
     name: "erpnext_file_upload",
@@ -451,11 +540,55 @@ export const operationsTools: ErpNextTool[] = [
         filters: {
           type: "array",
           description:
-            "Frappe filters as array of [fieldname, operator, value] tuples. " +
+            "Frappe filters as array of [fieldname, operator, value] tuples, or " +
+            "[child doctype, fieldname, operator, value] to filter on a child table. " +
+            "Values may be strings, numbers, booleans, null, or string/number arrays for in/not in. " +
             'Example: [["status","=","Open"],["company","=","Acme"]]',
           items: {
             type: "array",
-            items: { type: "string" },
+            anyOf: [
+              {
+                prefixItems: [
+                  { type: "string", minLength: 1 },
+                  { type: "string", minLength: 1 },
+                  {
+                    oneOf: [
+                      { type: ["string", "number", "boolean", "null"] },
+                      {
+                        type: "array",
+                        items: { type: ["string", "number"] },
+                      },
+                    ],
+                  },
+                ],
+                minItems: 3,
+                maxItems: 3,
+              },
+              {
+                prefixItems: [
+                  { type: "string", minLength: 1 },
+                  { type: "string", minLength: 1 },
+                  { type: "string", minLength: 1 },
+                  {
+                    oneOf: [
+                      { type: ["string", "number", "boolean", "null"] },
+                      {
+                        type: "array",
+                        items: { type: ["string", "number"] },
+                      },
+                    ],
+                  },
+                ],
+                minItems: 4,
+                maxItems: 4,
+              },
+              {
+                // 3.0.x advertised arbitrary string arrays. Keep accepting
+                // that legacy surface while describing real 3/4-part Frappe
+                // tuples precisely for modern clients.
+                items: { type: "string" },
+              },
+            ],
           },
         },
         limit: { type: "number", description: "Max results (default 20)" },

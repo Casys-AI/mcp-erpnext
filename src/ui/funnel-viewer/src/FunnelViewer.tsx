@@ -1,342 +1,937 @@
+/** @jsxImportSource preact */
 /**
- * Funnel Viewer — Sales funnel visualization
+ * Funnel viewer — Direction B v2.
+ * Horizontal bar chart replacing the old trapezoid layout.
+ * Handshake stays on ext-apps (refresh / callServerTool / sendMessage).
  *
- * Renders a trapezoid-shaped funnel from Lead through to Sales Order,
- * showing count, value, and conversion rates between stages.
- * Pure CSS shapes — no third-party chart libraries.
- *
- * @module lib/erpnext/src/ui/funnel-viewer
+ * Navigation : quand l'hôte relaie les outils serveur (`canJump` → true),
+ * un clic sur une étape qui a un `_stageJumps[label]` empile un niveau dans
+ * la vue (DoclistBody) plutôt que d'envoyer un message au chat.
+ * Sans serverTools, le comportement reste strictement identique à avant.
  */
-
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
+import { bindHostContext } from "~/shared/host-context-hook";
+import { CasysCredit, cx, StateMessage, ViewerShell } from "~/shared/ui";
+import { useViewerLayout } from "~/shared/useViewerLayout";
 import {
-  colors,
-  fonts,
-  formatCurrency,
-  formatNumber,
-  styles,
-} from "~/shared/theme";
-import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
-import {
+  beginUiRefresh,
   canRequestUiRefresh,
+  completeUiRefresh,
+  createUiRefreshSequence,
   extractToolResultText,
+  invalidateUiRefresh,
   normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
   type UiRefreshRequestData,
 } from "~/shared/refresh";
-
-// ============================================================================
-// MCP App
-// ============================================================================
+import { FUNNEL_FIXTURE, isFixtureMode } from "./fixture.ts";
+import type { FunnelData, FunnelStage } from "./types.ts";
+import { formatNumber } from "~/shared/format";
+import { type TFunction, useT } from "~/shared/i18n-hook";
+import {
+  type DrillDownChannel,
+  drillDownChannel,
+  sharedLabel,
+  shareSelection,
+} from "~/shared/drill-down";
+import { useViewerNav } from "~/shared/useViewerNav";
+import { viewerRootKey } from "~/shared/nav-stack.ts";
+import { PathBar } from "~/shared/PathBar";
+import { jumpFromHint } from "~/shared/jumps";
+import { canCallViewerTool, readAvailableTools } from "~/shared/viewer-tools";
+import { LevelBody } from "~/shared/levels/LevelBody";
+import { stageIsJumpable } from "./funnel-nav.ts";
+import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
+import { useActiveContext } from "~/shared/useActiveContext.ts";
+import type { ContextSelectionItem } from "~/shared/active-context.ts";
+import { contextFallbackForInlineJump } from "~/shared/active-context-flow.ts";
 
 const app = new App({ name: "Funnel Viewer", version: "1.0.0" });
 const FUNNEL_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
-// ============================================================================
-// Types
-// ============================================================================
+/** Maps ERPNext stage labels (data) to i18n keys for the drill-down message. */
+const STAGE_DRILL_DOWN_KEY: Record<string, string> = {
+  "Leads": "funnel.drill_down.leads",
+  "Lead": "funnel.drill_down.leads",
+  "Opportunities": "funnel.drill_down.opportunities",
+  "Opportunity": "funnel.drill_down.opportunities",
+  "Quotations": "funnel.drill_down.quotations",
+  "Quotation": "funnel.drill_down.quotations",
+  "Sales Orders": "funnel.drill_down.orders",
+  "Sales Order": "funnel.drill_down.orders",
+  "Orders": "funnel.drill_down.orders",
+};
 
-interface FunnelStage {
-  label: string;
-  count: number;
-  value?: number;
-  color: string;
-  conversionRate?: number;
-  /** sendMessage text when clicking this stage (auto-injected by server) */
-  _drillDown?: string;
+function getStageDrillDown(label: string, tf: TFunction): string | undefined {
+  const key = STAGE_DRILL_DOWN_KEY[label];
+  return key ? tf(key) : undefined;
 }
 
-interface FunnelData {
-  title: string;
-  subtitle?: string;
-  stages: FunnelStage[];
-  currency?: string;
-  refreshRequest?: UiRefreshRequestData;
+function funnelStageContext(
+  data: FunnelData,
+  stage: FunnelStage,
+): ContextSelectionItem {
+  return {
+    id: `funnel:${data.title}:${stage.label}`,
+    view: data.title,
+    label: stage.label,
+    value: String(stage.count),
+  };
 }
 
-// ============================================================================
-// Loading Skeleton
-// ============================================================================
+function funnelStageAriaLabel(
+  stage: FunnelStage,
+  jumpable: boolean,
+  contextEnabled: boolean,
+  tf: TFunction,
+): string {
+  const key = jumpable
+    ? "funnel.stage.aria_open"
+    : contextEnabled
+    ? "funnel.stage.aria_context"
+    : "funnel.stage.aria_ask";
+  return tf(key, { label: stage.label, count: stage.count });
+}
 
-function LoadingSkeleton() {
+/* ── Palette positionnelle ────────────────────────────────────────────
+   Les couleurs dépendent de la position dans le funnel, pas du serveur.
+   Le dernier stage reçoit toujours la brand color.
+──────────────────────────────────────────────────────────────────────── */
+/**
+ * Couleurs des étapes, en tokens plutôt qu'en hex.
+ *
+ * Un entonnoir descend : ses étapes encodent une grandeur, pas des identités.
+ * On prend donc l'échelle séquentielle teal — une seule teinte, du plus fort au
+ * plus faible — et la couleur de marque pour la dernière étape, qui est
+ * l'aboutissement et mérite de se détacher.
+ *
+ * Ces valeurs partent en style inline parce que la hauteur des barres est
+ * calculée : c'est un des cas légitimes. La garde `@source inline` de
+ * tokens.css empêche Tailwind de les élaguer.
+ */
+const STAGE_COLORS = [
+  "var(--color-chart-1)",
+  "var(--color-chart-2)",
+  "var(--color-chart-3)",
+] as const;
+
+const FINAL_STAGE_COLOR = "var(--color-brand)";
+
+function getBarColor(index: number, total: number): string {
+  if (index === total - 1) return FINAL_STAGE_COLOR;
+  return STAGE_COLORS[Math.min(index, STAGE_COLORS.length - 1)];
+}
+
+function getBarRadius(index: number, total: number): string {
+  if (total === 1) return "2px";
+  if (index === 0) return "2px 0 0 2px";
+  if (index === total - 1) return "0 2px 2px 0";
+  return "2px";
+}
+
+/**
+ * Tonalité du taux de conversion.
+ *
+ * ARBITRAGE OUVERT : la maquette montre 76 % en ambre alors que ce seuil rend
+ * « bon » tout ce qui dépasse 20 %. On applique le comportement du code, pas
+ * les valeurs de la maquette — le seuil est une décision métier, pas graphique.
+ */
+function conversionColor(rate: number): string {
+  if (rate > 20) return "var(--color-ok)";
+  if (rate > 5) return "var(--color-warn-text)";
+  return "var(--color-bad)";
+}
+
+/* ── Connecteur (wide) ───────────────────────────────────────────────── */
+
+function WideConnector({ rate }: { rate: number }) {
+  const color = conversionColor(rate);
+  const arrowColor = "var(--color-line-hover)";
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            className="skeleton"
-            style={{
-              height: i === 1 ? 32 : 20,
-              width: i === 1 ? "40%" : `${60 + i * 8}%`,
-            }}
-          />
-        ))}
-        <div
-          style={{
-            marginTop: 16,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          {[100, 82, 64, 46].map((w, i) => (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        width: 52,
+        paddingBottom: 22,
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10.5,
+          color,
+          lineHeight: 1.2,
+        }}
+      >
+        {rate} %
+      </span>
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 14 14"
+        fill="none"
+        style={{ color: arrowColor }}
+        aria-hidden="true"
+      >
+        <path
+          d="M2 7h10M12 7l-3.2-3.2M12 7l-3.2 3.2"
+          stroke="currentColor"
+          stroke-width="1.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
+/* ── Wide layout ─────────────────────────────────────────────────────── */
+
+function WideFunnelChart(
+  {
+    stages,
+    canDrill,
+    contextEnabled,
+    hasNavJump,
+    onDrillDown,
+    isContextActive,
+  }: {
+    stages: FunnelStage[];
+    canDrill: boolean;
+    contextEnabled: boolean;
+    /** Indique si cette étape a un saut serveur disponible. */
+    hasNavJump: (label: string) => boolean;
+    onDrillDown: (stage: FunnelStage) => Promise<DrillDownChannel>;
+    /** Le contour ne reflète que le panier confirmé par l'hôte. */
+    isContextActive: (stage: FunnelStage) => boolean;
+  },
+) {
+  const t = useT();
+  const maxCount = Math.max(1, ...stages.map((s) => s.count));
+  const MAX_BAR_H = 64;
+  const MIN_BAR_H = 4;
+
+  // Dynamic grid template: 1fr per stage, 52px per connector
+  const colParts: string[] = [];
+  stages.forEach((_, i) => {
+    colParts.push("1fr");
+    if (i < stages.length - 1) colParts.push("52px");
+  });
+  const gridCols = colParts.join(" ");
+
+  return (
+    <>
+      {/* Chart area */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          padding: "22px 16px 0",
+          height: 120,
+        }}
+      >
+        {stages.map((stage, idx) => {
+          const barH = Math.max(
+            MIN_BAR_H,
+            Math.round((stage.count / maxCount) * MAX_BAR_H),
+          );
+          const color = getBarColor(idx, stages.length);
+          const radius = getBarRadius(idx, stages.length);
+          const nextStage = stages[idx + 1];
+          const hasConnector = nextStage?.conversionRate != null;
+          const jumpable = hasNavJump(stage.label);
+          const interactive = jumpable || canDrill;
+          const isSelected = isContextActive(stage);
+
+          return (
+            <>
+              <div
+                key={`stage-${idx}`}
+                role={interactive ? "button" : undefined}
+                tabIndex={interactive ? 0 : undefined}
+                class={cx(
+                  "group rounded-[3px]",
+                  interactive &&
+                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                  isSelected &&
+                    "bg-sunken outline outline-1 outline-accent-edge outline-offset-0",
+                )}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "flex-end",
+                  flex: 1,
+                  gap: 8,
+                  cursor: interactive ? "pointer" : "default",
+                }}
+                onClick={interactive ? () => onDrillDown(stage) : undefined}
+                onKeyDown={interactive
+                  ? (e: KeyboardEvent) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    onDrillDown(stage);
+                  }
+                  : undefined}
+                aria-label={interactive
+                  ? funnelStageAriaLabel(stage, jumpable, contextEnabled, t)
+                  : undefined}
+                aria-pressed={interactive ? isSelected : undefined}
+                title={interactive
+                  ? t("funnel.stage.click_to_see", { label: stage.label })
+                  : undefined}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: 22,
+                    fontWeight: 600,
+                    color: "var(--color-ink)",
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  {stage.count}
+                  {/* Chevron de saut — visible uniquement au survol */}
+                  {jumpable && (
+                    <span
+                      class="font-mono text-[15px] text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                      aria-hidden="true"
+                    >
+                      ›
+                    </span>
+                  )}
+                </span>
+                <div
+                  style={{
+                    height: barH,
+                    background: color,
+                    borderRadius: radius,
+                    opacity: isSelected ? 1 : 0.9,
+                  }}
+                />
+              </div>
+              {hasConnector && (
+                <WideConnector
+                  key={`conn-${idx}`}
+                  rate={nextStage.conversionRate!}
+                />
+              )}
+            </>
+          );
+        })}
+      </div>
+
+      {/* Label / value grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: gridCols,
+          padding: "10px 16px 16px",
+        }}
+      >
+        {stages.map((stage, idx) => {
+          const hasValue = stage.value != null && stage.value > 0;
+          const valueText = hasValue ? formatNumber(stage.value, 2) : "—";
+          return (
+            <>
+              <div
+                key={`label-${idx}`}
+                style={{ display: "flex", flexDirection: "column", gap: 2 }}
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 10.5,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: "var(--color-ink-muted)",
+                  }}
+                >
+                  {stage.label}
+                </span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    fontVariantNumeric: hasValue ? "tabular-nums" : undefined,
+                    color: hasValue
+                      ? "var(--color-ink-muted)"
+                      : "var(--color-ink-ghost)",
+                  }}
+                >
+                  {valueText}
+                </span>
+              </div>
+              {idx < stages.length - 1 && <span key={`gap-${idx}`} />}
+            </>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+/* ── Mobile / Panel layout ───────────────────────────────────────────── */
+/* Panel = mobile sans min-height tactile                                 */
+
+/** SVG arc → flèche indiquant qu'un message a été envoyé. */
+function SentArc() {
+  return (
+    /* couleur de donnée UI (accent-edge) : justifié car c'est un retour
+       visuel dynamique lié au clic, pas une couleur statique de mise en page */
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      class="text-accent-edge shrink-0"
+      aria-hidden="true"
+    >
+      <path
+        d="M1 1 Q1 8 8 5"
+        stroke="currentColor"
+        stroke-width="1.2"
+        stroke-linecap="round"
+        fill="none"
+      />
+      <path
+        d="M8 5 L6 3 M8 5 L6 7"
+        stroke="currentColor"
+        stroke-width="1.2"
+        stroke-linecap="round"
+      />
+    </svg>
+  );
+}
+
+function MobileFunnelChart(
+  {
+    stages,
+    canDrill,
+    contextEnabled,
+    hasNavJump,
+    onDrillDown,
+    isContextActive,
+    touch,
+  }: {
+    stages: FunnelStage[];
+    canDrill: boolean;
+    contextEnabled: boolean;
+    /** Indique si cette étape a un saut serveur disponible. */
+    hasNavJump: (label: string) => boolean;
+    onDrillDown: (stage: FunnelStage) => Promise<DrillDownChannel>;
+    /** Les surbrillances reflètent uniquement le panier confirmé par l'hôte. */
+    isContextActive: (stage: FunnelStage) => boolean;
+    /** true = pointeur grossier → cibles tactiles min-height:38px */
+    touch: boolean;
+  },
+) {
+  const t = useT();
+  const maxCount = Math.max(1, ...stages.map((s) => s.count));
+  const firstCount = stages[0]?.count ?? 1;
+
+  const [sentStage, setSentStage] = useState<
+    { idx: number; label: string } | null
+  >(null);
+
+  // Le message legacy reste transitoire ; la sélection vient du contexte actif.
+  useEffect(() => {
+    setSentStage(null);
+  }, [stages]);
+
+  async function handleRowClick(stage: FunnelStage, idx: number) {
+    const jumpable = hasNavJump(stage.label);
+    const interactive = jumpable || canDrill;
+    if (!interactive) return;
+    const label = sharedLabel(await onDrillDown(stage));
+    if (!label) return;
+    setSentStage({ idx, label });
+    setTimeout(() => setSentStage(null), 1500);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", padding: 12 }}>
+      {stages.map((stage, idx) => {
+        const color = getBarColor(idx, stages.length);
+        const barWidthPct = Math.max(
+          4,
+          Math.round((stage.count / maxCount) * 100),
+        );
+        const nextStage = stages[idx + 1];
+        const hasConnector = nextStage?.conversionRate != null;
+        const isSelected = isContextActive(stage);
+        // Truncate long labels to fit 132px column (~13 chars)
+        const label = stage.label.length > 12
+          ? stage.label.slice(0, 11) + "."
+          : stage.label;
+
+        // Pourcentage du total (1ère étape = 100 %)
+        const totalPct = firstCount > 0
+          ? Math.round((stage.count / firstCount) * 100)
+          : 0;
+
+        const jumpable = hasNavJump(stage.label);
+        const interactive = jumpable || canDrill;
+
+        return (
+          <>
             <div
-              key={i}
-              className="skeleton"
-              style={{ height: 56, width: `${w}%`, borderRadius: 6 }}
-            />
-          ))}
-        </div>
-      </div>
+              key={`row-${idx}`}
+              role={interactive ? "button" : undefined}
+              tabIndex={interactive ? 0 : undefined}
+              class={cx(
+                "rounded-[5px] group",
+                interactive && "hover:bg-row-hover cursor-pointer",
+                interactive &&
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                isSelected &&
+                  "bg-sunken outline outline-1 outline-accent-edge outline-offset-0",
+              )}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "132px 1fr 56px 60px",
+                alignItems: "center",
+                gap: 9,
+                minHeight: touch ? 38 : undefined,
+              }}
+              onClick={() => handleRowClick(stage, idx)}
+              onKeyDown={(e: KeyboardEvent) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                handleRowClick(stage, idx);
+              }}
+              aria-label={interactive
+                ? funnelStageAriaLabel(stage, jumpable, contextEnabled, t)
+                : undefined}
+              aria-pressed={interactive ? isSelected : undefined}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 10.5,
+                  textTransform: "uppercase",
+                  color: "var(--color-ink-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
+                }}
+              >
+                {label}
+                {/* Chevron de saut — visible uniquement au survol de la ligne */}
+                {jumpable && (
+                  <span
+                    class="text-[11px] text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                    aria-hidden="true"
+                  >
+                    ›
+                  </span>
+                )}
+              </span>
+              {/* Barre avec track de fond — hauteur 26px, overflow hidden */}
+              <div class="h-[26px] w-full rounded-[3px] bg-sunken overflow-hidden">
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${barWidthPct}%`,
+                    background: color,
+                    borderRadius: 2,
+                    opacity: isSelected ? 1 : 0.85,
+                  }}
+                />
+              </div>
+              {/* Count : accent + gras sur la ligne sélectionnée */}
+              <span
+                class={cx(
+                  "font-mono text-[12.5px] text-right tabular-nums",
+                  isSelected ? "text-accent font-[500]" : "text-ink",
+                )}
+              >
+                {stage.count}
+              </span>
+              {/* Pourcentage du total */}
+              <span class="font-mono text-[10.5px] text-ink-faint text-right tabular-nums">
+                {totalPct} %
+              </span>
+            </div>
+
+            {/* Ligne de confirmation du partage */}
+            {sentStage?.idx === idx && (
+              <div
+                key={`sent-${idx}`}
+                class="flex items-center gap-1.5 px-[9px] py-[3px]"
+              >
+                <SentArc />
+                <span class="font-mono text-[10.5px] text-ink-faint">
+                  {sentStage.label}
+                </span>
+              </div>
+            )}
+
+            {hasConnector && (
+              <div
+                key={`conn-${idx}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "132px 1fr 56px 60px",
+                  gap: 9,
+                }}
+              >
+                <span />
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 9.5,
+                    color: conversionColor(nextStage.conversionRate!),
+                    padding: "1px 0",
+                  }}
+                >
+                  ↓ {nextStage.conversionRate} %
+                </span>
+                <span />
+                <span />
+              </div>
+            )}
+          </>
+        );
+      })}
     </div>
   );
 }
 
-// ============================================================================
-// Empty State
-// ============================================================================
+/* ── FunnelContent ───────────────────────────────────────────────────── */
 
-function FunnelEmptyState() {
+function FunnelContent(
+  {
+    data,
+    error,
+    refreshing: _refreshing,
+    fixture,
+    onRefresh: _onRefresh,
+    onError,
+  }: {
+    data: FunnelData;
+    error: string | null;
+    refreshing: boolean;
+    onRefresh: () => void;
+    fixture: boolean;
+    onError: (msg: string | null) => void;
+  },
+) {
+  const t = useT();
+  const { ref: containerRef, layout } = useViewerLayout<HTMLDivElement>();
+
+  // ── Navigation (pile de niveaux) ──────────────────────────────────────
+  const rootKey = viewerRootKey("funnel", data.refreshRequest, {
+    title: data.title,
+  });
+  const viewerNav = useViewerNav(app, {
+    title: data.title,
+    kind: "root",
+    origin: "chart",
+    key: rootKey,
+  }, { fixture });
+  const nav = viewerNav.nav;
+  const { current: navCurrent, isRoot } = nav;
+
+  // jumpsEnabled = false en fixture (pas d'outils) ou si l'hôte ne relaie pas.
+  const { jumpsEnabled } = viewerNav;
+
+  // list doit être déclaré inconditionnellement avant tout return (règle hooks).
+  const { list } = viewerNav;
+
+  const { ask } = viewerNav;
+
+  const stages = data.stages ?? [];
+  const activeContext = useActiveContext(app, rootKey);
+  useEffect(() => {
+    void activeContext.reconcile(
+      stages.map((stage) => funnelStageContext(data, stage)),
+    );
+  }, [data, activeContext.selections]);
+  const legacyChannel = drillDownChannel(app.getHostCapabilities());
+  const canDrill = activeContext.supported || legacyChannel === "message";
+
+  /** Indique si une étape a un saut serveur disponible. */
+  const hasNavJump = (label: string): boolean =>
+    stageIsJumpable(data._stageJumps, label, jumpsEnabled);
+
+  /** Fallback : sendMessage / contexte (comportement d'avant). */
+  function handleDrillDown(stage: FunnelStage): Promise<DrillDownChannel> {
+    const msg = stage._drillDown ?? getStageDrillDown(stage.label, t);
+    if (!msg) return Promise.resolve("none");
+    return shareSelection(app, {
+      view: data.title,
+      label: stage.label,
+      value: String(stage.count),
+      suggested: msg,
+    });
+  }
+
+  /**
+   * Dispatch : saut de pile quand possible, drill-down sinon.
+   *
+   * `jumpFromHint` retourne null si le hint n'a pas de `tool` — on ne sauterait
+   * jamais dans ce cas et on retomberait sur handleDrillDown.
+   */
+  function handleStageClick(stage: FunnelStage): Promise<DrillDownChannel> {
+    const fallbackMessage = stage._drillDown ??
+      getStageDrillDown(stage.label, t);
+    const navJumpHint = data._stageJumps?.[stage.label];
+    const jump = jumpsEnabled && navJumpHint
+      ? jumpFromHint(
+        navJumpHint,
+        {},
+        t("nav.linked_to", { id: stage.label }),
+      )
+      : null;
+    const activation = activeContext.supported
+      ? activeContext.activate(
+        funnelStageContext(data, stage),
+        contextFallbackForInlineJump(fallbackMessage, jump !== null),
+      ).then((result): DrillDownChannel =>
+        result === "message" ? "message" : "none"
+      )
+      : null;
+    if (jump) {
+      void nav.jump(jump);
+      return activation ?? Promise.resolve("none");
+    }
+    if (activation) return activation;
+    return handleDrillDown(stage);
+  }
+
+  if (stages.length === 0) {
+    return (
+      <ViewerShell containerRef={containerRef}>
+        <StateMessage>{t("funnel.empty")}</StateMessage>
+      </ViewerShell>
+    );
+  }
+
+  const firstCount = stages[0].count;
+  const lastCount = stages[stages.length - 1].count;
+  const totalConversion = firstCount > 0
+    ? Math.round((lastCount / firstCount) * 100)
+    : 0;
+
+  const isWide = layout === "wide";
+  const isMobile = layout === "mobile";
+
+  const headerPadding = isWide ? "13px 16px" : "11px 12px";
+  const titleSize = isWide ? 17 : 15.5;
+  const badgeText = isWide
+    ? t("funnel.conversion.end_to_end", { rate: totalConversion })
+    : `${totalConversion} %`;
+  // color-mix suit le token : la teinte change avec le thème, pas l'opacité.
+  const badgeBg = "color-mix(in srgb, var(--color-ok) 14%, transparent)";
+  const badgeColor = "var(--color-ok)";
+
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "48px 24px",
-        color: colors.text.muted,
-        gap: 16,
-      }}
-    >
-      <svg
-        width="56"
-        height="56"
-        viewBox="0 0 56 56"
-        fill="none"
-        style={{ opacity: 0.35 }}
-      >
-        {/* Funnel shape */}
-        <path
-          d="M8 10 L48 10 L36 46 L20 46 Z"
-          stroke="currentColor"
-          strokeWidth="2"
-          fill="none"
-          strokeLinejoin="round"
-        />
-        <line
-          x1="12"
-          y1="19"
-          x2="44"
-          y2="19"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          opacity="0.5"
-        />
-        <line
-          x1="16"
-          y1="28"
-          x2="40"
-          y2="28"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          opacity="0.4"
-        />
-        <line
-          x1="19"
-          y1="37"
-          x2="37"
-          y2="37"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          opacity="0.3"
-        />
-      </svg>
-      <div style={{ fontSize: 13, textAlign: "center" }}>
-        No funnel data
-        <div style={{ fontSize: 11, color: colors.text.faint, marginTop: 4 }}>
-          Run the sales funnel tool to visualize your pipeline
+    <ViewerShell containerRef={containerRef}>
+      {
+        /* Erreur inline (données déjà présentes) — bande latérale, pas StateMessage.
+          Doctrine G/H : StateMessage tone="bad" est réservé aux vides absolus. */
+      }
+      {error && (
+        <div class="border-l-2 border-bad pl-[10px] mx-3 mt-2 flex items-center gap-1.5">
+          <span class="size-[5px] shrink-0 rounded-full bg-bad" />
+          <span class="font-mono text-[10.5px] text-ink">{error}</span>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Funnel Stage Component
-// ============================================================================
-
-/** Clip-path polygons for progressive trapezoid narrowing */
-const CLIP_PATHS = [
-  "polygon(0% 0%, 100% 0%, 92% 100%, 8% 100%)",
-  "polygon(8% 0%, 92% 0%, 82% 100%, 18% 100%)",
-  "polygon(18% 0%, 82% 0%, 74% 100%, 26% 100%)",
-  "polygon(26% 0%, 74% 0%, 74% 100%, 26% 100%)",
-];
-
-/** Darker shade for gradient bottom */
-function darken(hex: string): string {
-  const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - 40);
-  const g = Math.max(0, parseInt(hex.slice(3, 5), 16) - 40);
-  const b = Math.max(0, parseInt(hex.slice(5, 7), 16) - 40);
-  return `#${r.toString(16).padStart(2, "0")}${
-    g.toString(16).padStart(2, "0")
-  }${b.toString(16).padStart(2, "0")}`;
-}
-
-function FunnelStageBar({
-  stage,
-  stageIndex,
-  currency,
-  onClick,
-}: {
-  stage: FunnelStage;
-  stageIndex: number;
-  currency: string;
-  onClick?: () => void;
-}) {
-  const isEmpty = stage.count === 0;
-  const clipPath = CLIP_PATHS[Math.min(stageIndex, CLIP_PATHS.length - 1)];
-  const bg = isEmpty
-    ? "linear-gradient(180deg, #333 0%, #222 100%)"
-    : `linear-gradient(180deg, ${stage.color} 0%, ${darken(stage.color)} 100%)`;
-
-  return (
-    <div
-      style={{
-        clipPath,
-        background: bg,
-        padding: "16px 20px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 4,
-        minHeight: 56,
-        cursor: onClick ? "pointer" : "default",
-        transition: "transform 0.15s, box-shadow 0.15s",
-        opacity: isEmpty ? 0.4 : 1,
-        position: "relative",
-      }}
-      onClick={onClick}
-      onMouseEnter={(e) => {
-        if (!onClick || isEmpty) return;
-        (e.currentTarget as HTMLElement).style.transform = "scale(1.02)";
-        (e.currentTarget as HTMLElement).style.boxShadow =
-          `0 0 20px ${stage.color}30`;
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.transform = "scale(1)";
-        (e.currentTarget as HTMLElement).style.boxShadow = "none";
-      }}
-      title={onClick ? `Click to see ${stage.label}` : undefined}
-    >
-      <span
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          fontFamily: fonts.mono,
-          color: "#fff",
-          textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-          lineHeight: 1,
-        }}
-      >
-        {formatNumber(stage.count, 0)}
-      </span>
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          color: "rgba(255,255,255,0.85)",
-          textTransform: "uppercase",
-          letterSpacing: "0.1em",
-        }}
-      >
-        {stage.label}
-      </span>
-      {stage.value != null && stage.value > 0 && (
-        <span
-          style={{
-            fontSize: 11,
-            fontFamily: fonts.mono,
-            color: "rgba(255,255,255,0.6)",
-            marginTop: 2,
-          }}
-        >
-          {formatCurrency(stage.value, currency)}
-        </span>
       )}
-    </div>
-  );
-}
 
-// ============================================================================
-// Conversion Rate Badge
-// ============================================================================
-
-function ConversionBadge({ rate, color }: { rate: number; color?: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 0,
-        margin: "2px 0",
-      }}
-    >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 12 12"
-        fill="none"
-        style={{ opacity: 0.4 }}
-      >
-        <path
-          d="M6 1v10M6 11l-3-3M6 11l3-3"
-          stroke={color ?? colors.text.muted}
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span
+      {/* Header — adapte le titre et le badge selon le niveau de navigation */}
+      <header
         style={{
-          display: "inline-flex",
+          display: "flex",
           alignItems: "center",
-          padding: "2px 10px",
-          fontSize: 10,
-          fontWeight: 700,
-          fontFamily: fonts.mono,
-          borderRadius: 10,
-          background: colors.bg.elevated,
-          color: color ?? colors.text.secondary,
-          letterSpacing: "0.02em",
+          justifyContent: "space-between",
+          padding: headerPadding,
+          borderBottom: "1px solid var(--color-line)",
+          flexShrink: 0,
         }}
       >
-        {rate}%
-      </span>
-    </div>
+        {isRoot
+          ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-display)",
+                    fontSize: titleSize,
+                    fontWeight: 600,
+                    color: "var(--color-ink)",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {data.title}
+                </h2>
+                {data.subtitle && (
+                  <span
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10.5,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "var(--color-ink-faint)",
+                    }}
+                  >
+                    {data.subtitle}
+                  </span>
+                )}
+              </div>
+              <div class="flex min-w-0 shrink-0 items-center gap-2">
+                <ActiveContextChip
+                  compact={!isWide}
+                  selections={activeContext.selections}
+                  failed={activeContext.failed}
+                  evictedLabel={activeContext.evictedLabel}
+                  onRemove={(selection) => activeContext.remove(selection)}
+                  onClear={() => activeContext.clear()}
+                />
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: isWide ? 11.5 : 10.5,
+                    padding: isWide ? "3px 8px" : "2px 7px",
+                    borderRadius: 3,
+                    background: badgeBg,
+                    color: badgeColor,
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  {badgeText}
+                </span>
+              </div>
+            </>
+          )
+          : (
+            /* Niveau de navigation empilé : titre du niveau + compte si liste */
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-display)",
+                    fontSize: titleSize,
+                    fontWeight: 600,
+                    color: "var(--color-ink)",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {navCurrent.title}
+                </h2>
+                {navCurrent.count !== undefined &&
+                  navCurrent.kind === "list" && (
+                  <span class="rounded-[3px] bg-count px-[7px] py-0.5 font-mono text-[11px] text-ink-muted">
+                    {navCurrent.count}
+                  </span>
+                )}
+              </div>
+              <ActiveContextChip
+                compact={!isWide}
+                selections={activeContext.selections}
+                failed={activeContext.failed}
+                evictedLabel={activeContext.evictedLabel}
+                onRemove={(selection) => activeContext.remove(selection)}
+                onClear={() => activeContext.clear()}
+              />
+            </>
+          )}
+      </header>
+
+      {/* PathBar — visible uniquement en profondeur (renvoie null au niveau 1) */}
+      <PathBar
+        layout={layout}
+        stack={nav.stack}
+        onBack={nav.pop}
+        onJump={nav.popTo}
+        loading={navCurrent.loading}
+      />
+
+      {
+        /* Corps : LevelBody rend les enfants au niveau racine, et les niveaux
+          empilés (DoclistBody, RecordLevel, BarsLevel) dans les autres cas. */
+      }
+      <LevelBody
+        level={navCurrent}
+        app={app}
+        list={list}
+        layout={layout}
+        fixture={fixture}
+        onJump={jumpsEnabled ? nav.jump : undefined}
+        onAsk={ask}
+        onError={onError}
+        onMutated={nav.markStale}
+        onRefresh={() => void nav.refreshLevel()}
+      >
+        {/* Contenu racine — funnel chart */}
+        {isWide
+          ? (
+            <WideFunnelChart
+              stages={stages}
+              canDrill={canDrill}
+              contextEnabled={activeContext.supported}
+              hasNavJump={hasNavJump}
+              onDrillDown={handleStageClick}
+              isContextActive={(stage) =>
+                activeContext.isSelected(funnelStageContext(data, stage))}
+            />
+          )
+          : (
+            <MobileFunnelChart
+              stages={stages}
+              canDrill={canDrill}
+              contextEnabled={activeContext.supported}
+              hasNavJump={hasNavJump}
+              onDrillDown={handleStageClick}
+              isContextActive={(stage) =>
+                activeContext.isSelected(funnelStageContext(data, stage))}
+              touch={isMobile}
+            />
+          )}
+      </LevelBody>
+
+      {/* Footer */}
+      <footer
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          padding: "9px 16px",
+          borderTop: "1px solid var(--color-line)",
+          flexShrink: 0,
+        }}
+      >
+        <CasysCredit compact={!isWide} />
+      </footer>
+    </ViewerShell>
   );
 }
 
-// ============================================================================
-// Main Component
-// ============================================================================
+/* ── FunnelViewer ─────────────────────────────────────────────────────── */
 
 export function FunnelViewer() {
-  const [data, setData] = useState<FunnelData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const t = useT();
+  const fixture = isFixtureMode();
+  const [data, setData] = useState<FunnelData | null>(
+    fixture ? FUNNEL_FIXTURE : null,
+  );
+  const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dataRef = useRef<FunnelData | null>(null);
+  const dataRef = useRef<FunnelData | null>(fixture ? FUNNEL_FIXTURE : null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
-  const refreshInFlightRef = useRef(false);
+  const refreshSequenceRef = useRef(createUiRefreshSequence());
   const lastRefreshStartedAtRef = useRef(0);
 
   function hydrateData(nextData: FunnelData) {
@@ -353,31 +948,32 @@ export function FunnelViewer() {
     if (!text) return false;
 
     try {
-      const parsed = JSON.parse(text) as FunnelData;
-      hydrateData(parsed);
+      hydrateData(JSON.parse(text) as FunnelData);
       setError(null);
       setLoading(false);
       return true;
     } catch (cause) {
       console.error("Parse error:", cause);
-      setError("Failed to parse funnel payload");
+      setError(t("funnel.error.parse_failed"));
       setLoading(false);
       return false;
     }
   }
 
   async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+    if (fixture) return false;
     const request = resolveUiRefreshRequest(
       dataRef.current,
       refreshRequestRef.current,
     );
+    const sequence = refreshSequenceRef.current;
     if (
       !canRequestUiRefresh({
         request,
         visibilityState: typeof document === "undefined"
           ? "visible"
           : document.visibilityState,
-        refreshInFlight: refreshInFlightRef.current,
+        refreshInFlight: sequence.inFlight !== null,
         now: Date.now(),
         lastRefreshStartedAt: lastRefreshStartedAtRef.current,
         minIntervalMs: FUNNEL_REFRESH_INTERVAL_MS,
@@ -386,42 +982,61 @@ export function FunnelViewer() {
       return false;
     }
 
-    if (!request || !app.getHostCapabilities()?.serverTools) {
+    if (
+      !request ||
+      !canCallViewerTool(
+        app.getHostCapabilities()?.serverTools,
+        readAvailableTools(dataRef.current),
+        request.toolName,
+      )
+    ) {
       return false;
     }
 
-    refreshInFlightRef.current = true;
+    const started = beginUiRefresh(sequence);
+    if (started.generation === null) return false;
+    refreshSequenceRef.current = started.state;
     lastRefreshStartedAtRef.current = Date.now();
     setRefreshing(true);
 
+    let result: ToolResultPayload | null = null;
+    let failure: { cause: unknown } | null = null;
     try {
-      const result = await app.callServerTool({
+      result = await app.callServerTool({
         name: request.toolName,
         arguments: request.arguments,
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
-
-      if (result.isError) {
-        setError("Refresh failed");
-        return false;
-      }
-
-      if (!consumeToolResult(result)) {
-        setError("Refresh returned no data");
-        return false;
-      }
-
-      return true;
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
-      return false;
-    } finally {
-      refreshInFlightRef.current = false;
-      setRefreshing(false);
+      failure = { cause };
     }
+
+    const completed = completeUiRefresh(
+      refreshSequenceRef.current,
+      started.generation,
+    );
+    refreshSequenceRef.current = completed.state;
+    let succeeded = false;
+    if (completed.accept) {
+      if (failure) {
+        setError(normalizeUiRefreshFailureMessage(failure.cause));
+      } else if (result?.isError) {
+        setError(t("common.error.refresh_failed"));
+      } else if (result && consumeToolResult(result)) {
+        succeeded = true;
+      } else {
+        setError(t("common.error.refresh_no_data"));
+      }
+    }
+    setRefreshing(false);
+    return succeeded;
   }
 
   useEffect(() => {
+    if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
+      refreshSequenceRef.current = invalidateUiRefresh(
+        refreshSequenceRef.current,
+      );
       consumeToolResult(result);
     };
 
@@ -431,10 +1046,11 @@ export function FunnelViewer() {
       }
     };
 
-    app.connect().catch(() => {});
-  }, []);
+    app.connect().then(() => bindHostContext(app)).catch(() => {});
+  }, [fixture]);
 
   useEffect(() => {
+    if (fixture) return;
     function handleWindowFocus() {
       void requestRefresh({ ignoreInterval: true });
     }
@@ -452,249 +1068,32 @@ export function FunnelViewer() {
       window.removeEventListener("focus", handleWindowFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [fixture]);
 
-  return (
-    <div
-      style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
-      aria-busy={refreshing}
-    >
-      <ErpNextBrandHeader />
-      <div style={{ flex: 1 }}>
-        {loading
-          ? <LoadingSkeleton />
-          : !data
-          ? <FunnelEmptyState />
-          : (
-            <FunnelContent
-              data={data}
-              error={error}
-              refreshing={refreshing}
-              onRefresh={() => void requestRefresh({ ignoreInterval: true })}
-            />
-          )}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Funnel Content
-// ============================================================================
-
-function FunnelContent(
-  { data, error, refreshing, onRefresh }: {
-    data: FunnelData;
-    error: string | null;
-    refreshing: boolean;
-    onRefresh: () => void;
-  },
-) {
-  const currency = data.currency ?? "EUR";
-  const stages = data.stages ?? [];
-  const hasServerTools = app.getHostCapabilities()?.serverTools;
-
-  // Default drill-down messages by stage label if not provided by server
-  const STAGE_DRILL_DOWN: Record<string, string> = {
-    "Leads": "Show all leads",
-    "Lead": "Show all leads",
-    "Opportunities": "Show all open opportunities",
-    "Opportunity": "Show all open opportunities",
-    "Quotations": "Show all quotations",
-    "Quotation": "Show all quotations",
-    "Sales Orders": "Show all sales orders",
-    "Sales Order": "Show all sales orders",
-    "Orders": "Show all sales orders",
-  };
-
-  function handleStageDrillDown(stage: FunnelStage) {
-    const msg = stage._drillDown ?? STAGE_DRILL_DOWN[stage.label];
-    if (!msg) return;
-    app.sendMessage({ role: "user", content: [{ type: "text", text: msg }] })
-      .catch(() => {});
+  if (loading) {
+    return (
+      <ViewerShell>
+        <StateMessage>{t("funnel.loading")}</StateMessage>
+      </ViewerShell>
+    );
   }
 
-  if (stages.length === 0) {
-    return <FunnelEmptyState />;
+  if (!data) {
+    return (
+      <ViewerShell>
+        <StateMessage>{t("funnel.empty")}</StateMessage>
+      </ViewerShell>
+    );
   }
 
-  // Total conversion: first stage to last stage
-  const firstCount = stages[0].count;
-  const lastCount = stages[stages.length - 1].count;
-  const totalConversion = firstCount > 0
-    ? Math.round((lastCount / firstCount) * 100)
-    : 0;
-
   return (
-    <div
-      style={{
-        padding: 20,
-        fontFamily: fonts.sans,
-        maxWidth: 680,
-        margin: "0 auto",
-      }}
-    >
-      {/* Title */}
-      <div
-        style={{
-          marginBottom: 20,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 12,
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: colors.text.primary,
-            }}
-          >
-            {data.title}
-          </div>
-          {data.subtitle && (
-            <div
-              style={{ fontSize: 12, color: colors.text.muted, marginTop: 2 }}
-            >
-              {data.subtitle}
-            </div>
-          )}
-          <div
-            aria-live="polite"
-            style={{
-              fontSize: 11,
-              color: error ? colors.error : colors.text.faint,
-              marginTop: 6,
-            }}
-          >
-            {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
-          </div>
-        </div>
-        <button
-          onClick={onRefresh}
-          disabled={refreshing}
-          style={styles.button}
-          onMouseEnter={(e) => {
-            if (!refreshing) {
-              (e.currentTarget as HTMLElement).style.borderColor =
-                colors.accent;
-              (e.currentTarget as HTMLElement).style.color = colors.accent;
-            }
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.borderColor = colors.border;
-            (e.currentTarget as HTMLElement).style.color =
-              colors.text.secondary;
-          }}
-        >
-          {refreshing ? "Refreshing" : "Refresh"}
-        </button>
-      </div>
-
-      {/* Funnel stages */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-        {stages.map((stage, idx) => (
-          <div key={stage.label}>
-            <FunnelStageBar
-              stage={stage}
-              stageIndex={idx}
-              currency={currency}
-              onClick={hasServerTools
-                ? () => handleStageDrillDown(stage)
-                : undefined}
-            />
-            {/* Conversion badge between stages */}
-            {idx < stages.length - 1 &&
-              stages[idx + 1].conversionRate != null && (
-              <ConversionBadge
-                rate={stages[idx + 1].conversionRate!}
-                color={stages[idx + 1].color}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Footer: total conversion */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: 12,
-          marginTop: 20,
-          padding: "12px 16px",
-          ...styles.card,
-        }}
-      >
-        <span style={{ fontSize: 12, color: colors.text.muted }}>
-          Overall Conversion
-        </span>
-        <span
-          style={{
-            fontSize: 11,
-            color: colors.text.faint,
-          }}
-        >
-          {stages[0].label} &#8594; {stages[stages.length - 1].label}
-        </span>
-        <span
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            fontFamily: fonts.mono,
-            color: totalConversion > 20
-              ? colors.success
-              : totalConversion > 5
-              ? colors.warning
-              : colors.error,
-          }}
-        >
-          {totalConversion}%
-        </span>
-      </div>
-
-      {/* Action buttons */}
-      {hasServerTools && (
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            justifyContent: "center",
-            marginTop: 12,
-          }}
-        >
-          {stages.map((stage) => (
-            <button
-              key={stage.label}
-              onClick={() => handleStageDrillDown(stage)}
-              style={{
-                ...styles.button,
-                fontSize: 11,
-                padding: "4px 12px",
-                borderColor: stage.color + "40",
-                color: colors.text.secondary,
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor =
-                  stage.color;
-                (e.currentTarget as HTMLElement).style.color = stage.color;
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor =
-                  stage.color + "40";
-                (e.currentTarget as HTMLElement).style.color =
-                  colors.text.secondary;
-              }}
-            >
-              {stage.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <FunnelContent
+      data={data}
+      error={error}
+      refreshing={refreshing}
+      fixture={fixture}
+      onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+      onError={setError}
+    />
   );
 }

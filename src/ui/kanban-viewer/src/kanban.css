@@ -1,0 +1,10 @@
+/* Styles locaux kanban-viewer — Direction B v2 */
+
+/* Bouton CTA "Démarrer" sur les cartes jalons. */
+.kanban-cta-btn:hover:not(:disabled) {
+  background: rgba(62, 193, 207, 0.22);
+}
+
+[data-theme="light"] .kanban-cta-btn:hover:not(:disabled) {
+  background: rgba(13, 124, 138, 0.18);
+}

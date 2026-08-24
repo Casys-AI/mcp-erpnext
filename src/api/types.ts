@@ -40,6 +40,8 @@ export interface FrappeFile extends FrappeDoc {
   file_url: string;
   /** 1 for private files, 0 for public files. */
   is_private: 0 | 1;
+  /** Size in bytes, as stored by Frappe. Absent on some older rows. */
+  file_size?: number;
   /** DocType the file is attached to. */
   attached_to_doctype?: string;
   /** Document name the file is attached to. */
@@ -94,12 +96,20 @@ export interface FrappeErrorResponse {
   message?: string;
 }
 
-/** Frappe list filter: [field, operator, value]. Array values pair with the "in"/"not in" operators. */
-export type FrappeFilter = [
-  string,
-  string,
-  string | number | boolean | null | (string | number)[],
-];
+/** Frappe list filter: [field, operator, value] or [child doctype, field, operator, value]. Array values pair with the "in"/"not in" operators. */
+export type FrappeFilterValue =
+  | string
+  | number
+  | boolean
+  | null
+  | (string | number)[];
+/**
+ * `[field, operator, value]`, ou `[child doctype, field, operator, value]`
+ * pour filtrer sur une table enfant — la forme que `frappe.get_list` accepte.
+ */
+export type FrappeFilter =
+  | [string, string, FrappeFilterValue]
+  | [string, string, string, FrappeFilterValue];
 
 /** Options for Frappe list queries (`GET /api/resource/{doctype}`). */
 export interface FrappeListOptions {

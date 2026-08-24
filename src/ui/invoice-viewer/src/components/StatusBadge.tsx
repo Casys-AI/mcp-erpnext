@@ -1,24 +1,24 @@
-/** Invoice status badge */
+/** @jsxImportSource preact */
+import { cx } from "~/shared/ui";
+import { TONE_BADGE, toneForStatus } from "~/shared/status";
 
-import { colors, styles } from "~/shared/theme";
-
-const STATUS_COLORS: Record<string, { color: string; bg: string }> = {
-  Paid: { color: colors.success, bg: colors.successDim },
-  Submitted: { color: colors.info, bg: colors.infoDim },
-  Draft: { color: colors.text.muted, bg: colors.bg.elevated },
-  Cancelled: { color: colors.error, bg: colors.errorDim },
-  Overdue: { color: colors.error, bg: colors.errorDim },
-  Unpaid: { color: colors.warning, bg: colors.warningDim },
-  "Partly Paid": { color: colors.warning, bg: colors.warningDim },
-  "Return": { color: colors.text.muted, bg: colors.bg.elevated },
-};
-
+/**
+ * Badge de statut Direction B v2 — JetBrains Mono 10px uppercase, radius 3px,
+ * padding 2px 7px, fond alpha par statut.
+ *
+ * Délègue à toneForStatus() + TONE_BADGE de shared/status.ts pour rester
+ * cohérent avec doclist-viewer et les autres vues.
+ */
 export function StatusBadge({ status }: { status: string }) {
-  const scheme = STATUS_COLORS[status] ??
-    { color: colors.text.secondary, bg: colors.bg.elevated };
-  return <span style={styles.badge(scheme.color, scheme.bg)}>{status}</span>;
-}
-
-export function getStatusScheme(status: string) {
-  return STATUS_COLORS[status];
+  return (
+    <span
+      class={cx(
+        "rounded-badge py-[2px] px-[7px]",
+        "font-mono text-micro uppercase tracking-chip",
+        TONE_BADGE[toneForStatus(status)],
+      )}
+    >
+      {status}
+    </span>
+  );
 }

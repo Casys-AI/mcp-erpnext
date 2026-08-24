@@ -1,0 +1,147 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Work+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #e8ecee; font-family: 'Work Sans', system-ui, sans-serif; }
+    a { color: #0d7c8a; text-decoration: none; }
+    a:hover { color: #0a6673; }
+  </style>
+</helmet>
+
+<div style="width: 740px; background: #ffffff; border: 1px solid #dbe3e7; border-radius: 8px; overflow: hidden; font-family: 'Work Sans', system-ui, sans-serif;">
+  <div style="height: 2px; background: linear-gradient(90deg, #0d7c8a 0%, #8a4fa3 100%);"></div>
+
+  <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 13px 16px; border-bottom: 1px solid #dbe3e7;">
+    <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0;">
+      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8892;">Task · TASK-2026-0184</span>
+      <h2 style="margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: #101519;">Draft qualification protocol</h2>
+      <div style="display: flex; align-items: center; gap: 7px;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; background: rgba(217,139,31,0.14); color: #a56815;">working</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7b8892;">docstatus 0</span>
+        <span style="width: 5px; height: 5px; border-radius: 50%; background: #12855f;"></span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #7b8892;">live</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+      <button style="background: #eef3f4; border: 1px solid #dbe3e7; border-radius: 5px; padding: 5px 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5b6a74; cursor: pointer;">↻</button>
+      <button style="background: #eef3f4; border: 1px solid #dbe3e7; border-radius: 5px; padding: 5px 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5b6a74; cursor: pointer;">JSON</button>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 268px;">
+    <div style="display: flex; flex-direction: column; border-right: 1px solid #dbe3e7;">
+
+      <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #eef3f4;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8892;">général</span>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 28px;">
+          <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7b8892;">project</span><span style="font-size: 11.5px; color: #2c3740;">Refonte catalogue</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7b8892;">priority</span><span style="font-size: 11.5px; color: #2c3740;">High</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7b8892;">exp start date</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #2c3740;">2026-08-04</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7b8892;">exp end date</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #c9453c;">2026-08-18</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7b8892;">expected time</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #2c3740;">8 h</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7b8892;">actual time</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #2c3740;">1,5 h</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7b8892;">is milestone</span><span style="font-size: 11.5px; color: #9aa5ad;">—</span></div>
+          <div style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline;"><span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7b8892;">owner</span><span style="font-size: 11.5px; color: #2c3740;">Administrator</span></div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-bottom: 1px solid #eef3f4;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8892;">description</span>
+        <p style="margin: 0; font-size: 12.5px; line-height: 1.55; color: #2c3740; text-wrap: pretty;">Write the qualification protocol for the Q1 batch. Cover incoming inspection, in-process checks at stations 2 and 4, and the final functional test. Reference the CTRL-8 acceptance criteria from the supplier spec.</p>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-bottom: 1px solid #eef3f4;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8892;">progression</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5b6a74;">20 %</span>
+        </div>
+        <div style="height: 3px; background: #e2e9ec; border-radius: 2px; overflow: hidden;"><div style="width: 20%; height: 3px; background: #0d7c8a; border-radius: 2px;"></div></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; padding: 14px 16px 6px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 8px;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8892;">depends on</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 7px; border-radius: 3px; background: #eef3f4; color: #5b6a74;">2</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.4fr 2fr 0.8fr; padding: 6px 16px; margin: 0 -16px; border-top: 1px solid #dbe3e7; border-bottom: 1px solid #dbe3e7; background: #f4f7f8;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8892;">task</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8892;">subject</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8892; text-align: right;">status</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.4fr 2fr 0.8fr; align-items: center; padding: 8px 16px; margin: 0 -16px; border-left: 2px solid #12855f; border-bottom: 1px solid #eef3f4;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #2c3740;">…2026-0171</span>
+          <span style="font-size: 12.5px; color: #5b6a74; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Collect supplier specs</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #12855f; text-align: right;">completed</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.4fr 2fr 0.8fr; align-items: center; padding: 8px 16px; margin: 0 -16px; border-left: 2px solid #d98b1f; border-bottom: 1px solid #eef3f4;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #2c3740;">…2026-0176</span>
+          <span style="font-size: 12.5px; color: #5b6a74; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Station 4 fixture redesign</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #a56815; text-align: right;">working</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="display: flex; flex-direction: column; background: #f4f7f8;">
+      <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 14px 12px; border-bottom: 1px solid #dbe3e7;">
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8892;">responsables</span>
+        <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 3px 8px; border-radius: 13px; border: 1px solid #86c0c8; background: rgba(13,124,138,0.1); color: #0a6673;">alice@casys.ai <span style="color: #0d7c8a; opacity: 0.7;">×</span></span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 3px 8px; border-radius: 13px; border: 1px solid #dbe3e7; background: #ffffff; color: #5b6a74;">+ attribuer</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #dbe3e7;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8892;">pièces jointes</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 7px; border-radius: 3px; background: #eef3f4; color: #5b6a74;">3</span>
+        </div>
+        <div style="display: flex; flex-direction: column;">
+          <a href="#" style="display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #eef3f4; color: inherit;">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color: #7b8892;"><path d="M3.5 1.5h5l2.5 2.5v8.5h-7.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M8.5 1.5v2.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+            <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 11.5px; color: #2c3740; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">protocole-Q1-v3.pdf</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #7b8892;">248 Ko · privé</span></span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="color: #7b8892;"><path d="M6 1.5v7M3 6l3 3 3-3M1.5 10.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <a href="#" style="display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #eef3f4; color: inherit;">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color: #7b8892;"><rect x="1.5" y="2.5" width="11" height="9" rx="1" stroke="currentColor" stroke-width="1.1"/><path d="M1.5 9l3-3 2.5 2.5L9 6.5l3.5 3.5" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><circle cx="9.5" cy="5" r="0.9" fill="currentColor"/></svg>
+            <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 11.5px; color: #2c3740; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">station-4-fixture.jpg</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #7b8892;">1,2 Mo · public</span></span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="color: #7b8892;"><path d="M6 1.5v7M3 6l3 3 3-3M1.5 10.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          <a href="#" style="display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 7px 0; color: inherit;">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color: #7b8892;"><path d="M3.5 1.5h5l2.5 2.5v8.5h-7.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M8.5 1.5v2.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M5 8h4M5 10h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+            <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 11.5px; color: #2c3740; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">CTRL-8-acceptance.xlsx</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #7b8892;">86 Ko · privé</span></span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="color: #7b8892;"><path d="M6 1.5v7M3 6l3 3 3-3M1.5 10.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+        <button style="display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; background: transparent; border: 1px dashed #c3ced4; border-radius: 5px; padding: 8px 10px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 11.5px; color: #5b6a74; cursor: pointer;">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="color: #5b6a74;"><path d="M6 10.5v-7M3 6.5l3-3 3 3M1.5 1.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Joindre un fichier
+        </button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px 14px;">
+        <button style="background: rgba(13,124,138,0.1); border: 1px solid #86c0c8; border-radius: 5px; padding: 7px 12px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 12px; font-weight: 500; color: #0a6673; cursor: pointer;">Ouvrir dans le kanban</button>
+        <button style="background: #ffffff; border: 1px solid #dbe3e7; border-radius: 5px; padding: 7px 12px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 12px; color: #5b6a74; cursor: pointer;">Feuilles de temps</button>
+        <button style="background: transparent; border: 1px solid rgba(201,69,60,0.3); border-radius: 5px; padding: 7px 12px; font-family: 'Work Sans', system-ui, sans-serif; font-size: 12px; color: #c9453c; cursor: pointer;">Annuler la tâche</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 16px; border-top: 1px solid #dbe3e7;">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #7b8892;">modifié il y a 2 h · Administrator</span>
+    <a href="https://casys.ai" style="display: inline-flex; align-items: center; gap: 7px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 0.04em; color: #9aa5ad;"><img src="casys-logo.svg" alt="" width="13" height="13" style="display: block; width: 13px; height: 13px;"><span>Powered by Casys.ai</span></a>
+  </div>
+</div>
+
+</x-dc>
+</body>
+</html>

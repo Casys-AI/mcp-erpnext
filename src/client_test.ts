@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
-import { ErpNextToolsClient } from "./client.ts";
+import { ErpNextToolsClient, getToolByName } from "./client.ts";
 import { type FrappeClient, setFrappeClient } from "./api/frappe-client.ts";
 import { AmbiguousLinkError } from "./api/resolve.ts";
 import { linkDisambiguationRequestKey } from "./mrtr/link-disambiguation.ts";
@@ -93,6 +93,7 @@ Deno.test("buildHandlersMap - uses resolved Link IDs in UI refresh requests", as
     description: "Test-only UI Link disambiguation probe",
     category: "setup",
     inputSchema: { type: "object" },
+    annotations: { readOnlyHint: true },
     _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
     handler: async (input) => {
       if (input.customer === "Acme") {
@@ -157,6 +158,214 @@ Deno.test("buildHandlersMap - uses resolved Link IDs in UI refresh requests", as
       }).arguments,
       { customer: "CUST-002" },
     );
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("buildHandlersMap - mutating viewer tools cannot refresh by replaying themselves", async () => {
+  const tool: ErpNextTool = {
+    name: "erpnext_mutating_ui_probe",
+    description: "Test-only mutating UI probe",
+    category: "setup",
+    inputSchema: { type: "object" },
+    annotations: { destructiveHint: true },
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+    handler: async () => ({
+      data: { name: "SINV-001", doctype: "Sales Invoice" },
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+      _availableTools: ["erpnext_doc_cancel", "forged_tool"],
+      refreshRequest: {
+        toolName: "erpnext_mutating_ui_probe",
+        arguments: { name: "SINV-001" },
+      },
+    }),
+  };
+  const client = new ErpNextToolsClient();
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool];
+
+  setFrappeClient({} as FrappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(tool.name)!({
+      name: "SINV-001",
+    }) as { structuredContent: Record<string, unknown> };
+
+    assertEquals(result.structuredContent.refreshRequest, undefined);
+    assertEquals(result.structuredContent._availableTools, []);
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("buildHandlersMap - mutating viewer tools preserve an explicit read-only refresh", async () => {
+  const safeRefresh = {
+    toolName: "erpnext_sales_invoice_get",
+    arguments: { name: "SINV-001" },
+  };
+  const tool: ErpNextTool = {
+    name: "erpnext_mutating_ui_safe_refresh_probe",
+    description: "Test-only mutating UI safe-refresh probe",
+    category: "setup",
+    inputSchema: { type: "object" },
+    annotations: { destructiveHint: true },
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+    handler: async () => ({
+      data: { name: "SINV-001", doctype: "Sales Invoice" },
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
+      refreshRequest: safeRefresh,
+    }),
+  };
+  const safeReadTool = getToolByName("erpnext_sales_invoice_get")!;
+  const client = new ErpNextToolsClient();
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool, safeReadTool];
+
+  setFrappeClient({} as FrappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(tool.name)!({}) as {
+      structuredContent: Record<string, unknown>;
+    };
+
+    assertEquals(result.structuredContent.refreshRequest, safeRefresh);
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("buildHandlersMap - category-scoped clients omit jumps to unavailable tools", async () => {
+  const tool: ErpNextTool = {
+    name: "erpnext_kpi_revenue",
+    description: "Test-only scoped KPI tool",
+    category: "analytics",
+    inputSchema: { type: "object" },
+    annotations: { readOnlyHint: true },
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } },
+    handler: async () => ({ label: "Revenue", value: 42 }),
+  };
+  const client = new ErpNextToolsClient();
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool];
+
+  setFrappeClient({} as FrappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(tool.name)!({}) as {
+      content: Array<{ text: string }>;
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(result.structuredContent._jumps, undefined);
+    assertEquals(result.structuredContent._availableTools, [tool.name]);
+    assertEquals(
+      (result.structuredContent._meta as { ui: { resourceUri: string } }).ui
+        .resourceUri,
+      "ui://mcp-erpnext/kpi-viewer",
+    );
+    assertEquals(JSON.parse(result.content[0].text), result.structuredContent);
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("buildHandlersMap - sales category advertises only usable invoice actions", async () => {
+  const client = new ErpNextToolsClient({ categories: ["sales"] });
+  const frappeClient = {
+    get: () =>
+      Promise.resolve({
+        name: "SINV-001",
+        doctype: "Sales Invoice",
+        customer: "CUST-001",
+        status: "Draft",
+        docstatus: 0,
+      }),
+  } as unknown as FrappeClient;
+
+  setFrappeClient(frappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(
+      "erpnext_sales_invoice_get",
+    )!({ name: "SINV-001" }) as {
+      content: Array<{ text: string }>;
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(result.structuredContent._availableTools, [
+      "erpnext_customer_get",
+      "erpnext_sales_invoice_get",
+      "erpnext_sales_invoice_submit",
+    ]);
+    assertEquals(JSON.parse(result.content[0].text), result.structuredContent);
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("buildHandlersMap - sales-only Sales Order advertises its exact submit and cancel", async () => {
+  const client = new ErpNextToolsClient({ categories: ["sales"] });
+  const frappeClient = {
+    get: () =>
+      Promise.resolve({
+        name: "SO-001",
+        customer: "CUST-001",
+        status: "Draft",
+        docstatus: 0,
+      }),
+  } as unknown as FrappeClient;
+
+  setFrappeClient(frappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(
+      "erpnext_sales_order_get",
+    )!({ name: "SO-001" }) as {
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(result.structuredContent._availableTools, [
+      "erpnext_sales_order_cancel",
+      "erpnext_sales_order_get",
+      "erpnext_sales_order_submit",
+    ]);
+    assertEquals(
+      (result.structuredContent.data as Record<string, unknown>).doctype,
+      "Sales Order",
+    );
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("buildHandlersMap - full server never advertises submit or cancel for master-data doclists", async () => {
+  const client = new ErpNextToolsClient();
+  const frappeClient = {
+    list: () => Promise.resolve([{ name: "CUST-001", customer_name: "Acme" }]),
+  } as unknown as FrappeClient;
+
+  setFrappeClient(frappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(
+      "erpnext_customer_list",
+    )!({}) as { structuredContent: Record<string, unknown> };
+    const tools = result.structuredContent._availableTools as string[];
+    assert(!tools.includes("erpnext_doc_submit"));
+    assert(!tools.includes("erpnext_doc_cancel"));
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("buildHandlersMap - kanban category advertises move but no operations/setup", async () => {
+  const client = new ErpNextToolsClient({ categories: ["kanban"] });
+  const frappeClient = {
+    list: () => Promise.resolve([]),
+  } as unknown as FrappeClient;
+
+  setFrappeClient(frappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(
+      "erpnext_kanban_get_board",
+    )!({ doctype: "Task" }) as {
+      content: Array<{ text: string }>;
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(result.structuredContent._availableTools, [
+      "erpnext_kanban_get_board",
+      "erpnext_kanban_move_card",
+    ]);
+    assertEquals(JSON.parse(result.content[0].text), result.structuredContent);
   } finally {
     setFrappeClient(null);
   }

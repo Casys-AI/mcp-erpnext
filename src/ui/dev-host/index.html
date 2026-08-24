@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hôte de démonstration · mcp-erpnext</title>
+    <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      margin: 0;
+      background: #101418;
+      color: #c3ccd3;
+      font: 12px/1.5 "JetBrains Mono", ui-monospace, monospace;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid #262c33;
+    }
+    header h1 {
+      font: 600 14px/1 ui-sans-serif, system-ui;
+      color: #e6ecf0;
+      margin: 0 8px 0 0;
+    }
+    header select,
+    header button {
+      background: #1a1e23;
+      color: #e6ecf0;
+      border: 1px solid #262c33;
+      border-radius: 4px;
+      padding: 5px 8px;
+      font: inherit;
+    }
+    header .caps {
+      color: #5d6a74;
+      margin-left: auto;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 760px 1fr;
+      gap: 14px;
+      padding: 14px;
+    }
+    iframe {
+      width: 740px;
+      height: 640px;
+      border: 1px solid #262c33;
+      border-radius: 8px;
+      background: #13161a;
+    }
+    #log {
+      border: 1px solid #262c33;
+      border-radius: 8px;
+      background: #13161a;
+      padding: 10px 12px;
+      height: 640px;
+      overflow: auto;
+    }
+    #log h2 {
+      font: 600 10px/1 inherit;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: #8895a0;
+      margin: 0 0 8px;
+    }
+    .ev {
+      padding: 6px 0;
+      border-bottom: 1px solid #1d2227;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .ev b {
+      color: #3ec1cf;
+    }
+    .ev.msg b {
+      color: #d95926;
+    }
+    .ev.ctx b {
+      color: #c98500;
+    }
+    .ev small {
+      color: #5d6a74;
+    }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Hôte de démonstration</h1>
+      <select id="viewer">
+        <option value="invoice">invoice-viewer</option>
+        <option value="doclist">doclist-viewer</option>
+        <option value="kanban">kanban-viewer</option>
+        <option value="stock">stock-viewer</option>
+        <option value="funnel">funnel-viewer</option>
+        <option value="kpi">kpi-viewer</option>
+        <option value="chart">chart-viewer</option>
+      </select>
+      <select id="caps">
+        <option value="full">
+          profil : full (serverTools + contexte + message)
+        </option>
+        <option value="serverTools-only">profil : serverTools-only</option>
+        <option value="context-only">profil : context-only</option>
+        <option value="message-only">
+          profil : message-only (ancien hôte)
+        </option>
+        <option value="none">profil : none (aucun canal)</option>
+      </select>
+      <button id="reload">recharger</button>
+      <span class="caps" id="status">—</span>
+    </header>
+    <main>
+      <iframe id="frame" title="viewer"></iframe>
+      <section id="log">
+        <h2>journal hôte</h2>
+      </section>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

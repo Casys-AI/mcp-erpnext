@@ -62,4 +62,6 @@ export interface KanbanBoardData {
   allowedTransitions: KanbanTransitionData[];
   capabilities: KanbanCapabilitiesData;
   pagination: KanbanPaginationData;
+  /** Outils exacts autorisés par le registre serveur pour ce viewer. */
+  _availableTools?: string[];
 }

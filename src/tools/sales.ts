@@ -31,6 +31,21 @@ interface MapLineItemsOptions {
   includeWarehouse?: boolean;
 }
 
+function viewerDocument(
+  value: unknown,
+  doctype: string,
+  name?: string,
+): Record<string, unknown> {
+  const record = typeof value === "object" && value !== null
+    ? value as Record<string, unknown>
+    : {};
+  return {
+    ...record,
+    ...(typeof record.name === "string" || !name ? {} : { name }),
+    doctype,
+  };
+}
+
 /**
  * Validate and shape the `items` array shared across SO / SI / Quotation
  * create tools. Centralizes the "items must be a non-empty array" and
@@ -348,7 +363,7 @@ export const salesTools: ErpNextTool[] = [
         throw new Error("[erpnext_sales_order_get] 'name' is required");
       }
       const doc = await ctx.client.get("Sales Order", input.name as string);
-      return { data: doc };
+      return { data: viewerDocument(doc, "Sales Order", input.name as string) };
     },
   },
 
@@ -438,8 +453,12 @@ export const salesTools: ErpNextTool[] = [
       const doc = await ctx.client.create("Sales Order", data);
 
       return {
-        data: doc,
+        data: viewerDocument(doc, "Sales Order"),
         message: `Sales Order ${doc.name} created successfully`,
+        refreshRequest: {
+          toolName: "erpnext_sales_order_get",
+          arguments: { name: doc.name },
+        },
       };
     },
   },
@@ -541,8 +560,16 @@ export const salesTools: ErpNextTool[] = [
       const warnings = roundedTotalFallbackWarning(docWithDoctype, patchedDoc);
 
       return {
-        data: result,
+        data: viewerDocument(
+          result,
+          "Sales Order",
+          input.name as string,
+        ),
         message: `Sales Order ${input.name} submitted successfully`,
+        refreshRequest: {
+          toolName: "erpnext_sales_order_get",
+          arguments: { name: input.name },
+        },
         ...(warnings.length > 0 ? { warnings } : {}),
       };
     },
@@ -683,7 +710,11 @@ export const salesTools: ErpNextTool[] = [
       }
       const doc = await ctx.client.get("Sales Invoice", input.name as string);
       return {
-        data: doc,
+        data: viewerDocument(
+          doc,
+          "Sales Invoice",
+          input.name as string,
+        ),
         _meta: INVOICE_META,
       };
     },
@@ -778,9 +809,13 @@ export const salesTools: ErpNextTool[] = [
 
       const doc = await ctx.client.create("Sales Invoice", data);
       return {
-        data: doc,
+        data: viewerDocument(doc, "Sales Invoice"),
         message: `Sales Invoice ${doc.name} created successfully`,
         _meta: INVOICE_META,
+        refreshRequest: {
+          toolName: "erpnext_sales_invoice_get",
+          arguments: { name: doc.name },
+        },
       };
     },
   },
@@ -821,9 +856,17 @@ export const salesTools: ErpNextTool[] = [
       const warnings = roundedTotalFallbackWarning(docWithDoctype, patchedDoc);
 
       return {
-        data: result,
+        data: viewerDocument(
+          result,
+          "Sales Invoice",
+          input.name as string,
+        ),
         message: `Sales Invoice ${input.name} submitted successfully`,
         _meta: INVOICE_META,
+        refreshRequest: {
+          toolName: "erpnext_sales_invoice_get",
+          arguments: { name: input.name },
+        },
         ...(warnings.length > 0 ? { warnings } : {}),
       };
     },
@@ -940,7 +983,7 @@ export const salesTools: ErpNextTool[] = [
         throw new Error("[erpnext_quotation_get] 'name' is required");
       }
       const doc = await ctx.client.get("Quotation", input.name as string);
-      return { data: doc };
+      return { data: viewerDocument(doc, "Quotation", input.name as string) };
     },
   },
 
@@ -1038,8 +1081,12 @@ export const salesTools: ErpNextTool[] = [
 
       const doc = await ctx.client.create("Quotation", data);
       return {
-        data: doc,
+        data: viewerDocument(doc, "Quotation"),
         message: `Quotation ${doc.name} created successfully`,
+        refreshRequest: {
+          toolName: "erpnext_quotation_get",
+          arguments: { name: doc.name },
+        },
       };
     },
   },

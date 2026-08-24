@@ -7,6 +7,7 @@
  */
 
 import { assertEquals, assertRejects } from "@std/assert";
+import { SchemaValidator } from "@casys/mcp-server";
 import { operationsTools } from "./operations.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
@@ -219,6 +220,111 @@ Deno.test("erpnext_doc_cancel - invalidates cache after cancel", async () => {
   assertEquals(invalidatedName, "SO-001");
 });
 
+// ── erpnext_file_list ──────────────────────────────────────────────────────
+
+Deno.test("erpnext_file_list - rejects missing or blank identifiers", async () => {
+  const tool = getTool("erpnext_file_list");
+  await assertRejects(
+    () =>
+      tool.handler({ attached_to_name: "TASK-001" }, makeCtx(makeMockClient())),
+    Error,
+    "attached_to_doctype",
+  );
+  await assertRejects(
+    () =>
+      tool.handler(
+        { attached_to_doctype: "Task", attached_to_name: "   " },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "attached_to_name",
+  );
+});
+
+Deno.test("erpnext_file_list - rejects a limit out of range", async () => {
+  const tool = getTool("erpnext_file_list");
+  for (const limit of [0, 501, 2.5, "10"]) {
+    await assertRejects(
+      () =>
+        tool.handler(
+          { attached_to_doctype: "Task", attached_to_name: "TASK-001", limit },
+          makeCtx(makeMockClient()),
+        ),
+      Error,
+      "limit",
+    );
+  }
+});
+
+Deno.test("erpnext_file_list - queries File filtered on both attachment keys", async () => {
+  const tool = getTool("erpnext_file_list");
+  let captured: { doctype?: string; options?: Record<string, unknown> } = {};
+  const client = makeMockClient({
+    list: async (doctype: string, options: Record<string, unknown>) => {
+      captured = { doctype, options };
+      return [
+        {
+          name: "f1",
+          file_name: "protocole-Q1-v3.pdf",
+          file_url: "/private/files/protocole-Q1-v3.pdf",
+          file_size: 253952,
+          is_private: 1,
+          creation: "2026-08-18 10:00:00",
+          modified: "2026-08-18 10:00:00",
+          owner: "alice@casys.ai",
+        },
+        {
+          name: "f2",
+          file_name: "station-4.jpg",
+          file_url: "/files/station-4.jpg",
+          is_private: 0,
+          creation: "2026-08-17 09:00:00",
+          modified: "2026-08-17 09:00:00",
+          owner: "bob@casys.ai",
+        },
+      ];
+    },
+  });
+
+  const result = await tool.handler(
+    { attached_to_doctype: "Task", attached_to_name: "TASK-001" },
+    makeCtx(client),
+  ) as { count: number; data: Record<string, unknown>[] };
+
+  assertEquals(captured.doctype, "File");
+  assertEquals(captured.options?.filters, [
+    ["attached_to_doctype", "=", "Task"],
+    ["attached_to_name", "=", "TASK-001"],
+  ]);
+  assertEquals(captured.options?.limit, 50);
+  assertEquals(captured.options?.order_by, "creation desc");
+
+  assertEquals(result.count, 2);
+  // is_private becomes a real boolean; a missing file_size becomes null, not undefined.
+  assertEquals(result.data[0].is_private, true);
+  assertEquals(result.data[0].file_size, 253952);
+  assertEquals(result.data[1].is_private, false);
+  assertEquals(result.data[1].file_size, null);
+  assertEquals(result.data[1].attached_to_field, null);
+});
+
+Deno.test("erpnext_file_list - forwards an explicit limit", async () => {
+  const tool = getTool("erpnext_file_list");
+  let limit: unknown;
+  const client = makeMockClient({
+    list: async (_d: string, options: Record<string, unknown>) => {
+      limit = options.limit;
+      return [];
+    },
+  });
+  const result = await tool.handler(
+    { attached_to_doctype: "Task", attached_to_name: "TASK-001", limit: 5 },
+    makeCtx(client),
+  ) as { count: number };
+  assertEquals(limit, 5);
+  assertEquals(result.count, 0);
+});
+
 // ── erpnext_file_upload ────────────────────────────────────────────────────
 
 Deno.test("erpnext_file_upload - validates input and delegates to the client", async () => {
@@ -307,6 +413,74 @@ Deno.test("erpnext_file_upload - is marked destructive", () => {
 Deno.test("erpnext_doc_list - has _meta.ui for doclist-viewer", () => {
   const tool = getTool("erpnext_doc_list");
   assertEquals(tool._meta?.ui?.resourceUri, "ui://mcp-erpnext/doclist-viewer");
+});
+
+Deno.test("erpnext_doc_list - schema accepts every Frappe filter value", () => {
+  const tool = getTool("erpnext_doc_list");
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+
+  const result = validator.validate(tool.name, {
+    doctype: "Sales Invoice",
+    filters: [
+      ["status", "=", "Unpaid"],
+      ["docstatus", "<", 2],
+      ["disabled", "=", false],
+      ["customer", "is", null],
+      ["status", "in", ["Open", "Closed"]],
+      ["docstatus", "not in", [0, 2]],
+      ["Sales Invoice Item", "item_code", "=", "SKU-001"],
+      ["Sales Invoice Item", "item_code", "in", ["SKU-001", "SKU-002"]],
+    ],
+  });
+
+  assertEquals(result, { valid: true, errors: [] });
+});
+
+Deno.test("erpnext_doc_list - schema preserves legacy string-array filters", () => {
+  const tool = getTool("erpnext_doc_list");
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+
+  for (
+    const filter of [
+      ["status", "="],
+      ["Sales Invoice Item", "item_code", "=", "SKU-001", "extra"],
+    ]
+  ) {
+    assertEquals(
+      validator.validate(tool.name, {
+        doctype: "Sales Invoice",
+        filters: [filter],
+      }),
+      { valid: true, errors: [] },
+      `3.0.x-compatible filter must stay accepted: ${JSON.stringify(filter)}`,
+    );
+  }
+});
+
+Deno.test("erpnext_doc_list - schema still rejects unsupported filter values", () => {
+  const tool = getTool("erpnext_doc_list");
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+
+  const invalidFilters: unknown[] = [
+    ["docstatus", 1, 1],
+    ["status", "=", { unexpected: true }],
+    ["status", "in", ["Open", false]],
+    ["status", "in", [{ unexpected: true }]],
+  ];
+
+  for (const filter of invalidFilters) {
+    assertEquals(
+      validator.validate(tool.name, {
+        doctype: "Sales Invoice",
+        filters: [filter],
+      }).valid,
+      false,
+      `filter must be rejected: ${JSON.stringify(filter)}`,
+    );
+  }
 });
 
 // ── erpnext_doc_update ──────────────────────────────────────────────────────

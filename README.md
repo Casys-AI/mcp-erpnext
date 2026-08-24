@@ -72,6 +72,11 @@ See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
 [latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for
 the current version's highlights.
 
+> **3.1 beta preview:** install with `npx -y @casys/mcp-erpnext@next`. The beta
+> remains compatible with the 3.0 tool surface and progressively enables in-view
+> navigation and active context according to the capabilities advertised by the
+> MCP host.
+
 ## Documentation
 
 Organised by what you are doing, following [Diátaxis](https://diataxis.fr):
@@ -179,43 +184,48 @@ until it exists. See
 Seven interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
 viewers, registered as `ui://mcp-erpnext/{name}`:
 
-| Viewer           | Description                                                      | Interactive Features                                                                                                                               |
-| ---------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `doclist-viewer` | Generic document table with sort, filter, pagination, CSV export | Row click → inline detail panel with Submit/Cancel + sendMessage navigation. Chip filters for status columns. Max 6 columns, rest in detail panel. |
-| `invoice-viewer` | Sales/Purchase Invoice with parties, items, totals               | Item click → stock balance + item info panel. Submit/Cancel/Payment actions. sendMessage to payment entries and customer invoices.                 |
-| `stock-viewer`   | Stock balance table with color-coded qty badges                  | Row click → item info + recent movements. sendMessage to stock chart, item details, stock entries.                                                 |
-| `chart-viewer`   | Universal chart renderer (12 types via Recharts)                 | Click bar/pie/line data points → sendMessage drill-down into underlying documents.                                                                 |
-| `kanban-viewer`  | Read-write kanban for Task, Opportunity, Issue                   | Drag-and-drop moves, inline edit (priority, progress, dates), sendMessage to Timesheets/Quotations/Related docs.                                   |
-| `kpi-viewer`     | Big number card with delta, sparkline, trend                     | Click number → sendMessage to exception list. Click sparkline → trend chart.                                                                       |
-| `funnel-viewer`  | Trapezoid sales funnel with conversion rates                     | Click stage → sendMessage to document list at that stage. Stage action buttons.                                                                    |
+| Viewer           | Description                                                      | Interactive Features                                                                          |
+| ---------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `doclist-viewer` | Generic document table with sort, filter, pagination, CSV export | Inline details, typed nested navigation, Submit/Cancel, and compact status filters.           |
+| `invoice-viewer` | Sales/Purchase documents with parties, items, totals             | Item, stock, party, and payment navigation plus guarded Submit/Cancel actions.                |
+| `stock-viewer`   | Stock balance table with color-coded qty badges                  | Item details, recent movements, stock charts, and stock-entry navigation.                     |
+| `chart-viewer`   | Universal chart renderer (12 types via Recharts)                 | Exact point/series navigation and active-context selection across simple and composed charts. |
+| `kanban-viewer`  | Read-write kanban for Task, Opportunity, Issue                   | Drag-and-drop, inline editing, serialized saves, and typed related-document navigation.       |
+| `kpi-viewer`     | Big number card with delta, sparkline, trend                     | Number and trend navigation with bounded active-context selection.                            |
+| `funnel-viewer`  | Trapezoid sales funnel with conversion rates                     | Period-aware stage navigation and bounded active-context selection.                           |
 
-### Cross-viewer navigation
+### Navigation and active context
 
-Viewers communicate via `app.sendMessage()` — clicking a button in one viewer
-injects a message into the conversation, which triggers the AI to call the right
-tool and open the appropriate viewer.
+Viewers progressively select the best interaction supported by the host:
 
-The server auto-injects navigation metadata into tool results:
+- `serverTools` opens typed list, record, and chart targets inside the current
+  viewer through `app.callServerTool()`. Back and breadcrumb navigation restore
+  the state of each level.
+- `updateModelContext` lets chart, KPI, and funnel selections join a bounded
+  active-context snapshot. The compact context chip keeps up to eight items and
+  lets users remove one item or clear them all. The snapshot contains selected
+  values, never hidden instructions for the model.
+- `message.text` keeps `app.sendMessage()` as a conversational fallback when
+  direct navigation or context replacement is unavailable.
+- Without these capabilities, local inspection remains available and unsupported
+  remote actions are omitted.
 
-- `_rowAction` — which tool to call when a row is clicked
-- `_sendMessageHints` — navigation buttons shown in detail panels (e.g.
-  "Orders", "Invoices")
-- `_drillDown` / `_trendDrillDown` — sendMessage templates for KPI and chart
-  click-through
+The server supplies typed navigation metadata and the exact `_availableTools`
+allowed for each viewer, so category-filtered deployments do not expose tools
+that are not loaded.
 
 ### Refresh model
 
-All viewers carry a `refreshRequest` payload for safe revalidation via
-`app.callServerTool()`:
-
-- `kanban-viewer` revalidates after mutations and on focus
-- All other viewers support focus refresh + manual refresh button
+Read-only viewers revalidate on focus and through their refresh control.
+Mutations use an explicit read-only request to fetch committed state; a mutating
+tool is never replayed automatically. Overlapping or stale responses are ignored
+when a newer host payload or mutation has already won.
 
 ### Building UI viewers
 
 ```bash
 cd src/ui
-npm install
+npm ci
 node build-all.mjs
 ```
 
@@ -237,8 +247,9 @@ click, inline detail, and cross-viewer navigation.
 - **Manufacturing** — BOMs, Work Orders, and Job Cards.
 - **CRM** — Leads, Opportunities, Contacts, and Campaigns.
 - **Assets** — Assets, Movements, Maintenance records, and Categories.
-- **Operations** — Generic CRUD, native assignment, and file upload for any
-  DocType (`erpnext_doc_*`, `erpnext_file_upload`).
+- **Operations** — Generic CRUD, native assignment, and attachment listing or
+  upload for any DocType (`erpnext_doc_*`, `erpnext_file_list`,
+  `erpnext_file_upload`).
 - **Kanban** — Read-write boards for Task, Opportunity, and Issue with
   drag-and-drop.
 - **Analytics** — Charts (bar, area, treemap, radar, scatter, P&L…), KPIs with

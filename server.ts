@@ -35,7 +35,10 @@ import { launchInspector, MCP_APP_MIME_TYPE, McpApp } from "@casys/mcp-server";
 import { ErpNextToolsClient } from "./src/client.ts";
 import { FrappeAPIError } from "./src/api/frappe-client.ts";
 import { UI_VIEWERS } from "./src/ui/viewers.ts";
-import { resolveViewerDistPath } from "./src/ui/viewer-resource-paths.ts";
+import {
+  readViewerDist,
+  resolveViewerDistPath,
+} from "./src/ui/viewer-resource-paths.ts";
 import {
   exit,
   getArgs,
@@ -102,7 +105,7 @@ async function main() {
   // Build MCP server
   const server = new McpApp({
     name: "mcp-erpnext",
-    version: "3.1.0-beta.2",
+    version: "3.1.0-beta.3",
     transport: "stateless",
     cache: {
       ttlMs: 3_600_000,
@@ -150,7 +153,7 @@ async function main() {
           mimeType: MCP_APP_MIME_TYPE,
         },
         async () => {
-          const html = await readTextFile(distPath);
+          const html = await readViewerDist(distPath, readTextFile);
           return { uri: resourceUri, mimeType: MCP_APP_MIME_TYPE, text: html };
         },
       );

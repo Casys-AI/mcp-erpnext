@@ -2,6 +2,16 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.1.0-beta.3] - 2026-08-25
+
+### Fixed
+
+- **JSR installations now register and serve the same MCP Apps viewers as the
+  npm bundle.** Published JSR modules retain an HTTPS `import.meta.url`; viewer
+  resources now preserve that URL and load their packaged HTML from JSR instead
+  of treating it as a local filesystem path. This restores `doc-viewer`, Sales
+  inspectors, and nested document details for Deno installations.
+
 ## [3.1.0-beta.2] - 2026-08-24
 
 ### Added

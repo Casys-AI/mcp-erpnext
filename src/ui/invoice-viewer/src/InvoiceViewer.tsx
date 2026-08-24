@@ -11,9 +11,13 @@
  *  - InvoiceViewer : état, connexion, refresh, actions — sans hooks d'UI.
  *  - InvoiceContent : rendu, pile de navigation, boutons — data toujours dispo.
  */
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
+import type { DocumentChangeEvent } from "~/shared/document-events";
+import { AttachmentsSection } from "~/shared/document/AttachmentsSection";
+import { documentCapabilities } from "~/shared/document/capabilities";
+import { useAttachments } from "~/shared/document/useAttachments";
 import {
   Button,
   CasysCredit,
@@ -37,25 +41,31 @@ import {
 } from "~/shared/refresh";
 import { useT } from "~/shared/i18n-hook";
 import { ConfirmSheet, type ConfirmState, useConfirm } from "~/shared/confirm";
-import { type NavHint } from "~/shared/jumps";
 import { useViewerNav } from "~/shared/useViewerNav";
 import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
 import { canSendTextMessage, sendTextMessage } from "~/shared/host-message";
-import { hasAvailableTool, readAvailableTools } from "~/shared/viewer-tools";
+import { hasAvailableTool } from "~/shared/viewer-tools";
 import { StatusBadge } from "./components/StatusBadge";
 import { ItemDetailPanel } from "./components/ItemDetailPanel";
-import { INVOICE_FIXTURE, isFixtureMode } from "./fixture.ts";
+import {
+  INVOICE_ATTACHMENT_FIXTURES,
+  INVOICE_FIXTURE,
+  isFixtureMode,
+} from "./fixture.ts";
 import {
   canOfferNavigation,
   invoiceJumps,
   invoiceMutationActions,
+  invoiceRootDocumentChange,
+  type InvoiceRootMutation,
   nextInvoiceMutationCommitted,
 } from "./nav.ts";
 import {
   type InvoiceData,
-  invoiceDataFromPayload,
+  type InvoiceDocumentEnvelope,
+  invoiceDocumentEnvelope,
   type InvoiceItem,
   type InvoicePayload,
 } from "./types.ts";
@@ -63,6 +73,8 @@ import {
 const app = new App({ name: "Invoice Viewer", version: "3.0.0" });
 const REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
+const CANONICAL_READBACK_DELAY_MS = 1_500;
+const ATTACHMENT_SIDEBAR_MIN_WIDTH = 960;
 
 type LineRow = InvoiceItem & { idx: number };
 
@@ -70,9 +82,7 @@ type LineRow = InvoiceItem & { idx: number };
 
 interface InvoiceContentProps {
   data: InvoiceData;
-  /** Hints du serveur ; null = pas de sauts disponibles. */
-  hints: NavHint[] | null;
-  availableTools: readonly string[] | undefined;
+  envelope: InvoiceDocumentEnvelope;
   mutationCommitted: boolean;
   error: string | null;
   refreshing: boolean;
@@ -81,12 +91,18 @@ interface InvoiceContentProps {
   actionLoading: string | null;
   actionMessage: string | null;
   actionIsError: boolean;
+  rootFreshEvent: number;
+  rootMutationEvent: number;
   callAction: (
-    key: string,
+    mutation: InvoiceRootMutation,
     toolName: string,
     args: Record<string, unknown>,
     successMsg: string,
+    target: { doctype: string; name: string },
+    onDocumentChanged: (event: DocumentChangeEvent) => void,
   ) => Promise<void>;
+  onBeginCanonicalReadback: () => void;
+  onCanonicalRefresh: () => Promise<boolean>;
   onNavigate: (key: string, message: string) => Promise<boolean>;
   setError: (msg: string | null) => void;
 }
@@ -98,17 +114,14 @@ interface InvoiceContentProps {
 export function InvoiceViewer() {
   const t = useT();
   const fixture = isFixtureMode();
+  const initialEnvelope = fixture
+    ? invoiceDocumentEnvelope(INVOICE_FIXTURE)
+    : null;
 
   /* ── État ─────────────────────────────────────────────────────────────── */
 
-  const [data, setData] = useState<InvoiceData | null>(
-    fixture ? (INVOICE_FIXTURE.data ?? null) : null,
-  );
-  const [hints, setHints] = useState<NavHint[] | null>(
-    fixture ? (INVOICE_FIXTURE._sendMessageHints as NavHint[] ?? null) : null,
-  );
-  const [availableTools, setAvailableTools] = useState<string[] | undefined>(
-    fixture ? readAvailableTools(INVOICE_FIXTURE) : undefined,
+  const [envelope, setEnvelope] = useState<InvoiceDocumentEnvelope | null>(
+    initialEnvelope,
   );
   const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
@@ -117,35 +130,39 @@ export function InvoiceViewer() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionIsError, setActionIsError] = useState(false);
   const [mutationCommitted, setMutationCommitted] = useState(false);
+  const [rootFreshEvent, setRootFreshEvent] = useState(0);
+  const [rootMutationEvent, setRootMutationEvent] = useState(0);
   const confirm = useConfirm();
 
   /* ── Refs ─────────────────────────────────────────────────────────────── */
 
   const loadingRef = useRef<HTMLDivElement>(null);
-  const dataRef = useRef<InvoiceData | null>(
-    fixture ? (INVOICE_FIXTURE.data ?? null) : null,
-  );
+  const envelopeRef = useRef<InvoiceDocumentEnvelope | null>(initialEnvelope);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(
-    fixture ? resolveUiRefreshRequest(INVOICE_FIXTURE, null) : null,
+    initialEnvelope?.refreshRequest ?? null,
   );
   const refreshSequenceRef = useRef(createUiRefreshSequence());
   const refreshPromiseRef = useRef<Promise<boolean> | null>(null);
   const lastRefreshStartedAtRef = useRef(0);
-  const availableToolsRef = useRef<string[] | undefined>(
-    fixture ? readAvailableTools(INVOICE_FIXTURE) : undefined,
+  const availableToolsRef = useRef<readonly string[] | undefined>(
+    initialEnvelope?.availableTools,
   );
   const actionInFlightRef = useRef(false);
   const mutationCommittedRef = useRef(false);
+  const canonicalRefreshBlockedRef = useRef(false);
+  const rootEventRef = useRef(0);
 
   /* ── Hydratation ──────────────────────────────────────────────────────── */
 
-  function hydrateData(nextData: InvoiceData) {
-    dataRef.current = nextData;
-    setData(nextData);
+  function hydrateData(nextEnvelope: InvoiceDocumentEnvelope) {
+    envelopeRef.current = nextEnvelope;
+    setEnvelope(nextEnvelope);
+    canonicalRefreshBlockedRef.current = false;
     mutationCommittedRef.current = false;
     setMutationCommitted((current) =>
       nextInvoiceMutationCommitted(current, "canonical-hydrated")
     );
+    setRootFreshEvent(++rootEventRef.current);
   }
 
   function consumeToolResult(result: ToolResultPayload): boolean {
@@ -159,19 +176,20 @@ export function InvoiceViewer() {
     if (!text) return false;
     try {
       const parsed = JSON.parse(text) as InvoicePayload;
-      const nextData = invoiceDataFromPayload(parsed);
-      if (!nextData) throw new Error("Missing explicit document identity");
-      const nextAvailableTools = readAvailableTools(parsed);
-      availableToolsRef.current = nextAvailableTools;
-      setAvailableTools(nextAvailableTools);
-      refreshRequestRef.current = resolveUiRefreshRequest(
+      const parsedEnvelope = invoiceDocumentEnvelope(parsed);
+      if (!parsedEnvelope) {
+        throw new Error("Missing explicit document identity");
+      }
+      availableToolsRef.current = parsedEnvelope.availableTools;
+      const refreshRequest = resolveUiRefreshRequest(
         parsed,
         refreshRequestRef.current,
       );
-      // Extraire les hints de navigation du payload serveur.
-      const nextHints = parsed._sendMessageHints;
-      setHints(Array.isArray(nextHints) ? nextHints as NavHint[] : null);
-      hydrateData(nextData);
+      refreshRequestRef.current = refreshRequest;
+      hydrateData({
+        ...parsedEnvelope,
+        ...(refreshRequest ? { refreshRequest } : {}),
+      });
       setError(null);
       setLoading(false);
       return true;
@@ -187,7 +205,7 @@ export function InvoiceViewer() {
   async function requestRefresh(
     options: { ignoreInterval?: boolean; force?: boolean } = {},
   ): Promise<boolean> {
-    if (fixture) return false;
+    if (fixture || canonicalRefreshBlockedRef.current) return false;
 
     const current = refreshSequenceRef.current;
     if (options.force) {
@@ -285,11 +303,30 @@ export function InvoiceViewer() {
 
   /* ── Actions ──────────────────────────────────────────────────────────── */
 
+  function invalidateRefresh() {
+    refreshSequenceRef.current = invalidateUiRefresh(
+      refreshSequenceRef.current,
+    );
+  }
+
+  function beginCanonicalReadback() {
+    canonicalRefreshBlockedRef.current = true;
+    invalidateRefresh();
+    setRootMutationEvent(++rootEventRef.current);
+  }
+
+  function requestCanonicalRefresh(): Promise<boolean> {
+    canonicalRefreshBlockedRef.current = false;
+    return requestRefresh({ ignoreInterval: true, force: true });
+  }
+
   async function callAction(
-    key: string,
+    mutation: InvoiceRootMutation,
     toolName: string,
     args: Record<string, unknown>,
     successMsg: string,
+    target: { doctype: string; name: string },
+    onDocumentChanged: (event: DocumentChangeEvent) => void,
   ) {
     if (
       fixture ||
@@ -298,14 +335,20 @@ export function InvoiceViewer() {
       !hasAvailableTool(availableToolsRef.current, toolName)
     ) return;
     actionInFlightRef.current = true;
-    setActionLoading(key);
+    setActionLoading(mutation);
     setActionMessage(null);
     setActionIsError(false);
+    const targetIsCurrent = () => {
+      const current = envelopeRef.current;
+      return current?.doctype === target.doctype &&
+        current.name === target.name;
+    };
     try {
       const result = await app.callServerTool({
         name: toolName,
         arguments: args,
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
+      if (!targetIsCurrent()) return;
       if (result.isError) {
         const text = extractToolResultText(result);
         setActionIsError(true);
@@ -315,21 +358,30 @@ export function InvoiceViewer() {
         setMutationCommitted((current) =>
           nextInvoiceMutationCommitted(current, "mutation-committed")
         );
-        const refreshPromise = requestRefresh({
-          ignoreInterval: true,
-          force: true,
-        });
+        onDocumentChanged(invoiceRootDocumentChange(
+          target.doctype,
+          target.name,
+          mutation,
+          new Date().toISOString(),
+        ));
+        beginCanonicalReadback();
         setActionIsError(false);
         setActionMessage(successMsg);
-        const refreshed = await refreshPromise;
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, CANONICAL_READBACK_DELAY_MS)
+        );
+        if (!targetIsCurrent()) return;
+        const refreshed = await requestCanonicalRefresh();
         if (!refreshed && mutationCommittedRef.current) {
           setActionIsError(true);
           setActionMessage(t("invoice.error.refresh_failed"));
         }
       }
     } catch {
-      setActionIsError(true);
-      setActionMessage(t("invoice.error.action_failed"));
+      if (targetIsCurrent()) {
+        setActionIsError(true);
+        setActionMessage(t("invoice.error.action_failed"));
+      }
     } finally {
       actionInFlightRef.current = false;
       setActionLoading(null);
@@ -359,13 +411,11 @@ export function InvoiceViewer() {
   useEffect(() => {
     if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
-      refreshSequenceRef.current = invalidateUiRefresh(
-        refreshSequenceRef.current,
-      );
+      invalidateRefresh();
       consumeToolResult(result);
     };
     app.ontoolinputpartial = () => {
-      if (!dataRef.current) setLoading(true);
+      if (!envelopeRef.current) setLoading(true);
     };
     app.connect().then(() => bindHostContext(app)).catch(() => {});
   }, [fixture]);
@@ -388,7 +438,7 @@ export function InvoiceViewer() {
 
   /* ── Early returns ────────────────────────────────────────────────────── */
 
-  if (loading || !data) {
+  if (loading || !envelope) {
     return (
       <ViewerShell containerRef={loadingRef}>
         <StateMessage>
@@ -401,12 +451,13 @@ export function InvoiceViewer() {
 
   /* ── Rendu ────────────────────────────────────────────────────────────── */
 
+  const data = envelope.document;
+
   return (
     <InvoiceContent
       key={`${data.doctype}:${data.name}`}
       data={data}
-      hints={hints}
-      availableTools={availableTools}
+      envelope={envelope}
       mutationCommitted={mutationCommitted}
       error={error}
       refreshing={refreshing}
@@ -415,7 +466,11 @@ export function InvoiceViewer() {
       actionLoading={actionLoading}
       actionMessage={actionMessage}
       actionIsError={actionIsError}
+      rootFreshEvent={rootFreshEvent}
+      rootMutationEvent={rootMutationEvent}
       callAction={callAction}
+      onBeginCanonicalReadback={beginCanonicalReadback}
+      onCanonicalRefresh={requestCanonicalRefresh}
       onNavigate={navigate}
       setError={setError}
     />
@@ -430,8 +485,7 @@ export function InvoiceViewer() {
 
 function InvoiceContent({
   data,
-  hints,
-  availableTools,
+  envelope,
   mutationCommitted,
   error,
   refreshing,
@@ -440,13 +494,17 @@ function InvoiceContent({
   actionLoading,
   actionMessage,
   actionIsError,
+  rootFreshEvent,
+  rootMutationEvent,
   callAction,
+  onBeginCanonicalReadback,
+  onCanonicalRefresh,
   onNavigate,
   setError,
 }: InvoiceContentProps) {
   /* ── Hooks d'UI (inconditionnels) ────────────────────────────────────── */
 
-  const { ref, layout } = useViewerLayout<HTMLDivElement>();
+  const { ref, width, layout } = useViewerLayout<HTMLDivElement>();
   const t = useT();
 
   // Pile de navigation : titre racine = nom de la pièce.
@@ -461,10 +519,79 @@ function InvoiceContent({
   }, { fixture });
   const nav = viewerNav.nav;
 
+  const rootLevelId = nav.stack.levels[0].id;
+  useLayoutEffect(() => {
+    if (rootFreshEvent > rootMutationEvent) nav.clearStale(rootLevelId);
+  }, [rootFreshEvent, rootMutationEvent, rootLevelId]);
+
   // useDoclist doit être appelé inconditionnellement avant tout return.
   const { list } = viewerNav;
 
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [canonicalRefreshPending, setCanonicalRefreshPending] = useState(false);
+  const delayedRefreshRef = useRef<number | null>(null);
+  const delayedRefreshGenerationRef = useRef(0);
+
+  useEffect(() => () => {
+    delayedRefreshGenerationRef.current += 1;
+    if (delayedRefreshRef.current !== null) {
+      clearTimeout(delayedRefreshRef.current);
+    }
+  }, []);
+
+  const hostCapabilities = fixture ? undefined : app.getHostCapabilities();
+  const availableTools = envelope.availableTools;
+  const hints = envelope.sendMessageHints
+    ? [...envelope.sendMessageHints]
+    : null;
+  const baseDocumentCapabilities = documentCapabilities(
+    hostCapabilities,
+    availableTools,
+    envelope.refreshRequest,
+  );
+  const attachmentCapabilities = {
+    ...baseDocumentCapabilities,
+    canUploadAttachment: baseDocumentCapabilities.canUploadAttachment &&
+      actionLoading === null && !mutationCommitted &&
+      !canonicalRefreshPending,
+  };
+
+  function scheduleCanonicalRefresh(invalidate = true) {
+    if (invalidate) onBeginCanonicalReadback();
+    setCanonicalRefreshPending(true);
+    const generation = ++delayedRefreshGenerationRef.current;
+    if (delayedRefreshRef.current !== null) {
+      clearTimeout(delayedRefreshRef.current);
+    }
+    delayedRefreshRef.current = window.setTimeout(() => {
+      delayedRefreshRef.current = null;
+      const finish = () => {
+        if (delayedRefreshGenerationRef.current !== generation) return false;
+        setCanonicalRefreshPending(false);
+        return true;
+      };
+      void onCanonicalRefresh().then((refreshed) => {
+        if (finish() && !refreshed) {
+          setError(t("invoice.error.refresh_failed"));
+        }
+      }, () => {
+        if (finish()) setError(t("invoice.error.refresh_failed"));
+      });
+    }, CANONICAL_READBACK_DELAY_MS);
+  }
+
+  const attachments = useAttachments({
+    app,
+    envelope,
+    capabilities: attachmentCapabilities,
+    fixtureFiles: fixture ? INVOICE_ATTACHMENT_FIXTURES : undefined,
+    onDocumentChanged: (event) => {
+      nav.reportDocumentChange(event);
+      scheduleCanonicalRefresh();
+    },
+  });
+  const attachmentMutationBusy = attachments.state.upload !== "idle" &&
+    attachments.state.upload !== "error";
 
   /* ── Valeurs dérivées ─────────────────────────────────────────────────── */
 
@@ -483,7 +610,7 @@ function InvoiceContent({
     ((data.grand_total ?? 0) - netTotal);
   const isDraft = data.status === "Draft" || data.docstatus === 0;
   const isSubmitted = data.docstatus === 1;
-  const hasServerTools = Boolean(app.getHostCapabilities()?.serverTools);
+  const hasServerTools = Boolean(hostCapabilities?.serverTools);
   const canInspectItem = hasServerTools && (
     hasAvailableTool(availableTools, "erpnext_item_get") ||
     hasAvailableTool(availableTools, "erpnext_stock_balance")
@@ -495,9 +622,37 @@ function InvoiceContent({
   const canExpand = canInspectItem || messagesEnabled || fixture;
   const rows: LineRow[] = items.map((item, idx) => ({ ...item, idx }));
   const previewTitle = fixture ? t("invoice.preview.title") : undefined;
-
   const isWide = layout === "wide";
   const isMobile = layout === "mobile";
+  const rootStale = nav.stack.levels[0].stale;
+  const rootStaleIndicator = nav.isRoot && rootStale
+    ? (
+      <span
+        role="status"
+        aria-label={t("nav.stale_values", { at: rootStale.at })}
+        title={t("nav.stale_title")}
+        class="inline-flex items-center gap-1.5 font-mono text-nano text-warn"
+      >
+        <span aria-hidden="true" class="size-[5px] rounded-full bg-warn" />
+        {!isMobile && <span>{t("nav.stale_values", { at: rootStale.at })}
+        </span>}
+      </span>
+    )
+    : null;
+
+  const showAttachments = fixture ||
+    baseDocumentCapabilities.canListAttachments;
+  const showAttachmentSidebar = showAttachments && isWide &&
+    width !== null && width >= ATTACHMENT_SIDEBAR_MIN_WIDTH;
+  const attachmentSection = showAttachments
+    ? (
+      <AttachmentsSection
+        controller={attachments}
+        capabilities={attachmentCapabilities}
+        layout={layout}
+      />
+    )
+    : null;
 
   /* ── Sauts de navigation ─────────────────────────────────────────────── */
 
@@ -655,7 +810,9 @@ function InvoiceContent({
     <Button
       variant="accent"
       class={isMobile ? "min-h-[44px] rounded-touch text-body" : "text-cell"}
-      disabled={fixture || actionLoading === "submit"}
+      disabled={fixture || actionLoading === "submit" ||
+        canonicalRefreshPending ||
+        attachmentMutationBusy}
       title={fixture ? previewTitle : t("invoice.btn.submit.title")}
       onClick={() =>
         confirm.request({
@@ -670,6 +827,8 @@ function InvoiceContent({
               mutations.submit.toolName,
               mutations.submit.args,
               t("invoice.action.submitted"),
+              { doctype, name: data.name },
+              nav.reportDocumentChange,
             );
           },
         })}
@@ -687,7 +846,9 @@ function InvoiceContent({
           ? "w-full min-h-[44px] rounded-touch text-body"
           : "ml-auto text-cell",
       )}
-      disabled={fixture || actionLoading === "cancel"}
+      disabled={fixture || actionLoading === "cancel" ||
+        canonicalRefreshPending ||
+        attachmentMutationBusy}
       title={fixture ? previewTitle : t("invoice.btn.cancel.title")}
       onClick={() =>
         confirm.request({
@@ -702,6 +863,8 @@ function InvoiceContent({
               mutations.cancel.toolName,
               mutations.cancel.args,
               t("invoice.action.cancelled"),
+              { doctype, name: data.name },
+              nav.reportDocumentChange,
             );
           },
         })}
@@ -776,6 +939,7 @@ function InvoiceContent({
                   {t("common.refreshing")}
                 </span>
               )}
+              {rootStaleIndicator}
               {nav.isRoot && (
                 <span class="text-data text-ink-muted">
                   {partyName}
@@ -828,115 +992,139 @@ function InvoiceContent({
           onAsk={ask}
           onError={setError}
           onMutated={nav.markStale}
+          onDocumentChanged={nav.reportDocumentChange}
+          onMutationInvalidate={onBeginCanonicalReadback}
+          onMutationRefresh={() => scheduleCanonicalRefresh(false)}
           onRefresh={() => void nav.refreshLevel()}
         >
           {/* ── Contenu racine (niveau 1 seulement) ── */}
           {messages}
 
-          {/* En-tête de tableau */}
           <div
-            class="grid border-b border-line bg-sunken"
-            style={{
-              gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
-              padding: "8px 16px",
-            }}
+            class={showAttachmentSidebar ? "grid min-w-0" : "min-w-0"}
+            style={showAttachmentSidebar
+              ? { gridTemplateColumns: "minmax(0, 1fr) 268px" }
+              : undefined}
           >
-            <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
-              {t("invoice.table.col.item")}
-            </span>
-            <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
-              {t("invoice.table.col.qty")}
-            </span>
-            <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
-              {t("invoice.table.col.rate")}
-            </span>
-            <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
-              {t("invoice.table.col.amount")}
-            </span>
-          </div>
-
-          {/* Lignes article */}
-          {rows.map((row) => {
-            const isSelected = canExpand && expandedIdx === row.idx;
-            return (
-              <div key={`${row.idx}-${row.item_code}`}>
-                <div
-                  class={cx(
-                    "grid items-center border-b border-line-soft focus-visible:outline-2 focus-visible:outline-accent",
-                    canExpand ? "cursor-pointer" : "",
-                    isSelected ? "bg-row-selected" : "hover:bg-row-hover",
-                  )}
-                  style={{
-                    gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
-                    padding: "10px 16px",
-                    borderLeft: `2px solid ${
-                      isSelected ? "var(--color-accent)" : "transparent"
-                    }`,
-                  }}
-                  role={canExpand ? "button" : undefined}
-                  tabIndex={canExpand ? 0 : undefined}
-                  aria-expanded={canExpand ? isSelected : undefined}
-                  onClick={canExpand
-                    ? () =>
-                      setExpandedIdx(expandedIdx === row.idx ? null : row.idx)
-                    : undefined}
-                  onKeyDown={canExpand
-                    ? (e: KeyboardEvent) => {
-                      if (e.key !== "Enter" && e.key !== " ") return;
-                      e.preventDefault();
-                      setExpandedIdx(expandedIdx === row.idx ? null : row.idx);
-                    }
-                    : undefined}
-                >
-                  <div class="flex flex-col gap-0.5">
-                    <span class="text-body text-ink">
-                      {row.item_name ?? row.item_code}
-                    </span>
-                    <span class="font-mono text-chip text-ink-faint">
-                      {row.item_code}
-                    </span>
-                  </div>
-                  <span class="font-mono text-cell tabular-nums text-ink-2 text-right">
-                    {formatNumber(row.qty)}
-                  </span>
-                  <span class="font-mono text-cell tabular-nums text-ink-muted text-right">
-                    {formatNumber(row.rate)}
-                  </span>
-                  <span class="font-mono text-cell font-medium tabular-nums text-ink text-right">
-                    {formatNumber(row.amount)}
-                  </span>
-                </div>
-
-                {isSelected && (
-                  <ItemDetailPanel
-                    app={app}
-                    itemCode={row.item_code}
-                    fixture={fixture}
-                    availableTools={availableTools}
-                    hints={hints ?? undefined}
-                    onJump={jumpsEnabled ? nav.jump : undefined}
-                    onClose={() => setExpandedIdx(null)}
-                    lineIndex={row.idx}
-                    lineCount={rows.length}
-                    lineQty={row.qty}
-                  />
-                )}
+            <div class="min-w-0">
+              {/* En-tête de tableau */}
+              <div
+                class="grid border-b border-line bg-sunken"
+                style={{
+                  gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
+                  padding: "8px 16px",
+                }}
+              >
+                <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+                  {t("invoice.table.col.item")}
+                </span>
+                <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+                  {t("invoice.table.col.qty")}
+                </span>
+                <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+                  {t("invoice.table.col.rate")}
+                </span>
+                <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+                  {t("invoice.table.col.amount")}
+                </span>
               </div>
-            );
-          })}
 
-          {/* Footer : boutons gauche | totaux droite */}
-          <div
-            class="grid border-t border-line"
-            style={{ gridTemplateColumns: "1fr 300px" }}
-          >
-            <div class="flex items-center gap-2 px-4 py-3.5">
-              {btnSubmit}
-              {btnPayments}
-              {btnParty}
-              {btnCancel}
+              {/* Lignes article */}
+              {rows.map((row) => {
+                const isSelected = canExpand && expandedIdx === row.idx;
+                return (
+                  <div key={`${row.idx}-${row.item_code}`}>
+                    <div
+                      class={cx(
+                        "grid items-center border-b border-line-soft focus-visible:outline-2 focus-visible:outline-accent",
+                        canExpand ? "cursor-pointer" : "",
+                        isSelected ? "bg-row-selected" : "hover:bg-row-hover",
+                      )}
+                      style={{
+                        gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
+                        padding: "10px 16px",
+                        borderLeft: `2px solid ${
+                          isSelected ? "var(--color-accent)" : "transparent"
+                        }`,
+                      }}
+                      role={canExpand ? "button" : undefined}
+                      tabIndex={canExpand ? 0 : undefined}
+                      aria-expanded={canExpand ? isSelected : undefined}
+                      onClick={canExpand
+                        ? () =>
+                          setExpandedIdx(
+                            expandedIdx === row.idx ? null : row.idx,
+                          )
+                        : undefined}
+                      onKeyDown={canExpand
+                        ? (e: KeyboardEvent) => {
+                          if (e.key !== "Enter" && e.key !== " ") return;
+                          e.preventDefault();
+                          setExpandedIdx(
+                            expandedIdx === row.idx ? null : row.idx,
+                          );
+                        }
+                        : undefined}
+                    >
+                      <div class="flex flex-col gap-0.5">
+                        <span class="text-body text-ink">
+                          {row.item_name ?? row.item_code}
+                        </span>
+                        <span class="font-mono text-chip text-ink-faint">
+                          {row.item_code}
+                        </span>
+                      </div>
+                      <span class="font-mono text-cell tabular-nums text-ink-2 text-right">
+                        {formatNumber(row.qty)}
+                      </span>
+                      <span class="font-mono text-cell tabular-nums text-ink-muted text-right">
+                        {formatNumber(row.rate)}
+                      </span>
+                      <span class="font-mono text-cell font-medium tabular-nums text-ink text-right">
+                        {formatNumber(row.amount)}
+                      </span>
+                    </div>
+
+                    {isSelected && (
+                      <ItemDetailPanel
+                        app={app}
+                        itemCode={row.item_code}
+                        fixture={fixture}
+                        availableTools={availableTools}
+                        hints={hints ?? undefined}
+                        onJump={jumpsEnabled ? nav.jump : undefined}
+                        onClose={() => setExpandedIdx(null)}
+                        lineIndex={row.idx}
+                        lineCount={rows.length}
+                        lineQty={row.qty}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Footer : boutons gauche | totaux droite */}
+              <div
+                class="grid border-t border-line"
+                style={{ gridTemplateColumns: "1fr 300px" }}
+              >
+                <div class="flex items-center gap-2 px-4 py-3.5">
+                  {btnSubmit}
+                  {btnPayments}
+                  {btnParty}
+                  {btnCancel}
+                </div>
+                {totalsPanel}
+              </div>
+              {!showAttachmentSidebar && attachmentSection && (
+                <div class="border-t border-line">{attachmentSection}</div>
+              )}
             </div>
-            {totalsPanel}
+            {showAttachmentSidebar && (
+              <aside class="min-w-0 border-l border-line bg-sunken/35">
+                {attachmentSection}
+              </aside>
+            )}
           </div>
         </LevelBody>
 
@@ -986,6 +1174,7 @@ function InvoiceContent({
             </div>
             <div class="flex flex-col items-end gap-[5px]">
               <StatusBadge status={data.status} />
+              {rootStaleIndicator}
               {data.due_date && (
                 <span class="font-mono text-chip text-ink-muted">
                   {t("invoice.header.due", { date: data.due_date.slice(5) })}
@@ -1016,6 +1205,9 @@ function InvoiceContent({
         onAsk={ask}
         onError={setError}
         onMutated={nav.markStale}
+        onDocumentChanged={nav.reportDocumentChange}
+        onMutationInvalidate={onBeginCanonicalReadback}
+        onMutationRefresh={() => scheduleCanonicalRefresh(false)}
         onRefresh={() => void nav.refreshLevel()}
       >
         {/* ── Contenu racine (niveau 1 seulement) ── */}
@@ -1074,6 +1266,10 @@ function InvoiceContent({
             {formatCurrency(data.grand_total, ccy)}
           </span>
         </div>
+
+        {attachmentSection && (
+          <div class="border-b border-line">{attachmentSection}</div>
+        )}
 
         {/* CTA section */}
         {hasActionButtons && (

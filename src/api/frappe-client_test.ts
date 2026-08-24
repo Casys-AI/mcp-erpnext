@@ -56,6 +56,14 @@ function mockFetch(responses: Array<MockResponse>) {
   };
 }
 
+function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
+  const headers = new Headers(init.headers);
+  if (!headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+  return new Response(JSON.stringify(body), { ...init, headers });
+}
+
 function makeClient(overrides: Record<string, unknown> = {}) {
   return new FrappeClient({
     baseUrl: "http://localhost:8000",
@@ -480,6 +488,424 @@ Deno.test("getFrappeClient() - treats a blank upload limit as unset", () => {
           setFrappeClient(null);
           try {
             assertEquals(getFrappeClient() instanceof FrappeClient, true);
+          } finally {
+            setFrappeClient(null);
+          }
+        });
+      });
+    });
+  });
+});
+
+// ── downloadFile() ──────────────────────────────────────────────────────────
+
+Deno.test("FrappeClient.downloadFile() - downloads a private attachment with auth and no redirects", async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    requests.push({ url: url.toString(), init });
+    if (requests.length === 1) {
+      return jsonResponse({
+        data: {
+          name: "FILE-001",
+          file_name: "folder/report\u0000.pdf",
+          file_url: "/private/files/report.pdf",
+          file_size: 3,
+          is_private: 1,
+          attached_to_doctype: "Task",
+          attached_to_name: "TASK-001",
+        },
+      });
+    }
+    return new Response(new Uint8Array([0, 255, 1]), {
+      status: 200,
+      headers: {
+        "content-type": "Application/PDF; charset=binary",
+        "content-length": "3",
+        "content-disposition": "attachment; filename=attacker.exe",
+      },
+    });
+  };
+
+  try {
+    const result = await makeClient().downloadFile({
+      fileId: "FILE-001",
+      attachedToDoctype: "Task",
+      attachedToName: "TASK-001",
+    });
+
+    assertEquals(
+      new URL(requests[0].url).pathname,
+      "/api/resource/File/FILE-001",
+    );
+    const downloadUrl = new URL(requests[1].url);
+    assertEquals(downloadUrl.origin, "http://localhost:8000");
+    assertEquals(
+      downloadUrl.pathname,
+      "/api/method/frappe.handler.download_file",
+    );
+    assertEquals(
+      downloadUrl.searchParams.get("file_url"),
+      "/private/files/report.pdf",
+    );
+    assertEquals(requests[1].init?.redirect, "manual");
+    assertEquals(requests[1].init?.cache, "no-store");
+    assertEquals(
+      new Headers(requests[1].init?.headers).get("authorization"),
+      "token test-key:test-secret",
+    );
+    assertEquals(result.fileName, "folder_report.pdf");
+    assertEquals(result.mimeType, "application/pdf");
+    assertEquals(result.bytes, new Uint8Array([0, 255, 1]));
+    assertEquals(result.isPrivate, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.downloadFile() - supports a public local file and MIME fallback", async () => {
+  const original = globalThis.fetch;
+  let call = 0;
+  globalThis.fetch = async (): Promise<Response> => {
+    call++;
+    if (call === 1) {
+      return jsonResponse({
+        data: {
+          name: "FILE-PUBLIC",
+          file_name: "brochure.bin",
+          file_url: "/files/brochure.bin",
+          is_private: 0,
+          attached_to_doctype: "Lead",
+          attached_to_name: "LEAD-001",
+        },
+      });
+    }
+    return new Response(new Uint8Array([7]), {
+      headers: { "content-type": "application/unknown; charset=utf-8" },
+    });
+  };
+
+  try {
+    const result = await makeClient().downloadFile({
+      fileId: "FILE-PUBLIC",
+      attachedToDoctype: "Lead",
+      attachedToName: "LEAD-001",
+    });
+    assertEquals(result.isPrivate, false);
+    assertEquals(result.mimeType, "application/octet-stream");
+    assertEquals(result.bytes, new Uint8Array([7]));
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.downloadFile() - rejects a mismatched attachment before fetching bytes", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async (): Promise<Response> => {
+    calls++;
+    return jsonResponse({
+      data: {
+        name: "FILE-001",
+        file_name: "report.pdf",
+        file_url: "/private/files/report.pdf",
+        is_private: 1,
+        attached_to_doctype: "Task",
+        attached_to_name: "TASK-OTHER",
+      },
+    });
+  };
+
+  try {
+    await assertRejects(
+      () =>
+        makeClient().downloadFile({
+          fileId: "FILE-001",
+          attachedToDoctype: "Task",
+          attachedToName: "TASK-001",
+        }),
+      Error,
+      "not attached",
+    );
+    assertEquals(calls, 1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.downloadFile() - rejects remote, traversing, encoded, and privacy-mismatched file URLs", async () => {
+  const cases: Array<{ fileUrl: string; isPrivate: 0 | 1 }> = [
+    { fileUrl: "https://evil.example/report.pdf", isPrivate: 1 },
+    { fileUrl: "//evil.example/report.pdf", isPrivate: 0 },
+    { fileUrl: "/api/method/evil", isPrivate: 0 },
+    { fileUrl: "/private/files/../secret.txt", isPrivate: 1 },
+    { fileUrl: "/private/files/%2e%2e", isPrivate: 1 },
+    { fileUrl: "/private/files/%252e%252e", isPrivate: 1 },
+    { fileUrl: "/private/files/a%2fb.pdf", isPrivate: 1 },
+    { fileUrl: "/private/files/a\\b.pdf", isPrivate: 1 },
+    { fileUrl: "/private/files/a.pdf?token=secret", isPrivate: 1 },
+    { fileUrl: "/private/files/%ZZ.pdf", isPrivate: 1 },
+    { fileUrl: "/files/public.pdf", isPrivate: 1 },
+  ];
+
+  for (const testCase of cases) {
+    const original = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async (): Promise<Response> => {
+      calls++;
+      return jsonResponse({
+        data: {
+          name: "FILE-001",
+          file_name: "report.pdf",
+          file_url: testCase.fileUrl,
+          is_private: testCase.isPrivate,
+          attached_to_doctype: "Task",
+          attached_to_name: "TASK-001",
+        },
+      });
+    };
+
+    try {
+      await assertRejects(
+        () =>
+          makeClient().downloadFile({
+            fileId: "FILE-001",
+            attachedToDoctype: "Task",
+            attachedToName: "TASK-001",
+          }),
+        Error,
+        "file_url",
+      );
+      assertEquals(calls, 1, `must not fetch bytes for ${testCase.fileUrl}`);
+    } finally {
+      globalThis.fetch = original;
+    }
+  }
+});
+
+Deno.test("FrappeClient.downloadFile() - enforces metadata and Content-Length limits", async () => {
+  const input = {
+    fileId: "FILE-001",
+    attachedToDoctype: "Task",
+    attachedToName: "TASK-001",
+  };
+
+  for (const source of ["metadata", "header"] as const) {
+    const original = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async (): Promise<Response> => {
+      calls++;
+      if (calls === 1) {
+        return jsonResponse({
+          data: {
+            name: "FILE-001",
+            file_name: "report.pdf",
+            file_url: "/private/files/report.pdf",
+            ...(source === "metadata" ? { file_size: 4 } : {}),
+            is_private: 1,
+            attached_to_doctype: "Task",
+            attached_to_name: "TASK-001",
+          },
+        });
+      }
+      return new Response(new Uint8Array([1]), {
+        headers: { "content-length": "4" },
+      });
+    };
+
+    try {
+      await assertRejects(
+        () => makeClient({ maxDownloadBytes: 3 }).downloadFile(input),
+        Error,
+        "exceeds",
+      );
+      assertEquals(calls, source === "metadata" ? 1 : 2);
+    } finally {
+      globalThis.fetch = original;
+    }
+  }
+});
+
+Deno.test("FrappeClient.downloadFile() - stops a lying stream at max plus one", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  let cancelled = false;
+  globalThis.fetch = async (): Promise<Response> => {
+    calls++;
+    if (calls === 1) {
+      return jsonResponse({
+        data: {
+          name: "FILE-001",
+          file_name: "report.pdf",
+          file_url: "/private/files/report.pdf",
+          file_size: 1,
+          is_private: 1,
+          attached_to_doctype: "Task",
+          attached_to_name: "TASK-001",
+        },
+      });
+    }
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2]));
+          controller.enqueue(new Uint8Array([3, 4]));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      }),
+      { headers: { "content-length": "1" } },
+    );
+  };
+
+  try {
+    await assertRejects(
+      () =>
+        makeClient({ maxDownloadBytes: 3 }).downloadFile({
+          fileId: "FILE-001",
+          attachedToDoctype: "Task",
+          attachedToName: "TASK-001",
+        }),
+      Error,
+      "exceeds",
+    );
+    assertEquals(cancelled, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.downloadFile() - refuses redirects instead of following them", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async (): Promise<Response> => {
+    calls++;
+    if (calls === 1) {
+      return jsonResponse({
+        data: {
+          name: "FILE-001",
+          file_name: "report.pdf",
+          file_url: "/private/files/report.pdf",
+          is_private: 1,
+          attached_to_doctype: "Task",
+          attached_to_name: "TASK-001",
+        },
+      });
+    }
+    return new Response(null, {
+      status: 302,
+      headers: { location: "https://evil.example/report.pdf" },
+    });
+  };
+
+  try {
+    await assertRejects(
+      () =>
+        makeClient().downloadFile({
+          fileId: "FILE-001",
+          attachedToDoctype: "Task",
+          attachedToName: "TASK-001",
+        }),
+      FrappeAPIError,
+      "refused an HTTP redirect",
+    );
+    assertEquals(calls, 2);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.downloadFile() - does not reuse cached File metadata", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async (): Promise<Response> => {
+    calls++;
+    if (calls % 2 === 1) {
+      return jsonResponse({
+        data: {
+          name: "FILE-001",
+          file_name: "report.pdf",
+          file_url: "/private/files/report.pdf",
+          is_private: 1,
+          attached_to_doctype: "Task",
+          attached_to_name: "TASK-001",
+        },
+      });
+    }
+    return new Response(new Uint8Array([calls]));
+  };
+
+  try {
+    const client = makeClient({ cache: new MemoryCache() });
+    const input = {
+      fileId: "FILE-001",
+      attachedToDoctype: "Task",
+      attachedToName: "TASK-001",
+    };
+    await client.downloadFile(input);
+    await client.downloadFile(input);
+    assertEquals(calls, 4);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient - defaults downloads to 10 MiB and validates the limit", async () => {
+  assertThrows(
+    () => makeClient({ maxDownloadBytes: 0 }),
+    Error,
+    "maxDownloadBytes",
+  );
+
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async (): Promise<Response> => {
+    calls++;
+    return jsonResponse({
+      data: {
+        name: "FILE-001",
+        file_name: "large.bin",
+        file_url: "/private/files/large.bin",
+        file_size: 10 * 1024 * 1024 + 1,
+        is_private: 1,
+        attached_to_doctype: "Task",
+        attached_to_name: "TASK-001",
+      },
+    });
+  };
+  try {
+    await assertRejects(
+      () =>
+        makeClient().downloadFile({
+          fileId: "FILE-001",
+          attachedToDoctype: "Task",
+          attachedToName: "TASK-001",
+        }),
+      Error,
+      "10485760-byte limit",
+    );
+    assertEquals(calls, 1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("getFrappeClient() - reads ERPNEXT_MAX_DOWNLOAD_BYTES", () => {
+  withEnv("ERPNEXT_URL", "http://localhost:8000", () => {
+    withEnv("ERPNEXT_API_KEY", "test-key", () => {
+      withEnv("ERPNEXT_API_SECRET", "test-secret", () => {
+        withEnv("ERPNEXT_MAX_DOWNLOAD_BYTES", "0", () => {
+          setFrappeClient(null);
+          try {
+            assertThrows(
+              () => getFrappeClient(),
+              Error,
+              "maxDownloadBytes",
+            );
           } finally {
             setFrappeClient(null);
           }

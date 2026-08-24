@@ -8,7 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META, INVOICE_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META, INVOICE_META } from "./viewer-meta.ts";
 import { resolveCustomer, resolveDynamicLink } from "../api/resolve.ts";
 import {
   roundedTotalFallbackWarning,
@@ -147,6 +147,7 @@ export const salesTools: ErpNextTool[] = [
   {
     name: "erpnext_customer_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single ERPNext customer by name (ID). Returns all fields including contact details.",
     category: "sales",
@@ -162,7 +163,7 @@ export const salesTools: ErpNextTool[] = [
         throw new Error("[erpnext_customer_get] 'name' is required");
       }
       const doc = await ctx.client.get("Customer", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Customer" } };
     },
   },
 

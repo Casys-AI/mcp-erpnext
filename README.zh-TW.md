@@ -8,6 +8,13 @@
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+> [!IMPORTANT]
+> **安裝 3.1 Beta：** 在新版 UX 驗證期間，請固定使用預發布版本。npm/Node 請執行
+> `npx -y @casys/mcp-erpnext@3.1.0-beta.2`；Deno 請執行
+> `deno run -A jsr:@casys/mcp-erpnext@3.1.0-beta.2/server`。npm 的浮動標籤為
+> `@next`。Beta 2 新增通用文件檢視器及附件流程；在取代穩定版部署前，請務必
+> 使用實際的 MCP 主機進行測試。
+
 讓任何相容 MCP 的 AI 智慧代理操作您的 [ERPNext](https://erpnext.com) / Frappe
 執行個體 — 文件、工作流程，以及主機內的互動式檢視器（Claude Desktop、 Claude
 Code、VS Code Copilot 或自訂代理）。
@@ -69,9 +76,9 @@ Code、VS Code Copilot 或自訂代理）。
 完整的發布歷程請參閱
 [CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
 
-> **3.1 Beta 預覽版：** 使用 `npx -y @casys/mcp-erpnext@next` 安裝。此版本維持與
-> 3.0 工具介面的相容性， 並依 MCP
-> 主機宣告的能力逐步啟用檢視器內導覽與作用中內容。
+> **3.1 Beta 2 預覽版：** 此版本維持與 3.0 工具介面的相容性，並新增通用文件
+> 檢視器、子表格、附件、檢視器內導覽及作用中內容。所有功能仍依 MCP 主機能力
+> 啟用；下載同時需要代理伺服器工具與 MCP Apps 的 `downloadFile` 能力。
 
 ## 文件
 
@@ -176,13 +183,14 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 
 ## UI 檢視器
 
-七個互動式 [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
+八個互動式 [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
 檢視器，已登錄為 `ui://mcp-erpnext/{name}`：
 
 | 檢視器           | 說明                                               | 互動功能                                                       |
 | ---------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| `doc-viewer`     | 顯示欄位與子表格的通用 ERPNext 文件                | 依能力啟用附件、具型別導覽、受保護的提交／取消及原始 JSON。    |
 | `doclist-viewer` | 通用文件表格，支援排序、篩選、分頁與 CSV 匯出      | 內嵌詳情、具型別的巢狀導覽、提交／取消，以及精簡的狀態篩選器。 |
-| `invoice-viewer` | 含交易方、品項與金額合計的銷售／採購文件           | 品項、庫存、交易方與付款導覽，以及受保護的提交／取消操作。     |
+| `invoice-viewer` | 含交易方、品項及合計的銷售訂單、銷售發票與報價單   | 品項、庫存、交易方與付款導覽，以及受保護的提交／取消操作。     |
 | `stock-viewer`   | 含色碼數量標籤的庫存結餘表格                       | 品項詳情、近期異動、庫存圖表與庫存記錄導覽。                   |
 | `chart-viewer`   | 通用圖表渲染器（透過 Recharts 支援 12 種圖表類型） | 精確的資料點／數列導覽，以及簡單與組合圖表的作用中內容選取。   |
 | `kanban-viewer`  | 可讀寫的 Task、Opportunity、Issue 看板             | 拖放、內嵌編輯、循序儲存，以及具型別的相關文件導覽。           |
@@ -195,6 +203,8 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 
 - `serverTools` 透過 `app.callServerTool()`，直接在目前檢視器內開啟具型別的
   清單、文件或圖表層級。麵包屑與返回導覽會還原各層級的介面狀態。
+- `downloadFile` 讓主機確認並儲存以大小上限保護的內嵌附件。檢視器不會直接開啟
+  ERPNext 的檔案 URL。
 - `updateModelContext` 可將圖表、KPI 與漏斗中的選取項目加入有上限的作用中內容。
   精簡的內容晶片最多保留八個項目，並可逐項移除或全部清除。傳送的快照只包含
   使用者選取的值，不含給模型的隱藏指令。
@@ -210,6 +220,8 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 唯讀檢視器會在重新取得焦點或使用重新整理控制項時重新驗證。資料異動後只會
 透過明確的唯讀工具讀回已提交狀態，不會自動重播寫入工具。若較新的主機資料或
 異動結果已生效，較舊或重疊的重新整理回應會被忽略。
+已確認的文件異動會把目前導覽堆疊中可能衍生的快照標記為過期；只有在該畫面
+實際重新讀取後才會移除標記。Beta 2 不會自動同步彼此分離的 MCP Apps。
 
 ### 建置 UI 檢視器
 
@@ -221,8 +233,10 @@ node build-all.mjs
 
 ## 工具
 
-每個 `_list` 工具均透過 doclist-viewer 返回互動式結果，支援點擊列、內嵌詳情及
-跨檢視器導覽。
+資料列表類的 `_list` 工具會透過 doclist-viewer 返回互動式結果，支援點擊列、
+內嵌詳情及跨檢視器導覽；專用於附件的 `erpnext_file_list` 不會呈現
+doclist-viewer。通用與專用的文件讀取會使用 doc-viewer，但銷售訂單、銷售發票及
+報價單仍保留專用的 invoice-viewer。
 
 - **Sales（銷售）** — 客戶、銷售訂單、發票及報價單，含完整的 CRUD、提交與取消。
 - **Purchasing（採購）** — 供應商、採購訂單、採購發票、收貨單及供應商報價單。
@@ -234,8 +248,8 @@ node build-all.mjs
 - **Manufacturing（製造）** — 物料清單（BOM）、工單及工作卡。
 - **CRM** — 潛在客戶、商機、聯絡人及行銷活動。
 - **Assets（資產）** — 資產、異動、維護紀錄及類別。
-- **Operations（作業）** — 任何 DocType 的通用 CRUD、原生指派，以及附件清單
-  與上傳（`erpnext_doc_*`、`erpnext_file_list`、`erpnext_file_upload`）。
+- **Operations（作業）** — 任何 DocType 的通用 CRUD、原生指派，以及附件清單、
+  上傳或由主機代理下載（`erpnext_doc_*`、`erpnext_file_*`）。
 - **Kanban（看板）** — 支援拖放的 Task、Opportunity、Issue 可讀寫看板。
 - **Analytics（分析）** — 圖表（長條圖、面積圖、樹狀圖、雷達圖、散佈圖、損益表
   等）、含迷你圖的 KPI，以及銷售漏斗。
@@ -245,12 +259,14 @@ node build-all.mjs
 
 ## 環境變數
 
-| 變數                   | 必填 | 說明                                                                                                      |
-| ---------------------- | ---- | --------------------------------------------------------------------------------------------------------- |
-| `ERPNEXT_URL`          | 是   | ERPNext 基礎 URL — 自行託管（例如 `http://localhost:8000`）或雲端（例如 `https://mycompany.erpnext.com`） |
-| `ERPNEXT_API_KEY`      | 是   | 來自使用者設定的 API Key                                                                                  |
-| `ERPNEXT_API_SECRET`   | 是   | 來自使用者設定的 API Secret                                                                               |
-| `MCP_MRTR_SIGNING_KEY` | 否   | 恰為 64 個小寫十六進位字元；啟用已簽章的模糊連結 elicitation。**僅限單一執行個體部署**，詳見下方說明      |
+| 變數                         | 必填 | 說明                                                                                                      |
+| ---------------------------- | ---- | --------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_URL`                | 是   | ERPNext 基礎 URL — 自行託管（例如 `http://localhost:8000`）或雲端（例如 `https://mycompany.erpnext.com`） |
+| `ERPNEXT_API_KEY`            | 是   | 來自使用者設定的 API Key                                                                                  |
+| `ERPNEXT_API_SECRET`         | 是   | 來自使用者設定的 API Secret                                                                               |
+| `ERPNEXT_MAX_UPLOAD_BYTES`   | 否   | 解碼後檔案上傳大小上限（正整數位元組；預設 10 MiB）                                                       |
+| `ERPNEXT_MAX_DOWNLOAD_BYTES` | 否   | 附件下載大小上限（正整數位元組；預設 10 MiB）                                                             |
+| `MCP_MRTR_SIGNING_KEY`       | 否   | 恰為 64 個小寫十六進位字元；啟用已簽章的模糊連結 elicitation。**僅限單一執行個體部署**，詳見下方說明      |
 
 MRTR 為選用功能。未設定此金鑰，或用戶端未宣告 elicitation
 時，模糊連結會維持既有的 可操作歧義錯誤，而不會要求選擇。

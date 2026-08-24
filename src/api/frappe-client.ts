@@ -23,6 +23,8 @@ import type {
   FrappeDoc,
   FrappeDocResponse,
   FrappeFile,
+  FrappeFileDownload,
+  FrappeFileDownloadInput,
   FrappeFileUploadInput,
   FrappeListOptions,
   FrappeListResponse,
@@ -64,6 +66,8 @@ export interface FrappeClientConfig {
   timeoutMs?: number;
   /** Maximum decoded file upload size in bytes. Default: 10 MiB. */
   maxUploadBytes?: number;
+  /** Maximum downloaded file size in bytes. Default: 10 MiB. */
+  maxDownloadBytes?: number;
   /**
    * Number of retry attempts on retryable failures (default: 3).
    * Set to 0 to disable retries entirely.
@@ -100,6 +104,156 @@ export interface FrappeClientConfig {
 const DEFAULT_RETRY_STATUSES = [408, 429, 502, 503, 504];
 const DEFAULT_RETRY_METHODS = ["GET"];
 const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_ERROR_BODY_BYTES = 64 * 1024;
+
+class ResponseBodyLimitError extends Error {
+  constructor(label: string, size: number, limit: number) {
+    super(
+      `[FrappeClient] ${label} size ${size} bytes exceeds the ${limit}-byte limit`,
+    );
+    this.name = "ResponseBodyLimitError";
+  }
+}
+
+async function readResponseBytes(
+  response: Response,
+  maxBytes: number,
+  label: string,
+): Promise<Uint8Array> {
+  const declaredLength = response.headers.get("content-length")?.trim();
+  if (declaredLength && /^\d+$/.test(declaredLength)) {
+    const size = Number(declaredLength);
+    if (size > maxBytes) {
+      try {
+        await response.body?.cancel();
+      } catch {
+        // The size rejection is authoritative even if cancelling the body fails.
+      }
+      throw new ResponseBodyLimitError(label, size, maxBytes);
+    }
+  }
+
+  if (!response.body) return new Uint8Array();
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          // The size rejection is authoritative even if cancelling fails.
+        }
+        throw new ResponseBodyLimitError(label, total, maxBytes);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+function isUnsafeControl(character: string): boolean {
+  const codePoint = character.codePointAt(0) ?? 0;
+  return codePoint <= 0x1f ||
+    (codePoint >= 0x7f && codePoint <= 0x9f) ||
+    (codePoint >= 0x202a && codePoint <= 0x202e) ||
+    (codePoint >= 0x2066 && codePoint <= 0x2069);
+}
+
+function validateLocalFileUrl(fileUrl: unknown, isPrivate: boolean): string {
+  if (typeof fileUrl !== "string" || fileUrl.length === 0) {
+    throw new Error("[FrappeClient] File.file_url must be a non-empty string");
+  }
+  if (fileUrl !== fileUrl.trim()) {
+    throw new Error(
+      "[FrappeClient] File.file_url must not contain whitespace padding",
+    );
+  }
+
+  const expectedPrefix = isPrivate ? "/private/files/" : "/files/";
+  let decoded = fileUrl;
+  for (let depth = 0; depth < 5; depth++) {
+    if (
+      Array.from(decoded).some(isUnsafeControl) || decoded.includes("\\") ||
+      decoded.includes("?") || decoded.includes("#")
+    ) {
+      throw new Error(
+        "[FrappeClient] File.file_url must be a local Frappe file path without query, fragment, NUL, or backslash",
+      );
+    }
+    if (!decoded.startsWith(expectedPrefix)) {
+      throw new Error(
+        `[FrappeClient] File.file_url does not match is_private=${
+          isPrivate ? 1 : 0
+        }`,
+      );
+    }
+    const fileSegment = decoded.slice(expectedPrefix.length);
+    if (
+      !fileSegment || fileSegment === "." || fileSegment === ".." ||
+      fileSegment.includes("/")
+    ) {
+      throw new Error(
+        "[FrappeClient] File.file_url must contain exactly one safe file segment",
+      );
+    }
+
+    let next: string;
+    try {
+      next = decodeURIComponent(decoded);
+    } catch {
+      throw new Error(
+        "[FrappeClient] File.file_url contains malformed percent encoding",
+      );
+    }
+    if (next === decoded) return fileUrl;
+    decoded = next;
+  }
+
+  throw new Error(
+    "[FrappeClient] File.file_url contains excessive nested percent encoding",
+  );
+}
+
+function sanitizeDownloadFileName(raw: unknown, fileId: string): string {
+  const fallbackId = fileId.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80) ||
+    "file";
+  if (typeof raw !== "string") return `erpnext-${fallbackId}`;
+
+  const normalized = Array.from(raw.normalize("NFC"))
+    .filter((character) => !isUnsafeControl(character))
+    .join("")
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .trim()
+    .replace(/[. ]+$/g, "");
+  const bounded = Array.from(normalized).slice(0, 255).join("");
+  return !bounded || bounded === "." || bounded === ".."
+    ? `erpnext-${fallbackId}`
+    : bounded;
+}
+
+function normalizeMimeType(raw: string | null): string {
+  const candidate = (raw ?? "").split(";", 1)[0].trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i
+      .test(candidate) && candidate !== "application/unknown"
+    ? candidate
+    : "application/octet-stream";
+}
 
 function decodeBase64File(contentBase64: string, maxBytes: number): Uint8Array {
   if (contentBase64.length === 0) {
@@ -232,6 +386,7 @@ export class FrappeClient {
   private authHeader: string;
   private timeoutMs: number;
   private maxUploadBytes: number;
+  private maxDownloadBytes: number;
   private retries: number;
   private retryStatuses: number[];
   private retryBackoffMs: number;
@@ -246,6 +401,15 @@ export class FrappeClient {
     if (!Number.isInteger(this.maxUploadBytes) || this.maxUploadBytes <= 0) {
       throw new Error(
         "[FrappeClient] maxUploadBytes must be a positive integer",
+      );
+    }
+    this.maxDownloadBytes = config.maxDownloadBytes ??
+      DEFAULT_MAX_DOWNLOAD_BYTES;
+    if (
+      !Number.isInteger(this.maxDownloadBytes) || this.maxDownloadBytes <= 0
+    ) {
+      throw new Error(
+        "[FrappeClient] maxDownloadBytes must be a positive integer",
       );
     }
     this.retries = config.retries ?? 3;
@@ -403,6 +567,178 @@ export class FrappeClient {
     return responseBody as T;
   }
 
+  private buildSameOriginUrl(path: string): string {
+    if (!path.startsWith("/")) {
+      throw new Error("[FrappeClient] Download path must be root-relative");
+    }
+    let base: URL;
+    let target: URL;
+    try {
+      base = new URL(this.baseUrl);
+      target = new URL(`${this.baseUrl}${path}`);
+    } catch {
+      throw new Error("[FrappeClient] baseUrl must be a valid absolute URL");
+    }
+    if (target.origin !== base.origin) {
+      throw new Error("[FrappeClient] Refusing a cross-origin download");
+    }
+    return target.href;
+  }
+
+  private async requestBinary(
+    path: string,
+  ): Promise<{ bytes: Uint8Array; mimeType: string }> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= this.retries; attempt++) {
+      try {
+        return await this.requestBinaryOnce(path);
+      } catch (err) {
+        lastError = err;
+        if (attempt === this.retries || !this.isRetryable(err, "GET")) {
+          throw err;
+        }
+        const delay = this.computeBackoff(attempt, err);
+        if (delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+    throw lastError;
+  }
+
+  private async requestBinaryOnce(
+    path: string,
+  ): Promise<{ bytes: Uint8Array; mimeType: string }> {
+    const url = this.buildSameOriginUrl(path);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": this.authHeader,
+          "Accept": "*/*",
+          "Cache-Control": "no-store",
+        },
+        cache: "no-store",
+        redirect: "manual",
+        signal: controller.signal,
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new FrappeAPIError(
+          `Request timed out after ${this.timeoutMs}ms: GET ${path}`,
+          408,
+          null,
+        );
+      }
+      throw new FrappeAPIError(
+        `Network error on GET ${path}: ${(err as Error).message}`,
+        0,
+        null,
+      );
+    }
+
+    try {
+      if (
+        response.redirected || response.type === "opaqueredirect" ||
+        (response.status >= 300 && response.status < 400)
+      ) {
+        try {
+          await response.body?.cancel();
+        } catch {
+          // The redirect rejection is authoritative even if cancellation fails.
+        }
+        throw new FrappeAPIError(
+          `GET ${path} refused an HTTP redirect`,
+          response.status,
+          null,
+        );
+      }
+
+      if (!response.ok) {
+        let rawText: string;
+        try {
+          const errorBytes = await readResponseBytes(
+            response,
+            MAX_ERROR_BODY_BYTES,
+            "Error response body",
+          );
+          rawText = new TextDecoder().decode(errorBytes);
+        } catch (err) {
+          if (!(err instanceof ResponseBodyLimitError)) throw err;
+          rawText = err.message;
+        }
+
+        const contentType = response.headers.get("content-type") ?? "";
+        let responseBody: unknown = rawText;
+        if (contentType.includes("application/json") && rawText.length > 0) {
+          try {
+            responseBody = JSON.parse(rawText);
+          } catch {
+            responseBody = rawText;
+          }
+        }
+
+        let message = response.statusText;
+        if (typeof responseBody === "object" && responseBody !== null) {
+          const body = responseBody as Record<string, unknown>;
+          const baseMessage = (body.message as string) ??
+            (body.exc_type as string) ?? response.statusText;
+          const serverDetails = extractServerMessages(body._server_messages);
+          message = serverDetails
+            ? `${baseMessage}: ${serverDetails}`
+            : baseMessage;
+        } else if (
+          typeof responseBody === "string" && responseBody.length > 0
+        ) {
+          message = responseBody.slice(0, 200);
+        }
+
+        throw new FrappeAPIError(
+          `GET ${path} failed: ${message}`,
+          response.status,
+          responseBody,
+          parseRetryAfter(response.headers.get("retry-after")),
+        );
+      }
+
+      const bytes = await readResponseBytes(
+        response,
+        this.maxDownloadBytes,
+        "Downloaded file",
+      );
+      return {
+        bytes,
+        mimeType: normalizeMimeType(response.headers.get("content-type")),
+      };
+    } catch (err) {
+      if (
+        err instanceof FrappeAPIError ||
+        err instanceof ResponseBodyLimitError
+      ) {
+        throw err;
+      }
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new FrappeAPIError(
+          `Request timed out after ${this.timeoutMs}ms: GET ${path}`,
+          408,
+          null,
+        );
+      }
+      throw new FrappeAPIError(
+        `Network error while reading GET ${path}: ${(err as Error).message}`,
+        0,
+        null,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   // ── Resource CRUD ───────────────────────────────────────────────────────────
 
   /**
@@ -557,6 +893,87 @@ export class FrappeClient {
   }
 
   /**
+   * Download one File row through Frappe's authenticated download handler.
+   *
+   * The caller supplies the expected attachment owner as a confused-deputy
+   * guard. The File row is fetched fresh, its local path is validated, and the
+   * response stream is stopped as soon as it exceeds `maxDownloadBytes`.
+   */
+  async downloadFile(
+    input: FrappeFileDownloadInput,
+  ): Promise<FrappeFileDownload> {
+    const fileId = input.fileId.trim();
+    const attachedToDoctype = input.attachedToDoctype.trim();
+    const attachedToName = input.attachedToName.trim();
+    if (!fileId) {
+      throw new Error("[FrappeClient] fileId must not be empty");
+    }
+    if (!attachedToDoctype) {
+      throw new Error("[FrappeClient] attachedToDoctype must not be empty");
+    }
+    if (!attachedToName) {
+      throw new Error("[FrappeClient] attachedToName must not be empty");
+    }
+
+    // Deliberately bypass get() so neither stale metadata nor a cached File row
+    // can authorize a download after its attachment or privacy changed.
+    const metadata = await this.request<FrappeDocResponse<FrappeFile>>(
+      "GET",
+      `/api/resource/File/${encodeURIComponent(fileId)}`,
+    );
+    const file = metadata.data;
+    if (file.name !== fileId) {
+      throw new Error("[FrappeClient] File response identity mismatch");
+    }
+    if (
+      file.attached_to_doctype !== attachedToDoctype ||
+      file.attached_to_name !== attachedToName
+    ) {
+      throw new Error(
+        "[FrappeClient] File is not attached to the requested document",
+      );
+    }
+    if (file.is_private !== 0 && file.is_private !== 1) {
+      throw new Error("[FrappeClient] File.is_private must be 0 or 1");
+    }
+
+    const fileUrl = validateLocalFileUrl(
+      file.file_url,
+      file.is_private === 1,
+    );
+    const fileSize = (file as Record<string, unknown>).file_size;
+    if (fileSize !== undefined && fileSize !== null) {
+      if (
+        typeof fileSize !== "number" || !Number.isInteger(fileSize) ||
+        fileSize < 0
+      ) {
+        throw new Error(
+          "[FrappeClient] File.file_size must be a non-negative integer",
+        );
+      }
+      if (fileSize > this.maxDownloadBytes) {
+        throw new ResponseBodyLimitError(
+          "File metadata",
+          fileSize,
+          this.maxDownloadBytes,
+        );
+      }
+    }
+
+    const params = new URLSearchParams({ file_url: fileUrl });
+    const download = await this.requestBinary(
+      `/api/method/frappe.handler.download_file?${params.toString()}`,
+    );
+    return {
+      fileId,
+      fileName: sanitizeDownloadFileName(file.file_name, fileId),
+      mimeType: download.mimeType,
+      bytes: download.bytes,
+      isPrivate: file.is_private === 1,
+    };
+  }
+
+  /**
    * Upload file bytes and attach the native File document to another document.
    * POST /api/method/upload_file
    */
@@ -648,6 +1065,7 @@ export function getFrappeClient(): FrappeClient {
   const apiKey = env("ERPNEXT_API_KEY");
   const apiSecret = env("ERPNEXT_API_SECRET");
   const maxUploadBytesRaw = env("ERPNEXT_MAX_UPLOAD_BYTES");
+  const maxDownloadBytesRaw = env("ERPNEXT_MAX_DOWNLOAD_BYTES");
 
   if (!url) {
     throw new Error(
@@ -669,6 +1087,9 @@ export function getFrappeClient(): FrappeClient {
     cache: getCache(),
     maxUploadBytes: maxUploadBytesRaw?.trim()
       ? Number(maxUploadBytesRaw)
+      : undefined,
+    maxDownloadBytes: maxDownloadBytesRaw?.trim()
+      ? Number(maxDownloadBytesRaw)
       : undefined,
   });
   return _client;

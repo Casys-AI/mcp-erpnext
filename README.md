@@ -8,6 +8,14 @@ English | [繁體中文](README.zh-TW.md)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+> [!IMPORTANT]
+> **Installing the 3.1 beta:** pin the prerelease while this UX is being
+> validated. For npm/Node use `npx -y @casys/mcp-erpnext@3.1.0-beta.2`; for Deno
+> use `deno run -A jsr:@casys/mcp-erpnext@3.1.0-beta.2/server`. The moving npm
+> alias is `@next`. Beta 2 adds the generic document viewer and attachment
+> workflows, so test it with the MCP host your users actually run before
+> replacing a stable deployment.
+
 Let any MCP-compatible AI agent operate your [ERPNext](https://erpnext.com) /
 Frappe instance — documents, workflows, and interactive viewers inside the host
 (Claude Desktop, Claude Code, VS Code Copilot, or custom).
@@ -72,10 +80,11 @@ See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
 [latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for
 the current version's highlights.
 
-> **3.1 beta preview:** install with `npx -y @casys/mcp-erpnext@next`. The beta
-> remains compatible with the 3.0 tool surface and progressively enables in-view
-> navigation and active context according to the capabilities advertised by the
-> MCP host.
+> **3.1 beta 2 preview:** the beta keeps the 3.0 tool surface and adds a generic
+> document viewer, child tables, document attachments, in-view navigation, and
+> active context. Features remain capability-gated by the MCP host. In
+> particular, downloads require both proxied server tools and the MCP Apps
+> `downloadFile` capability.
 
 ## Documentation
 
@@ -181,13 +190,14 @@ until it exists. See
 
 ## UI Viewers
 
-Seven interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
+Eight interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
 viewers, registered as `ui://mcp-erpnext/{name}`:
 
 | Viewer           | Description                                                      | Interactive Features                                                                          |
 | ---------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `doc-viewer`     | Generic ERPNext document with fields and child tables            | Capability-gated attachments, typed navigation, guarded Submit/Cancel, and raw JSON fallback. |
 | `doclist-viewer` | Generic document table with sort, filter, pagination, CSV export | Inline details, typed nested navigation, Submit/Cancel, and compact status filters.           |
-| `invoice-viewer` | Sales/Purchase documents with parties, items, totals             | Item, stock, party, and payment navigation plus guarded Submit/Cancel actions.                |
+| `invoice-viewer` | Sales Orders, Sales Invoices, and Quotations with line totals    | Item, stock, party, and payment navigation plus guarded Submit/Cancel actions.                |
 | `stock-viewer`   | Stock balance table with color-coded qty badges                  | Item details, recent movements, stock charts, and stock-entry navigation.                     |
 | `chart-viewer`   | Universal chart renderer (12 types via Recharts)                 | Exact point/series navigation and active-context selection across simple and composed charts. |
 | `kanban-viewer`  | Read-write kanban for Task, Opportunity, Issue                   | Drag-and-drop, inline editing, serialized saves, and typed related-document navigation.       |
@@ -201,6 +211,9 @@ Viewers progressively select the best interaction supported by the host:
 - `serverTools` opens typed list, record, and chart targets inside the current
   viewer through `app.callServerTool()`. Back and breadcrumb navigation restore
   the state of each level.
+- `downloadFile` lets the host confirm and save an attachment returned as a
+  bounded embedded resource. The viewer never opens an ERPNext file URL
+  directly.
 - `updateModelContext` lets chart, KPI, and funnel selections join a bounded
   active-context snapshot. The compact context chip keeps up to eight items and
   lets users remove one item or clear them all. The snapshot contains selected
@@ -219,7 +232,10 @@ that are not loaded.
 Read-only viewers revalidate on focus and through their refresh control.
 Mutations use an explicit read-only request to fetch committed state; a mutating
 tool is never replayed automatically. Overlapping or stale responses are ignored
-when a newer host payload or mutation has already won.
+when a newer host payload or mutation has already won. A confirmed document
+change marks every potentially derived snapshot in the current navigation stack
+as stale; each marker is removed only when that surface has actually been read
+again. Separate MCP Apps are not synchronized automatically in beta 2.
 
 ### Building UI viewers
 
@@ -231,8 +247,11 @@ node build-all.mjs
 
 ## Tools
 
-Each `_list` tool returns interactive results via the doclist-viewer with row
-click, inline detail, and cross-viewer navigation.
+Record `_list` tools return interactive results via the doclist-viewer with row
+click, inline detail, and cross-viewer navigation. The attachment-specific
+`erpnext_file_list` tool does not render doclist-viewer. Generic and dedicated
+document reads use `doc-viewer`, except Sales Order, Sales Invoice, and
+Quotation, which retain the specialized invoice surface.
 
 - **Sales** — Customers, Sales Orders, Invoices, and Quotations with full CRUD,
   Submit, and Cancel.
@@ -247,9 +266,9 @@ click, inline detail, and cross-viewer navigation.
 - **Manufacturing** — BOMs, Work Orders, and Job Cards.
 - **CRM** — Leads, Opportunities, Contacts, and Campaigns.
 - **Assets** — Assets, Movements, Maintenance records, and Categories.
-- **Operations** — Generic CRUD, native assignment, and attachment listing or
-  upload for any DocType (`erpnext_doc_*`, `erpnext_file_list`,
-  `erpnext_file_upload`).
+- **Operations** — Generic CRUD, native assignment, and attachment listing,
+  upload, or host-mediated download for any DocType (`erpnext_doc_*`,
+  `erpnext_file_*`).
 - **Kanban** — Read-write boards for Task, Opportunity, and Issue with
   drag-and-drop.
 - **Analytics** — Charts (bar, area, treemap, radar, scatter, P&L…), KPIs with
@@ -260,13 +279,14 @@ Full per-tool reference with parameters: [`docs/tools.md`](docs/tools.md).
 
 ## Environment Variables
 
-| Variable                   | Required | Description                                                                                                                      |
-| -------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `ERPNEXT_URL`              | Yes      | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`)                    |
-| `ERPNEXT_API_KEY`          | Yes      | API Key from User Settings                                                                                                       |
-| `ERPNEXT_API_SECRET`       | Yes      | API Secret from User Settings                                                                                                    |
-| `ERPNEXT_MAX_UPLOAD_BYTES` | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                                    |
-| `MCP_MRTR_SIGNING_KEY`     | No       | Exactly 64 lowercase hex characters; enables signed ambiguous-link elicitation. **Single-instance deployments only** — see below |
+| Variable                     | Required | Description                                                                                                                      |
+| ---------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_URL`                | Yes      | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`)                    |
+| `ERPNEXT_API_KEY`            | Yes      | API Key from User Settings                                                                                                       |
+| `ERPNEXT_API_SECRET`         | Yes      | API Secret from User Settings                                                                                                    |
+| `ERPNEXT_MAX_UPLOAD_BYTES`   | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                                    |
+| `ERPNEXT_MAX_DOWNLOAD_BYTES` | No       | Maximum attachment-download size in bytes (positive integer; default: 10 MiB)                                                    |
+| `MCP_MRTR_SIGNING_KEY`       | No       | Exactly 64 lowercase hex characters; enables signed ambiguous-link elicitation. **Single-instance deployments only** — see below |
 
 MRTR is opt-in. Without this key, or when the client does not advertise
 elicitation, ambiguous links keep returning the existing actionable ambiguity

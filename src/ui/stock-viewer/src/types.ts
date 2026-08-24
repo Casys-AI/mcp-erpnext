@@ -1,5 +1,5 @@
-import type { UiRefreshRequestData } from "~/shared/refresh";
-import type { NavHint } from "~/shared/jumps";
+import type { UiRefreshRequestData } from "../../shared/refresh.ts";
+import type { NavHint } from "../../shared/jumps.ts";
 
 export interface StockEntry {
   item_code: string;

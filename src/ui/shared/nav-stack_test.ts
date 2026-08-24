@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertNotStrictEquals } from "@std/assert";
+import type { DocumentChangeEvent } from "./document-events.ts";
 import {
   clearStale,
   createStack,
@@ -14,6 +15,7 @@ import {
   popToLevel,
   pushLevel,
   reconcileRoot,
+  reportDocumentChange,
   viewerRootKey,
 } from "./nav-stack.ts";
 
@@ -251,6 +253,93 @@ Deno.test("markStale / clearStale - tous les niveaux marqués, un seul effacé",
   assertEquals(cleared.levels[1].stale, undefined);
   assertEquals(cleared.levels[0].stale?.at, "14:02");
   assertEquals(clearStale(cleared, cleared.levels[1].id), cleared);
+});
+
+Deno.test("reportDocumentChange - invalide tous les snapshots sans perdre navigation ni UI", () => {
+  const rootBody = { rows: [{ name: "SINV-00046", total: 42 }] };
+  const parentBody = { document: { name: "SINV-00046", docstatus: 0 } };
+  const childBody = { attachments: [{ name: "invoice.pdf" }] };
+  let stack = createStack({
+    title: "Factures",
+    kind: "root",
+    origin: "list",
+    key: "invoice-list",
+    body: rootBody,
+    ui: { sortKey: "total", sortDir: "desc", page: 2 },
+  });
+  stack = pushLevel(stack, {
+    title: "SINV-00046",
+    kind: "record",
+    key: "invoice:SINV-00046",
+    body: parentBody,
+    ui: { expandedId: "items", searchOpen: true },
+  });
+  stack = pushLevel(stack, {
+    title: "Pièces jointes",
+    kind: "list",
+    key: "attachments:SINV-00046",
+    body: childBody,
+    ui: { page: 3, filter: "invoice" },
+  });
+  const before = stack;
+  const event = Object.freeze<DocumentChangeEvent>({
+    doctype: "Sales Invoice",
+    name: "SINV-00046",
+    mutation: "submit",
+    committedAt: "2026-08-24T06:02:03.456Z",
+    source: "document-viewer",
+  });
+
+  const changed = reportDocumentChange(stack, "14:02", event);
+
+  assertEquals(changed.levels.map((level) => level.stale), [
+    { at: "14:02", subject: "SINV-00046", documentChange: event },
+    { at: "14:02", subject: "SINV-00046", documentChange: event },
+    { at: "14:02", subject: "SINV-00046", documentChange: event },
+  ]);
+  assertEquals(changed.levels.map((level) => level.body), [
+    rootBody,
+    parentBody,
+    childBody,
+  ]);
+  assertEquals(changed.levels.map((level) => level.ui), [
+    { sortKey: "total", sortDir: "desc", page: 2 },
+    { expandedId: "items", searchOpen: true },
+    { page: 3, filter: "invoice" },
+  ]);
+  assertEquals(changed.rootIdentity, before.rootIdentity);
+  assertEquals(changed.nextId, before.nextId);
+  assertEquals(event, {
+    doctype: "Sales Invoice",
+    name: "SINV-00046",
+    mutation: "submit",
+    committedAt: "2026-08-24T06:02:03.456Z",
+    source: "document-viewer",
+  });
+  assertNotStrictEquals(changed.levels[0].stale?.documentChange, event);
+
+  const parentId = changed.levels[1].id;
+  const cleared = clearStale(changed, parentId);
+  assertEquals(cleared.levels[0].stale?.documentChange, event);
+  assertEquals(cleared.levels[1].stale, undefined);
+  assertEquals(cleared.levels[2].stale?.documentChange, event);
+  assertEquals(cleared.levels[1].body, parentBody);
+  assertEquals(cleared.levels[1].ui, {
+    expandedId: "items",
+    searchOpen: true,
+  });
+
+  const reset = reconcileRoot(cleared, {
+    title: "Commandes",
+    kind: "root",
+    origin: "list",
+    key: "order-list",
+    body: { rows: [] },
+  });
+  assertEquals(reset.levels.length, 1);
+  assertEquals(reset.levels[0].title, "Commandes");
+  assertEquals(reset.levels[0].stale, undefined);
+  assertEquals(reset.nextId, 1);
 });
 
 Deno.test("pushLevel - un niveau repoussé après un retour n'hérite pas de l'id de l'ancien", () => {

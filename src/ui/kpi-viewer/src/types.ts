@@ -1,5 +1,5 @@
-import type { UiRefreshRequestData } from "~/shared/refresh";
-import type { NavHint } from "~/shared/jumps";
+import type { UiRefreshRequestData } from "../../shared/refresh.ts";
+import type { NavHint } from "../../shared/jumps.ts";
 
 export interface KpiData {
   label: string;
@@ -17,6 +17,8 @@ export interface KpiData {
   color?: string;
   icon?: string;
   refreshRequest?: UiRefreshRequestData;
+  /** Outils exacts autorisés par le registre serveur pour ce viewer. */
+  _availableTools?: string[];
   _drillDown?: string;
   _trendDrillDown?: string;
   /** Sauts de pile : le nombre ouvre une liste, la courbe un graphique. */

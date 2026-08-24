@@ -8,7 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveEmployee, resolveLink } from "../api/resolve.ts";
 
 export const hrTools: ErpNextTool[] = [
@@ -74,6 +74,7 @@ export const hrTools: ErpNextTool[] = [
   {
     name: "erpnext_employee_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Employee by name/ID (e.g. HR-EMP-00001). Returns all fields.",
     category: "hr",
@@ -103,7 +104,7 @@ export const hrTools: ErpNextTool[] = [
         { allowPartialMatch: false, inputPath: "name" },
       );
       const doc = await ctx.client.get("Employee", employeeId);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Employee" } };
     },
   },
 
@@ -269,6 +270,7 @@ export const hrTools: ErpNextTool[] = [
   {
     name: "erpnext_leave_application_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Leave Application by name. Returns full document.",
     category: "hr",
@@ -287,7 +289,7 @@ export const hrTools: ErpNextTool[] = [
         "Leave Application",
         input.name as string,
       );
-      return { data: doc };
+      return { data: { ...doc, doctype: "Leave Application" } };
     },
   },
 
@@ -447,6 +449,7 @@ export const hrTools: ErpNextTool[] = [
   {
     name: "erpnext_salary_slip_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Salary Slip by name/ID. Returns all fields including earnings and deductions.",
     category: "hr",
@@ -465,7 +468,7 @@ export const hrTools: ErpNextTool[] = [
         throw new Error("[erpnext_salary_slip_get] 'name' is required");
       }
       const doc = await ctx.client.get("Salary Slip", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Salary Slip" } };
     },
   },
 

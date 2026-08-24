@@ -16,6 +16,10 @@ import {
 import {
   cannedResult,
   initialResult,
+  isCannedDownloadToolResult,
+  resetCannedState,
+  summarizeDownloadContents,
+  toolArgumentsForLog,
   type ViewerKey,
   withDevViewerTools,
 } from "./canned.ts";
@@ -64,6 +68,7 @@ async function mount() {
   const profile = selectedProfile();
   const hostCapabilities = capabilitiesForProfile(profile);
   const channels = channelsForProfile(profile);
+  resetCannedState();
   log.innerHTML = "<h2>journal hôte</h2>";
   status.textContent = "chargement…";
   note(
@@ -108,7 +113,11 @@ async function mount() {
   bridge.oncalltool = async (params) => {
     const args = (params.arguments ?? {}) as Record<string, unknown>;
     const payload = cannedResult(viewer, params.name, args);
-    note("tool", `canal serverTools · tools/call ${params.name}`, args);
+    note(
+      "tool",
+      `canal serverTools · tools/call ${params.name}`,
+      toolArgumentsForLog(args),
+    );
     if (payload === null) {
       note("info", `${params.name} : non simulé → isError`);
       return {
@@ -120,7 +129,27 @@ async function mount() {
         }],
       };
     }
+    // Le backend renvoie déjà ce résultat au format MCP : le retransformer en
+    // texte dupliquerait le blob et empêcherait le viewer de l'extraire.
+    if (isCannedDownloadToolResult(payload)) return payload;
     return textResult(withDevViewerTools(viewer, payload));
+  };
+  bridge.ondownloadfile = async (params) => {
+    const files = summarizeDownloadContents(params.contents);
+    if (!("downloadFile" in hostCapabilities)) {
+      note(
+        "info",
+        "canal downloadFile refusé · capacité non annoncée",
+        { fichiers: files },
+      );
+      return { isError: true };
+    }
+    note(
+      "info",
+      "canal downloadFile · ui/download-file",
+      { fichiers: files },
+    );
+    return {};
   };
   bridge.onupdatemodelcontext = async (params) => {
     note(

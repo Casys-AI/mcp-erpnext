@@ -93,6 +93,7 @@
       <select id="viewer">
         <option value="invoice">invoice-viewer</option>
         <option value="doclist">doclist-viewer</option>
+        <option value="doc">doc-viewer</option>
         <option value="kanban">kanban-viewer</option>
         <option value="stock">stock-viewer</option>
         <option value="funnel">funnel-viewer</option>
@@ -101,9 +102,11 @@
       </select>
       <select id="caps">
         <option value="full">
-          profil : full (serverTools + contexte + message)
+          profil : full (serverTools + download + contexte + message)
         </option>
-        <option value="serverTools-only">profil : serverTools-only</option>
+        <option value="serverTools-only">
+          profil : serverTools-only (download refusé)
+        </option>
         <option value="context-only">profil : context-only</option>
         <option value="message-only">
           profil : message-only (ancien hôte)

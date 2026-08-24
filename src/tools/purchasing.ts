@@ -9,7 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveLink, resolveSupplier } from "../api/resolve.ts";
 
 export const purchasingTools: ErpNextTool[] = [
@@ -80,6 +80,7 @@ export const purchasingTools: ErpNextTool[] = [
   {
     name: "erpnext_supplier_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single ERPNext supplier by name (ID). Returns all fields including contact details.",
     category: "purchasing",
@@ -95,7 +96,7 @@ export const purchasingTools: ErpNextTool[] = [
         throw new Error("[erpnext_supplier_get] 'name' is required");
       }
       const doc = await ctx.client.get("Supplier", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Supplier" } };
     },
   },
 
@@ -239,6 +240,7 @@ export const purchasingTools: ErpNextTool[] = [
   {
     name: "erpnext_purchase_order_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Purchase Order by name (e.g. PO-00001). Returns full document with line items.",
     category: "purchasing",
@@ -257,7 +259,7 @@ export const purchasingTools: ErpNextTool[] = [
         throw new Error("[erpnext_purchase_order_get] 'name' is required");
       }
       const doc = await ctx.client.get("Purchase Order", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Purchase Order" } };
     },
   },
 
@@ -428,6 +430,7 @@ export const purchasingTools: ErpNextTool[] = [
   {
     name: "erpnext_purchase_invoice_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Purchase Invoice by name (e.g. PINV-00001). Returns full document with line items.",
     category: "purchasing",
@@ -449,7 +452,7 @@ export const purchasingTools: ErpNextTool[] = [
         "Purchase Invoice",
         input.name as string,
       );
-      return { data: doc };
+      return { data: { ...doc, doctype: "Purchase Invoice" } };
     },
   },
 
@@ -532,6 +535,7 @@ export const purchasingTools: ErpNextTool[] = [
   {
     name: "erpnext_purchase_receipt_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Purchase Receipt by name (e.g. MAT-PRE-00001). Returns full document with received items.",
     category: "purchasing",
@@ -553,7 +557,7 @@ export const purchasingTools: ErpNextTool[] = [
         "Purchase Receipt",
         input.name as string,
       );
-      return { data: doc };
+      return { data: { ...doc, doctype: "Purchase Receipt" } };
     },
   },
 

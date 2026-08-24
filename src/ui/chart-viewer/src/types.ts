@@ -75,6 +75,8 @@ export interface ChartData {
   treeData?: TreeNode[];
   height?: number;
   refreshRequest?: UiRefreshRequestData;
+  /** Outils exacts autorisés par le registre serveur pour ce viewer. */
+  _availableTools?: string[];
   /** sendMessage template — `{label}` is replaced with the clicked label */
   _drillDown?: string;
 }

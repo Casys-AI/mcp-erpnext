@@ -9,7 +9,7 @@
  * la vue (DoclistBody) plutôt que d'envoyer un message au chat.
  * Sans serverTools, le comportement reste strictement identique à avant.
  */
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
 import { CasysCredit, cx, StateMessage, ViewerShell } from "~/shared/ui";
@@ -613,16 +613,28 @@ function FunnelContent(
   {
     data,
     error,
-    refreshing: _refreshing,
+    refreshing,
     fixture,
-    onRefresh: _onRefresh,
+    rootRefreshRequest,
+    rootFreshEvent,
+    rootMutationEvent,
+    canRefreshRoot,
+    onRefresh,
+    onMutationInvalidate,
+    onMutationRefresh,
     onError,
   }: {
     data: FunnelData;
     error: string | null;
     refreshing: boolean;
-    onRefresh: () => void;
     fixture: boolean;
+    rootRefreshRequest: UiRefreshRequestData | null;
+    rootFreshEvent: number;
+    rootMutationEvent: number;
+    canRefreshRoot: boolean;
+    onRefresh: () => void;
+    onMutationInvalidate: () => void;
+    onMutationRefresh?: () => void;
     onError: (msg: string | null) => void;
   },
 ) {
@@ -630,7 +642,7 @@ function FunnelContent(
   const { ref: containerRef, layout } = useViewerLayout<HTMLDivElement>();
 
   // ── Navigation (pile de niveaux) ──────────────────────────────────────
-  const rootKey = viewerRootKey("funnel", data.refreshRequest, {
+  const rootKey = viewerRootKey("funnel", rootRefreshRequest ?? undefined, {
     title: data.title,
   });
   const viewerNav = useViewerNav(app, {
@@ -641,6 +653,12 @@ function FunnelContent(
   }, { fixture });
   const nav = viewerNav.nav;
   const { current: navCurrent, isRoot } = nav;
+  useLayoutEffect(() => {
+    const root = nav.stack.levels[0];
+    if (rootFreshEvent > rootMutationEvent && root?.stale) {
+      nav.clearStale(root.id);
+    }
+  }, [rootFreshEvent, rootMutationEvent]);
 
   // jumpsEnabled = false en fixture (pas d'outils) ou si l'hôte ne relaie pas.
   const { jumpsEnabled } = viewerNav;
@@ -790,6 +808,35 @@ function FunnelContent(
                 )}
               </div>
               <div class="flex min-w-0 shrink-0 items-center gap-2">
+                {navCurrent.stale && (
+                  <div
+                    role="status"
+                    title={t("nav.stale_title")}
+                    class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+                  >
+                    <span
+                      aria-hidden="true"
+                      class="size-[5px] rounded-full bg-warn"
+                    />
+                    {isWide && (
+                      <span>
+                        {t("nav.stale_values", { at: navCurrent.stale.at })}
+                      </span>
+                    )}
+                    {canRefreshRoot && (
+                      <button
+                        type="button"
+                        disabled={refreshing}
+                        onClick={onRefresh}
+                        aria-label={t("nav.refresh")}
+                        title={t("nav.refresh")}
+                        class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                      >
+                        {refreshing ? "…" : "↻"}
+                      </button>
+                    )}
+                  </div>
+                )}
                 <ActiveContextChip
                   compact={!isWide}
                   selections={activeContext.selections}
@@ -873,6 +920,9 @@ function FunnelContent(
         onAsk={ask}
         onError={onError}
         onMutated={nav.markStale}
+        onDocumentChanged={nav.reportDocumentChange}
+        onMutationInvalidate={onMutationInvalidate}
+        onMutationRefresh={onMutationRefresh}
         onRefresh={() => void nav.refreshLevel()}
       >
         {/* Contenu racine — funnel chart */}
@@ -928,10 +978,13 @@ export function FunnelViewer() {
   );
   const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
+  const [rootFreshEvent, setRootFreshEvent] = useState(0);
+  const [rootMutationEvent, setRootMutationEvent] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const dataRef = useRef<FunnelData | null>(fixture ? FUNNEL_FIXTURE : null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshSequenceRef = useRef(createUiRefreshSequence());
+  const rootEventRef = useRef(0);
   const lastRefreshStartedAtRef = useRef(0);
 
   function hydrateData(nextData: FunnelData) {
@@ -941,6 +994,7 @@ export function FunnelViewer() {
       refreshRequestRef.current,
     );
     setData(nextData);
+    setRootFreshEvent(++rootEventRef.current);
   }
 
   function consumeToolResult(result: ToolResultPayload): boolean {
@@ -960,28 +1014,14 @@ export function FunnelViewer() {
     }
   }
 
-  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+  async function requestRefresh(
+    options: { ignoreInterval?: boolean; force?: boolean } = {},
+  ) {
     if (fixture) return false;
     const request = resolveUiRefreshRequest(
       dataRef.current,
       refreshRequestRef.current,
     );
-    const sequence = refreshSequenceRef.current;
-    if (
-      !canRequestUiRefresh({
-        request,
-        visibilityState: typeof document === "undefined"
-          ? "visible"
-          : document.visibilityState,
-        refreshInFlight: sequence.inFlight !== null,
-        now: Date.now(),
-        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
-        minIntervalMs: FUNNEL_REFRESH_INTERVAL_MS,
-      }, options)
-    ) {
-      return false;
-    }
-
     if (
       !request ||
       !canCallViewerTool(
@@ -993,7 +1033,32 @@ export function FunnelViewer() {
       return false;
     }
 
-    const started = beginUiRefresh(sequence);
+    const sequence = refreshSequenceRef.current;
+    if (sequence.inFlight !== null) {
+      if (options.force) {
+        refreshSequenceRef.current = beginUiRefresh(sequence, {
+          force: true,
+        }).state;
+      }
+      return false;
+    }
+    const forced = Boolean(options.force || sequence.pendingForced);
+    if (
+      !canRequestUiRefresh({
+        request,
+        visibilityState: typeof document === "undefined"
+          ? "visible"
+          : document.visibilityState,
+        refreshInFlight: false,
+        now: Date.now(),
+        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+        minIntervalMs: FUNNEL_REFRESH_INTERVAL_MS,
+      }, { ignoreInterval: options.ignoreInterval || forced })
+    ) {
+      return false;
+    }
+
+    const started = beginUiRefresh(sequence, { force: forced });
     if (started.generation === null) return false;
     refreshSequenceRef.current = started.state;
     lastRefreshStartedAtRef.current = Date.now();
@@ -1028,6 +1093,9 @@ export function FunnelViewer() {
       }
     }
     setRefreshing(false);
+    if (completed.runPending) {
+      void requestRefresh({ ignoreInterval: true, force: true });
+    }
     return succeeded;
   }
 
@@ -1086,13 +1154,38 @@ export function FunnelViewer() {
     );
   }
 
+  const rootRefreshRequest = resolveUiRefreshRequest(
+    data,
+    refreshRequestRef.current,
+  );
+  const canRefreshRoot = Boolean(
+    !fixture &&
+      rootRefreshRequest &&
+      app.getHostCapabilities()?.serverTools &&
+      readAvailableTools(data)?.includes(rootRefreshRequest.toolName),
+  );
+
   return (
     <FunnelContent
       data={data}
       error={error}
       refreshing={refreshing}
       fixture={fixture}
-      onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+      rootRefreshRequest={rootRefreshRequest}
+      rootFreshEvent={rootFreshEvent}
+      rootMutationEvent={rootMutationEvent}
+      canRefreshRoot={canRefreshRoot}
+      onRefresh={() =>
+        void requestRefresh({ ignoreInterval: true, force: true })}
+      onMutationInvalidate={() => {
+        setRootMutationEvent(++rootEventRef.current);
+        refreshSequenceRef.current = invalidateUiRefresh(
+          refreshSequenceRef.current,
+        );
+      }}
+      onMutationRefresh={canRefreshRoot
+        ? () => void requestRefresh({ ignoreInterval: true, force: true })
+        : undefined}
       onError={setError}
     />
   );

@@ -4,16 +4,100 @@ import {
   chartOf,
   chartSeriesFormat,
   chartSeriesType,
+  documentChangeForTool,
   listOf,
   recordOf,
 } from "./bodies.ts";
 
-Deno.test("recordOf - { data: {...} }, l'objet lui-même, jamais un tableau", () => {
-  assertEquals(recordOf({ data: { name: "X" } }), { name: "X" });
-  assertEquals(recordOf({ name: "X" }), { name: "X" });
+Deno.test("recordOf - conserve l'enveloppe et les capacités exactes de la fiche", () => {
+  const payload = {
+    data: {
+      doctype: "Sales Invoice",
+      name: "SINV-1",
+      items: [{ item_code: "A", qty: 2 }],
+    },
+    _availableTools: ["erpnext_doc_submit", "erpnext_file_list"],
+    _sendMessageHints: [{
+      label: "Payments",
+      tool: "erpnext_doc_list",
+      args: { doctype: "Payment Entry" },
+      kind: "list" as const,
+    }],
+    refreshRequest: {
+      toolName: "erpnext_sales_invoice_get",
+      arguments: { name: "SINV-1" },
+    },
+  };
+
+  assertEquals(recordOf(payload), {
+    document: payload.data,
+    doctype: "Sales Invoice",
+    name: "SINV-1",
+    availableTools: ["erpnext_doc_submit", "erpnext_file_list"],
+    sendMessageHints: payload._sendMessageHints,
+    refreshRequest: payload.refreshRequest,
+  });
+});
+
+Deno.test("recordOf - complète seulement l'identité d'un ancien détail local", () => {
+  assertEquals(
+    recordOf({ subject: "Legacy" }, {
+      doctype: "Task",
+      name: "TASK-1",
+    }),
+    {
+      document: {
+        subject: "Legacy",
+        doctype: "Task",
+        name: "TASK-1",
+      },
+      doctype: "Task",
+      name: "TASK-1",
+    },
+  );
+  assertEquals(recordOf({ name: "X" }), null);
   assertEquals(recordOf({ data: [1] }), null);
   assertEquals(recordOf(null), null);
   assertEquals(recordOf("x"), null);
+});
+
+Deno.test("documentChangeForTool - submit/cancel seulement, avec identité enfant", () => {
+  const envelope = { doctype: "Sales Invoice", name: "SINV-1" };
+  assertEquals(
+    documentChangeForTool(
+      envelope,
+      "erpnext_doc_submit",
+      "2026-08-24T06:02:03.456Z",
+      "doclist.inline-detail",
+    ),
+    {
+      doctype: "Sales Invoice",
+      name: "SINV-1",
+      mutation: "submit",
+      committedAt: "2026-08-24T06:02:03.456Z",
+      source: "doclist.inline-detail",
+    },
+  );
+  assertEquals(
+    documentChangeForTool(
+      envelope,
+      "erpnext_doc_cancel",
+      "2026-08-24T06:02:04.000Z",
+    )?.mutation,
+    "cancel",
+  );
+  assertEquals(
+    documentChangeForTool(
+      envelope,
+      "erpnext_doc_update",
+      "2026-08-24T06:02:05.000Z",
+    ),
+    null,
+  );
+  assertEquals(
+    documentChangeForTool(envelope, "erpnext_doc_submit", "not-a-date"),
+    null,
+  );
 });
 
 Deno.test("chartOf - labels + values devient une série simple", () => {

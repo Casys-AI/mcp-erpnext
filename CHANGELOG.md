@@ -2,6 +2,53 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.1.0-beta.2] - 2026-08-24
+
+### Added
+
+- **Generic `doc-viewer` for ERPNext records.** Twenty-six dedicated `*_get`
+  tools and `erpnext_doc_get` now open a responsive document surface with scalar
+  fields, long text, progress, system metadata, and ERPNext child tables. Sales
+  Order, Sales Invoice, and Quotation keep their specialized invoice viewer.
+- **Attachment workflows inside document surfaces.** Users can list and upload
+  private-by-default files, choose public visibility explicitly, and download an
+  attachment through the MCP Apps host. Uploads are single-flight and only
+  report success after the canonical File list has been read again.
+- **`erpnext_file_download`**, an app-only read tool. It re-fetches the File
+  document, verifies its exact parent and privacy, accepts only a local Frappe
+  file path, performs an authenticated no-redirect download, and returns one
+  bounded embedded resource. Tool count increases from 125 to 126; viewer count
+  increases from seven to eight.
+- **Transport-neutral document change events.** A confirmed update, submit,
+  cancel, or attachment addition carries its canonical DocType/name and marks
+  open navigation snapshots stale without discarding their UI state.
+
+### Changed
+
+- Drill-down record results retain their complete viewer envelope, including the
+  server-filtered tool manifest, navigation hints, and refresh request. Child
+  actions no longer inherit capabilities from the parent list.
+- Mutations invalidate older reads immediately, keep the affected action locked,
+  and clear a stale marker only after the corresponding surface has accepted a
+  canonical re-read. Hidden parent or child snapshots remain marked stale until
+  they are actually refreshed.
+- File downloads default to a 10 MiB decoded limit, independently configurable
+  with `ERPNEXT_MAX_DOWNLOAD_BYTES`. Uploads retain their separate
+  `ERPNEXT_MAX_UPLOAD_BYTES` limit.
+
+### Beta compatibility
+
+- No existing tool was removed and no existing input schema was made
+  incompatible. The new download tool is hidden from model tool lists and is
+  callable only by an MCP App.
+- This beta intentionally changes the presentation of generic and dedicated
+  record reads from raw JSON to `doc-viewer` in compatible hosts. Hosts without
+  MCP Apps continue to receive the normal tool result.
+- Synchronization is currently local to one viewer navigation stack. The event
+  contract can later be transported by a composition host, but beta 2 does not
+  claim automatic synchronization across separate viewers, conversations, or
+  external ERPNext edits.
+
 ## [3.1.0-beta.1] - 2026-08-24
 
 ### Added

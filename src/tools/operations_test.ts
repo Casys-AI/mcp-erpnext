@@ -27,6 +27,13 @@ function makeMockClient(overrides: Record<string, AnyFn> = {}): FrappeClient {
     delete: async () => {},
     callMethod: async () => null,
     invalidate: () => {},
+    downloadFile: async () => ({
+      fileId: "FILE-001",
+      fileName: "report.pdf",
+      mimeType: "application/pdf",
+      bytes: new Uint8Array([1]),
+      isPrivate: true,
+    }),
     ...overrides,
   };
   return mock as unknown as FrappeClient;
@@ -406,6 +413,126 @@ Deno.test("erpnext_file_upload - is marked destructive", () => {
     getTool("erpnext_file_upload").annotations?.destructiveHint,
     true,
   );
+});
+
+// ── erpnext_file_download ──────────────────────────────────────────────────
+
+Deno.test("erpnext_file_download - is read-only, app-only, and rejects extra schema properties", () => {
+  const tool = getTool("erpnext_file_download");
+  assertEquals(tool.annotations?.readOnlyHint, true);
+  assertEquals(tool._meta?.ui?.visibility, ["app"]);
+  assertEquals(tool._meta?.ui?.resourceUri, "ui://mcp-erpnext/doc-viewer");
+
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+  assertEquals(
+    validator.validate(tool.name, {
+      file_id: "FILE-001",
+      attached_to_doctype: "Task",
+      attached_to_name: "TASK-001",
+      file_url: "https://evil.example/report.pdf",
+    }).valid,
+    false,
+  );
+});
+
+Deno.test("erpnext_file_download - validates identifiers before delegation", async () => {
+  const tool = getTool("erpnext_file_download");
+  for (
+    const input of [
+      { attached_to_doctype: "Task", attached_to_name: "TASK-001" },
+      {
+        file_id: " ",
+        attached_to_doctype: "Task",
+        attached_to_name: "TASK-001",
+      },
+      {
+        file_id: "FILE-001",
+        attached_to_doctype: 42,
+        attached_to_name: "TASK-001",
+      },
+    ]
+  ) {
+    await assertRejects(
+      () => tool.handler(input, makeCtx(makeMockClient())),
+      Error,
+      "must be a non-empty string",
+    );
+  }
+});
+
+Deno.test("erpnext_file_download - returns one embedded blob with one base64 copy", async () => {
+  let captured: Record<string, unknown> = {};
+  const result = await getTool("erpnext_file_download").handler(
+    {
+      file_id: " FILE-001 ",
+      attached_to_doctype: " Task ",
+      attached_to_name: " TASK-001 ",
+    },
+    makeCtx(makeMockClient({
+      downloadFile: async (input: Record<string, unknown>) => {
+        captured = input;
+        return {
+          fileId: "FILE-001",
+          fileName: "Q1 report.pdf",
+          mimeType: "application/pdf",
+          bytes: new Uint8Array([0, 255]),
+          isPrivate: true,
+        };
+      },
+    })),
+  ) as {
+    content: Array<{
+      type: string;
+      text?: string;
+      resource?: { uri: string; mimeType: string; blob: string };
+    }>;
+  };
+
+  assertEquals(captured, {
+    fileId: "FILE-001",
+    attachedToDoctype: "Task",
+    attachedToName: "TASK-001",
+  });
+  assertEquals(result.content.length, 2);
+  assertEquals(result.content[0].type, "text");
+  assertEquals(
+    result.content.filter((block) => block.type === "resource").length,
+    1,
+  );
+  assertEquals(result.content[1].resource, {
+    uri: "file:///Q1%20report.pdf",
+    mimeType: "application/pdf",
+    blob: "AP8=",
+  });
+  assertEquals(JSON.stringify(result).split("AP8=").length - 1, 1);
+});
+
+// ── erpnext_doc_get ────────────────────────────────────────────────────────
+
+Deno.test("erpnext_doc_get - binds DOC_META and normalizes doctype without replacing the returned name", async () => {
+  const tool = getTool("erpnext_doc_get");
+  assertEquals(tool._meta?.ui?.resourceUri, "ui://mcp-erpnext/doc-viewer");
+
+  let getArgs: unknown[] = [];
+  const result = await tool.handler(
+    { doctype: " Task ", name: " TASK-001 " },
+    makeCtx(makeMockClient({
+      get: async (...args: unknown[]) => {
+        getArgs = args;
+        return {
+          name: "SERVER-NAME",
+          doctype: "Wrong Type",
+          subject: "Preserved",
+        };
+      },
+    })),
+  ) as { data: Record<string, unknown> };
+
+  assertEquals(getArgs, ["Task", "TASK-001"]);
+  assertEquals(result.data.name, "SERVER-NAME");
+  assertEquals(result.data.doctype, "Task");
+  assertEquals(result.data.subject, "Preserved");
 });
 
 // ── erpnext_doc_list ────────────────────────────────────────────────────────

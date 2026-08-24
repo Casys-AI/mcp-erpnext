@@ -1,15 +1,17 @@
 # Environment Variables
 
-Read at two different moments, which matters when diagnosing a failure:
+Read timing depends on the subsystem, which matters when diagnosing a failure:
 
-- **ERPNext connection variables** are read lazily, on the first tool call. The
-  server starts and lists its tools without them; the failure surfaces when a
-  tool first needs the client.
-- **Everything else** is read at process startup.
+- **ERPNext connection and file-limit variables** are read when the singleton
+  ERPNext client is first created. This is normally the first tool call, but a
+  configured cache warm-up can create it during startup.
+- **HTTP authentication and MRTR variables** are read at process startup.
+- **Cache variables are lazy:** `MCP_CACHE_ENABLED` is read when the cache
+  singleton is first created, while `MCP_CACHE_TTL_MS` is read for each Frappe
+  document/list cache insertion. `MCP_CACHE_WARM_TOOLS` is read during startup.
 
-Where a value is unrecognised, the listed default applies. The three ERPNext
-connection variables are the exception — a missing one throws, rather than
-falling back.
+Invalid-value behaviour is documented per variable below; there is no global
+fallback rule.
 
 ---
 
@@ -17,12 +19,13 @@ falling back.
 
 Always required, regardless of transport (stdio or HTTP).
 
-| Variable                   | Type                 | Default             | Required | Notes                                                                                                                  |
-| -------------------------- | -------------------- | ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `ERPNEXT_URL`              | string (URL)         | —                   | **Yes**  | Base URL of the ERPNext instance, e.g. `http://localhost:8000`. No trailing slash.                                     |
-| `ERPNEXT_API_KEY`          | string               | —                   | **Yes**  | API key from ERPNext User Settings → API Access.                                                                       |
-| `ERPNEXT_API_SECRET`       | string               | —                   | **Yes**  | API secret paired with the key above.                                                                                  |
-| `ERPNEXT_MAX_UPLOAD_BYTES` | non-negative integer | `10485760` (10 MiB) | No       | Upper bound in bytes for file uploads. Must be a positive integer; invalid or missing values fall back to the default. |
+| Variable                     | Type             | Default             | Required | Notes                                                                                                                     |
+| ---------------------------- | ---------------- | ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_URL`                | string (URL)     | —                   | **Yes**  | Base URL of the ERPNext instance, e.g. `http://localhost:8000`. No trailing slash.                                        |
+| `ERPNEXT_API_KEY`            | string           | —                   | **Yes**  | API key from ERPNext User Settings → API Access.                                                                          |
+| `ERPNEXT_API_SECRET`         | string           | —                   | **Yes**  | API secret paired with the key above.                                                                                     |
+| `ERPNEXT_MAX_UPLOAD_BYTES`   | positive integer | `10485760` (10 MiB) | No       | Upper bound in decoded bytes for file uploads. Missing or blank uses the default; an invalid value fails client creation. |
+| `ERPNEXT_MAX_DOWNLOAD_BYTES` | positive integer | `10485760` (10 MiB) | No       | Upper bound in bytes for attachment downloads. Missing or blank uses the default; an invalid value fails client creation. |
 
 ---
 
@@ -64,8 +67,9 @@ set.
 ---
 
 <!-- Maintainer source references (not user-facing):
-  ERPNEXT_URL / ERPNEXT_API_KEY / ERPNEXT_API_SECRET / ERPNEXT_MAX_UPLOAD_BYTES:
-    src/api/frappe-client.ts:102 (DEFAULT_MAX_UPLOAD_BYTES), :647-673 (getFrappeClient)
+  ERPNEXT_URL / ERPNEXT_API_KEY / ERPNEXT_API_SECRET /
+  ERPNEXT_MAX_UPLOAD_BYTES / ERPNEXT_MAX_DOWNLOAD_BYTES:
+    src/api/frappe-client.ts (file limits and getFrappeClient)
   MCP_MRTR_SIGNING_KEY:
     src/mrtr/config.ts:23-32 (loadMrtrConfig, regex validation)
   MCP_AUTH_TOKEN / MCP_AUTH_TOKENS / MCP_OAUTH_JWKS_URL:

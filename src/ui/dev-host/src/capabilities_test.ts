@@ -8,6 +8,7 @@ import {
 Deno.test("dev-host capabilities - maps the five profiles exactly", () => {
   assertEquals(capabilitiesForProfile("full"), {
     serverTools: {},
+    downloadFile: {},
     updateModelContext: { text: {} },
     message: { text: {} },
   });
@@ -34,6 +35,7 @@ Deno.test("dev-host capabilities - preserves legacy URL aliases", () => {
 Deno.test("dev-host capabilities - exposes journal channel names", () => {
   assertEquals(channelsForProfile("full"), [
     "serverTools",
+    "downloadFile",
     "updateModelContext",
     "message",
   ]);
@@ -41,4 +43,17 @@ Deno.test("dev-host capabilities - exposes journal channel names", () => {
   assertEquals(channelsForProfile("context-only"), ["updateModelContext"]);
   assertEquals(channelsForProfile("message-only"), ["message"]);
   assertEquals(channelsForProfile("none"), []);
+});
+
+Deno.test("dev-host capabilities - keeps download fail-closed outside full", () => {
+  for (
+    const profile of [
+      "serverTools-only",
+      "context-only",
+      "message-only",
+      "none",
+    ] as const
+  ) {
+    assertEquals("downloadFile" in capabilitiesForProfile(profile), false);
+  }
 });

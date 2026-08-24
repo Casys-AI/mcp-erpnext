@@ -1022,6 +1022,11 @@ function isDoclistViewer(result: UiRefreshableResult): boolean {
   return uri === "ui://mcp-erpnext/doclist-viewer";
 }
 
+function isDocViewer(result: UiRefreshableResult): boolean {
+  const uri = result._meta?.ui?.resourceUri;
+  return uri === "ui://mcp-erpnext/doc-viewer";
+}
+
 /**
  * Appels codés dans les viewers, donc invisibles dans les hints dynamiques.
  * La liste envoyée reste bornée à la surface du viewer courant : elle ne
@@ -1031,8 +1036,16 @@ const VIEWER_TOOL_CANDIDATES: Record<string, readonly string[]> = {
   "ui://mcp-erpnext/invoice-viewer": [
     "erpnext_item_get",
     "erpnext_stock_balance",
+    "erpnext_file_list",
+    "erpnext_file_upload",
+    "erpnext_file_download",
   ],
   "ui://mcp-erpnext/doclist-viewer": [],
+  "ui://mcp-erpnext/doc-viewer": [
+    "erpnext_file_list",
+    "erpnext_file_upload",
+    "erpnext_file_download",
+  ],
   "ui://mcp-erpnext/kanban-viewer": [
     "erpnext_doc_get",
     "erpnext_doc_update",
@@ -1092,7 +1105,8 @@ function addDoctypeMutationCandidates(
   if (!doctype || !SUBMITTABLE_VIEWER_DOCTYPES.has(doctype)) return;
   if (
     uri === "ui://mcp-erpnext/invoice-viewer" ||
-    uri === "ui://mcp-erpnext/doclist-viewer"
+    uri === "ui://mcp-erpnext/doclist-viewer" ||
+    uri === "ui://mcp-erpnext/doc-viewer"
   ) {
     target.add("erpnext_doc_submit");
     target.add("erpnext_doc_cancel");
@@ -1370,7 +1384,9 @@ export function withUiRefreshRequest(
       if (hints) enriched._sendMessageHints = hints;
     } else if (isStockViewer(enriched)) {
       enriched._sendMessageHints = STOCK_HINTS;
-    } else if (isKanbanViewer(enriched) && doctype) {
+    } else if (
+      (isKanbanViewer(enriched) || isDocViewer(enriched)) && doctype
+    ) {
       const hints = DOCTYPE_SEND_MESSAGE_HINTS[doctype];
       if (hints) enriched._sendMessageHints = hints;
     }

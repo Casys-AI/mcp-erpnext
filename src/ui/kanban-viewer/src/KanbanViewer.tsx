@@ -8,7 +8,13 @@
  * Aucun import de @casys/mcp-view.
  */
 import type { ComponentChildren, JSX, Ref } from "preact";
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
 import {
@@ -779,7 +785,16 @@ function MobileColumnNavWrapper({
 /** Extension runtime de KanbanBoardData : le serveur injecte ce champ via withUiRefreshRequest. */
 type BoardWithHints = KanbanBoardData & {
   _sendMessageHints?: NavHint[];
+  refreshRequest?: KanbanRefreshRequestData;
 };
+
+function resolvedBoardRefreshRequest(
+  board: KanbanBoardData | null,
+  fallback: KanbanRefreshRequestData | null,
+): KanbanRefreshRequestData | null {
+  return (board as BoardWithHints | null)?.refreshRequest ??
+    resolveKanbanRefreshRequest(board, fallback);
+}
 
 /* ────────────────────────────── KanbanBoardWithNav ─────────────────────── */
 
@@ -803,6 +818,14 @@ function KanbanBoardWithNav({
   liveMessage,
   inlineError,
   activeDropColumn,
+  refreshing,
+  rootRefreshRequest,
+  rootFreshEvent,
+  rootMutationEvent,
+  canRefreshRoot,
+  onRefreshRoot,
+  onMutationInvalidate,
+  onMutationRefresh,
   onMove,
   onDropCard,
   onDragStart,
@@ -825,6 +848,14 @@ function KanbanBoardWithNav({
   liveMessage: string;
   inlineError: string | null;
   activeDropColumn: string | null;
+  refreshing: boolean;
+  rootRefreshRequest: KanbanRefreshRequestData | null;
+  rootFreshEvent: number;
+  rootMutationEvent: number;
+  canRefreshRoot: boolean;
+  onRefreshRoot: () => void;
+  onMutationInvalidate: () => void;
+  onMutationRefresh?: () => void;
   onMove: (card: KanbanCardData, toColumn: string, label: string) => void;
   onDropCard: (toColumn: string, event: KanbanDragEvent) => void;
   onDragStart: (card: KanbanCardData, event: KanbanDragEvent) => void;
@@ -859,14 +890,17 @@ function KanbanBoardWithNav({
     origin: "list",
     key: viewerRootKey(
       "kanban",
-      {
-        toolName: "erpnext_kanban_get_board",
-        arguments: board.refreshArguments,
-      },
+      rootRefreshRequest ?? undefined,
       { boardId: board.boardId, doctype: board.doctype },
     ),
   }, { fixture });
   const nav = viewerNav.nav;
+  useLayoutEffect(() => {
+    const root = nav.stack.levels[0];
+    if (rootFreshEvent > rootMutationEvent && root?.stale) {
+      nav.clearStale(root.id);
+    }
+  }, [rootFreshEvent, rootMutationEvent]);
   // Liste du niveau courant (racine → vide ; niveau empilé liste → payload de l'outil).
   const { list } = viewerNav;
 
@@ -946,9 +980,62 @@ function KanbanBoardWithNav({
             )}
           </div>
           {!narrow && nav.isRoot && (
-            <span class="font-mono text-chip text-ink-faint shrink-0">
-              {actionCapabilities.canMove ? board.moveToolName : null}
-            </span>
+            <div class="flex shrink-0 items-center gap-2">
+              {nav.current.stale && (
+                <div
+                  role="status"
+                  title={t("nav.stale_title")}
+                  class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+                >
+                  <span
+                    aria-hidden="true"
+                    class="size-[5px] rounded-full bg-warn"
+                  />
+                  <span>
+                    {t("nav.stale_values", { at: nav.current.stale.at })}
+                  </span>
+                  {canRefreshRoot && (
+                    <button
+                      type="button"
+                      disabled={refreshing}
+                      onClick={onRefreshRoot}
+                      aria-label={t("nav.refresh")}
+                      title={t("nav.refresh")}
+                      class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                    >
+                      {refreshing ? "…" : "↻"}
+                    </button>
+                  )}
+                </div>
+              )}
+              <span class="font-mono text-chip text-ink-faint">
+                {actionCapabilities.canMove ? board.moveToolName : null}
+              </span>
+            </div>
+          )}
+          {narrow && nav.isRoot && nav.current.stale && (
+            <div
+              role="status"
+              title={t("nav.stale_title")}
+              class="ml-auto flex shrink-0 items-center gap-1 font-mono text-warn"
+            >
+              <span
+                aria-hidden="true"
+                class="size-[5px] rounded-full bg-warn"
+              />
+              {canRefreshRoot && (
+                <button
+                  type="button"
+                  disabled={refreshing}
+                  onClick={onRefreshRoot}
+                  aria-label={t("nav.refresh")}
+                  title={t("nav.refresh")}
+                  class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                >
+                  {refreshing ? "…" : "↻"}
+                </button>
+              )}
+            </div>
           )}
         </header>
 
@@ -974,6 +1061,9 @@ function KanbanBoardWithNav({
             if (msg !== null) onError(msg);
           }}
           onMutated={nav.markStale}
+          onDocumentChanged={nav.reportDocumentChange}
+          onMutationInvalidate={onMutationInvalidate}
+          onMutationRefresh={onMutationRefresh}
           onRefresh={() => void nav.refreshLevel()}
         >
           {/* Contenu racine : le tableau kanban lui-même */}
@@ -1089,6 +1179,8 @@ export function KanbanViewer() {
   const [liveMessage, setLiveMessage] = useState("");
   const [activeDropColumn, setActiveDropColumn] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [rootFreshEvent, setRootFreshEvent] = useState(0);
+  const [rootMutationEvent, setRootMutationEvent] = useState(0);
   const queueRef = useRef<QueuedKanbanMove[]>([]);
   const snapshotsRef = useRef<Record<string, KanbanBoardData>>({});
   const processingRef = useRef(false);
@@ -1099,6 +1191,7 @@ export function KanbanViewer() {
   const draggingRef = useRef(false);
   const refreshRequestRef = useRef<KanbanRefreshRequestData | null>(null);
   const refreshSequenceRef = useRef(createUiRefreshSequence());
+  const rootEventRef = useRef(0);
   const refreshAfterMutationRef = useRef(false);
   const lastRefreshStartedAtRef = useRef(0);
   const detailFetchCardIdRef = useRef<string | null>(null);
@@ -1110,6 +1203,15 @@ export function KanbanViewer() {
   function updateBoard(board: KanbanBoardData) {
     boardRef.current = board;
     hydrateBoard(board);
+  }
+
+  function acceptCanonicalBoard(board: KanbanBoardData) {
+    refreshRequestRef.current = resolvedBoardRefreshRequest(
+      board,
+      refreshRequestRef.current,
+    );
+    updateBoard(board);
+    setRootFreshEvent(++rootEventRef.current);
   }
 
   function parseToolCallResult(
@@ -1138,7 +1240,7 @@ export function KanbanViewer() {
   ) {
     if (fixture) return false;
     const board = boardRef.current;
-    const request = resolveKanbanRefreshRequest(
+    const request = resolvedBoardRefreshRequest(
       board,
       refreshRequestRef.current,
     );
@@ -1214,7 +1316,7 @@ export function KanbanViewer() {
       const text = extractTextContent(result);
       if (text) {
         try {
-          updateBoard(parseBoard(text));
+          acceptCanonicalBoard(parseBoard(text));
           refreshed = true;
         } catch {
           // Keep the current board when a passive refresh payload is invalid.
@@ -1433,7 +1535,7 @@ export function KanbanViewer() {
       }
 
       try {
-        updateBoard(parseBoard(text));
+        acceptCanonicalBoard(parseBoard(text));
       } catch (error) {
         setError(
           error instanceof Error
@@ -1911,6 +2013,17 @@ export function KanbanViewer() {
     );
   }
 
+  const rootRefreshRequest = resolvedBoardRefreshRequest(
+    state.board,
+    refreshRequestRef.current,
+  );
+  const canRefreshRoot = Boolean(
+    !fixture &&
+      rootRefreshRequest &&
+      app.getHostCapabilities()?.serverTools &&
+      state.board._availableTools?.includes(rootRefreshRequest.toolName),
+  );
+
   return (
     <KanbanBoardWithNav
       board={state.board}
@@ -1921,6 +2034,22 @@ export function KanbanViewer() {
       liveMessage={liveMessage}
       inlineError={errorPresentation.inlineError}
       activeDropColumn={activeDropColumn}
+      refreshing={refreshing}
+      rootRefreshRequest={rootRefreshRequest}
+      rootFreshEvent={rootFreshEvent}
+      rootMutationEvent={rootMutationEvent}
+      canRefreshRoot={canRefreshRoot}
+      onRefreshRoot={() =>
+        void requestBoardRefresh({ ignoreInterval: true, force: true })}
+      onMutationInvalidate={() => {
+        setRootMutationEvent(++rootEventRef.current);
+        refreshSequenceRef.current = invalidateUiRefresh(
+          refreshSequenceRef.current,
+        );
+      }}
+      onMutationRefresh={canRefreshRoot
+        ? () => void requestBoardRefresh({ ignoreInterval: true, force: true })
+        : undefined}
       onMove={requestMove}
       onDropCard={handleDropCard}
       onDragStart={handleDragStart}

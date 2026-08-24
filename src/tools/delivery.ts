@@ -8,7 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveCustomer } from "../api/resolve.ts";
 
 export const deliveryTools: ErpNextTool[] = [
@@ -91,6 +91,7 @@ export const deliveryTools: ErpNextTool[] = [
   {
     name: "erpnext_delivery_note_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Delivery Note by name (e.g. MAT-DN-00001). Returns full document with delivered items.",
     category: "delivery",
@@ -109,7 +110,7 @@ export const deliveryTools: ErpNextTool[] = [
         throw new Error("[erpnext_delivery_note_get] 'name' is required");
       }
       const doc = await ctx.client.get("Delivery Note", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Delivery Note" } };
     },
   },
 
@@ -262,6 +263,7 @@ export const deliveryTools: ErpNextTool[] = [
   {
     name: "erpnext_shipment_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Shipment by name. Returns full shipment details including parcels.",
     category: "delivery",
@@ -277,7 +279,7 @@ export const deliveryTools: ErpNextTool[] = [
         throw new Error("[erpnext_shipment_get] 'name' is required");
       }
       const doc = await ctx.client.get("Shipment", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Shipment" } };
     },
   },
 ];

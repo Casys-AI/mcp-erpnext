@@ -8,7 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META, STOCK_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META, STOCK_META } from "./viewer-meta.ts";
 import { resolveItem } from "../api/resolve.ts";
 
 export const inventoryTools: ErpNextTool[] = [
@@ -81,6 +81,7 @@ export const inventoryTools: ErpNextTool[] = [
   {
     name: "erpnext_item_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single ERPNext Item by name/item_code. Returns all fields including pricing and stock details.",
     category: "inventory",
@@ -96,7 +97,7 @@ export const inventoryTools: ErpNextTool[] = [
         throw new Error("[erpnext_item_get] 'name' is required");
       }
       const doc = await ctx.client.get("Item", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Item" } };
     },
   },
 
@@ -398,6 +399,7 @@ export const inventoryTools: ErpNextTool[] = [
   {
     name: "erpnext_stock_entry_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Stock Entry by name. Returns full document with item details.",
     category: "inventory",
@@ -416,7 +418,7 @@ export const inventoryTools: ErpNextTool[] = [
         throw new Error("[erpnext_stock_entry_get] 'name' is required");
       }
       const doc = await ctx.client.get("Stock Entry", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Stock Entry" } };
     },
   },
 

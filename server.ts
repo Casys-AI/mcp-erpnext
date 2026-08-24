@@ -102,7 +102,7 @@ async function main() {
   // Build MCP server
   const server = new McpApp({
     name: "mcp-erpnext",
-    version: "3.1.0-beta.1",
+    version: "3.1.0-beta.2",
     transport: "stateless",
     cache: {
       ttlMs: 3_600_000,

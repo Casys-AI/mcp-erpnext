@@ -9,20 +9,21 @@
 import {
   INVOICE_FIXTURE,
   ITEM_FIXTURES,
-} from "~/invoice-viewer/src/fixture.ts";
-import { DOCLIST_FIXTURE } from "~/doclist-viewer/src/fixture.ts";
+} from "../../invoice-viewer/src/fixture.ts";
+import { DOCLIST_FIXTURE } from "../../doclist-viewer/src/fixture.ts";
 import {
   KANBAN_FIXTURE,
   KANBAN_FIXTURE_DETAILS,
   KANBAN_FIXTURE_USERS,
-} from "~/kanban-viewer/src/fixture.ts";
-import { STOCK_FIXTURE } from "~/stock-viewer/src/fixture.ts";
-import { FUNNEL_FIXTURE } from "~/funnel-viewer/src/fixture.ts";
-import { KPI_FIXTURE } from "~/kpi-viewer/src/fixture.ts";
+} from "../../kanban-viewer/src/fixture.ts";
+import { STOCK_FIXTURE } from "../../stock-viewer/src/fixture.ts";
+import { FUNNEL_FIXTURE } from "../../funnel-viewer/src/fixture.ts";
+import { KPI_FIXTURE } from "../../kpi-viewer/src/fixture.ts";
 
 export type ViewerKey =
   | "invoice"
   | "doclist"
+  | "doc"
   | "kanban"
   | "stock"
   | "funnel"
@@ -48,6 +49,14 @@ const DEV_AVAILABLE_TOOLS: Partial<Record<ViewerKey, readonly string[]>> = {
     "erpnext_doc_list",
     "erpnext_doc_submit",
     "erpnext_doc_cancel",
+  ],
+  doc: [
+    "erpnext_doc_cancel",
+    "erpnext_doc_get",
+    "erpnext_doc_submit",
+    "erpnext_file_download",
+    "erpnext_file_list",
+    "erpnext_file_upload",
   ],
   kanban: [
     "erpnext_kanban_get_board",
@@ -80,6 +89,268 @@ export function withDevViewerTools(
 }
 
 type Row = Record<string, unknown>;
+
+export const DEV_DOCUMENT_DOCTYPE = "BOM";
+export const DEV_DOCUMENT_NAME = "BOM-2026-00042";
+
+/**
+ * Fiche générique volontairement différente des viewers métier dédiés. Les
+ * deux tables enfant permettent de vérifier le rendu récursif du doc-viewer.
+ */
+export const DEV_DOCUMENT_FIXTURE = {
+  data: {
+    doctype: DEV_DOCUMENT_DOCTYPE,
+    name: DEV_DOCUMENT_NAME,
+    item: "PACK-LINE-CONTROL-CABINET",
+    item_name: "Packaging line control cabinet",
+    company: "Casys Taiwan",
+    quantity: 1,
+    uom: "Nos",
+    is_active: 1,
+    is_default: 0,
+    docstatus: 0,
+    description:
+      "Manufacturing definition for the control cabinet used on the Taichung packaging line.",
+    items: [
+      {
+        idx: 1,
+        item_code: "PLC-CPU-1516",
+        item_name: "Fail-safe PLC CPU",
+        qty: 1,
+        uom: "Nos",
+        source_warehouse: "Stores - CS",
+        rate: 2_840,
+        amount: 2_840,
+      },
+      {
+        idx: 2,
+        item_code: "IO-REMOTE-ET200",
+        item_name: "Remote I/O station",
+        qty: 2,
+        uom: "Nos",
+        source_warehouse: "Stores - CS",
+        rate: 680,
+        amount: 1_360,
+      },
+      {
+        idx: 3,
+        item_code: "ENCLOSURE-IP55",
+        item_name: "IP55 floor-standing enclosure",
+        qty: 1,
+        uom: "Nos",
+        source_warehouse: "Fabrication - CS",
+        rate: 940,
+        amount: 940,
+      },
+    ],
+    operations: [
+      {
+        idx: 1,
+        operation: "Electrical assembly",
+        workstation: "Panel Shop - CS",
+        time_in_mins: 180,
+        hourly_rate: 54,
+        operating_cost: 162,
+      },
+      {
+        idx: 2,
+        operation: "Factory acceptance test",
+        workstation: "FAT Bench - CS",
+        time_in_mins: 120,
+        hourly_rate: 72,
+        operating_cost: 144,
+      },
+    ],
+    owner: "engineering@casys.ai",
+    creation: "2026-08-21 09:18:00",
+    modified: "2026-08-24 16:42:00",
+  },
+  refreshRequest: {
+    toolName: "erpnext_doc_get",
+    arguments: {
+      doctype: DEV_DOCUMENT_DOCTYPE,
+      name: DEV_DOCUMENT_NAME,
+    },
+  },
+};
+
+interface CannedAttachment {
+  name: string;
+  file_name: string;
+  file_url: string;
+  file_size: number;
+  is_private: boolean;
+  attached_to_field: string | null;
+  creation: string;
+  modified: string;
+  owner: string;
+  mimeType: string;
+  blob: string;
+}
+
+const INITIAL_DOCUMENT_FILES: readonly CannedAttachment[] = [
+  {
+    name: "FILE-BOM-001",
+    file_name: "control-cabinet-drawing.pdf",
+    file_url: "/private/files/control-cabinet-drawing.pdf",
+    file_size: 16,
+    is_private: true,
+    attached_to_field: null,
+    creation: "2026-08-24 15:10:00",
+    modified: "2026-08-24 15:10:00",
+    owner: "engineering@casys.ai",
+    mimeType: "application/pdf",
+    blob: "JVBERi0xLjQKJcTl8uXrCg==",
+  },
+  {
+    name: "FILE-BOM-002",
+    file_name: "bill-of-materials.csv",
+    file_url: "/files/bill-of-materials.csv",
+    file_size: 27,
+    is_private: false,
+    attached_to_field: null,
+    creation: "2026-08-23 11:20:00",
+    modified: "2026-08-23 11:20:00",
+    owner: "planner@casys.ai",
+    mimeType: "text/csv",
+    blob: "aXRlbV9jb2RlLHF0eQpQTEMtQ1BVLDEK",
+  },
+];
+
+let documentFiles: CannedAttachment[] = [];
+let uploadSequence = 0;
+
+/** Reset mutable upload state whenever the dev-host remounts a viewer. */
+export function resetCannedState(): void {
+  documentFiles = INITIAL_DOCUMENT_FILES.map((file) => ({ ...file }));
+  uploadSequence = 0;
+}
+
+resetCannedState();
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+export function approximateBase64Bytes(blob: string): number {
+  const compact = blob.replace(/\s/g, "");
+  if (!compact) return 0;
+  const padding = compact.endsWith("==") ? 2 : compact.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor(compact.length * 3 / 4) - padding);
+}
+
+function mimeTypeForFileName(fileName: string): string {
+  const extension = fileName.toLowerCase().split(".").pop();
+  return {
+    csv: "text/csv",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    json: "application/json",
+    pdf: "application/pdf",
+    png: "image/png",
+    txt: "text/plain",
+  }[extension ?? ""] ?? "application/octet-stream";
+}
+
+function fileListRow(file: CannedAttachment): Row {
+  return {
+    name: file.name,
+    file_name: file.file_name,
+    file_url: file.file_url,
+    file_size: file.file_size,
+    is_private: file.is_private,
+    attached_to_field: file.attached_to_field,
+    creation: file.creation,
+    modified: file.modified,
+    owner: file.owner,
+  };
+}
+
+function targetsDevDocument(args: Record<string, unknown>): boolean {
+  return args.attached_to_doctype === DEV_DOCUMENT_DOCTYPE &&
+    args.attached_to_name === DEV_DOCUMENT_NAME;
+}
+
+export interface CannedDownloadToolResult {
+  [key: string]: unknown;
+  content: [
+    { type: "text"; text: string },
+    {
+      type: "resource";
+      resource: { uri: string; mimeType: string; blob: string };
+    },
+  ];
+}
+
+/** Narrow guard used by the host to avoid JSON-wrapping binary tool results. */
+export function isCannedDownloadToolResult(
+  value: unknown,
+): value is CannedDownloadToolResult {
+  const result = record(value);
+  if (
+    !result || !Array.isArray(result.content) || result.content.length !== 2
+  ) {
+    return false;
+  }
+  const text = record(result.content[0]);
+  const embedded = record(result.content[1]);
+  const resource = record(embedded?.resource);
+  return text?.type === "text" && typeof text.text === "string" &&
+    embedded?.type === "resource" && typeof resource?.uri === "string" &&
+    typeof resource.mimeType === "string" && typeof resource.blob === "string";
+}
+
+function fileNameFromUri(uri: string): string {
+  try {
+    const path = new URL(uri).pathname;
+    const segment = path.slice(path.lastIndexOf("/") + 1);
+    return decodeURIComponent(segment) || "download";
+  } catch {
+    return "download";
+  }
+}
+
+export interface DownloadLogSummary {
+  name: string;
+  mimeType: string;
+  approximateBytes: number;
+}
+
+/** Reduce a host download request to metadata; never retain or return its blob. */
+export function summarizeDownloadContents(
+  contents: readonly unknown[],
+): DownloadLogSummary[] {
+  return contents.flatMap((raw) => {
+    const block = record(raw);
+    const resource = record(block?.resource);
+    if (
+      block?.type !== "resource" || typeof resource?.uri !== "string" ||
+      typeof resource.blob !== "string"
+    ) return [];
+    return [{
+      name: fileNameFromUri(resource.uri),
+      mimeType: typeof resource.mimeType === "string"
+        ? resource.mimeType
+        : "application/octet-stream",
+      approximateBytes: approximateBase64Bytes(resource.blob),
+    }];
+  });
+}
+
+/** Keep uploaded bytes out of the visible journal as well. */
+export function toolArgumentsForLog(
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  if (typeof args.content_base64 !== "string") return args;
+  return {
+    ...args,
+    content_base64: `[base64 omitted; approximately ${
+      approximateBase64Bytes(args.content_base64)
+    } bytes]`,
+  };
+}
 /**
  * Une liste telle que le serveur la renvoie : avec le `_rowAction` qu'il
  * injecte sur toute liste (une ligne s'ouvre dans l'inspecteur du niveau).
@@ -571,6 +842,8 @@ export function initialResult(viewer: ViewerKey): unknown {
           },
         }],
       };
+    case "doc":
+      return DEV_DOCUMENT_FIXTURE;
     case "kanban":
       return {
         ...KANBAN_FIXTURE,
@@ -592,6 +865,7 @@ export function initialResult(viewer: ViewerKey): unknown {
 export const INITIAL_TOOL: Record<ViewerKey, string> = {
   invoice: "erpnext_sales_invoice_get",
   doclist: "erpnext_sales_invoice_list",
+  doc: "erpnext_doc_get",
   kanban: "erpnext_kanban_get_board",
   stock: "erpnext_stock_balance",
   funnel: "erpnext_sales_funnel",
@@ -607,6 +881,92 @@ export function cannedResult(
 ): unknown | null {
   if (name === INITIAL_TOOL[viewer]) return initialResult(viewer);
   switch (name) {
+    case "erpnext_file_list": {
+      if (viewer !== "doc" || !targetsDevDocument(args)) return null;
+      const limit = typeof args.limit === "number" &&
+          Number.isInteger(args.limit) && args.limit > 0
+        ? args.limit
+        : 50;
+      const data = documentFiles.slice(0, limit).map(fileListRow);
+      return { count: data.length, data };
+    }
+    case "erpnext_file_upload": {
+      if (viewer !== "doc" || !targetsDevDocument(args)) return null;
+      const fileName = typeof args.file_name === "string"
+        ? args.file_name.trim()
+        : "";
+      const blob = typeof args.content_base64 === "string"
+        ? args.content_base64.trim()
+        : "";
+      if (!fileName || /[\\/\0]/.test(fileName) || !blob) return null;
+      if (
+        args.is_private !== undefined && typeof args.is_private !== "boolean"
+      ) {
+        return null;
+      }
+      if (
+        args.attached_to_field !== undefined &&
+        (typeof args.attached_to_field !== "string" ||
+          !args.attached_to_field.trim())
+      ) return null;
+
+      uploadSequence += 1;
+      const isPrivate = args.is_private !== false;
+      const sequence = String(uploadSequence).padStart(3, "0");
+      const timestamp = `2026-08-24 17:00:${
+        String(uploadSequence).padStart(2, "0")
+      }`;
+      const file: CannedAttachment = {
+        name: `FILE-UPLOAD-${sequence}`,
+        file_name: fileName,
+        file_url: `${isPrivate ? "/private" : ""}/files/${fileName}`,
+        file_size: approximateBase64Bytes(blob),
+        is_private: isPrivate,
+        attached_to_field: typeof args.attached_to_field === "string"
+          ? args.attached_to_field.trim()
+          : null,
+        creation: timestamp,
+        modified: timestamp,
+        owner: "dev-host@casys.ai",
+        mimeType: mimeTypeForFileName(fileName),
+        blob,
+      };
+      documentFiles.unshift(file);
+      return {
+        data: {
+          ...fileListRow(file),
+          is_private: file.is_private ? 1 : 0,
+          attached_to_doctype: DEV_DOCUMENT_DOCTYPE,
+          attached_to_name: DEV_DOCUMENT_NAME,
+        },
+        message:
+          `${fileName} attached to ${DEV_DOCUMENT_DOCTYPE} ${DEV_DOCUMENT_NAME}`,
+      };
+    }
+    case "erpnext_file_download": {
+      if (viewer !== "doc" || !targetsDevDocument(args)) return null;
+      const file = documentFiles.find((candidate) =>
+        candidate.name === args.file_id
+      );
+      if (!file) return null;
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Prepared ${file.file_name} for download (${file.file_size} bytes).`,
+          },
+          {
+            type: "resource",
+            resource: {
+              uri: `file:///${encodeURIComponent(file.file_name)}`,
+              mimeType: file.mimeType,
+              blob: file.blob,
+            },
+          },
+        ],
+      } satisfies CannedDownloadToolResult;
+    }
     case "erpnext_doc_list": {
       const doctype = String(args.doctype ?? "");
       if (doctype === "Payment Entry") return list(doctype, PAYMENTS);

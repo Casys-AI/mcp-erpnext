@@ -9,7 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
-import { DOCLIST_META } from "./viewer-meta.ts";
+import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveDynamicLink } from "../api/resolve.ts";
 
 export const accountingTools: ErpNextTool[] = [
@@ -142,6 +142,7 @@ export const accountingTools: ErpNextTool[] = [
   {
     name: "erpnext_journal_entry_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Journal Entry by name (e.g. JV-00001). Returns full document with accounts.",
     category: "accounting",
@@ -160,7 +161,7 @@ export const accountingTools: ErpNextTool[] = [
         throw new Error("[erpnext_journal_entry_get] 'name' is required");
       }
       const doc = await ctx.client.get("Journal Entry", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Journal Entry" } };
     },
   },
 
@@ -259,6 +260,7 @@ export const accountingTools: ErpNextTool[] = [
   {
     name: "erpnext_payment_entry_get",
     annotations: { readOnlyHint: true },
+    _meta: DOC_META,
     description:
       "Get a single Payment Entry by name (e.g. PE-00001). Returns full document including references.",
     category: "accounting",
@@ -277,7 +279,7 @@ export const accountingTools: ErpNextTool[] = [
         throw new Error("[erpnext_payment_entry_get] 'name' is required");
       }
       const doc = await ctx.client.get("Payment Entry", input.name as string);
-      return { data: doc };
+      return { data: { ...doc, doctype: "Payment Entry" } };
     },
   },
 

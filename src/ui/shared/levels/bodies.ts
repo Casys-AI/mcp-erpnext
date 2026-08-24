@@ -7,6 +7,13 @@
  * qui ne correspond pas donne `null`, jamais une exception.
  */
 
+import {
+  type DocumentChangeEvent,
+  type DocumentMutationKind,
+  isDocumentChangeEvent,
+} from "../document-events.ts";
+import { documentEnvelopeOf } from "../document/model.ts";
+import type { DocumentEnvelope } from "../document/types.ts";
 import type { NavHint } from "../jumps.ts";
 
 export type BarsChartType =
@@ -117,12 +124,72 @@ export function chartSeriesFormat(
   return chart.unit ? { unit: chart.unit } : {};
 }
 
-/** `{ data: {...} }` ou l'objet lui-même — jamais un tableau. */
-export function recordOf(body: unknown): Record<string, unknown> | null {
-  if (!body || typeof body !== "object") return null;
-  const inner = (body as { data?: unknown }).data;
-  const record = inner && typeof inner === "object" ? inner : body;
-  return Array.isArray(record) ? null : record as Record<string, unknown>;
+export interface RecordIdentityFallback {
+  doctype?: string;
+  name?: string;
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+/**
+ * Une fiche garde son enveloppe serveur complète. Le fallback ne complète que
+ * l'identité d'un ancien détail local ; il n'invente jamais de capacités.
+ */
+export function recordOf(
+  body: unknown,
+  fallback: RecordIdentityFallback = {},
+): DocumentEnvelope | null {
+  const exact = documentEnvelopeOf(body);
+  if (exact) return exact;
+
+  const payload = plainRecord(body);
+  if (!payload) return null;
+  const document = plainRecord(payload.data) ?? payload;
+  const doctype = nonEmptyString(document.doctype) ??
+    nonEmptyString(fallback.doctype);
+  const name = nonEmptyString(document.name) ?? nonEmptyString(fallback.name);
+  if (!doctype || !name) return null;
+
+  return documentEnvelopeOf({
+    ...payload,
+    data: { ...document, doctype, name },
+  });
+}
+
+const DOCUMENT_MUTATION_BY_TOOL: Readonly<
+  Record<string, DocumentMutationKind>
+> = {
+  erpnext_doc_submit: "submit",
+  erpnext_doc_cancel: "cancel",
+};
+
+/** Événement canonique des seules mutations de fiche gérées ici. */
+export function documentChangeForTool(
+  envelope: Pick<DocumentEnvelope, "doctype" | "name">,
+  toolName: string,
+  committedAt: string,
+  source?: string,
+): DocumentChangeEvent | null {
+  const mutation = DOCUMENT_MUTATION_BY_TOOL[toolName];
+  if (!mutation) return null;
+  const event: DocumentChangeEvent = {
+    doctype: envelope.doctype,
+    name: envelope.name,
+    mutation,
+    committedAt,
+    ...(source ? { source } : {}),
+  };
+  return isDocumentChangeEvent(event) ? event : null;
 }
 
 /**

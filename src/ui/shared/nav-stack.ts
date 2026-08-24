@@ -14,6 +14,7 @@
  */
 
 import type { Jump } from "./jumps.ts";
+import type { DocumentChangeEvent } from "./document-events.ts";
 
 export type LevelKind = "root" | "list" | "record" | "chart";
 
@@ -46,6 +47,15 @@ export interface LevelUi {
   searchOpen?: boolean;
 }
 
+export interface StaleSnapshot {
+  /** Libellé court déjà consommé par l'interface, par exemple « 14:02 ». */
+  at: string;
+  /** Compatibilité avec l'UX existante qui met le document touché en évidence. */
+  subject?: string;
+  /** Référence canonique structurée, conservée pour l'UX et le diagnostic. */
+  documentChange?: DocumentChangeEvent;
+}
+
 export interface NavLevel {
   id: string;
   /** Le segment du fil : « Factures », « SO-1043 ». */
@@ -69,7 +79,7 @@ export interface NavLevel {
   /** Racine seulement : la nature du niveau 1, pour colorer l'origine du fil. */
   origin?: Exclude<LevelKind, "root">;
   /** Une action plus bas a changé ce que ce niveau montre ; à l'utilisateur d'actualiser. */
-  stale?: { at: string; subject?: string };
+  stale?: StaleSnapshot;
 }
 
 export interface NavStack {
@@ -238,6 +248,27 @@ export function markStale(
   return {
     ...stack,
     levels: stack.levels.map((level) => ({ ...level, stale: { at, subject } })),
+  };
+}
+
+/**
+ * Un document canonique vient de changer. Tant que les dépendances métier des
+ * niveaux ne sont pas déclarées, chaque snapshot ouvert est potentiellement
+ * concerné : on les marque donc tous sans toucher à leur corps ni à leur UI.
+ */
+export function reportDocumentChange(
+  stack: NavStack,
+  at: string,
+  event: DocumentChangeEvent,
+): NavStack {
+  // La copie garde la pile indépendante d'un objet possédé par l'émetteur.
+  const documentChange: DocumentChangeEvent = { ...event };
+  return {
+    ...stack,
+    levels: stack.levels.map((level) => ({
+      ...level,
+      stale: { at, subject: event.name, documentChange },
+    })),
   };
 }
 

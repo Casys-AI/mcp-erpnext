@@ -467,6 +467,115 @@ Deno.test("buildHandlersMap - detail objects remain machine-readable without a v
   }
 });
 
+Deno.test("buildHandlersMap - preserves the download EmbeddedResource without duplicating its base64", async () => {
+  const prepared = {
+    content: [
+      { type: "text", text: "Prepared report.pdf for download." },
+      {
+        type: "resource",
+        resource: {
+          uri: "file:///report.pdf",
+          mimeType: "application/pdf",
+          blob: "AP8=",
+        },
+      },
+    ],
+  };
+  const tool: ErpNextTool = {
+    name: "erpnext_file_download",
+    description: "Test-only download probe",
+    category: "operations",
+    inputSchema: { type: "object" },
+    annotations: { readOnlyHint: true },
+    _meta: {
+      ui: {
+        resourceUri: "ui://mcp-erpnext/doc-viewer",
+        visibility: ["app"],
+      },
+    },
+    handler: async () => prepared,
+  };
+  const client = new ErpNextToolsClient();
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool];
+  setFrappeClient({} as FrappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(tool.name)!({});
+    assertEquals(result, prepared);
+    assertEquals(JSON.stringify(result).split("AP8=").length - 1, 1);
+    assertEquals(
+      "structuredContent" in (result as Record<string, unknown>),
+      false,
+    );
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("buildHandlersMap - does not grant the preformatted bypass to another tool", async () => {
+  const prepared = {
+    content: [
+      { type: "text", text: "Domain content" },
+      {
+        type: "resource",
+        resource: {
+          uri: "file:///report.pdf",
+          mimeType: "application/pdf",
+          blob: "AP8=",
+        },
+      },
+    ],
+  };
+  const tool: ErpNextTool = {
+    name: "erpnext_domain_content_probe",
+    description: "Test-only domain content probe",
+    category: "setup",
+    inputSchema: { type: "object" },
+    handler: async () => prepared,
+  };
+  const client = new ErpNextToolsClient();
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool];
+  setFrappeClient({} as FrappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(tool.name)!({}) as {
+      structuredContent: Record<string, unknown>;
+    };
+    assertEquals(result.structuredContent, prepared);
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("execute - preserves the download EmbeddedResource result", async () => {
+  const prepared = {
+    content: [
+      { type: "text", text: "Prepared report.pdf for download." },
+      {
+        type: "resource",
+        resource: {
+          uri: "file:///report.pdf",
+          mimeType: "application/pdf",
+          blob: "AP8=",
+        },
+      },
+    ],
+  };
+  const tool: ErpNextTool = {
+    name: "erpnext_file_download",
+    description: "Test-only download probe",
+    category: "operations",
+    inputSchema: { type: "object" },
+    handler: async () => prepared,
+  };
+  const client = new ErpNextToolsClient();
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool];
+  setFrappeClient({} as FrappeClient);
+  try {
+    assertEquals(await client.execute(tool.name, {}), prepared);
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
 Deno.test("execute - bounded tools stay bounded on the direct-execution path", async () => {
   // `execute()` calls handlers directly, with no schema validator in between.
   // A bound declared only in `inputSchema` therefore protects the MCP route and

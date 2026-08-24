@@ -10,6 +10,7 @@ import type { DoclistData } from "./doclist/types";
 import { useDoclist } from "./doclist/useDoclist";
 import { canJump } from "./jumps";
 import { levelListData } from "./levels/LevelBody";
+import { canSendTextMessage, sendTextMessage } from "./host-message";
 import type { LevelInit } from "./nav-stack";
 import { useNavStack } from "./useNavStack";
 
@@ -24,21 +25,29 @@ export function useViewerNav(
 ) {
   const nav = useNavStack(app, root);
   const { current, isRoot } = nav;
-  // En fixture il n'y a pas d'outils : les sauts sont éteints, les phrases restent.
+  // La fixture ne contacte jamais l'hôte ; chaque canal suit sa capacité propre.
   const jumpsEnabled = !fixture && canJump(app.getHostCapabilities());
+  const messagesEnabled = !fixture &&
+    canSendTextMessage(app.getHostCapabilities());
   // Déclaré inconditionnellement : à la racine il porte une liste vide.
   const list = useDoclist(
     isRoot && rootList ? rootList : levelListData(current),
     current.ui,
     nav.patchUi,
   );
-  const ask = useCallback((message: string) => {
-    void app.sendMessage({
-      role: "user",
-      content: [{ type: "text", text: message }],
-    }).catch(() => {});
+  const sendAsk = useCallback((message: string) => {
+    return sendTextMessage(app, message);
   }, [app]);
-  return { nav, current, isRoot, jumpsEnabled, list, ask };
+  const ask = messagesEnabled ? sendAsk : undefined;
+  return {
+    nav,
+    current,
+    isRoot,
+    jumpsEnabled,
+    messagesEnabled,
+    list,
+    ask,
+  };
 }
 
 export type ViewerNav = ReturnType<typeof useViewerNav>;

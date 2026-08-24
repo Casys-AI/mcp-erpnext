@@ -7,6 +7,7 @@
  */
 
 import { assertEquals, assertRejects } from "@std/assert";
+import { SchemaValidator } from "@casys/mcp-server";
 import { operationsTools } from "./operations.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
@@ -412,6 +413,74 @@ Deno.test("erpnext_file_upload - is marked destructive", () => {
 Deno.test("erpnext_doc_list - has _meta.ui for doclist-viewer", () => {
   const tool = getTool("erpnext_doc_list");
   assertEquals(tool._meta?.ui?.resourceUri, "ui://mcp-erpnext/doclist-viewer");
+});
+
+Deno.test("erpnext_doc_list - schema accepts every Frappe filter value", () => {
+  const tool = getTool("erpnext_doc_list");
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+
+  const result = validator.validate(tool.name, {
+    doctype: "Sales Invoice",
+    filters: [
+      ["status", "=", "Unpaid"],
+      ["docstatus", "<", 2],
+      ["disabled", "=", false],
+      ["customer", "is", null],
+      ["status", "in", ["Open", "Closed"]],
+      ["docstatus", "not in", [0, 2]],
+      ["Sales Invoice Item", "item_code", "=", "SKU-001"],
+      ["Sales Invoice Item", "item_code", "in", ["SKU-001", "SKU-002"]],
+    ],
+  });
+
+  assertEquals(result, { valid: true, errors: [] });
+});
+
+Deno.test("erpnext_doc_list - schema preserves legacy string-array filters", () => {
+  const tool = getTool("erpnext_doc_list");
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+
+  for (
+    const filter of [
+      ["status", "="],
+      ["Sales Invoice Item", "item_code", "=", "SKU-001", "extra"],
+    ]
+  ) {
+    assertEquals(
+      validator.validate(tool.name, {
+        doctype: "Sales Invoice",
+        filters: [filter],
+      }),
+      { valid: true, errors: [] },
+      `3.0.x-compatible filter must stay accepted: ${JSON.stringify(filter)}`,
+    );
+  }
+});
+
+Deno.test("erpnext_doc_list - schema still rejects unsupported filter values", () => {
+  const tool = getTool("erpnext_doc_list");
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+
+  const invalidFilters: unknown[] = [
+    ["docstatus", 1, 1],
+    ["status", "=", { unexpected: true }],
+    ["status", "in", ["Open", false]],
+    ["status", "in", [{ unexpected: true }]],
+  ];
+
+  for (const filter of invalidFilters) {
+    assertEquals(
+      validator.validate(tool.name, {
+        doctype: "Sales Invoice",
+        filters: [filter],
+      }).valid,
+      false,
+      `filter must be rejected: ${JSON.stringify(filter)}`,
+    );
+  }
 });
 
 // ── erpnext_doc_update ──────────────────────────────────────────────────────

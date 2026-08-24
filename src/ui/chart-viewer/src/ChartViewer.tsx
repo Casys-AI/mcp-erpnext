@@ -37,7 +37,7 @@ import {
 } from "recharts";
 import type { BarShapeProps } from "recharts";
 
-import { formatCurrency, formatNumber } from "~/shared/format";
+import { formatCurrency, formatNumber, formatPercent } from "~/shared/format";
 import { useT } from "~/shared/i18n-hook";
 import {
   type DrillDownChannel,
@@ -54,12 +54,19 @@ import {
 } from "~/shared/ui";
 import { useViewerLayout, type ViewerLayout } from "~/shared/useViewerLayout";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
+import { chartSeriesFormat } from "~/shared/levels/bodies";
 import { type Jump, jumpFromHint } from "~/shared/jumps";
+import { canCallViewerTool, readAvailableTools } from "~/shared/viewer-tools";
 import {
+  beginUiRefresh,
   canRequestUiRefresh,
+  completeUiRefresh,
+  createUiRefreshSequence,
   extractToolResultText,
+  invalidateUiRefresh,
   normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
@@ -67,6 +74,19 @@ import {
 } from "~/shared/refresh";
 import { fixtureFromSearch, isFixtureMode } from "./fixture.ts";
 import type { ChartData, Dataset, ScatterSeries, TreeNode } from "./types.ts";
+import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
+import { useActiveContext } from "~/shared/useActiveContext.ts";
+import type { ContextSelectionItem } from "~/shared/active-context.ts";
+import {
+  type ChartCursor,
+  type ChartCursorMove,
+  chartJumpHint,
+  chartPointLabel,
+  chartSelectionAt,
+  chartSeriesFromTarget,
+  contextFallbackForJump,
+  moveChartCursor,
+} from "./chart-interactions.ts";
 
 const app = new App({ name: "Chart Viewer", version: "3.0.0" });
 
@@ -82,6 +102,27 @@ const MONO_FONT = "var(--font-mono)";
 const fonts = { mono: MONO_FONT } as const;
 const CHART_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
+
+type ChartDataClick = (label: string, series?: string) => void;
+
+/**
+ * Un clic de graphe catégoriel n'est traité qu'ici. La géométrie SVG porte
+ * éventuellement sa série ; un clic dans la colonne seule reste générique.
+ */
+function activateCategoricalPoint(
+  data: ChartData,
+  onDataClick: ChartDataClick,
+  state: Record<string, unknown> | null | undefined,
+  target: unknown,
+) {
+  const label = chartPointLabel(data.labels, state);
+  if (!label) return;
+  const series = chartSeriesFromTarget(
+    target,
+    data.datasets.flatMap((dataset) => dataset.label ? [dataset.label] : []),
+  );
+  onDataClick(label, series);
+}
 
 /**
  * Palette catégorielle, en variables plutôt qu'en hex.
@@ -138,10 +179,14 @@ function toRows(data: ChartData) {
   });
 }
 
-function fmtValue(v: number, data: ChartData) {
-  if (data.currency) return formatCurrency(v, data.currency);
+function fmtValue(v: number, data: ChartData, dataset?: Dataset) {
+  const format = dataset
+    ? chartSeriesFormat(data, dataset)
+    : { currency: data.currency, unit: data.unit };
+  if (format.currency) return formatCurrency(v, format.currency);
+  if (format.unit === "%") return formatPercent(v, v % 1 === 0 ? 0 : 1);
   return `${formatNumber(v, v % 1 === 0 ? 0 : 1)}${
-    data.unit ? " " + data.unit : ""
+    format.unit ? " " + format.unit : ""
   }`;
 }
 
@@ -329,7 +374,11 @@ function ChartTooltip({ active, payload, label, data, drillDown }: {
               fontWeight: 600,
             }}
           >
-            {fmtValue(p.value, data)}
+            {fmtValue(
+              p.value,
+              data,
+              data.datasets.find((dataset) => dataset.label === p.name),
+            )}
           </span>
         </div>
       ))}
@@ -410,7 +459,7 @@ function SharedYAxis(
 function VerticalBarChart(
   { data, onDataClick }: {
     data: ChartData;
-    onDataClick?: (label: string) => void;
+    onDataClick?: ChartDataClick;
   },
 ) {
   const rows = toRows(data);
@@ -455,7 +504,10 @@ function VerticalBarChart(
             cursor={onDataClick ? "pointer" : undefined}
             onClick={onDataClick
               ? (entry: { payload?: { name?: unknown } }) =>
-                onDataClick(String(entry.payload?.name ?? ""))
+                onDataClick(
+                  String(entry.payload?.name ?? ""),
+                  ds.label || undefined,
+                )
               : undefined}
             shape={single ? soloBar : undefined}
           />
@@ -468,7 +520,7 @@ function VerticalBarChart(
 function HorizontalBarChart(
   { data, onDataClick }: {
     data: ChartData;
-    onDataClick?: (label: string) => void;
+    onDataClick?: ChartDataClick;
   },
 ) {
   const rows = toRows(data);
@@ -507,7 +559,10 @@ function HorizontalBarChart(
             cursor={onDataClick ? "pointer" : undefined}
             onClick={onDataClick
               ? (entry: { payload?: { name?: unknown } }) =>
-                onDataClick(String(entry.payload?.name ?? ""))
+                onDataClick(
+                  String(entry.payload?.name ?? ""),
+                  ds.label || undefined,
+                )
               : undefined}
           />
         ))}
@@ -519,7 +574,7 @@ function HorizontalBarChart(
 function LineChartView(
   { data, onDataClick }: {
     data: ChartData;
-    onDataClick?: (label: string) => void;
+    onDataClick?: ChartDataClick;
   },
 ) {
   const rows = toRows(data);
@@ -530,9 +585,13 @@ function LineChartView(
         data={rows}
         margin={MARGIN}
         onClick={onDataClick
-          ? (e: Record<string, unknown>) => {
-            if (e?.activeLabel) onDataClick(String(e.activeLabel));
-          }
+          ? (state, event) =>
+            activateCategoricalPoint(
+              data,
+              onDataClick,
+              state as unknown as Record<string, unknown>,
+              event.target,
+            )
           : undefined}
       >
         <CartesianGrid {...GRID} vertical={false} />
@@ -546,26 +605,36 @@ function LineChartView(
           cursor={<BandCursor count={rows.length} />}
           isAnimationActive={false}
         />
-        {data.datasets.map((ds, i) => (
-          <Line
-            key={ds.label}
-            type="linear"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            dataKey={ds.label}
-            stroke={dsColor(ds, i, data.datasets.length)}
-            strokeWidth={2}
-            strokeDasharray={ds.strokeStyle === "dashed" ? "6 3" : undefined}
-            dot={ds.showDots !== false && ds.strokeStyle !== "dashed"
-              ? { r: 2.6, fill: dsColor(ds, i, data.datasets.length) }
-              : false}
-            activeDot={onDataClick
-              ? { ...ACTIVE_DOT_BASE, cursor: "pointer" }
-              : ACTIVE_DOT_BASE}
-            yAxisId={ds.yAxisId}
-            isAnimationActive={false}
-          />
-        ))}
+        {data.datasets.map((ds, i) => {
+          const marker = onDataClick && ds.label
+            ? { "data-chart-series": ds.label }
+            : {};
+          return (
+            <Line
+              key={ds.label}
+              type="linear"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              dataKey={ds.label}
+              stroke={dsColor(ds, i, data.datasets.length)}
+              strokeWidth={2}
+              strokeDasharray={ds.strokeStyle === "dashed" ? "6 3" : undefined}
+              dot={ds.showDots !== false && ds.strokeStyle !== "dashed"
+                ? {
+                  r: 2.6,
+                  fill: dsColor(ds, i, data.datasets.length),
+                  ...marker,
+                }
+                : false}
+              activeDot={onDataClick
+                ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
+                : ACTIVE_DOT_BASE}
+              yAxisId={ds.yAxisId}
+              isAnimationActive={false}
+              {...marker}
+            />
+          );
+        })}
       </LineChart>
     </ResponsiveContainer>
   );
@@ -574,7 +643,7 @@ function LineChartView(
 function AreaChartView(
   { data, onDataClick }: {
     data: ChartData;
-    onDataClick?: (label: string) => void;
+    onDataClick?: ChartDataClick;
   },
 ) {
   const rows = toRows(data);
@@ -586,9 +655,13 @@ function AreaChartView(
         data={rows}
         margin={MARGIN}
         onClick={onDataClick
-          ? (e: Record<string, unknown>) => {
-            if (e?.activeLabel) onDataClick(String(e.activeLabel));
-          }
+          ? (state, event) =>
+            activateCategoricalPoint(
+              data,
+              onDataClick,
+              state as unknown as Record<string, unknown>,
+              event.target,
+            )
           : undefined}
       >
         <defs>
@@ -624,6 +697,9 @@ function AreaChartView(
         />
         {data.datasets.map((ds, i) => {
           const color = dsColor(ds, i, data.datasets.length);
+          const marker = onDataClick && ds.label
+            ? { "data-chart-series": ds.label }
+            : {};
           return (
             <Area
               key={ds.label}
@@ -640,10 +716,13 @@ function AreaChartView(
                   Math.min(i, STACKED_AREA_OPACITY.length - 1)
                 ]
                 : undefined}
-              dot={ds.showDots ? { r: 2.6, fill: color } : false}
-              activeDot={ACTIVE_DOT_BASE}
+              dot={ds.showDots ? { r: 2.6, fill: color, ...marker } : false}
+              activeDot={onDataClick
+                ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
+                : ACTIVE_DOT_BASE}
               stackId={stacked ? (ds.stack ?? "default") : undefined}
               isAnimationActive={false}
+              {...marker}
             />
           );
         })}
@@ -655,7 +734,7 @@ function AreaChartView(
 function ComposedChartView(
   { data, onDataClick }: {
     data: ChartData;
-    onDataClick?: (label: string) => void;
+    onDataClick?: ChartDataClick;
   },
 ) {
   const rows = toRows(data);
@@ -666,9 +745,13 @@ function ComposedChartView(
         data={rows}
         margin={MARGIN}
         onClick={onDataClick
-          ? (e: Record<string, unknown>) => {
-            if (e?.activeLabel) onDataClick(String(e.activeLabel));
-          }
+          ? (state, event) =>
+            activateCategoricalPoint(
+              data,
+              onDataClick,
+              state as unknown as Record<string, unknown>,
+              event.target,
+            )
           : undefined}
       >
         <CartesianGrid {...GRID} vertical={false} />
@@ -685,6 +768,9 @@ function ComposedChartView(
         {data.datasets.map((ds, i) => {
           const color = dsColor(ds, i, data.datasets.length);
           const dsType = ds.type ?? "bar";
+          const marker = onDataClick && ds.label
+            ? { "data-chart-series": ds.label }
+            : {};
           if (dsType === "line") {
             return (
               <Line
@@ -699,11 +785,14 @@ function ComposedChartView(
                   ? "6 3"
                   : undefined}
                 dot={ds.showDots !== false && ds.strokeStyle !== "dashed"
-                  ? { r: 2.6, fill: color }
+                  ? { r: 2.6, fill: color, ...marker }
                   : false}
-                activeDot={ACTIVE_DOT_BASE}
+                activeDot={onDataClick
+                  ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
+                  : ACTIVE_DOT_BASE}
                 yAxisId={ds.yAxisId}
                 isAnimationActive={false}
+                {...marker}
               />
             );
           }
@@ -720,6 +809,10 @@ function ComposedChartView(
                 fillOpacity={0.15}
                 yAxisId={ds.yAxisId}
                 isAnimationActive={false}
+                activeDot={onDataClick
+                  ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
+                  : ACTIVE_DOT_BASE}
+                {...marker}
               />
             );
           }
@@ -734,6 +827,18 @@ function ComposedChartView(
               stackId={ds.stack}
               yAxisId={ds.yAxisId}
               isAnimationActive={false}
+              cursor={onDataClick ? "pointer" : undefined}
+              onClick={onDataClick
+                ? (entry, _index, event) => {
+                  // Le graphique composé écoute aussi sa colonne entière. Un
+                  // segment exact ne doit donc pas déclencher deux sélections.
+                  event.stopPropagation();
+                  onDataClick(
+                    String(entry.payload?.name ?? ""),
+                    ds.label || undefined,
+                  );
+                }
+                : undefined}
             />
           );
         })}
@@ -746,7 +851,7 @@ function PieDonutChart(
   { data, isDonut, onDataClick }: {
     data: ChartData;
     isDonut: boolean;
-    onDataClick?: (label: string) => void;
+    onDataClick?: ChartDataClick;
   },
 ) {
   const t = useT();
@@ -790,7 +895,7 @@ function PieDonutChart(
               cursor={onDataClick ? "pointer" : undefined}
               onClick={onDataClick
                 ? (entry: { name?: unknown }) =>
-                  onDataClick(String(entry.name ?? ""))
+                  onDataClick(String(entry.name ?? ""), ds.label || undefined)
                 : undefined}
             >
               {pieData.map((_, i) => (
@@ -1072,26 +1177,110 @@ function TreemapView({ data }: { data: ChartData }) {
   );
 }
 
-function ChartRouter(
-  { data, onShared, tryJump }: {
+const KEYBOARD_CURSOR_MOVES: Partial<Record<string, ChartCursorMove>> = {
+  ArrowLeft: "previous-label",
+  ArrowRight: "next-label",
+  ArrowUp: "previous-series",
+  ArrowDown: "next-series",
+};
+
+/**
+ * Un seul arrêt de tabulation pour tout le graphe. Le contrôle reste un pixel
+ * transparent tant qu'il n'a pas le focus clavier ; au focus, il devient une
+ * petite puce qui annonce le point courant. Les interactions souris continuent
+ * donc de traverser vers Recharts et l'UI ne gagne aucun bouton permanent.
+ */
+function ChartKeyboardNavigator(
+  { data, onActivate, isSelected }: {
     data: ChartData;
-    onShared?: (channel: DrillDownChannel) => void;
-    /** Un saut dans la vue pour ce libellé ; `true` s'il a été pris. */
-    tryJump?: (label: string) => boolean;
+    onActivate?: ChartDataClick;
+    isSelected?: (label: string, series?: string) => boolean;
+  },
+) {
+  const t = useT();
+  const [cursor, setCursor] = useState<ChartCursor>({
+    labelIndex: 0,
+    seriesIndex: 0,
+  });
+
+  useEffect(() => {
+    setCursor((current) => ({
+      labelIndex: Math.min(
+        current.labelIndex,
+        Math.max(0, data.labels.length - 1),
+      ),
+      seriesIndex: Math.min(
+        current.seriesIndex,
+        Math.max(0, data.datasets.length - 1),
+      ),
+    }));
+  }, [data.labels.length, data.datasets.length]);
+
+  const selection = chartSelectionAt(data, cursor);
+  if (!onActivate || !selection) return null;
+
+  const value = selection.value === undefined ? "—" : fmtValue(
+    selection.value,
+    data,
+    data.datasets.find((dataset) => dataset.label === selection.series),
+  );
+  const target = selection.series
+    ? t("chart.keyboard.target", {
+      label: selection.label,
+      series: selection.series,
+      value,
+    })
+    : t("chart.keyboard.target_single", { label: selection.label, value });
+  const help = t("chart.keyboard.help");
+
+  return (
+    <button
+      type="button"
+      aria-pressed={isSelected?.(selection.label, selection.series) ?? false}
+      aria-label={t("chart.keyboard.control", { target, help })}
+      aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Enter Space"
+      aria-live="polite"
+      aria-atomic="true"
+      title={help}
+      onKeyDown={(event) => {
+        const move = KEYBOARD_CURSOR_MOVES[event.key];
+        if (!move) return;
+        event.preventDefault();
+        setCursor((current) =>
+          moveChartCursor(
+            current,
+            move,
+            data.labels.length,
+            data.datasets.length,
+          )
+        );
+      }}
+      onClick={() => onActivate(selection.label, selection.series)}
+      class={cx(
+        "pointer-events-none absolute bottom-1.5 left-1.5 z-20 h-px w-px overflow-hidden whitespace-nowrap border-0 p-0 opacity-0",
+        "focus:pointer-events-auto focus:flex focus:h-auto focus:w-auto focus:max-w-[calc(100%-0.75rem)] focus:items-center focus:gap-2 focus:overflow-visible focus:rounded-[4px] focus:border focus:border-accent/50 focus:bg-control focus:px-2.5 focus:py-1.5 focus:opacity-100 focus:shadow-modal",
+        "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
+        "font-mono text-[10.5px] text-ink",
+      )}
+    >
+      <span class="min-w-0 truncate">{target}</span>
+      <span
+        aria-hidden="true"
+        class="shrink-0 text-[9px] tracking-[-0.08em] text-ink-faint"
+      >
+        ←→ ↑↓
+      </span>
+    </button>
+  );
+}
+
+function ChartRouter(
+  { data, onDataClick }: {
+    data: ChartData;
+    onDataClick?: ChartDataClick;
   },
 ) {
   const type = data.type ?? "bar";
-  const canDrill = drillDownChannel(app.getHostCapabilities()) !== "none";
-
-  const onDataClick = (tryJump || (canDrill && data._drillDown))
-    ? (label: string) => {
-      if (tryJump?.(label)) return;
-      if (!canDrill || !data._drillDown) return;
-      const suggested = data._drillDown.replace(/\{label\}/g, label);
-      shareSelection(app, { view: data.title, label, suggested })
-        .then((channel) => onShared?.(channel));
-    }
-    : undefined;
 
   switch (type) {
     case "bar":
@@ -1139,6 +1328,7 @@ function ChartContent(
   },
 ) {
   const [shared, setShared] = useState<DrillDownChannel | null>(null);
+  const legacyChannel = drillDownChannel(app.getHostCapabilities());
   function flashShared(channel: DrillDownChannel) {
     if (channel === "none") return;
     setShared(channel);
@@ -1147,10 +1337,15 @@ function ChartContent(
   const narrow = layout !== "wide";
   const t = useT();
   const fixture = isFixtureMode();
+  const rootKey = viewerRootKey("chart", data.refreshRequest, {
+    title: data.title,
+  });
+  const activeContext = useActiveContext(app, rootKey);
   const viewerNav = useViewerNav(app, {
     title: data.title,
     kind: "root",
     origin: "chart",
+    key: rootKey,
   }, { fixture });
   const nav = viewerNav.nav;
   const { current, isRoot } = nav;
@@ -1158,17 +1353,87 @@ function ChartContent(
   const { list } = viewerNav;
   const [levelError, setLevelError] = useState<string | null>(null);
   const { ask } = viewerNav;
-  // Un point, une barre, une part : quand le serveur a décrit le saut de ce
-  // libellé et que l'hôte relaie les outils, on empile ; sinon le contexte.
-  const tryJump = jumpsEnabled && data._pointJumps
-    ? (label: string): boolean => {
-      const hint = data._pointJumps?.[label];
+  // Un point, une barre, une part : le segment exact prime sur le saut plus
+  // général de sa catégorie. Sans saut typé, la sélection reste du contexte.
+  const tryJump = jumpsEnabled &&
+      (data._pointJumps || data._seriesPointJumps)
+    ? (label: string, series?: string): boolean => {
+      const hint = chartJumpHint(data, label, series);
+      const target = series ? `${label} · ${series}` : label;
       const jump: Jump | null = hint
-        ? jumpFromHint(hint, {}, t("nav.linked_to", { id: label }))
+        ? jumpFromHint(hint, {}, t("nav.linked_to", { id: target }))
         : null;
       if (!jump) return false;
       void nav.jump(jump);
       return true;
+    }
+    : undefined;
+
+  function pointContext(
+    label: string,
+    series?: string,
+  ): ContextSelectionItem {
+    const index = data.labels.indexOf(label);
+    const datasets = series
+      ? data.datasets.filter((dataset) => dataset.label === series)
+      : data.datasets;
+    const values = index < 0 ? [] : datasets.map((dataset) => {
+      const raw = dataset.values[index];
+      if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+      const formatted = fmtValue(raw, data, dataset);
+      return series || !dataset.label
+        ? formatted
+        : `${dataset.label}: ${formatted}`;
+    }).filter((value): value is string => value !== null);
+    const contextLabel = series ? `${label} · ${series}` : label;
+    return {
+      id: `chart:${encodeURIComponent(data.title)}:${
+        encodeURIComponent(label)
+      }:${encodeURIComponent(series ?? "all")}`,
+      view: data.title,
+      label: contextLabel,
+      value: values.length > 0 ? values.join(" · ") : undefined,
+    };
+  }
+
+  useEffect(() => {
+    const candidates = data.labels.flatMap((label) => [
+      pointContext(label),
+      ...data.datasets.flatMap((dataset) =>
+        dataset.label ? [pointContext(label, dataset.label)] : []
+      ),
+    ]);
+    void activeContext.reconcile(candidates);
+  }, [data, activeContext.selections]);
+
+  function pointFallback(label: string, series?: string): string | undefined {
+    return data._drillDown
+      ?.replace(/\{label\}/g, label)
+      .replace(/\{series\}/g, series ?? "");
+  }
+
+  const onDataClick = (tryJump || activeContext.supported ||
+      (legacyChannel === "message" && data._drillDown))
+    ? (label: string, series?: string) => {
+      if (!label) return;
+      const context = pointContext(label, series);
+      const fallback = pointFallback(label, series);
+      const jumped = tryJump?.(label, series) ?? false;
+      if (activeContext.supported) {
+        void activeContext.activate(
+          context,
+          contextFallbackForJump(jumped, fallback),
+        )
+          .then((result) => {
+            if (result === "message") flashShared("message");
+          });
+      }
+      if (jumped || activeContext.supported) return;
+      if (legacyChannel !== "message" || !data._drillDown) return;
+      const suggested = fallback;
+      if (!suggested) return;
+      shareSelection(app, { view: data.title, label: context.label, suggested })
+        .then(flashShared);
     }
     : undefined;
 
@@ -1209,10 +1474,20 @@ function ChartContent(
             </span>
           )}
         </div>
-        {/* LiveDot large = texte + point ; narrow = point seul */}
-        {!narrow
-          ? <LiveDot />
-          : <span class="size-[5px] shrink-0 rounded-full bg-ok" />}
+        <div class="flex min-w-0 shrink-0 items-center gap-2">
+          <ActiveContextChip
+            compact={narrow}
+            selections={activeContext.selections}
+            failed={activeContext.failed}
+            evictedLabel={activeContext.evictedLabel}
+            onRemove={(selection) => activeContext.remove(selection)}
+            onClear={() => activeContext.clear()}
+          />
+          {/* LiveDot large = texte + point ; narrow = point seul */}
+          {!narrow
+            ? <LiveDot />
+            : <span class="size-[5px] shrink-0 rounded-full bg-ok" />}
+        </div>
       </header>
 
       <PathBar
@@ -1257,11 +1532,16 @@ function ChartContent(
               <span>{data.rightAxisLabel}</span>
             </div>
           )}
-          <div class="min-h-0 flex-1">
+          <div class="relative min-h-0 flex-1">
             <ChartRouter
               data={data}
-              onShared={flashShared}
-              tryJump={tryJump}
+              onDataClick={onDataClick}
+            />
+            <ChartKeyboardNavigator
+              data={data}
+              onActivate={onDataClick}
+              isSelected={(label, series) =>
+                activeContext.isSelected(pointContext(label, series))}
             />
           </div>
           {data.xAxisLabel && (
@@ -1297,7 +1577,7 @@ export function ChartViewer() {
     fixture ? fixtureFromSearch() : null,
   );
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
-  const refreshInFlightRef = useRef(false);
+  const refreshSequenceRef = useRef(createUiRefreshSequence());
   const lastRefreshStartedAtRef = useRef(0);
 
   const { ref: containerRef, layout } = useViewerLayout<HTMLDivElement>();
@@ -1337,13 +1617,14 @@ export function ChartViewer() {
       dataRef.current,
       refreshRequestRef.current,
     );
+    const sequence = refreshSequenceRef.current;
     if (
       !canRequestUiRefresh({
         request,
         visibilityState: typeof document === "undefined"
           ? "visible"
           : document.visibilityState,
-        refreshInFlight: refreshInFlightRef.current,
+        refreshInFlight: sequence.inFlight !== null,
         now: Date.now(),
         lastRefreshStartedAt: lastRefreshStartedAtRef.current,
         minIntervalMs: CHART_REFRESH_INTERVAL_MS,
@@ -1352,43 +1633,61 @@ export function ChartViewer() {
       return false;
     }
 
-    if (!request || !app.getHostCapabilities()?.serverTools) {
+    if (
+      !request ||
+      !canCallViewerTool(
+        app.getHostCapabilities()?.serverTools,
+        readAvailableTools(dataRef.current),
+        request.toolName,
+      )
+    ) {
       return false;
     }
 
-    refreshInFlightRef.current = true;
+    const started = beginUiRefresh(sequence);
+    if (started.generation === null) return false;
+    refreshSequenceRef.current = started.state;
     lastRefreshStartedAtRef.current = Date.now();
     setRefreshing(true);
 
+    let result: ToolResultPayload | null = null;
+    let failure: { cause: unknown } | null = null;
     try {
-      const result = await app.callServerTool({
+      result = await app.callServerTool({
         name: request.toolName,
         arguments: request.arguments,
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
-
-      if (result.isError) {
-        setError(t("common.error.refresh_failed"));
-        return false;
-      }
-
-      if (!consumeToolResult(result)) {
-        setError(t("common.error.refresh_no_data"));
-        return false;
-      }
-
-      return true;
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
-      return false;
-    } finally {
-      refreshInFlightRef.current = false;
-      setRefreshing(false);
+      failure = { cause };
     }
+
+    const completed = completeUiRefresh(
+      refreshSequenceRef.current,
+      started.generation,
+    );
+    refreshSequenceRef.current = completed.state;
+    let succeeded = false;
+    if (completed.accept) {
+      if (failure) {
+        setError(normalizeUiRefreshFailureMessage(failure.cause));
+      } else if (result?.isError) {
+        setError(t("common.error.refresh_failed"));
+      } else if (result && consumeToolResult(result)) {
+        succeeded = true;
+      } else {
+        setError(t("common.error.refresh_no_data"));
+      }
+    }
+    setRefreshing(false);
+    return succeeded;
   }
 
   useEffect(() => {
     if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
+      refreshSequenceRef.current = invalidateUiRefresh(
+        refreshSequenceRef.current,
+      );
       consumeToolResult(result);
     };
 

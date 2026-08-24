@@ -5,7 +5,7 @@
  * corps vit dans `shared/doclist` pour que toute vue puisse rendre une liste.
  */
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
 import {
@@ -18,8 +18,12 @@ import {
 import { useViewerLayout } from "~/shared/useViewerLayout";
 import { useT } from "~/shared/i18n-hook";
 import {
+  beginUiRefresh,
   canRequestUiRefresh,
+  completeUiRefresh,
+  createUiRefreshSequence,
   extractToolResultText,
+  invalidateUiRefresh,
   normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
@@ -32,9 +36,11 @@ import { DoclistEmptyState } from "~/shared/doclist/EmptyState";
 import { SearchControl } from "~/shared/doclist/SearchControl";
 import { DoclistBody } from "~/shared/doclist/DoclistBody";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody, levelListData } from "~/shared/levels/LevelBody";
 import { DOCLIST_FIXTURE, isFixtureMode } from "./fixture.ts";
+import { canRefreshDoclistRoot } from "./capabilities.ts";
 
 const app = new App({ name: "Doclist Viewer", version: "2.0.0" });
 const DOCLIST_REFRESH_INTERVAL_MS = 15_000;
@@ -49,9 +55,12 @@ export function DoclistViewer() {
   const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rootFreshEvent, setRootFreshEvent] = useState(0);
+  const [rootMutationEvent, setRootMutationEvent] = useState(0);
+  const rootEventRef = useRef(0);
   const dataRef = useRef<DoclistData | null>(fixture ? DOCLIST_FIXTURE : null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
-  const refreshInFlightRef = useRef(false);
+  const refreshSequenceRef = useRef(createUiRefreshSequence());
   const lastRefreshStartedAtRef = useRef(0);
 
   function hydrateData(nextData: DoclistData) {
@@ -61,6 +70,8 @@ export function DoclistViewer() {
       refreshRequestRef.current,
     );
     setData(nextData);
+    const event = ++rootEventRef.current;
+    setRootFreshEvent(event);
   }
 
   function consumeToolResult(result: ToolResultPayload): boolean {
@@ -93,51 +104,93 @@ export function DoclistViewer() {
     }
   }
 
-  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
-    if (fixture) return;
+  async function requestRefresh(
+    options: { ignoreInterval?: boolean; force?: boolean } = {},
+  ): Promise<boolean> {
+    if (fixture) return false;
     const request = resolveUiRefreshRequest(
       dataRef.current,
       refreshRequestRef.current,
     );
+    if (
+      !request ||
+      !canRefreshDoclistRoot(
+        app.getHostCapabilities()?.serverTools,
+        dataRef.current?._availableTools,
+        request,
+      )
+    ) return false;
+
+    const sequence = refreshSequenceRef.current;
+    if (sequence.inFlight !== null) {
+      if (options.force) {
+        refreshSequenceRef.current = beginUiRefresh(sequence, {
+          force: true,
+        }).state;
+      }
+      return false;
+    }
+    const forced = Boolean(options.force || sequence.pendingForced);
     if (
       !canRequestUiRefresh({
         request,
         visibilityState: typeof document === "undefined"
           ? "visible"
           : document.visibilityState,
-        refreshInFlight: refreshInFlightRef.current,
+        refreshInFlight: false,
         now: Date.now(),
         lastRefreshStartedAt: lastRefreshStartedAtRef.current,
         minIntervalMs: DOCLIST_REFRESH_INTERVAL_MS,
-      }, options)
-    ) return;
+      }, { ignoreInterval: options.ignoreInterval || forced })
+    ) return false;
 
-    if (!request || !app.getHostCapabilities()?.serverTools) return;
-
-    refreshInFlightRef.current = true;
+    const started = beginUiRefresh(sequence, { force: forced });
+    if (started.generation === null) return false;
+    refreshSequenceRef.current = started.state;
     lastRefreshStartedAtRef.current = Date.now();
     setRefreshing(true);
 
+    let result: ToolResultPayload | null = null;
+    let failure: { cause: unknown } | null = null;
     try {
-      const result = await app.callServerTool(
+      result = await app.callServerTool(
         { name: request.toolName, arguments: request.arguments },
         { timeout: TOOL_CALL_TIMEOUT_MS },
       );
-      if (result.isError) setError(t("common.error.refresh_failed"));
-      else if (!consumeToolResult(result)) {
+    } catch (cause) {
+      failure = { cause };
+    }
+
+    const completed = completeUiRefresh(
+      refreshSequenceRef.current,
+      started.generation,
+    );
+    refreshSequenceRef.current = completed.state;
+    let succeeded = false;
+    if (completed.accept) {
+      if (failure) {
+        setError(normalizeUiRefreshFailureMessage(failure.cause));
+      } else if (result?.isError) {
+        setError(t("common.error.refresh_failed"));
+      } else if (result && consumeToolResult(result)) {
+        succeeded = true;
+      } else {
         setError(t("common.error.refresh_no_data"));
       }
-    } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
-    } finally {
-      refreshInFlightRef.current = false;
-      setRefreshing(false);
     }
+    setRefreshing(false);
+    if (completed.runPending) {
+      void requestRefresh({ ignoreInterval: true, force: true });
+    }
+    return succeeded;
   }
 
   useEffect(() => {
     if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
+      refreshSequenceRef.current = invalidateUiRefresh(
+        refreshSequenceRef.current,
+      );
       consumeToolResult(result);
     };
     app.ontoolinputpartial = () => {
@@ -170,13 +223,35 @@ export function DoclistViewer() {
     return <DoclistEmptyState />;
   }
 
+  const refreshRequest = resolveUiRefreshRequest(
+    data,
+    refreshRequestRef.current,
+  );
+  const refreshAvailable = !fixture && canRefreshDoclistRoot(
+    app.getHostCapabilities()?.serverTools,
+    data._availableTools,
+    refreshRequest,
+  );
+
   return (
     <DoclistContent
       data={data}
       error={error}
       refreshing={refreshing}
       fixture={fixture}
+      refreshAvailable={refreshAvailable}
+      rootFreshEvent={rootFreshEvent}
+      rootMutationEvent={rootMutationEvent}
       onRefresh={() => void requestRefresh({ ignoreInterval: true })}
+      onMutationInvalidate={() => {
+        const event = ++rootEventRef.current;
+        setRootMutationEvent(event);
+        refreshSequenceRef.current = invalidateUiRefresh(
+          refreshSequenceRef.current,
+        );
+      }}
+      onMutationRefresh={() =>
+        void requestRefresh({ ignoreInterval: true, force: true })}
       onError={setError}
     />
   );
@@ -187,14 +262,24 @@ function DoclistContent({
   error,
   refreshing,
   fixture,
+  refreshAvailable,
+  rootFreshEvent,
+  rootMutationEvent,
   onRefresh,
+  onMutationInvalidate,
+  onMutationRefresh,
   onError,
 }: {
   data: DoclistData;
   error: string | null;
   refreshing: boolean;
   fixture: boolean;
+  refreshAvailable: boolean;
+  rootFreshEvent: number;
+  rootMutationEvent: number;
   onRefresh: () => void;
+  onMutationInvalidate: () => void;
+  onMutationRefresh: () => void;
   onError: (msg: string | null) => void;
 }) {
   const t = useT();
@@ -204,6 +289,10 @@ function DoclistContent({
     title: rootTitle,
     kind: "root",
     origin: "list",
+    key: viewerRootKey("doclist", data.refreshRequest, {
+      doctype: data.doctype ?? null,
+      title: data.doctype ? null : rootTitle,
+    }),
   }, {
     fixture,
     rootList: data,
@@ -216,6 +305,11 @@ function DoclistContent({
   const levelData: DoclistData = isRoot ? data : levelListData(current);
   const { list } = viewerNav;
   const isList = isRoot || current.kind === "list";
+  const rootLevelId = nav.stack.levels[0].id;
+
+  useLayoutEffect(() => {
+    if (rootFreshEvent > rootMutationEvent) nav.clearStale(rootLevelId);
+  }, [rootFreshEvent, rootMutationEvent, rootLevelId]);
 
   return (
     <ViewerShell class="h-screen" containerRef={shellRef}>
@@ -224,7 +318,7 @@ function DoclistContent({
         count={isList
           ? (isRoot ? data.count ?? list.rows.length : current.count)
           : undefined}
-        live={isRoot && !fixture && !error}
+        live={isRoot && refreshAvailable && !error}
         layout={layout}
         actions={isList && !current.loading && (
           <>
@@ -237,12 +331,10 @@ function DoclistContent({
             />
             {layout === "wide" && (
               <>
-                {isRoot && (
+                {isRoot && refreshAvailable && (
                   <ToolButton
-                    disabled={refreshing || fixture}
-                    title={fixture
-                      ? t("doclist.preview.no_refresh")
-                      : t("common.refresh")}
+                    disabled={refreshing}
+                    title={t("common.refresh")}
                     onClick={onRefresh}
                   >
                     {refreshing ? "…" : "↻"}
@@ -276,6 +368,10 @@ function DoclistContent({
         onAsk={ask}
         onError={onError}
         onMutated={nav.markStale}
+        onMutationInvalidate={refreshAvailable
+          ? onMutationInvalidate
+          : undefined}
+        onMutationRefresh={refreshAvailable ? onMutationRefresh : undefined}
         onRefresh={() => void nav.refreshLevel()}
       >
         <DoclistBody
@@ -286,7 +382,11 @@ function DoclistContent({
           fixture={fixture}
           error={error}
           stale={nav.stack.levels[0].stale}
-          onRefresh={onRefresh}
+          onRefresh={refreshAvailable ? onRefresh : undefined}
+          onMutationInvalidate={refreshAvailable
+            ? onMutationInvalidate
+            : undefined}
+          onMutationRefresh={refreshAvailable ? onMutationRefresh : undefined}
           onMutated={nav.markStale}
           onError={onError}
           onJump={jumpsEnabled ? nav.jump : undefined}

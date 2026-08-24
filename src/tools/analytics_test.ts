@@ -163,6 +163,43 @@ Deno.test("erpnext_sales_chart - customer grouping returns horizontal-bar", asyn
   assertChartMeta(result);
 });
 
+Deno.test("erpnext_sales_chart - preserves the published grouping populations", async () => {
+  const cases = [
+    ["customer", false, "Sales Invoice", [["docstatus", "=", 1]]],
+    ["customer", true, "Sales Invoice", []],
+    ["item", false, "Sales Invoice Item", [["docstatus", "=", 1]]],
+    ["item", true, "Sales Invoice Item", [["docstatus", "=", 1]]],
+    ["status", false, "Sales Invoice", [["docstatus", "!=", 2]]],
+    ["status", true, "Sales Invoice", [["docstatus", "!=", 2]]],
+  ] as const;
+  const tool = getTool("erpnext_sales_chart");
+
+  for (
+    const [groupBy, includeDrafts, expectedDoctype, expectedFilter] of cases
+  ) {
+    let capturedDoctype = "";
+    let capturedFilters: unknown;
+    const client = makeMockClient({
+      list: async (doctype: string, options: { filters?: unknown }) => {
+        capturedDoctype = doctype;
+        capturedFilters = options.filters;
+        return [];
+      },
+    });
+
+    await tool.handler(
+      { group_by: groupBy, include_drafts: includeDrafts },
+      makeCtx(client),
+    );
+    assertEquals(capturedDoctype, expectedDoctype, groupBy);
+    assertEquals(
+      capturedFilters,
+      expectedFilter,
+      `${groupBy}/include_drafts=${includeDrafts}`,
+    );
+  }
+});
+
 // ── erpnext_revenue_trend ───────────────────────────────────────────────────
 
 Deno.test("erpnext_revenue_trend - returns line chart with monthly data", async () => {
@@ -286,6 +323,7 @@ Deno.test("erpnext_revenue_vs_orders - returns composed chart with dual axis", a
   assertEquals(result.datasets[0].type, "bar");
   assertEquals(result.datasets[1].type, "line");
   assertEquals(result.datasets[1].yAxisId, "right");
+  assertEquals(result.datasets[1].unit, "orders");
   // Acme: 2 orders, 8000 total
   assertEquals(result.datasets[0].values[0], 8000);
   assertEquals(result.datasets[1].values[0], 2);

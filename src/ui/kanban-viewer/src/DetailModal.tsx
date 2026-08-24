@@ -5,7 +5,7 @@
  * Aucun import de @casys/mcp-view : les primitives viennent de ~/shared/ui.
  */
 import type { JSX } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   Button,
   CONTROL_CLASS,
@@ -21,12 +21,18 @@ import {
   StateMessage,
 } from "~/shared/ui";
 import type { KanbanBoardData, KanbanCardData } from "~/shared/kanban/types";
-import type { CardDetailState } from "~/shared/kanban/state";
+import {
+  type CardDetailState,
+  rebaseCardEdits,
+  resolveCardDetailCloseIntent,
+} from "~/shared/kanban/state";
+import { ConfirmSheet, useConfirm } from "~/shared/confirm";
 import { getAvailableTargets } from "./KanbanViewer";
 import { LocalActionButton } from "./LocalActionButton";
 import { useT } from "~/shared/i18n-hook";
 import type { TFunction } from "~/shared/i18n-hook";
 import { hintLabel, type NavHint } from "~/shared/jumps";
+import { createSingleFlightGate } from "~/shared/single-flight.ts";
 
 const DETAIL_SKIP_FIELDS = new Set([
   "doctype",
@@ -352,13 +358,14 @@ function fieldControl(
   editedFields: Record<string, string>,
   onFieldChange: (key: string, value: string) => void,
   t: TFunction,
+  editable: boolean,
 ): JSX.Element {
   const isReadonly = READONLY_FIELDS.has(fieldKey);
   const isEdited = fieldKey in editedFields;
   const displayValue = isEdited ? editedFields[fieldKey] : String(value);
   const type = getFieldType(fieldKey, value);
 
-  if (isReadonly) {
+  if (isReadonly || !editable) {
     return <span class="text-data text-ink-2">{String(value)}</span>;
   }
 
@@ -470,9 +477,9 @@ function AssigneesSection({
   onLoadUsers,
 }: {
   assignees: string[];
-  onAssign: (assignTo: string) => Promise<void>;
+  onAssign?: (assignTo: string) => Promise<void>;
   onUnassign?: (assignee: string) => Promise<void>;
-  onLoadUsers: () => Promise<AssignableUser[]>;
+  onLoadUsers?: () => Promise<AssignableUser[]>;
 }) {
   const t = useT();
   const [users, setUsers] = useState<AssignableUser[] | null>(null);
@@ -483,6 +490,10 @@ function AssigneesSection({
   const [assignError, setAssignError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!onLoadUsers) {
+      setUsers([]);
+      return;
+    }
     let cancelled = false;
     onLoadUsers()
       .then((loaded) => {
@@ -507,7 +518,7 @@ function AssigneesSection({
   );
 
   async function handleAssign() {
-    if (!selected || assigning) return;
+    if (!onAssign || !selected || assigning) return;
     setAssigning(true);
     setAssignError(null);
     try {
@@ -571,43 +582,45 @@ function AssigneesSection({
           </Badge>
         ))}
       </div>
-      <div class="flex flex-wrap items-center gap-1.5">
-        <SelectShell>
-          <select
-            aria-label={t("kanban.assignees.select_label")}
-            class={cx(SELECT_CLASS, "w-auto")}
-            value={selected}
-            onChange={(e) =>
-              setSelected((e.currentTarget as HTMLSelectElement).value)}
-            disabled={assigning || (users === null && !loadError)}
-          >
-            <option value="">
-              {users === null
-                ? (loadError
-                  ? t("kanban.assignees.placeholder_error")
-                  : t("common.loading"))
-                : t("kanban.assignees.placeholder_select")}
-            </option>
-            {options.map((user) => (
-              <option key={user.name} value={user.name}>
-                {user.full_name
-                  ? `${user.full_name} (${user.name})`
-                  : user.name}
+      {onAssign && onLoadUsers && (
+        <div class="flex flex-wrap items-center gap-1.5">
+          <SelectShell>
+            <select
+              aria-label={t("kanban.assignees.select_label")}
+              class={cx(SELECT_CLASS, "w-auto")}
+              value={selected}
+              onChange={(e) =>
+                setSelected((e.currentTarget as HTMLSelectElement).value)}
+              disabled={assigning || (users === null && !loadError)}
+            >
+              <option value="">
+                {users === null
+                  ? (loadError
+                    ? t("kanban.assignees.placeholder_error")
+                    : t("common.loading"))
+                  : t("kanban.assignees.placeholder_select")}
               </option>
-            ))}
-          </select>
-        </SelectShell>
-        {selected && (
-          <Button
-            disabled={assigning}
-            onClick={() => void handleAssign()}
-          >
-            {assigning
-              ? t("kanban.assignees.assigning")
-              : t("kanban.assignees.assign_btn")}
-          </Button>
-        )}
-      </div>
+              {options.map((user) => (
+                <option key={user.name} value={user.name}>
+                  {user.full_name
+                    ? `${user.full_name} (${user.name})`
+                    : user.name}
+                </option>
+              ))}
+            </select>
+          </SelectShell>
+          {selected && (
+            <Button
+              disabled={assigning}
+              onClick={() => void handleAssign()}
+            >
+              {assigning
+                ? t("kanban.assignees.assigning")
+                : t("kanban.assignees.assign_btn")}
+            </Button>
+          )}
+        </div>
+      )}
       {(assignError ?? loadError) && (
         /* Erreur inline : des données sont déjà affichées — pas de StateMessage tone="bad". */
         <p class="border-l-2 border-bad pl-2.5 text-chip text-bad">
@@ -653,7 +666,7 @@ export function CardDetailModal({
     assignee: string,
   ) => Promise<void>;
   onLoadUsers?: () => Promise<AssignableUser[]>;
-  onNavigate?: (message: string) => void;
+  onNavigate?: (message: string) => Promise<boolean>;
   /**
    * Hints de navigation du tableau (issus de `_sendMessageHints`).
    * Présents uniquement quand l'hôte relaie les outils serveur.
@@ -666,15 +679,40 @@ export function CardDetailModal({
   onJump?: (hint: NavHint, cardId: string) => void;
 }) {
   const t = useT();
+  const discardConfirm = useConfirm();
   const [editedFields, setEditedFields] = useState<Record<string, string>>({});
+  const editRevisionRef = useRef(0);
+  const saveInFlightRef = useRef(false);
+  const saveGenerationRef = useRef(0);
+  const selectedCardIdRef = useRef(detail.selectedCardId);
+  const cardDetailRef = useRef(detail.cardDetail);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<
     { text: string; isError: boolean } | null
   >(null);
+  const [navigatePendingKey, setNavigatePendingKey] = useState<string | null>(
+    null,
+  );
+  const [navigateFailed, setNavigateFailed] = useState(false);
+  const navigateGateRef = useRef(createSingleFlightGate());
+
+  cardDetailRef.current = detail.cardDetail;
+  if (selectedCardIdRef.current !== detail.selectedCardId) {
+    selectedCardIdRef.current = detail.selectedCardId;
+    saveGenerationRef.current += 1;
+  }
 
   useEffect(() => {
+    editRevisionRef.current += 1;
+    saveInFlightRef.current = false;
     setEditedFields({});
+    setSaving(false);
     setSaveMessage(null);
+    setNavigatePendingKey(null);
+    setNavigateFailed(false);
+    navigateGateRef.current.reset();
+    discardConfirm.dismiss();
+    return () => navigateGateRef.current.reset();
   }, [detail.selectedCardId]);
 
   if (!detail.selectedCardId) return null;
@@ -686,9 +724,34 @@ export function CardDetailModal({
     ? getAvailableTargets(board, card.columnId)
     : [];
   const hasEdits = Object.keys(editedFields).length > 0;
+  const canEdit = Boolean(onSave);
+
+  function requestDiscard(
+    onConfirm: () => void,
+    actionLabel: string,
+  ) {
+    if (resolveCardDetailCloseIntent(editedFields) === "close") {
+      onConfirm();
+      return;
+    }
+    discardConfirm.request({
+      subject: selectedCardId,
+      title: t("kanban.modal.discard.title"),
+      detail: t("kanban.modal.discard.detail"),
+      actionLabel,
+      onConfirm,
+    });
+  }
+
+  function requestClose() {
+    requestDiscard(onClose, t("kanban.modal.discard.action"));
+  }
 
   function handleFieldChange(key: string, value: string) {
+    if (!canEdit) return;
+    editRevisionRef.current += 1;
     setEditedFields((prev) => {
+      if (saveInFlightRef.current) return { ...prev, [key]: value };
       const original = detail.cardDetail
         ? String(detail.cardDetail[key] ?? "")
         : "";
@@ -703,14 +766,40 @@ export function CardDetailModal({
   }
 
   async function handleSave() {
-    if (!hasEdits || !onSave || !detail.selectedCardId) return;
+    if (
+      !hasEdits || !onSave || !detail.selectedCardId ||
+      saveInFlightRef.current
+    ) return;
+    const submittedCardId = detail.selectedCardId;
+    const originalDetail = detail.cardDetail ?? {};
+    const submittedFields = { ...editedFields };
+    const submittedRevision = editRevisionRef.current;
+    const saveGeneration = ++saveGenerationRef.current;
+    saveInFlightRef.current = true;
     setSaving(true);
     setSaveMessage(null);
     try {
-      await onSave(board.doctype, detail.selectedCardId, editedFields);
-      setSaveMessage({ text: t("kanban.modal.saved"), isError: false });
-      setEditedFields({});
+      await onSave(board.doctype, submittedCardId, submittedFields);
+      if (
+        saveGeneration !== saveGenerationRef.current ||
+        selectedCardIdRef.current !== submittedCardId
+      ) return;
+      const hydratedDetail = cardDetailRef.current;
+      const canonical = hydratedDetail !== originalDetail && hydratedDetail
+        ? hydratedDetail
+        : { ...originalDetail, ...submittedFields };
+      setSaveMessage(
+        editRevisionRef.current === submittedRevision
+          ? { text: t("kanban.modal.saved"), isError: false }
+          : null,
+      );
+      setEditedFields((current) => rebaseCardEdits(current, canonical));
     } catch (error) {
+      if (
+        saveGeneration !== saveGenerationRef.current ||
+        selectedCardIdRef.current !== submittedCardId
+      ) return;
+      setEditedFields((current) => rebaseCardEdits(current, originalDetail));
       setSaveMessage({
         text: error instanceof Error
           ? error.message
@@ -718,8 +807,32 @@ export function CardDetailModal({
         isError: true,
       });
     } finally {
-      setSaving(false);
+      if (saveGeneration === saveGenerationRef.current) {
+        saveInFlightRef.current = false;
+        setSaving(false);
+      }
     }
+  }
+
+  async function handleNavigate(key: string, message: string) {
+    if (!onNavigate) return;
+    const token = navigateGateRef.current.begin();
+    if (token === null) return;
+    setNavigatePendingKey(key);
+    setNavigateFailed(false);
+    let sent = false;
+    try {
+      sent = await onNavigate(message);
+    } catch {
+      sent = false;
+    }
+    if (!navigateGateRef.current.settle(token)) return;
+    setNavigatePendingKey(null);
+    setNavigateFailed(!sent);
+  }
+
+  if (discardConfirm.pending) {
+    return <ConfirmSheet confirm={discardConfirm} />;
   }
 
   const classified = detail.cardDetail
@@ -783,6 +896,7 @@ export function CardDetailModal({
           {hasEdits && (
             <Button
               variant="quiet"
+              disabled={saving}
               onClick={() => {
                 setEditedFields({});
                 setSaveMessage(null);
@@ -811,8 +925,10 @@ export function CardDetailModal({
                 key={target.columnId}
                 variant="secondary"
                 onClick={() => {
-                  onMove(card, target.columnId, target.label);
-                  onClose();
+                  requestDiscard(() => {
+                    onMove(card, target.columnId, target.label);
+                    onClose();
+                  }, t("kanban.modal.discard.move_action"));
                 }}
               >
                 {target.color && (
@@ -841,7 +957,11 @@ export function CardDetailModal({
               key={hint.key ?? hint.label}
               label={`${hintLabel(hint)} ›`}
               variant="info"
-              onClick={() => onJump!(hint, detail.selectedCardId!)}
+              onClick={() =>
+                requestDiscard(
+                  () => onJump!(hint, detail.selectedCardId!),
+                  t("kanban.modal.discard.continue_action"),
+                )}
             />
           ))}
           {/* Boutons sendMessage — comportement d'origine, sans outils */}
@@ -850,8 +970,11 @@ export function CardDetailModal({
               <LocalActionButton
                 label={t("kanban.modal.nav.view_list")}
                 variant="info"
+                disabled={navigatePendingKey !== null}
+                loading={navigatePendingKey === "view_list"}
                 onClick={() =>
-                  onNavigate!(
+                  void handleNavigate(
+                    "view_list",
                     t("kanban.nav.view_list.message", {
                       doctype: board.doctype,
                       id: detail.selectedCardId,
@@ -862,8 +985,11 @@ export function CardDetailModal({
                 <LocalActionButton
                   label={t("kanban.modal.nav.timesheets")}
                   variant="info"
+                  disabled={navigatePendingKey !== null}
+                  loading={navigatePendingKey === "timesheets"}
                   onClick={() =>
-                    onNavigate!(
+                    void handleNavigate(
+                      "timesheets",
                       t("kanban.nav.timesheets.message", {
                         id: detail.selectedCardId,
                       }),
@@ -875,8 +1001,11 @@ export function CardDetailModal({
                   <LocalActionButton
                     label={t("kanban.modal.nav.quotations")}
                     variant="info"
+                    disabled={navigatePendingKey !== null}
+                    loading={navigatePendingKey === "quotations"}
                     onClick={() =>
-                      onNavigate!(
+                      void handleNavigate(
+                        "quotations",
                         t("kanban.nav.quotations.message", {
                           id: detail.selectedCardId,
                         }),
@@ -887,13 +1016,30 @@ export function CardDetailModal({
                 <LocalActionButton
                   label={t("kanban.modal.nav.related_tasks")}
                   variant="info"
+                  disabled={navigatePendingKey !== null}
+                  loading={navigatePendingKey === "tasks"}
                   onClick={() =>
-                    onNavigate!(
+                    void handleNavigate(
+                      "tasks",
                       t("kanban.nav.tasks.message", {
                         id: detail.selectedCardId,
                       }),
                     )}
                 />
+              )}
+              {(navigatePendingKey !== null || navigateFailed) && (
+                <span
+                  role="status"
+                  aria-live="polite"
+                  class={cx(
+                    "basis-full font-mono text-chip",
+                    navigateFailed ? "text-bad" : "text-ink-faint",
+                  )}
+                >
+                  {t(
+                    navigateFailed ? "message.send_error" : "message.sending",
+                  )}
+                </span>
               )}
             </>
           )}
@@ -906,7 +1052,7 @@ export function CardDetailModal({
     <DetailSheet
       title={sheetTitle}
       eyebrow={classified?.idValue ?? selectedCardId}
-      onClose={onClose}
+      onClose={requestClose}
       footer={footer}
     >
       {/* ── États de chargement / erreur ── */}
@@ -924,17 +1070,25 @@ export function CardDetailModal({
             {/* Titre éditable — l'identifiant est dans l'eyebrow de DetailSheet. */}
             {classified.titleField && (
               <Field label={fieldLabel(classified.titleField.key, t)}>
-                <input
-                  type="text"
-                  class={CONTROL_CLASS}
-                  value={editedFields[classified.titleField.key] ??
-                    String(classified.titleField.value)}
-                  onInput={(e) =>
-                    handleFieldChange(
-                      classified.titleField!.key,
-                      (e.currentTarget as HTMLInputElement).value,
-                    )}
-                />
+                {canEdit
+                  ? (
+                    <input
+                      type="text"
+                      class={CONTROL_CLASS}
+                      value={editedFields[classified.titleField.key] ??
+                        String(classified.titleField.value)}
+                      onInput={(e) =>
+                        handleFieldChange(
+                          classified.titleField!.key,
+                          (e.currentTarget as HTMLInputElement).value,
+                        )}
+                    />
+                  )
+                  : (
+                    <span class="text-data text-ink-2">
+                      {String(classified.titleField.value)}
+                    </span>
+                  )}
               </Field>
             )}
 
@@ -949,64 +1103,94 @@ export function CardDetailModal({
             {classified.priorityValue !== null &&
               classified.priorityValue !== undefined && (
               <Field label={t("kanban.field.priority")}>
-                <SelectShell>
-                  <select
-                    class={SELECT_CLASS}
-                    value={editedFields.priority ?? classified.priorityValue}
-                    onChange={(e) =>
-                      handleFieldChange(
-                        "priority",
-                        (e.currentTarget as HTMLSelectElement).value,
-                      )}
-                  >
-                    {SELECT_OPTIONS.priority.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {t(`kanban.select.priority.${opt.value}`)}
-                      </option>
-                    ))}
-                  </select>
-                </SelectShell>
+                {canEdit
+                  ? (
+                    <SelectShell>
+                      <select
+                        class={SELECT_CLASS}
+                        value={editedFields.priority ??
+                          classified.priorityValue}
+                        onChange={(e) =>
+                          handleFieldChange(
+                            "priority",
+                            (e.currentTarget as HTMLSelectElement).value,
+                          )}
+                      >
+                        {SELECT_OPTIONS.priority.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {t(`kanban.select.priority.${opt.value}`)}
+                          </option>
+                        ))}
+                      </select>
+                    </SelectShell>
+                  )
+                  : (
+                    <span class="text-data text-ink-2">
+                      {classified.priorityValue}
+                    </span>
+                  )}
               </Field>
             )}
 
             {classified.projectValue !== null &&
               classified.projectValue !== undefined && (
               <Field label={t("kanban.field.project")}>
-                <input
-                  type="text"
-                  class={CONTROL_CLASS}
-                  value={editedFields.project ?? classified.projectValue}
-                  onInput={(e) =>
-                    handleFieldChange(
-                      "project",
-                      (e.currentTarget as HTMLInputElement).value,
-                    )}
-                />
+                {canEdit
+                  ? (
+                    <input
+                      type="text"
+                      class={CONTROL_CLASS}
+                      value={editedFields.project ?? classified.projectValue}
+                      onInput={(e) =>
+                        handleFieldChange(
+                          "project",
+                          (e.currentTarget as HTMLInputElement).value,
+                        )}
+                    />
+                  )
+                  : (
+                    <span class="text-data text-ink-2">
+                      {classified.projectValue}
+                    </span>
+                  )}
               </Field>
             )}
 
             {classified.milestoneValue !== null &&
               classified.milestoneValue !== undefined && (
               <Field label={t("kanban.field.is_milestone")}>
-                <button
-                  type="button"
-                  aria-pressed={milestoneOn}
-                  title={milestoneOn
-                    ? t("kanban.modal.milestone.remove_title")
-                    : t("kanban.modal.milestone.set_title")}
-                  class={cx(
-                    "self-start rounded-control border px-3 py-[5px] font-mono text-chip transition-colors",
-                    milestoneOn
-                      ? "bg-brand/12 dark:bg-brand/16 border-accent-edge text-brand-text"
-                      : "bg-control border-line text-ink-muted hover:text-ink",
+                {canEdit
+                  ? (
+                    <button
+                      type="button"
+                      aria-pressed={milestoneOn}
+                      title={milestoneOn
+                        ? t("kanban.modal.milestone.remove_title")
+                        : t("kanban.modal.milestone.set_title")}
+                      class={cx(
+                        "self-start rounded-control border px-3 py-[5px] font-mono text-chip transition-colors",
+                        milestoneOn
+                          ? "bg-brand/12 dark:bg-brand/16 border-accent-edge text-brand-text"
+                          : "bg-control border-line text-ink-muted hover:text-ink",
+                      )}
+                      onClick={() =>
+                        handleFieldChange(
+                          "is_milestone",
+                          milestoneOn ? "0" : "1",
+                        )}
+                    >
+                      {milestoneOn
+                        ? t("kanban.modal.bool.yes")
+                        : t("kanban.modal.bool.no")}
+                    </button>
+                  )
+                  : (
+                    <span class="text-data text-ink-2">
+                      {milestoneOn
+                        ? t("kanban.modal.bool.yes")
+                        : t("kanban.modal.bool.no")}
+                    </span>
                   )}
-                  onClick={() =>
-                    handleFieldChange("is_milestone", milestoneOn ? "0" : "1")}
-                >
-                  {milestoneOn
-                    ? t("kanban.modal.bool.yes")
-                    : t("kanban.modal.bool.no")}
-                </button>
               </Field>
             )}
           </DetailSection>
@@ -1016,19 +1200,27 @@ export function CardDetailModal({
             <DetailSection
               label={fieldLabel(classified.descriptionField.key, t)}
             >
-              <textarea
-                class={cx(CONTROL_CLASS, "resize-y")}
-                value={editedFields[classified.descriptionField.key] !==
-                    undefined
-                  ? editedFields[classified.descriptionField.key]
-                  : String(classified.descriptionField.value)}
-                rows={3}
-                onInput={(e) =>
-                  handleFieldChange(
-                    classified.descriptionField!.key,
-                    (e.currentTarget as HTMLTextAreaElement).value,
-                  )}
-              />
+              {canEdit
+                ? (
+                  <textarea
+                    class={cx(CONTROL_CLASS, "resize-y")}
+                    value={editedFields[classified.descriptionField.key] !==
+                        undefined
+                      ? editedFields[classified.descriptionField.key]
+                      : String(classified.descriptionField.value)}
+                    rows={3}
+                    onInput={(e) =>
+                      handleFieldChange(
+                        classified.descriptionField!.key,
+                        (e.currentTarget as HTMLTextAreaElement).value,
+                      )}
+                  />
+                )
+                : (
+                  <p class="m-0 whitespace-pre-wrap text-data text-ink-2">
+                    {String(classified.descriptionField.value)}
+                  </p>
+                )}
             </DetailSection>
           )}
 
@@ -1036,19 +1228,21 @@ export function CardDetailModal({
           {classified.progressValue !== null && (
             <DetailSection label={t("kanban.modal.section.progress")}>
               <div class="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={currentProgress}
-                  class={cx(RANGE_CLASS, "flex-1")}
-                  aria-label={t("common.progress.label")}
-                  onInput={(e) =>
-                    handleFieldChange(
-                      "progress",
-                      (e.currentTarget as HTMLInputElement).value,
-                    )}
-                />
+                {canEdit && (
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={currentProgress}
+                    class={cx(RANGE_CLASS, "flex-1")}
+                    aria-label={t("common.progress.label")}
+                    onInput={(e) =>
+                      handleFieldChange(
+                        "progress",
+                        (e.currentTarget as HTMLInputElement).value,
+                      )}
+                  />
+                )}
                 <strong class="w-10 shrink-0 text-right font-mono text-data tabular-nums text-ink">
                   {currentProgress}%
                 </strong>
@@ -1057,7 +1251,7 @@ export function CardDetailModal({
           )}
 
           {/* ── Responsables ── */}
-          {onAssign && onLoadUsers && (
+          {((onAssign && onLoadUsers) || onUnassign) && (
             <DetailSection label={t("kanban.modal.section.assignees")}>
               <AssigneesSection
                 assignees={(() => {
@@ -1071,8 +1265,10 @@ export function CardDetailModal({
                   }
                   return card?.assignee ? [card.assignee] : [];
                 })()}
-                onAssign={(assignTo) =>
-                  onAssign(board.doctype, selectedCardId, assignTo)}
+                onAssign={onAssign
+                  ? (assignTo) =>
+                    onAssign(board.doctype, selectedCardId, assignTo)
+                  : undefined}
                 onUnassign={onUnassign
                   ? (assignee) =>
                     onUnassign(board.doctype, selectedCardId, assignee)
@@ -1096,6 +1292,7 @@ export function CardDetailModal({
                     editedFields,
                     handleFieldChange,
                     t,
+                    canEdit,
                   )}
                 </Field>
               ))}

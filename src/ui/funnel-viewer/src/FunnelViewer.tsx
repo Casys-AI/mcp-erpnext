@@ -15,8 +15,12 @@ import { bindHostContext } from "~/shared/host-context-hook";
 import { CasysCredit, cx, StateMessage, ViewerShell } from "~/shared/ui";
 import { useViewerLayout } from "~/shared/useViewerLayout";
 import {
+  beginUiRefresh,
   canRequestUiRefresh,
+  completeUiRefresh,
+  createUiRefreshSequence,
   extractToolResultText,
+  invalidateUiRefresh,
   normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
@@ -33,10 +37,16 @@ import {
   shareSelection,
 } from "~/shared/drill-down";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { viewerRootKey } from "~/shared/nav-stack.ts";
 import { PathBar } from "~/shared/PathBar";
 import { jumpFromHint } from "~/shared/jumps";
+import { canCallViewerTool, readAvailableTools } from "~/shared/viewer-tools";
 import { LevelBody } from "~/shared/levels/LevelBody";
 import { stageIsJumpable } from "./funnel-nav.ts";
+import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
+import { useActiveContext } from "~/shared/useActiveContext.ts";
+import type { ContextSelectionItem } from "~/shared/active-context.ts";
+import { contextFallbackForInlineJump } from "~/shared/active-context-flow.ts";
 
 const app = new App({ name: "Funnel Viewer", version: "1.0.0" });
 const FUNNEL_REFRESH_INTERVAL_MS = 15_000;
@@ -58,6 +68,32 @@ const STAGE_DRILL_DOWN_KEY: Record<string, string> = {
 function getStageDrillDown(label: string, tf: TFunction): string | undefined {
   const key = STAGE_DRILL_DOWN_KEY[label];
   return key ? tf(key) : undefined;
+}
+
+function funnelStageContext(
+  data: FunnelData,
+  stage: FunnelStage,
+): ContextSelectionItem {
+  return {
+    id: `funnel:${data.title}:${stage.label}`,
+    view: data.title,
+    label: stage.label,
+    value: String(stage.count),
+  };
+}
+
+function funnelStageAriaLabel(
+  stage: FunnelStage,
+  jumpable: boolean,
+  contextEnabled: boolean,
+  tf: TFunction,
+): string {
+  const key = jumpable
+    ? "funnel.stage.aria_open"
+    : contextEnabled
+    ? "funnel.stage.aria_context"
+    : "funnel.stage.aria_ask";
+  return tf(key, { label: stage.label, count: stage.count });
 }
 
 /* ── Palette positionnelle ────────────────────────────────────────────
@@ -158,12 +194,22 @@ function WideConnector({ rate }: { rate: number }) {
 /* ── Wide layout ─────────────────────────────────────────────────────── */
 
 function WideFunnelChart(
-  { stages, canDrill, hasNavJump, onDrillDown }: {
+  {
+    stages,
+    canDrill,
+    contextEnabled,
+    hasNavJump,
+    onDrillDown,
+    isContextActive,
+  }: {
     stages: FunnelStage[];
     canDrill: boolean;
+    contextEnabled: boolean;
     /** Indique si cette étape a un saut serveur disponible. */
     hasNavJump: (label: string) => boolean;
     onDrillDown: (stage: FunnelStage) => Promise<DrillDownChannel>;
+    /** Le contour ne reflète que le panier confirmé par l'hôte. */
+    isContextActive: (stage: FunnelStage) => boolean;
   },
 ) {
   const t = useT();
@@ -201,6 +247,7 @@ function WideFunnelChart(
           const hasConnector = nextStage?.conversionRate != null;
           const jumpable = hasNavJump(stage.label);
           const interactive = jumpable || canDrill;
+          const isSelected = isContextActive(stage);
 
           return (
             <>
@@ -209,9 +256,11 @@ function WideFunnelChart(
                 role={interactive ? "button" : undefined}
                 tabIndex={interactive ? 0 : undefined}
                 class={cx(
-                  "group",
+                  "group rounded-[3px]",
                   interactive &&
-                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent rounded-[3px]",
+                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                  isSelected &&
+                    "bg-sunken outline outline-1 outline-accent-edge outline-offset-0",
                 )}
                 style={{
                   display: "flex",
@@ -229,6 +278,10 @@ function WideFunnelChart(
                     onDrillDown(stage);
                   }
                   : undefined}
+                aria-label={interactive
+                  ? funnelStageAriaLabel(stage, jumpable, contextEnabled, t)
+                  : undefined}
+                aria-pressed={interactive ? isSelected : undefined}
                 title={interactive
                   ? t("funnel.stage.click_to_see", { label: stage.label })
                   : undefined}
@@ -262,6 +315,7 @@ function WideFunnelChart(
                     height: barH,
                     background: color,
                     borderRadius: radius,
+                    opacity: isSelected ? 1 : 0.9,
                   }}
                 />
               </div>
@@ -360,27 +414,37 @@ function SentArc() {
 }
 
 function MobileFunnelChart(
-  { stages, canDrill, hasNavJump, onDrillDown, touch }: {
+  {
+    stages,
+    canDrill,
+    contextEnabled,
+    hasNavJump,
+    onDrillDown,
+    isContextActive,
+    touch,
+  }: {
     stages: FunnelStage[];
     canDrill: boolean;
+    contextEnabled: boolean;
     /** Indique si cette étape a un saut serveur disponible. */
     hasNavJump: (label: string) => boolean;
     onDrillDown: (stage: FunnelStage) => Promise<DrillDownChannel>;
+    /** Les surbrillances reflètent uniquement le panier confirmé par l'hôte. */
+    isContextActive: (stage: FunnelStage) => boolean;
     /** true = pointeur grossier → cibles tactiles min-height:38px */
     touch: boolean;
   },
 ) {
+  const t = useT();
   const maxCount = Math.max(1, ...stages.map((s) => s.count));
   const firstCount = stages[0]?.count ?? 1;
 
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [sentStage, setSentStage] = useState<
     { idx: number; label: string } | null
   >(null);
 
-  // Réinitialise la sélection si les étapes changent (évite une sélection fantôme).
+  // Le message legacy reste transitoire ; la sélection vient du contexte actif.
   useEffect(() => {
-    setSelectedIdx(null);
     setSentStage(null);
   }, [stages]);
 
@@ -388,7 +452,6 @@ function MobileFunnelChart(
     const jumpable = hasNavJump(stage.label);
     const interactive = jumpable || canDrill;
     if (!interactive) return;
-    setSelectedIdx(idx);
     const label = sharedLabel(await onDrillDown(stage));
     if (!label) return;
     setSentStage({ idx, label });
@@ -405,7 +468,7 @@ function MobileFunnelChart(
         );
         const nextStage = stages[idx + 1];
         const hasConnector = nextStage?.conversionRate != null;
-        const isSelected = selectedIdx === idx;
+        const isSelected = isContextActive(stage);
         // Truncate long labels to fit 132px column (~13 chars)
         const label = stage.label.length > 12
           ? stage.label.slice(0, 11) + "."
@@ -446,6 +509,10 @@ function MobileFunnelChart(
                 e.preventDefault();
                 handleRowClick(stage, idx);
               }}
+              aria-label={interactive
+                ? funnelStageAriaLabel(stage, jumpable, contextEnabled, t)
+                : undefined}
+              aria-pressed={interactive ? isSelected : undefined}
             >
               <span
                 style={{
@@ -563,10 +630,14 @@ function FunnelContent(
   const { ref: containerRef, layout } = useViewerLayout<HTMLDivElement>();
 
   // ── Navigation (pile de niveaux) ──────────────────────────────────────
+  const rootKey = viewerRootKey("funnel", data.refreshRequest, {
+    title: data.title,
+  });
   const viewerNav = useViewerNav(app, {
     title: data.title,
     kind: "root",
     origin: "chart",
+    key: rootKey,
   }, { fixture });
   const nav = viewerNav.nav;
   const { current: navCurrent, isRoot } = nav;
@@ -580,7 +651,14 @@ function FunnelContent(
   const { ask } = viewerNav;
 
   const stages = data.stages ?? [];
-  const canDrill = drillDownChannel(app.getHostCapabilities()) !== "none";
+  const activeContext = useActiveContext(app, rootKey);
+  useEffect(() => {
+    void activeContext.reconcile(
+      stages.map((stage) => funnelStageContext(data, stage)),
+    );
+  }, [data, activeContext.selections]);
+  const legacyChannel = drillDownChannel(app.getHostCapabilities());
+  const canDrill = activeContext.supported || legacyChannel === "message";
 
   /** Indique si une étape a un saut serveur disponible. */
   const hasNavJump = (label: string): boolean =>
@@ -605,18 +683,29 @@ function FunnelContent(
    * jamais dans ce cas et on retomberait sur handleDrillDown.
    */
   function handleStageClick(stage: FunnelStage): Promise<DrillDownChannel> {
+    const fallbackMessage = stage._drillDown ??
+      getStageDrillDown(stage.label, t);
     const navJumpHint = data._stageJumps?.[stage.label];
-    if (jumpsEnabled && navJumpHint) {
-      const jump = jumpFromHint(
+    const jump = jumpsEnabled && navJumpHint
+      ? jumpFromHint(
         navJumpHint,
         {},
         t("nav.linked_to", { id: stage.label }),
-      );
-      if (jump) {
-        void nav.jump(jump);
-        return Promise.resolve("none");
-      }
+      )
+      : null;
+    const activation = activeContext.supported
+      ? activeContext.activate(
+        funnelStageContext(data, stage),
+        contextFallbackForInlineJump(fallbackMessage, jump !== null),
+      ).then((result): DrillDownChannel =>
+        result === "message" ? "message" : "none"
+      )
+      : null;
+    if (jump) {
+      void nav.jump(jump);
+      return activation ?? Promise.resolve("none");
     }
+    if (activation) return activation;
     return handleDrillDown(stage);
   }
 
@@ -700,43 +789,64 @@ function FunnelContent(
                   </span>
                 )}
               </div>
-              <span
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: isWide ? 11.5 : 10.5,
-                  padding: isWide ? "3px 8px" : "2px 7px",
-                  borderRadius: 3,
-                  background: badgeBg,
-                  color: badgeColor,
-                  whiteSpace: "nowrap",
-                  flexShrink: 0,
-                }}
-              >
-                {badgeText}
-              </span>
+              <div class="flex min-w-0 shrink-0 items-center gap-2">
+                <ActiveContextChip
+                  compact={!isWide}
+                  selections={activeContext.selections}
+                  failed={activeContext.failed}
+                  evictedLabel={activeContext.evictedLabel}
+                  onRemove={(selection) => activeContext.remove(selection)}
+                  onClear={() => activeContext.clear()}
+                />
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: isWide ? 11.5 : 10.5,
+                    padding: isWide ? "3px 8px" : "2px 7px",
+                    borderRadius: 3,
+                    background: badgeBg,
+                    color: badgeColor,
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  {badgeText}
+                </span>
+              </div>
             </>
           )
           : (
             /* Niveau de navigation empilé : titre du niveau + compte si liste */
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <h2
-                style={{
-                  margin: 0,
-                  fontFamily: "var(--font-display)",
-                  fontSize: titleSize,
-                  fontWeight: 600,
-                  color: "var(--color-ink)",
-                  lineHeight: 1.2,
-                }}
-              >
-                {navCurrent.title}
-              </h2>
-              {navCurrent.count !== undefined && navCurrent.kind === "list" && (
-                <span class="rounded-[3px] bg-count px-[7px] py-0.5 font-mono text-[11px] text-ink-muted">
-                  {navCurrent.count}
-                </span>
-              )}
-            </div>
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontFamily: "var(--font-display)",
+                    fontSize: titleSize,
+                    fontWeight: 600,
+                    color: "var(--color-ink)",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {navCurrent.title}
+                </h2>
+                {navCurrent.count !== undefined &&
+                  navCurrent.kind === "list" && (
+                  <span class="rounded-[3px] bg-count px-[7px] py-0.5 font-mono text-[11px] text-ink-muted">
+                    {navCurrent.count}
+                  </span>
+                )}
+              </div>
+              <ActiveContextChip
+                compact={!isWide}
+                selections={activeContext.selections}
+                failed={activeContext.failed}
+                evictedLabel={activeContext.evictedLabel}
+                onRemove={(selection) => activeContext.remove(selection)}
+                onClear={() => activeContext.clear()}
+              />
+            </>
           )}
       </header>
 
@@ -771,16 +881,22 @@ function FunnelContent(
             <WideFunnelChart
               stages={stages}
               canDrill={canDrill}
+              contextEnabled={activeContext.supported}
               hasNavJump={hasNavJump}
               onDrillDown={handleStageClick}
+              isContextActive={(stage) =>
+                activeContext.isSelected(funnelStageContext(data, stage))}
             />
           )
           : (
             <MobileFunnelChart
               stages={stages}
               canDrill={canDrill}
+              contextEnabled={activeContext.supported}
               hasNavJump={hasNavJump}
               onDrillDown={handleStageClick}
+              isContextActive={(stage) =>
+                activeContext.isSelected(funnelStageContext(data, stage))}
               touch={isMobile}
             />
           )}
@@ -815,7 +931,7 @@ export function FunnelViewer() {
   const [error, setError] = useState<string | null>(null);
   const dataRef = useRef<FunnelData | null>(fixture ? FUNNEL_FIXTURE : null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
-  const refreshInFlightRef = useRef(false);
+  const refreshSequenceRef = useRef(createUiRefreshSequence());
   const lastRefreshStartedAtRef = useRef(0);
 
   function hydrateData(nextData: FunnelData) {
@@ -850,13 +966,14 @@ export function FunnelViewer() {
       dataRef.current,
       refreshRequestRef.current,
     );
+    const sequence = refreshSequenceRef.current;
     if (
       !canRequestUiRefresh({
         request,
         visibilityState: typeof document === "undefined"
           ? "visible"
           : document.visibilityState,
-        refreshInFlight: refreshInFlightRef.current,
+        refreshInFlight: sequence.inFlight !== null,
         now: Date.now(),
         lastRefreshStartedAt: lastRefreshStartedAtRef.current,
         minIntervalMs: FUNNEL_REFRESH_INTERVAL_MS,
@@ -865,43 +982,61 @@ export function FunnelViewer() {
       return false;
     }
 
-    if (!request || !app.getHostCapabilities()?.serverTools) {
+    if (
+      !request ||
+      !canCallViewerTool(
+        app.getHostCapabilities()?.serverTools,
+        readAvailableTools(dataRef.current),
+        request.toolName,
+      )
+    ) {
       return false;
     }
 
-    refreshInFlightRef.current = true;
+    const started = beginUiRefresh(sequence);
+    if (started.generation === null) return false;
+    refreshSequenceRef.current = started.state;
     lastRefreshStartedAtRef.current = Date.now();
     setRefreshing(true);
 
+    let result: ToolResultPayload | null = null;
+    let failure: { cause: unknown } | null = null;
     try {
-      const result = await app.callServerTool({
+      result = await app.callServerTool({
         name: request.toolName,
         arguments: request.arguments,
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
-
-      if (result.isError) {
-        setError(t("common.error.refresh_failed"));
-        return false;
-      }
-
-      if (!consumeToolResult(result)) {
-        setError(t("common.error.refresh_no_data"));
-        return false;
-      }
-
-      return true;
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
-      return false;
-    } finally {
-      refreshInFlightRef.current = false;
-      setRefreshing(false);
+      failure = { cause };
     }
+
+    const completed = completeUiRefresh(
+      refreshSequenceRef.current,
+      started.generation,
+    );
+    refreshSequenceRef.current = completed.state;
+    let succeeded = false;
+    if (completed.accept) {
+      if (failure) {
+        setError(normalizeUiRefreshFailureMessage(failure.cause));
+      } else if (result?.isError) {
+        setError(t("common.error.refresh_failed"));
+      } else if (result && consumeToolResult(result)) {
+        succeeded = true;
+      } else {
+        setError(t("common.error.refresh_no_data"));
+      }
+    }
+    setRefreshing(false);
+    return succeeded;
   }
 
   useEffect(() => {
     if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
+      refreshSequenceRef.current = invalidateUiRefresh(
+        refreshSequenceRef.current,
+      );
       consumeToolResult(result);
     };
 

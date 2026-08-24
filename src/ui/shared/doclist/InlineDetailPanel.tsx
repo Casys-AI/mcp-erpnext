@@ -21,18 +21,19 @@ import { formatCell } from "./helpers";
 import type { ViewerLayout } from "~/shared/useViewerLayout";
 import { type Jump, jumpFromHint } from "~/shared/jumps";
 import { JumpList } from "~/shared/levels/JumpList";
+import { hasAvailableTool } from "~/shared/viewer-tools";
 
 /** Champs mis en avant sous le titre, dans cet ordre, avant le reste. */
 const LEAD_FIELDS = ["grand_total", "outstanding_amount", "total"];
 
 export function InlineDetailPanel(
   {
-    app,
     data,
     loading,
     doctype,
     sendMessageHints,
     fixture,
+    availableTools,
     layout,
     onClose,
     onJump,
@@ -45,6 +46,8 @@ export function InlineDetailPanel(
     doctype?: string;
     sendMessageHints?: SendMessageHint[];
     fixture?: boolean;
+    /** Contrat serveur borné : seules ces mutations peuvent être proposées. */
+    availableTools?: readonly string[];
     /** Mise en page courante — détermine le header de l'inspecteur et les tailles. */
     layout?: ViewerLayout;
     onClose: () => void;
@@ -70,7 +73,7 @@ export function InlineDetailPanel(
     args: Record<string, unknown>,
     msg: string,
   ) {
-    if (fixture) return;
+    if (fixture || !hasAvailableTool(availableTools, tool)) return;
     setActLoading(key);
     setActMsg(null);
     const ok = await onAction(tool, args);
@@ -135,6 +138,8 @@ export function InlineDetailPanel(
   const tone = toneForStatus(status);
   const isDraft = status === "Draft" || data.docstatus === 0;
   const isSubmitted = data.docstatus === 1;
+  const canSubmit = hasAvailableTool(availableTools, "erpnext_doc_submit");
+  const canCancel = hasAvailableTool(availableTools, "erpnext_doc_cancel");
 
   const lead = entries.filter((entry) => LEAD_FIELDS.includes(entry.id));
   const rest = entries.filter((entry) => !LEAD_FIELDS.includes(entry.id));
@@ -150,6 +155,10 @@ export function InlineDetailPanel(
      un saut dans la vue ; les autres restent des questions au modèle. */
   const jumps = onJump
     ? (sendMessageHints ?? [])
+      .filter((hint) =>
+        typeof hint.tool === "string" &&
+        hasAvailableTool(availableTools, hint.tool)
+      )
       .map((hint) =>
         jumpFromHint(
           hint,
@@ -166,11 +175,15 @@ export function InlineDetailPanel(
       .replace(/\{id\}/g, docName)
       .replace(/\{doctype\}/g, doctype ?? ""),
   })) ?? [];
-  const asks = hints.filter((hint) => !hint.tool).map((hint) => ({
-    label: hint.label,
-    message: hint.message,
-  }));
-  if (asks.length === 0 && jumps.length === 0 && docName && doctype) {
+  const asks = onAsk
+    ? hints.filter((hint) => !hint.tool).map((hint) => ({
+      label: hint.label,
+      message: hint.message,
+    }))
+    : [];
+  if (
+    onAsk && asks.length === 0 && jumps.length === 0 && docName && doctype
+  ) {
     asks.push({
       label: t("doclist.detail.full_detail"),
       message: t("doclist.detail.full_detail_message", {
@@ -178,13 +191,6 @@ export function InlineDetailPanel(
         id: docName,
       }),
     });
-  }
-
-  function ask(text: string) {
-    void app.sendMessage({
-      role: "user",
-      content: [{ type: "text", text }],
-    }).catch(() => {});
   }
 
   return (
@@ -277,13 +283,13 @@ export function InlineDetailPanel(
                   jumps={jumps}
                   asks={asks}
                   onJump={onJump}
-                  onAsk={onAsk ?? ask}
+                  onAsk={onAsk}
                 />
               </>
             )
             : (
               <>
-                {hints.map((hint, index) => (
+                {onAsk && hints.map((hint, index) => (
                   <Button
                     key={index}
                     variant={index === 0 ? "accent" : "secondary"}
@@ -292,12 +298,12 @@ export function InlineDetailPanel(
                     class={narrow
                       ? "min-h-[44px] rounded-control text-body"
                       : undefined}
-                    onClick={() => ask(hint.message)}
+                    onClick={() => onAsk(hint.message)}
                   >
                     {hint.label}
                   </Button>
                 ))}
-                {docName && doctype && hints.length === 0 && (
+                {onAsk && docName && doctype && hints.length === 0 && (
                   <Button
                     variant="accent"
                     disabled={fixture}
@@ -308,7 +314,7 @@ export function InlineDetailPanel(
                       ? "min-h-[44px] rounded-control text-body"
                       : undefined}
                     onClick={() =>
-                      ask(
+                      onAsk(
                         t("doclist.detail.full_detail_message", {
                           doctype: doctype ?? "",
                           id: docName,
@@ -320,7 +326,7 @@ export function InlineDetailPanel(
                 )}
               </>
             )}
-          {isDraft && docName && (
+          {isDraft && docName && (fixture || canSubmit) && (
             <Button
               variant="secondary"
               disabled={actLoading === "submit" || fixture}
@@ -346,7 +352,7 @@ export function InlineDetailPanel(
               {actLoading === "submit" ? "…" : t("common.submit")}
             </Button>
           )}
-          {isSubmitted && docName && (
+          {isSubmitted && docName && (fixture || canCancel) && (
             <Button
               variant="danger"
               disabled={actLoading === "cancel" || fixture}

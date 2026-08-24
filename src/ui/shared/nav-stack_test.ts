@@ -7,11 +7,14 @@ import {
   findLevelByKey,
   levelKey,
   markStale,
+  navRootIdentity,
   patchLevel,
   patchLevelUi,
   popLevel,
   popToLevel,
   pushLevel,
+  reconcileRoot,
+  viewerRootKey,
 } from "./nav-stack.ts";
 
 const root = () => createStack({ title: "Customer", kind: "root" });
@@ -50,7 +53,106 @@ Deno.test("nav-stack : dès quatre niveaux, les intermédiaires s'élident derri
   assertEquals(c.depth, 5);
   assertEquals(c.elided.map((x) => x.level.title), ["CUST-42", "Sales Order"]);
   assertEquals(c.parents.map((x) => x.level.title), ["Customer", "SO-1043"]);
+  assertEquals(
+    c.trail.map((part) =>
+      "elided" in part ? `…${part.elided.length}` : part.level.title
+    ),
+    ["Customer", "…2", "SO-1043"],
+  );
   assertEquals(c.current.level.title, "Factures");
+});
+
+Deno.test("reconcileRoot - même identité conserve le parcours ; une autre racine le remet à zéro", () => {
+  const initial = {
+    title: "SINV-1",
+    kind: "root" as const,
+    origin: "record" as const,
+  };
+  let stack = pushLevel(createStack(initial), list("Paiements"));
+  stack = patchLevelUi(stack, currentLevel(stack).id, { page: 2 });
+
+  const same = reconcileRoot(stack, {
+    ...initial,
+    count: 99,
+    body: { fresh: true },
+  });
+  assertEquals(same, stack);
+  assertEquals(currentLevel(same).ui.page, 2);
+  assertEquals(navRootIdentity(initial), navRootIdentity({ ...initial }));
+
+  const changed = reconcileRoot(stack, {
+    title: "SINV-2",
+    kind: "root",
+    origin: "record",
+  });
+  assertEquals(changed.levels.map((level) => level.title), ["SINV-2"]);
+  assertEquals(changed.nextId, 1);
+});
+
+Deno.test("viewerRootKey - canonicalise la requête et ignore les données rafraîchies", () => {
+  const first = viewerRootKey(
+    "stock",
+    {
+      toolName: "erpnext_stock_balance",
+      arguments: { warehouse: "Stores - C", limit: 50 },
+    },
+    { doctype: "Bin" },
+  );
+  const refreshed = viewerRootKey(
+    "stock",
+    {
+      toolName: "erpnext_stock_balance",
+      arguments: { limit: 50, warehouse: "Stores - C" },
+    },
+    { doctype: "Bin", title: "Stock refreshed" },
+  );
+
+  assertEquals(refreshed, first);
+  assertEquals(
+    viewerRootKey(
+      "stock",
+      {
+        toolName: "erpnext_stock_balance",
+        arguments: { warehouse: "Finished Goods - C", limit: 50 },
+      },
+      { doctype: "Bin" },
+    ) === first,
+    false,
+  );
+});
+
+Deno.test("viewerRootKey - l'identité intrinsèque distingue deux racines sans refresh", () => {
+  const invoices = viewerRootKey("doclist", undefined, {
+    doctype: "Sales Invoice",
+  });
+  const orders = viewerRootKey("doclist", undefined, {
+    doctype: "Sales Order",
+  });
+  assertEquals(invoices === orders, false);
+});
+
+Deno.test("reconcileRoot - même titre, nouvelle requête racine coupe la pile", () => {
+  const stockRoot = (warehouse: string) => ({
+    title: "Stock",
+    kind: "root" as const,
+    origin: "list" as const,
+    key: viewerRootKey(
+      "stock",
+      {
+        toolName: "erpnext_stock_balance",
+        arguments: { warehouse, limit: 50 },
+      },
+      { doctype: "Bin" },
+    ),
+  });
+  let stack = pushLevel(createStack(stockRoot("Stores - C")), list("Item"));
+
+  const refreshed = reconcileRoot(stack, stockRoot("Stores - C"));
+  assertEquals(refreshed, stack);
+
+  stack = reconcileRoot(stack, stockRoot("Finished Goods - C"));
+  assertEquals(stack.levels.map((level) => level.title), ["Stock"]);
+  assertEquals(stack.nextId, 1);
 });
 
 Deno.test("nav-stack : retour et saut direct coupent la pile, jamais sous la racine", () => {

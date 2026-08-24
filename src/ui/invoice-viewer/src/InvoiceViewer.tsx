@@ -24,8 +24,12 @@ import {
 import { useViewerLayout, type ViewerLayout } from "~/shared/useViewerLayout";
 import { formatCurrency, formatNumber } from "~/shared/format";
 import {
+  beginUiRefresh,
   canRequestUiRefresh,
+  completeUiRefresh,
+  createUiRefreshSequence,
   extractToolResultText,
+  invalidateUiRefresh,
   normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
@@ -35,13 +39,26 @@ import { useT } from "~/shared/i18n-hook";
 import { ConfirmSheet, type ConfirmState, useConfirm } from "~/shared/confirm";
 import { type NavHint } from "~/shared/jumps";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
+import { canSendTextMessage, sendTextMessage } from "~/shared/host-message";
+import { hasAvailableTool, readAvailableTools } from "~/shared/viewer-tools";
 import { StatusBadge } from "./components/StatusBadge";
 import { ItemDetailPanel } from "./components/ItemDetailPanel";
 import { INVOICE_FIXTURE, isFixtureMode } from "./fixture.ts";
-import { invoiceJumps } from "./nav.ts";
-import type { InvoiceData, InvoiceItem, InvoicePayload } from "./types.ts";
+import {
+  canOfferNavigation,
+  invoiceJumps,
+  invoiceMutationActions,
+  nextInvoiceMutationCommitted,
+} from "./nav.ts";
+import {
+  type InvoiceData,
+  invoiceDataFromPayload,
+  type InvoiceItem,
+  type InvoicePayload,
+} from "./types.ts";
 
 const app = new App({ name: "Invoice Viewer", version: "3.0.0" });
 const REFRESH_INTERVAL_MS = 15_000;
@@ -55,6 +72,8 @@ interface InvoiceContentProps {
   data: InvoiceData;
   /** Hints du serveur ; null = pas de sauts disponibles. */
   hints: NavHint[] | null;
+  availableTools: readonly string[] | undefined;
+  mutationCommitted: boolean;
   error: string | null;
   refreshing: boolean;
   fixture: boolean;
@@ -68,7 +87,7 @@ interface InvoiceContentProps {
     args: Record<string, unknown>,
     successMsg: string,
   ) => Promise<void>;
-  onNavigate: (key: string, message: string) => Promise<void>;
+  onNavigate: (key: string, message: string) => Promise<boolean>;
   setError: (msg: string | null) => void;
 }
 
@@ -88,12 +107,16 @@ export function InvoiceViewer() {
   const [hints, setHints] = useState<NavHint[] | null>(
     fixture ? (INVOICE_FIXTURE._sendMessageHints as NavHint[] ?? null) : null,
   );
+  const [availableTools, setAvailableTools] = useState<string[] | undefined>(
+    fixture ? readAvailableTools(INVOICE_FIXTURE) : undefined,
+  );
   const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionIsError, setActionIsError] = useState(false);
+  const [mutationCommitted, setMutationCommitted] = useState(false);
   const confirm = useConfirm();
 
   /* ── Refs ─────────────────────────────────────────────────────────────── */
@@ -105,14 +128,24 @@ export function InvoiceViewer() {
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(
     fixture ? resolveUiRefreshRequest(INVOICE_FIXTURE, null) : null,
   );
-  const refreshInFlightRef = useRef(false);
+  const refreshSequenceRef = useRef(createUiRefreshSequence());
+  const refreshPromiseRef = useRef<Promise<boolean> | null>(null);
   const lastRefreshStartedAtRef = useRef(0);
+  const availableToolsRef = useRef<string[] | undefined>(
+    fixture ? readAvailableTools(INVOICE_FIXTURE) : undefined,
+  );
+  const actionInFlightRef = useRef(false);
+  const mutationCommittedRef = useRef(false);
 
   /* ── Hydratation ──────────────────────────────────────────────────────── */
 
   function hydrateData(nextData: InvoiceData) {
     dataRef.current = nextData;
     setData(nextData);
+    mutationCommittedRef.current = false;
+    setMutationCommitted((current) =>
+      nextInvoiceMutationCommitted(current, "canonical-hydrated")
+    );
   }
 
   function consumeToolResult(result: ToolResultPayload): boolean {
@@ -126,14 +159,19 @@ export function InvoiceViewer() {
     if (!text) return false;
     try {
       const parsed = JSON.parse(text) as InvoicePayload;
+      const nextData = invoiceDataFromPayload(parsed);
+      if (!nextData) throw new Error("Missing explicit document identity");
+      const nextAvailableTools = readAvailableTools(parsed);
+      availableToolsRef.current = nextAvailableTools;
+      setAvailableTools(nextAvailableTools);
       refreshRequestRef.current = resolveUiRefreshRequest(
         parsed,
         refreshRequestRef.current,
       );
       // Extraire les hints de navigation du payload serveur.
       const nextHints = parsed._sendMessageHints;
-      if (Array.isArray(nextHints)) setHints(nextHints as NavHint[]);
-      hydrateData((parsed.data ?? parsed) as InvoiceData);
+      setHints(Array.isArray(nextHints) ? nextHints as NavHint[] : null);
+      hydrateData(nextData);
       setError(null);
       setLoading(false);
       return true;
@@ -146,41 +184,103 @@ export function InvoiceViewer() {
 
   /* ── Refresh ──────────────────────────────────────────────────────────── */
 
-  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
-    if (fixture) return;
-    const request = refreshRequestRef.current;
-    if (
-      !canRequestUiRefresh({
-        request,
-        visibilityState: typeof document === "undefined"
-          ? "visible"
-          : document.visibilityState,
-        refreshInFlight: refreshInFlightRef.current,
-        now: Date.now(),
-        lastRefreshStartedAt: lastRefreshStartedAtRef.current,
-        minIntervalMs: REFRESH_INTERVAL_MS,
-      }, options)
-    ) return;
+  async function requestRefresh(
+    options: { ignoreInterval?: boolean; force?: boolean } = {},
+  ): Promise<boolean> {
+    if (fixture) return false;
 
-    if (!request || !app.getHostCapabilities()?.serverTools) return;
+    const current = refreshSequenceRef.current;
+    if (options.force) {
+      if (current.inFlight !== null) {
+        // Invalide immédiatement le read antérieur et coalesce toutes les
+        // mutations derrière son unique drain canonique.
+        refreshSequenceRef.current = beginUiRefresh(current, {
+          force: true,
+        }).state;
+        return refreshPromiseRef.current ?? false;
+      }
 
-    refreshInFlightRef.current = true;
-    lastRefreshStartedAtRef.current = Date.now();
-    setRefreshing(true);
-
-    try {
-      const result = await app.callServerTool({
-        name: request.toolName,
-        arguments: request.arguments,
-      }, { timeout: TOOL_CALL_TIMEOUT_MS });
-      if (!result.isError) consumeToolResult(result);
-      else setError(t("invoice.error.refresh_failed"));
-    } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
-    } finally {
-      refreshInFlightRef.current = false;
-      setRefreshing(false);
+      // Conserve la relecture obligatoire si elle ne peut pas partir tout de
+      // suite (vue masquée ou capacité momentanément absente).
+      refreshSequenceRef.current = {
+        ...invalidateUiRefresh(current),
+        pendingForced: true,
+      };
+    } else if (current.inFlight !== null) {
+      return false;
     }
+
+    const operation = (async (): Promise<boolean> => {
+      try {
+        while (true) {
+          const sequence = refreshSequenceRef.current;
+          const request = refreshRequestRef.current;
+          const forced = sequence.pendingForced;
+
+          if (
+            !request ||
+            !app.getHostCapabilities()?.serverTools ||
+            !hasAvailableTool(availableToolsRef.current, request.toolName) ||
+            !canRequestUiRefresh({
+              request,
+              visibilityState: typeof document === "undefined"
+                ? "visible"
+                : document.visibilityState,
+              refreshInFlight: false,
+              now: Date.now(),
+              lastRefreshStartedAt: lastRefreshStartedAtRef.current,
+              minIntervalMs: REFRESH_INTERVAL_MS,
+            }, { ignoreInterval: options.ignoreInterval || forced })
+          ) return false;
+
+          const started = beginUiRefresh(sequence, { force: forced });
+          if (started.generation === null) return false;
+          refreshSequenceRef.current = started.state;
+          lastRefreshStartedAtRef.current = Date.now();
+          setRefreshing(true);
+
+          let result: ToolResultPayload | null = null;
+          let failure: { cause: unknown } | null = null;
+          try {
+            result = await app.callServerTool({
+              name: request.toolName,
+              arguments: request.arguments,
+            }, { timeout: TOOL_CALL_TIMEOUT_MS });
+          } catch (cause) {
+            failure = { cause };
+          }
+
+          const completed = completeUiRefresh(
+            refreshSequenceRef.current,
+            started.generation,
+          );
+          refreshSequenceRef.current = completed.state;
+          let succeeded = false;
+          if (completed.accept) {
+            if (failure) {
+              setError(normalizeUiRefreshFailureMessage(failure.cause));
+            } else if (result?.isError) {
+              setError(t("invoice.error.refresh_failed"));
+            } else if (result) {
+              succeeded = consumeToolResult(result);
+            }
+          }
+
+          if (!completed.runPending) return succeeded;
+          // La boucle revalide requête, visibilité et capacité. Tant qu'elle
+          // ne peut pas repartir, pendingForced reste posé pour le focus futur.
+        }
+      } finally {
+        setRefreshing(false);
+      }
+    })();
+    refreshPromiseRef.current = operation;
+    void operation.finally(() => {
+      if (refreshPromiseRef.current === operation) {
+        refreshPromiseRef.current = null;
+      }
+    });
+    return operation;
   }
 
   /* ── Actions ──────────────────────────────────────────────────────────── */
@@ -191,7 +291,13 @@ export function InvoiceViewer() {
     args: Record<string, unknown>,
     successMsg: string,
   ) {
-    if (fixture || !app.getHostCapabilities()?.serverTools) return;
+    if (
+      fixture ||
+      actionInFlightRef.current ||
+      !app.getHostCapabilities()?.serverTools ||
+      !hasAvailableTool(availableToolsRef.current, toolName)
+    ) return;
+    actionInFlightRef.current = true;
     setActionLoading(key);
     setActionMessage(null);
     setActionIsError(false);
@@ -205,14 +311,27 @@ export function InvoiceViewer() {
         setActionIsError(true);
         setActionMessage(text ?? t("invoice.error.action_failed"));
       } else {
+        mutationCommittedRef.current = true;
+        setMutationCommitted((current) =>
+          nextInvoiceMutationCommitted(current, "mutation-committed")
+        );
+        const refreshPromise = requestRefresh({
+          ignoreInterval: true,
+          force: true,
+        });
         setActionIsError(false);
         setActionMessage(successMsg);
-        setTimeout(() => void requestRefresh({ ignoreInterval: true }), 1500);
+        const refreshed = await refreshPromise;
+        if (!refreshed && mutationCommittedRef.current) {
+          setActionIsError(true);
+          setActionMessage(t("invoice.error.refresh_failed"));
+        }
       }
     } catch {
       setActionIsError(true);
       setActionMessage(t("invoice.error.action_failed"));
     } finally {
+      actionInFlightRef.current = false;
       setActionLoading(null);
     }
   }
@@ -222,17 +341,17 @@ export function InvoiceViewer() {
    * envoie une phrase au chat — comportement identique à l'original.
    */
   async function navigate(key: string, message: string) {
-    if (fixture) return;
+    if (fixture) return false;
     setActionLoading(key);
-    try {
-      await app.sendMessage({
-        role: "user",
-        content: [{ type: "text", text: message }],
-      });
-    } catch {
-      // Hosts without sendMessage (Inspector) ignorent silencieusement.
+    setActionMessage(null);
+    setActionIsError(false);
+    const sent = await sendTextMessage(app, message);
+    if (!sent) {
+      setActionIsError(true);
+      setActionMessage(t("invoice.error.action_failed"));
     }
     setActionLoading(null);
+    return sent;
   }
 
   /* ── Effets ───────────────────────────────────────────────────────────── */
@@ -240,6 +359,9 @@ export function InvoiceViewer() {
   useEffect(() => {
     if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
+      refreshSequenceRef.current = invalidateUiRefresh(
+        refreshSequenceRef.current,
+      );
       consumeToolResult(result);
     };
     app.ontoolinputpartial = () => {
@@ -281,9 +403,11 @@ export function InvoiceViewer() {
 
   return (
     <InvoiceContent
-      key={data.name}
+      key={`${data.doctype}:${data.name}`}
       data={data}
       hints={hints}
+      availableTools={availableTools}
+      mutationCommitted={mutationCommitted}
       error={error}
       refreshing={refreshing}
       fixture={fixture}
@@ -301,12 +425,14 @@ export function InvoiceViewer() {
 /* ══════════════════════════════════════════════════════════════════════════════
    InvoiceContent — rendu, pile de navigation, boutons
    Reçoit `data` toujours défini → useNavStack initialisé avec le bon titre.
-   key={data.name} sur l'appelant réinitialise la pile à chaque nouvelle pièce.
+   key={doctype:name} sur l'appelant réinitialise la pile à chaque nouvelle pièce.
 ══════════════════════════════════════════════════════════════════════════════ */
 
 function InvoiceContent({
   data,
   hints,
+  availableTools,
+  mutationCommitted,
   error,
   refreshing,
   fixture,
@@ -328,6 +454,10 @@ function InvoiceContent({
     title: data.name,
     kind: "root",
     origin: "record",
+    key: viewerRootKey("invoice", undefined, {
+      doctype: data.doctype,
+      name: data.name,
+    }),
   }, { fixture });
   const nav = viewerNav.nav;
 
@@ -339,10 +469,12 @@ function InvoiceContent({
   /* ── Valeurs dérivées ─────────────────────────────────────────────────── */
 
   const ccy = data.currency ?? "EUR";
-  const isCustomer = !!data.customer;
-  const doctype = isCustomer ? "Sales Invoice" : "Purchase Invoice";
+  const doctype = data.doctype;
+  const isCustomer = Boolean(
+    data.customer || (data.quotation_to === "Customer" && data.party_name),
+  );
   const partyName = data.customer_name ?? data.customer ?? data.supplier_name ??
-    data.supplier ?? "—";
+    data.supplier ?? data.party_name ?? "—";
   const outstanding = data.outstanding_amount ?? 0;
   const isPaid = outstanding <= 0;
   const items = data.items ?? [];
@@ -351,9 +483,16 @@ function InvoiceContent({
     ((data.grand_total ?? 0) - netTotal);
   const isDraft = data.status === "Draft" || data.docstatus === 0;
   const isSubmitted = data.docstatus === 1;
-  const hasServerTools = app.getHostCapabilities()?.serverTools;
-  const canMutate = Boolean(hasServerTools) && !fixture;
-  const canExpand = canMutate || fixture;
+  const hasServerTools = Boolean(app.getHostCapabilities()?.serverTools);
+  const canInspectItem = hasServerTools && (
+    hasAvailableTool(availableTools, "erpnext_item_get") ||
+    hasAvailableTool(availableTools, "erpnext_stock_balance")
+  );
+  const messagesEnabled = !fixture &&
+    canSendTextMessage(app.getHostCapabilities());
+  const paymentMessagesEnabled = messagesEnabled &&
+    (doctype === "Sales Invoice" || doctype === "Purchase Invoice");
+  const canExpand = canInspectItem || messagesEnabled || fixture;
   const rows: LineRow[] = items.map((item, idx) => ({ ...item, idx }));
   const previewTitle = fixture ? t("invoice.preview.title") : undefined;
 
@@ -367,12 +506,19 @@ function InvoiceContent({
    * Dans ce cas invoiceJumps reçoit null → sauts null → navigate() est utilisé.
    */
   const { jumpsEnabled } = viewerNav;
-  const party = data.customer ?? data.supplier ?? "";
+  const party = data.customer ?? data.supplier ?? data.party_name ?? "";
   const jumpSubtitle = t("nav.linked_to", { id: data.name });
   const { payments: paymentsJump, party: partyJump } = invoiceJumps(
     jumpsEnabled ? hints : null,
     { id: data.name, doctype, party },
     jumpSubtitle,
+    jumpsEnabled ? availableTools : [],
+  );
+  const mutations = invoiceMutationActions(
+    doctype,
+    data.name,
+    hasServerTools ? availableTools : [],
+    mutationCommitted,
   );
 
   /** Envoie une question au chat (chemin de secours sans outils). */
@@ -403,7 +549,11 @@ function InvoiceContent({
    * Paiements : saut › si l'hôte relaie et que le hint est disponible,
    * sinon navigate() envoie une phrase au chat — identique à l'original.
    */
-  const btnPayments = (canMutate || fixture) && (
+  const btnPayments = canOfferNavigation(
+    paymentsJump,
+    paymentMessagesEnabled,
+    fixture,
+  ) && (
     <Button
       variant="accent"
       class={cx(
@@ -443,7 +593,7 @@ function InvoiceContent({
    * Tiers (client ou fournisseur) : saut › vers la fiche si l'hôte relaie,
    * sinon navigate() envoie une phrase au chat — identique à l'original.
    */
-  const btnParty = (canMutate || fixture) &&
+  const btnParty = canOfferNavigation(partyJump, messagesEnabled, fixture) &&
     (data.customer ?? data.supplier) && (
     <Button
       variant="secondary"
@@ -501,7 +651,7 @@ function InvoiceContent({
     </Button>
   );
 
-  const btnSubmit = isDraft && (canMutate || fixture) && (
+  const btnSubmit = isDraft && (mutations.submit || fixture) && (
     <Button
       variant="accent"
       class={isMobile ? "min-h-[44px] rounded-touch text-body" : "text-cell"}
@@ -513,18 +663,22 @@ function InvoiceContent({
           title: t("invoice.confirm.submit"),
           detail: t("invoice.confirm.submit.detail"),
           actionLabel: t("invoice.confirm.submit.action"),
-          onConfirm: () =>
-            void callAction("submit", "erpnext_doc_submit", {
-              doctype,
-              name: data.name,
-            }, t("invoice.action.submitted")),
+          onConfirm: () => {
+            if (!mutations.submit) return;
+            void callAction(
+              "submit",
+              mutations.submit.toolName,
+              mutations.submit.args,
+              t("invoice.action.submitted"),
+            );
+          },
         })}
     >
       {actionLoading === "submit" ? "…" : t("invoice.btn.submit.label")}
     </Button>
   );
 
-  const btnCancel = isSubmitted && (canMutate || fixture) && (
+  const btnCancel = isSubmitted && (mutations.cancel || fixture) && (
     <Button
       variant="danger"
       class={cx(
@@ -541,15 +695,22 @@ function InvoiceContent({
           title: t("invoice.confirm.cancel"),
           detail: t("invoice.confirm.cancel.detail"),
           actionLabel: t("invoice.confirm.cancel.action"),
-          onConfirm: () =>
-            void callAction("cancel", "erpnext_doc_cancel", {
-              doctype,
-              name: data.name,
-            }, t("invoice.action.cancelled")),
+          onConfirm: () => {
+            if (!mutations.cancel) return;
+            void callAction(
+              "cancel",
+              mutations.cancel.toolName,
+              mutations.cancel.args,
+              t("invoice.action.cancelled"),
+            );
+          },
         })}
     >
       {actionLoading === "cancel" ? "…" : t("invoice.btn.cancel.label")}
     </Button>
+  );
+  const hasActionButtons = Boolean(
+    btnPayments || btnParty || btnSubmit || btnCancel,
   );
 
   /* ── Totaux ───────────────────────────────────────────────────────────── */
@@ -751,7 +912,8 @@ function InvoiceContent({
                     app={app}
                     itemCode={row.item_code}
                     fixture={fixture}
-                    hints={hints ?? data._sendMessageHints}
+                    availableTools={availableTools}
+                    hints={hints ?? undefined}
                     onJump={jumpsEnabled ? nav.jump : undefined}
                     onClose={() => setExpandedIdx(null)}
                     lineIndex={row.idx}
@@ -914,7 +1076,7 @@ function InvoiceContent({
         </div>
 
         {/* CTA section */}
-        {(canMutate || fixture) && (
+        {hasActionButtons && (
           <div class="flex flex-col gap-[7px] px-3 py-[11px]">
             {btnPayments}
             <div class="flex gap-[7px]">{btnParty}</div>

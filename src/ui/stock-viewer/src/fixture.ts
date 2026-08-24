@@ -7,6 +7,13 @@ import type { StockData, StockItemDetail } from "./types.ts";
  * désactivés car jumpsEnabled = !fixture && canJump(...).
  */
 export const STOCK_FIXTURE: StockData = {
+  _availableTools: [
+    "erpnext_stock_balance",
+    "erpnext_item_get",
+    "erpnext_stock_entry_list",
+    "erpnext_doc_list",
+    "erpnext_stock_chart",
+  ],
   _sendMessageHints: [
     {
       key: "item",

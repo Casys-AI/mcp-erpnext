@@ -16,6 +16,8 @@ export interface StockData {
   data: StockEntry[];
   currency?: string;
   refreshRequest?: UiRefreshRequestData;
+  /** Outils exacts exposés par le registre serveur à ce viewer. */
+  _availableTools?: string[];
   /** Hints de navigation attachés par le serveur (STOCK_HINTS). */
   _sendMessageHints?: NavHint[];
 }

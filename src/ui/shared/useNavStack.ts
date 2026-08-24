@@ -6,7 +6,7 @@
  * écrit l'état d'interface du niveau courant (tri, page, ligne active).
  */
 
-import { useCallback, useMemo, useState } from "preact/hooks";
+import { useCallback, useLayoutEffect, useMemo, useState } from "preact/hooks";
 import type { Jump, ToolHost } from "./jumps";
 import { jumpInto, refreshCurrent, type StackStore } from "./nav-jump";
 import {
@@ -16,14 +16,24 @@ import {
   type LevelInit,
   type LevelUi,
   markStale as markStaleLevels,
+  navRootIdentity,
   type NavStack,
   patchLevelUi,
   popLevel,
   popToLevel,
+  reconcileRoot,
 } from "./nav-stack";
 
 export function useNavStack(host: ToolHost, root: LevelInit) {
   const [stack, setStack] = useState<NavStack>(() => createStack(root));
+  const rootIdentity = navRootIdentity(root);
+
+  // Les payloads d'une même ressource arrivent sans démonter le viewer : ils
+  // gardent le parcours. Une autre ressource repart, elle, à son niveau 1.
+  useLayoutEffect(() => {
+    setStack((s) => reconcileRoot(s, root));
+  }, [rootIdentity]);
+
   const current = currentLevel(stack);
 
   // La pile vit dans l'état Preact ; l'orchestration, dans `nav-jump.ts`.

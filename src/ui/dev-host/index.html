@@ -100,11 +100,15 @@
         <option value="chart">chart-viewer</option>
       </select>
       <select id="caps">
-        <option value="tools">
-          capacités : serverTools + updateModelContext + message
+        <option value="full">
+          profil : full (serverTools + contexte + message)
         </option>
-        <option value="context">capacités : updateModelContext seul</option>
-        <option value="message">capacités : message seul (ancien hôte)</option>
+        <option value="serverTools-only">profil : serverTools-only</option>
+        <option value="context-only">profil : context-only</option>
+        <option value="message-only">
+          profil : message-only (ancien hôte)
+        </option>
+        <option value="none">profil : none (aucun canal)</option>
       </select>
       <button id="reload">recharger</button>
       <span class="caps" id="status">—</span>

@@ -29,6 +29,56 @@ export type ViewerKey =
   | "kpi"
   | "chart";
 
+const DEV_AVAILABLE_TOOLS: Partial<Record<ViewerKey, readonly string[]>> = {
+  invoice: [
+    "erpnext_sales_invoice_get",
+    "erpnext_doc_submit",
+    "erpnext_doc_cancel",
+    "erpnext_sales_invoice_submit",
+    "erpnext_item_get",
+    "erpnext_stock_balance",
+    "erpnext_doc_list",
+    "erpnext_customer_get",
+    "erpnext_doc_get",
+  ],
+  doclist: [
+    "erpnext_sales_invoice_list",
+    "erpnext_sales_invoice_get",
+    "erpnext_doc_get",
+    "erpnext_doc_list",
+    "erpnext_doc_submit",
+    "erpnext_doc_cancel",
+  ],
+  kanban: [
+    "erpnext_kanban_get_board",
+    "erpnext_kanban_move_card",
+    "erpnext_doc_get",
+    "erpnext_doc_update",
+    "erpnext_user_list",
+    "erpnext_doc_assign",
+    "erpnext_doc_unassign",
+    "erpnext_doc_list",
+  ],
+  stock: [
+    "erpnext_stock_balance",
+    "erpnext_item_get",
+    "erpnext_stock_entry_list",
+    "erpnext_doc_list",
+    "erpnext_stock_chart",
+    "erpnext_doc_get",
+  ],
+};
+
+/** Décore les payloads canned comme le registre complet du serveur. */
+export function withDevViewerTools(
+  viewer: ViewerKey,
+  payload: unknown,
+): unknown {
+  const tools = DEV_AVAILABLE_TOOLS[viewer];
+  if (!tools || typeof payload !== "object" || payload === null) return payload;
+  return { ...payload, _availableTools: [...tools] };
+}
+
 type Row = Record<string, unknown>;
 /**
  * Une liste telle que le serveur la renvoie : avec le `_rowAction` qu'il
@@ -377,20 +427,6 @@ const CUSTOMER: Row = {
   email_id: "compta@acme.example",
   disabled: 0,
 };
-const MONTHS = [
-  "sept.",
-  "oct.",
-  "nov.",
-  "déc.",
-  "janv.",
-  "févr.",
-  "mars",
-  "avr.",
-  "mai",
-  "juin",
-  "juil.",
-  "août",
-];
 /** Libellés de mois comme le serveur les écrit (« Sep 25 » … « Aug 26 »). */
 const MONTH_LABELS = [
   "Sep 25",
@@ -451,6 +487,20 @@ const REVENUE_VALUES = [
   20_300,
   22_100,
   21_653,
+];
+const EXPENSE_VALUES = [
+  8_900,
+  9_700,
+  9_100,
+  10_300,
+  11_200,
+  12_800,
+  13_600,
+  14_900,
+  12_400,
+  13_800,
+  14_500,
+  15_200,
 ];
 const chart = (
   title: string,
@@ -657,39 +707,97 @@ export function cannedResult(
       };
     case "erpnext_ar_aging":
       // Le vrai handler étiquette des clients, empilés par seau d'ancienneté.
-      return withPointJumps(
-        chart(
-          "Receivables aging",
-          CUSTOMERS,
-          [18_200, 9_400, 3_100, 1_250],
-          "Outstanding",
-        ),
-        byCustomer("Sales Invoice", [["outstanding_amount", ">", 0], [
-          "docstatus",
-          "=",
-          1,
-        ]]),
-      );
+      // Aucun saut typé : le handler réel peut classer sur posting_date quand
+      // due_date manque, condition impossible à reproduire exactement dans
+      // une simple liste filtrée. La sélection de contexte reste disponible.
+      return {
+        title: "Receivables aging",
+        type: "stacked-bar",
+        labels: CUSTOMERS,
+        datasets: [
+          { label: "0-30 days", values: [9_400, 5_100, 1_600, 700] },
+          { label: "31-60 days", values: [4_800, 2_300, 900, 350] },
+          { label: "61-90 days", values: [2_700, 1_200, 400, 150] },
+          { label: "90+ days", values: [1_300, 800, 200, 50] },
+        ],
+        currency: "EUR",
+        _drillDown: "Show outstanding sales invoices for customer {label}",
+      };
     case "erpnext_order_breakdown":
       return withPointJumps(
         chart("Order breakdown", CUSTOMERS, [4, 9, 3, 12], "Orders"),
         byCustomer("Sales Order", [["docstatus", "<", 2]]),
       );
     case "erpnext_profit_loss":
-      return chart("Profit and loss", MONTHS, [
-        2_100,
-        1_800,
-        2_400,
-        1_200,
-        2_900,
-        3_300,
-        2_700,
-        3_900,
-        2_200,
-        3_100,
-        3_600,
-        4_050,
-      ], "Profit");
+      return {
+        title: "Profit and loss",
+        type: "composed",
+        labels: MONTH_LABELS,
+        datasets: [
+          { label: "Income", values: REVENUE_VALUES, type: "bar" },
+          {
+            label: "Expenses",
+            values: EXPENSE_VALUES,
+            type: "bar",
+          },
+          {
+            label: "Net Profit",
+            values: REVENUE_VALUES.map((value, index) =>
+              value - EXPENSE_VALUES[index]
+            ),
+            type: "line",
+          },
+        ],
+        currency: "EUR",
+        _drillDown:
+          "Show submitted sales and purchase orders for month {label}",
+        _seriesPointJumps: Object.fromEntries(
+          MONTH_LABELS.map((label) => [label, {
+            Income: {
+              label: `${label} · Income`,
+              tool: "erpnext_doc_list",
+              args: {
+                doctype: "Sales Order",
+                fields: [
+                  "name",
+                  "customer",
+                  "transaction_date",
+                  "status",
+                  "grand_total",
+                ],
+                filters: [
+                  ["transaction_date", ">=", MONTH_RANGES[label][0]],
+                  ["transaction_date", "<=", MONTH_RANGES[label][1]],
+                  ["docstatus", "=", 1],
+                ],
+                limit: 20,
+              },
+              kind: "list",
+            },
+            Expenses: {
+              label: `${label} · Expenses`,
+              tool: "erpnext_doc_list",
+              args: {
+                doctype: "Purchase Order",
+                fields: [
+                  "name",
+                  "supplier",
+                  "transaction_date",
+                  "status",
+                  "grand_total",
+                ],
+                filters: [
+                  ["transaction_date", ">=", MONTH_RANGES[label][0]],
+                  ["transaction_date", "<=", MONTH_RANGES[label][1]],
+                  ["docstatus", "=", 1],
+                ],
+                limit: 20,
+              },
+              kind: "list",
+            },
+          }]),
+        ),
+      };
     case "erpnext_gross_profit":
       return withPointJumps(
         chart("Gross profit by item", ["Laptop Pro 14", "Wireless Mouse"], [

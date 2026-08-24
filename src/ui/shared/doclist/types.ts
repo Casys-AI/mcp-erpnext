@@ -30,6 +30,8 @@ export interface DoclistData {
   _title?: string;
   data: Record<string, unknown>[];
   refreshRequest?: UiRefreshRequestData;
+  /** Outils exacts autorisés par le registre serveur pour ce viewer. */
+  _availableTools?: string[];
   _rowAction?: RowAction;
   _sendMessageHints?: SendMessageHint[];
 }

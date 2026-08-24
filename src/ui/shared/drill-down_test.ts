@@ -25,20 +25,42 @@ const SEL = {
   suggested: "Show sales invoices for Mar",
 };
 
-function fakeHost(caps: HostCapabilities | undefined, reject = false) {
-  const calls: { method: string; text: string }[] = [];
-  const fail = () => Promise.reject(new Error("refusé"));
+type Outcome = "ok" | "isError" | "throw";
+
+interface FakeBehavior {
+  context?: Outcome;
+  message?: Outcome;
+}
+
+interface HostCall {
+  method: "updateModelContext" | "sendMessage";
+  text?: string;
+  structuredContent?: Record<string, unknown>;
+}
+
+function outcome(value: Outcome | undefined): Promise<unknown> {
+  if (value === "throw") return Promise.reject(new Error("refusé"));
+  return Promise.resolve(value === "isError" ? { isError: true } : {});
+}
+
+function fakeHost(
+  caps: HostCapabilities | undefined,
+  behavior: FakeBehavior = {},
+) {
+  const calls: HostCall[] = [];
   const host: DrillDownHost = {
     getHostCapabilities: () => caps,
     updateModelContext: (p) => {
-      if (reject) return fail();
-      calls.push({ method: "updateModelContext", text: p.content[0].text });
-      return Promise.resolve({});
+      calls.push({
+        method: "updateModelContext",
+        text: p.content?.[0]?.text,
+        structuredContent: p.structuredContent,
+      });
+      return outcome(behavior.context);
     },
     sendMessage: (p) => {
-      if (reject) return fail();
       calls.push({ method: "sendMessage", text: p.content[0].text });
-      return Promise.resolve({});
+      return outcome(behavior.message);
     },
   };
   return { host, calls };
@@ -46,14 +68,34 @@ function fakeHost(caps: HostCapabilities | undefined, reject = false) {
 
 Deno.test("drillDownChannel : updateModelContext prime sur tout le reste", () => {
   assertEquals(
-    drillDownChannel({ updateModelContext: { text: {} }, serverTools: {} }),
+    drillDownChannel({
+      updateModelContext: { text: {} },
+      message: { text: {} },
+      serverTools: {},
+    }),
     "context",
   );
 });
 
-Deno.test("drillDownChannel : message ou serverTools → message ; rien → none", () => {
+Deno.test("drillDownChannel : structuredContent est une modalité de contexte", () => {
+  assertEquals(
+    drillDownChannel({ updateModelContext: { structuredContent: {} } }),
+    "context",
+  );
+});
+
+Deno.test("drillDownChannel : seul message.text autorise un message", () => {
   assertEquals(drillDownChannel({ message: { text: {} } }), "message");
-  assertEquals(drillDownChannel({ serverTools: {} }), "message");
+  assertEquals(
+    drillDownChannel({ message: { structuredContent: {} } }),
+    "none",
+  );
+  assertEquals(drillDownChannel({ message: {} }), "none");
+  assertEquals(drillDownChannel({ serverTools: {} }), "none");
+  assertEquals(
+    drillDownChannel({ updateModelContext: {}, message: { text: {} } }),
+    "message",
+  );
   assertEquals(drillDownChannel({}), "none");
   assertEquals(drillDownChannel(undefined), "none");
 });
@@ -62,19 +104,16 @@ Deno.test("selectionContext : une ligne, valeur optionnelle, langue courante", (
   setLangSource(() => "fr-FR");
   assertEquals(
     selectionContext(SEL),
-    "Sélection de l'utilisateur dans « Revenue Trend » : Mars — 21 300 €. " +
-      "S'il demande le détail : Show sales invoices for Mar",
+    "Sélection active dans « Revenue Trend » : Mars — 21 300 €.",
   );
   assertEquals(
     selectionContext({ ...SEL, value: undefined }),
-    "Sélection de l'utilisateur dans « Revenue Trend » : Mars. " +
-      "S'il demande le détail : Show sales invoices for Mar",
+    "Sélection active dans « Revenue Trend » : Mars.",
   );
   setLangSource(() => "en-US");
   assertEquals(
     selectionContext(SEL),
-    "User selection in “Revenue Trend”: Mars — 21 300 €. " +
-      "If they ask for details: Show sales invoices for Mar",
+    "Active selection in “Revenue Trend”: Mars — 21 300 €.",
   );
 });
 
@@ -84,10 +123,29 @@ Deno.test("shareSelection : contexte → updateModelContext seul, texte de conte
   assertEquals(await shareSelection(host, SEL), "context");
   assertEquals(calls.map((c) => c.method), ["updateModelContext"]);
   assertEquals(calls[0].text, selectionContext(SEL));
+  assertEquals(calls[0].structuredContent, undefined);
 });
 
-Deno.test("shareSelection : message → sendMessage avec l'action suggérée telle quelle", async () => {
-  const { host, calls } = fakeHost({ serverTools: {} });
+Deno.test("shareSelection : structuredContent seul → contexte structuré seul", async () => {
+  const { host, calls } = fakeHost({
+    updateModelContext: { structuredContent: {} },
+  });
+  assertEquals(await shareSelection(host, SEL), "context");
+  assertEquals(calls, [{
+    method: "updateModelContext",
+    text: undefined,
+    structuredContent: {
+      selection: {
+        view: SEL.view,
+        label: SEL.label,
+        value: SEL.value,
+      },
+    },
+  }]);
+});
+
+Deno.test("shareSelection : message.text → action suggérée telle quelle", async () => {
+  const { host, calls } = fakeHost({ message: { text: {} } });
   assertEquals(await shareSelection(host, SEL), "message");
   assertEquals(calls, [{ method: "sendMessage", text: SEL.suggested }]);
 });
@@ -98,9 +156,63 @@ Deno.test("shareSelection : hôte muet → none, aucun appel", async () => {
   assertEquals(calls, []);
 });
 
-Deno.test("shareSelection : refus de l'hôte → none, sans lever", async () => {
-  const { host } = fakeHost({ updateModelContext: { text: {} } }, true);
+Deno.test("shareSelection : serverTools seul → aucun message", async () => {
+  const { host, calls } = fakeHost({ serverTools: {} });
   assertEquals(await shareSelection(host, SEL), "none");
+  assertEquals(calls, []);
+});
+
+Deno.test("shareSelection : isError du message → none", async () => {
+  const { host } = fakeHost(
+    { message: { text: {} } },
+    { message: "isError" },
+  );
+  assertEquals(await shareSelection(host, SEL), "none");
+});
+
+Deno.test("shareSelection : refus du contexte → fallback message.text", async () => {
+  for (const context of ["throw", "isError"] as const) {
+    const { host, calls } = fakeHost(
+      {
+        updateModelContext: { text: {} },
+        message: { text: {} },
+      },
+      { context },
+    );
+    assertEquals(await shareSelection(host, SEL), "message");
+    assertEquals(calls.map((call) => call.method), [
+      "updateModelContext",
+      "sendMessage",
+    ]);
+  }
+});
+
+Deno.test("shareSelection : refus du contexte sans message.text → none", async () => {
+  const { host, calls } = fakeHost(
+    {
+      updateModelContext: { text: {} },
+      message: { structuredContent: {} },
+      serverTools: {},
+    },
+    { context: "isError" },
+  );
+  assertEquals(await shareSelection(host, SEL), "none");
+  assertEquals(calls.map((call) => call.method), ["updateModelContext"]);
+});
+
+Deno.test("shareSelection : isError du fallback message → none", async () => {
+  const { host, calls } = fakeHost(
+    {
+      updateModelContext: { text: {} },
+      message: { text: {} },
+    },
+    { context: "isError", message: "isError" },
+  );
+  assertEquals(await shareSelection(host, SEL), "none");
+  assertEquals(calls.map((call) => call.method), [
+    "updateModelContext",
+    "sendMessage",
+  ]);
 });
 
 Deno.test("sharedLabel : un libellé par canal, null pour none", () => {

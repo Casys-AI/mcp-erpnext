@@ -6,7 +6,10 @@ import {
   currentLevel,
   markStale,
   type NavStack,
+  patchLevel,
   popLevel,
+  pushLevel,
+  reconcileRoot,
 } from "./nav-stack.ts";
 
 /** Une pile en mémoire, comme `useState` la tiendrait. */
@@ -101,6 +104,23 @@ Deno.test("jumpInto - une réponse tardive ne touche pas un niveau repoussé", a
   assertEquals(currentLevel(store.stack).count, 3);
 });
 
+Deno.test("jumpInto - une réponse de l'ancienne racine ne touche pas la nouvelle pile", async () => {
+  const store = memoryStore(createStack({ title: "SINV-1", kind: "root" }));
+  const { host, resolve } = deferredHost();
+  const old = jumpInto(store, host, jump("Paiements"));
+  store.set((s) => reconcileRoot(s, { title: "SINV-2", kind: "root" }));
+  const current = jumpInto(store, host, jump("Paiements"));
+
+  resolve(0, { count: 1, data: [{ name: "ancien" }] });
+  await old;
+  assertEquals(currentLevel(store.stack).loading, true);
+  assertEquals(currentLevel(store.stack).body, undefined);
+
+  resolve(1, { count: 2, data: [{ name: "nouveau" }] });
+  await current;
+  assertEquals(currentLevel(store.stack).count, 2);
+});
+
 Deno.test("jumpInto - un outil en erreur remplit `error`, pas `body`", async () => {
   const store = memoryStore(createStack({ title: "Racine", kind: "root" }));
   const host: ToolHost = {
@@ -129,5 +149,55 @@ Deno.test("refreshCurrent - la racine ne sait pas se recharger ; un niveau si, e
   resolve(1, { count: 5, data: [] });
   assertEquals(await r, true);
   assertEquals(currentLevel(store.stack).count, 5);
+  assertEquals(currentLevel(store.stack).stale, undefined);
+});
+
+Deno.test("refreshCurrent - un échec garde le corps périmé et un retry réussi le remplace", async () => {
+  let stack = createStack({ title: "Racine", kind: "root" });
+  stack = pushLevel(stack, {
+    title: "Factures",
+    kind: "list",
+    tool: { name: "erpnext_doc_list", args: { doctype: "Sales Invoice" } },
+  });
+  stack = patchLevel(stack, currentLevel(stack).id, {
+    body: { count: 1, data: [{ name: "SINV-1" }] },
+    count: 1,
+  });
+  stack = markStale(stack, "14:02", "SINV-1");
+  const store = memoryStore(stack);
+  let calls = 0;
+  const host: ToolHost = {
+    callServerTool: () => {
+      calls += 1;
+      if (calls === 1) {
+        return Promise.resolve({
+          isError: true,
+          content: [{ type: "text", text: "indisponible" }],
+        });
+      }
+      return Promise.resolve({
+        content: [{
+          type: "text",
+          text: JSON.stringify({ count: 2, data: [{ name: "SINV-2" }] }),
+        }],
+      });
+    },
+  };
+
+  assertEquals(await refreshCurrent(store, host), false);
+  assertEquals(currentLevel(store.stack).body, {
+    count: 1,
+    data: [{ name: "SINV-1" }],
+  });
+  assertEquals(currentLevel(store.stack).count, 1);
+  assertEquals(currentLevel(store.stack).stale?.at, "14:02");
+  assertEquals(currentLevel(store.stack).loading, false);
+
+  assertEquals(await refreshCurrent(store, host), true);
+  assertEquals(currentLevel(store.stack).body, {
+    count: 2,
+    data: [{ name: "SINV-2" }],
+  });
+  assertEquals(currentLevel(store.stack).count, 2);
   assertEquals(currentLevel(store.stack).stale, undefined);
 });

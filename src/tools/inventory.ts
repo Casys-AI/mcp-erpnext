@@ -325,12 +325,16 @@ export const inventoryTools: ErpNextTool[] = [
     _meta: DOCLIST_META,
     description: "List Stock Entries (material transfers, receipts, issues). " +
       "Fields: name, stock_entry_type, posting_date, from_warehouse, to_warehouse, total_amount. " +
-      "Filterable by stock_entry_type, date range.",
+      "Filterable by item_code, stock_entry_type, date range.",
     category: "inventory",
     inputSchema: {
       type: "object",
       properties: {
         limit: { type: "number", description: "Max results (default 20)" },
+        item_code: {
+          type: "string",
+          description: "Exact item code present in a Stock Entry line",
+        },
         stock_entry_type: {
           type: "string",
           description:
@@ -346,6 +350,14 @@ export const inventoryTools: ErpNextTool[] = [
     handler: async (input, ctx) => {
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [];
+      if (input.item_code) {
+        filters.push([
+          "Stock Entry Detail",
+          "item_code",
+          "=",
+          input.item_code as string,
+        ]);
+      }
       if (input.stock_entry_type) {
         filters.push([
           "stock_entry_type",

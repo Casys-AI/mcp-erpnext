@@ -109,29 +109,36 @@ export function PathBar(
         >
           ‹
         </button>
-        {c.elided.length > 0 && (
-          <>
-            <button
-              type="button"
-              aria-expanded={open}
-              aria-haspopup="menu"
-              aria-label={t("nav.elided_title")}
-              onClick={() => setOpen((v) => !v)}
-              class={cx(
-                "rounded-[3px] border px-1.5 py-0.5 font-mono text-[11px] transition-colors",
-                open
-                  ? "border-accent bg-accent/12 text-ink"
-                  : "border-dotted border-line-modal text-ink-dim hover:border-line-hover hover:text-ink",
-              )}
-            >
-              {t("nav.elided", { n: c.elided.length })}
-            </button>
-            {SEP}
-          </>
+        {c.trail.map((part) =>
+          "elided" in part
+            ? (
+              <span class="contents" key={`elided:${part.elided[0]?.index}`}>
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-haspopup="menu"
+                  aria-label={t("nav.elided_title")}
+                  onClick={() => setOpen((v) => !v)}
+                  class={cx(
+                    "rounded-[3px] border px-1.5 py-0.5 font-mono text-[11px] transition-colors",
+                    open
+                      ? "border-accent bg-accent/12 text-ink"
+                      : "border-dotted border-line-modal text-ink-dim hover:border-line-hover hover:text-ink",
+                  )}
+                >
+                  {t("nav.elided", { n: part.elided.length })}
+                </button>
+                {SEP}
+              </span>
+            )
+            : (
+              <Parent
+                key={part.level.id}
+                crumb={part}
+                onJump={onJump}
+              />
+            )
         )}
-        {c.parents.map((crumb) => (
-          <Parent key={crumb.level.id} crumb={crumb} onJump={onJump} />
-        ))}
         <span
           aria-current="page"
           class="truncate font-mono text-[11.5px] font-medium text-ink"

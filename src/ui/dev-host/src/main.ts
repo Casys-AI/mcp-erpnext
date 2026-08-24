@@ -13,7 +13,18 @@ import {
   AppBridge,
   PostMessageTransport,
 } from "@modelcontextprotocol/ext-apps/app-bridge";
-import { cannedResult, initialResult, type ViewerKey } from "./canned.ts";
+import {
+  cannedResult,
+  initialResult,
+  type ViewerKey,
+  withDevViewerTools,
+} from "./canned.ts";
+import {
+  capabilitiesForProfile,
+  type CapabilityProfile,
+  channelsForProfile,
+  resolveCapabilityProfile,
+} from "./capabilities.ts";
 
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -39,20 +50,8 @@ function note(
   log.scrollTop = log.scrollHeight;
 }
 
-function capabilities() {
-  switch (capsSelect.value) {
-    case "context":
-      return { updateModelContext: { text: {} } };
-    case "message":
-      return { message: { text: {} } };
-    default:
-      return {
-        serverTools: {},
-        updateModelContext: { text: {} },
-        message: { text: {} },
-      };
-  }
-}
+const selectedProfile = (): CapabilityProfile =>
+  resolveCapabilityProfile(capsSelect.value) ?? "full";
 
 const textResult = (payload: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(payload) }],
@@ -62,8 +61,18 @@ let bridge: AppBridge | null = null;
 
 async function mount() {
   const viewer = viewerSelect.value as ViewerKey;
+  const profile = selectedProfile();
+  const hostCapabilities = capabilitiesForProfile(profile);
+  const channels = channelsForProfile(profile);
   log.innerHTML = "<h2>journal hôte</h2>";
   status.textContent = "chargement…";
+  note(
+    "info",
+    `profil ${profile}`,
+    channels.length > 0
+      ? { "canaux annoncés": channels }
+      : { "canaux annoncés": "aucun" },
+  );
   if (bridge) {
     await bridge.close().catch(() => {});
     bridge = null;
@@ -76,7 +85,7 @@ async function mount() {
   bridge = new AppBridge(
     null,
     { name: "mcp-erpnext dev host", version: "0.1.0" },
-    capabilities(),
+    hostCapabilities,
     {
       hostContext: {
         locale: "fr-FR",
@@ -88,16 +97,18 @@ async function mount() {
   );
 
   bridge.oninitialized = () => {
-    status.textContent = `initialisé · ${
-      Object.keys(capabilities()).join(" + ")
+    status.textContent = `initialisé · ${profile} · ${
+      channels.length > 0 ? channels.join(" + ") : "aucun canal"
     }`;
     note("info", "ui/initialized → résultat d'outil initial envoyé");
-    void bridge!.sendToolResult(textResult(initialResult(viewer)));
+    void bridge!.sendToolResult(
+      textResult(withDevViewerTools(viewer, initialResult(viewer))),
+    );
   };
   bridge.oncalltool = async (params) => {
     const args = (params.arguments ?? {}) as Record<string, unknown>;
     const payload = cannedResult(viewer, params.name, args);
-    note("tool", `tools/call ${params.name}`, args);
+    note("tool", `canal serverTools · tools/call ${params.name}`, args);
     if (payload === null) {
       note("info", `${params.name} : non simulé → isError`);
       return {
@@ -109,18 +120,22 @@ async function mount() {
         }],
       };
     }
-    return textResult(payload);
+    return textResult(withDevViewerTools(viewer, payload));
   };
   bridge.onupdatemodelcontext = async (params) => {
     note(
       "ctx",
-      "ui/update-model-context (contexte, rien n'est envoyé)",
+      "canal updateModelContext · ui/update-model-context (aucun message)",
       params.content,
     );
     return {};
   };
   bridge.onmessage = async (params) => {
-    note("msg", "ui/message — UN MESSAGE FABRIQUÉ (repli)", params.content);
+    note(
+      "msg",
+      "canal message · ui/message — UN MESSAGE FABRIQUÉ (repli)",
+      params.content,
+    );
     return {};
   };
   bridge.onopenlink = async (params) => {
@@ -134,19 +149,17 @@ async function mount() {
   frame.src = `/${viewer}-viewer/index.html?theme=dark&v=${Date.now()}`;
 }
 
-// `?viewer=invoice&caps=context` présélectionne — pratique pour une démo.
+// Les anciennes URLs `caps=tools|context|message` restent des alias valides.
 const params = new URLSearchParams(location.search);
-for (
-  const [select, key] of [[viewerSelect, "viewer"], [
-    capsSelect,
-    "caps",
-  ]] as const
+const wantedViewer = params.get("viewer");
+if (
+  wantedViewer &&
+  [...viewerSelect.options].some((option) => option.value === wantedViewer)
 ) {
-  const wanted = params.get(key);
-  if (wanted && [...select.options].some((o) => o.value === wanted)) {
-    select.value = wanted;
-  }
+  viewerSelect.value = wantedViewer;
 }
+const wantedProfile = resolveCapabilityProfile(params.get("caps"));
+if (wantedProfile) capsSelect.value = wantedProfile;
 
 viewerSelect.addEventListener("change", () => void mount());
 capsSelect.addEventListener("change", () => void mount());

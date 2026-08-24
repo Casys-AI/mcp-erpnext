@@ -57,7 +57,8 @@
   --color-ink: #101519;
   --color-ink-2: #2c3740;
   --color-ink-muted: #5b6a74;
-  --color-ink-faint: #7b8892;
+  /* 4.62:1 sur surface blanche : reste secondaire sans sacrifier le petit texte. */
+  --color-ink-faint: #687781;
   --color-ink-ghost: #9aa5ad;
   /**
    * Encre des valeurs nulles en mobile. Plus lisible que --color-ink-ghost :
@@ -225,7 +226,8 @@
   --color-ink: #e6ecf0;
   --color-ink-2: #c3ccd3;
   --color-ink-muted: #8895a0;
-  --color-ink-faint: #5d6a74;
+  /* 4.54:1 sur la surface sombre, y compris pour les micro-libellés. */
+  --color-ink-faint: #74818b;
   --color-ink-ghost: #4a5661;
   --color-ink-dim: #6f7c88;
 

@@ -49,6 +49,11 @@ export const fr: Record<string, string> = {
   "chart.scatter.no_data": "Aucune donnée de dispersion",
   "chart.treemap.no_data": "Aucune donnée pour la treemap",
   "chart.error.parse_failed": "Impossible de lire les données du graphique",
+  "chart.keyboard.target": "{label} · {series} · {value}",
+  "chart.keyboard.target_single": "{label} · {value}",
+  "chart.keyboard.help":
+    "Gauche et droite changent le point ; haut et bas changent la série ; Entrée la sélectionne.",
+  "chart.keyboard.control": "Explorer le graphique : {target}. {help}",
   // ── /chart-viewer ─────────────────────────────────────────────────────────
 
   // ── stock-viewer ──────────────────────────────────────────────────────────
@@ -158,6 +163,10 @@ export const fr: Record<string, string> = {
   "funnel.conversion.overall": "Conversion globale",
   "funnel.autorefresh": "Actualisation auto au focus",
   "funnel.stage.click_to_see": "Cliquer pour voir {label}",
+  "funnel.stage.aria_open": "Ouvrir {label}, {count}",
+  "funnel.stage.aria_context":
+    "Sélectionner {label}, {count}, comme contexte actif",
+  "funnel.stage.aria_ask": "Demander le détail de {label}, {count}",
   "funnel.error.parse_failed": "Impossible de lire la réponse du funnel",
   "funnel.drill_down.leads": "Afficher tous les leads",
   "funnel.drill_down.opportunities":
@@ -198,11 +207,19 @@ export const fr: Record<string, string> = {
   "doclist.detail.back_list_label": "‹ liste",
   // ── /doclist-viewer ───────────────────────────────────────────────────────
   // ── drill-down (partage d'une sélection) ──
-  "drill.context":
-    "Sélection de l'utilisateur dans « {view} » : {label}{value}. S'il demande le détail : {suggested}",
+  "drill.context": "Sélection active dans « {view} » : {label}{value}.",
   "drill.shared":
     "Sélection partagée — demandez le détail dans la conversation",
   "drill.sent": "Envoyé à la conversation",
+  "message.sending": "Envoi…",
+  "message.send_error": "Envoi à la conversation impossible",
+  "context.active.label": "Contexte",
+  "context.active.items": "Sélections du contexte actif",
+  "context.active.select": "Sélectionner {label} comme contexte actif",
+  "context.active.clear": "Retirer {label} du contexte actif",
+  "context.active.clear_all": "Tout effacer",
+  "context.active.error": "Contexte non mis à jour",
+  "context.active.evicted": "8 max · {label} retiré",
   "chart.tooltip.click": "clic",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Retour",
@@ -334,6 +351,12 @@ export const fr: Record<string, string> = {
   "kanban.modal.saving": "Enregistrement…",
   "kanban.modal.saved": "Enregistré",
   "kanban.modal.save_error": "Échec de l'enregistrement",
+  "kanban.modal.discard.title": "Abandonner les modifications ?",
+  "kanban.modal.discard.detail":
+    "Cette carte contient des modifications non enregistrées. Revenez à l'édition pour les conserver, ou abandonnez-les pour continuer.",
+  "kanban.modal.discard.action": "Abandonner et fermer",
+  "kanban.modal.discard.move_action": "Abandonner et déplacer",
+  "kanban.modal.discard.continue_action": "Abandonner et continuer",
   "kanban.modal.section.general": "général",
   "kanban.modal.section.progress": "progression",
   "kanban.modal.section.assignees": "responsables",

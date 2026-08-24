@@ -18,8 +18,10 @@ import { InlineDetailPanel } from "./InlineDetailPanel";
 import { SearchRow } from "./SearchControl";
 import type { DoclistData } from "./types";
 import type { DoclistState, Row } from "./useDoclist";
+import { canCallViewerTool } from "../viewer-tools";
 
 const TOOL_CALL_TIMEOUT_MS = 10_000;
+const CANONICAL_READBACK_DELAY_MS = 1_500;
 
 export function resolveRowId(
   row: Row,
@@ -46,6 +48,8 @@ export function DoclistBody(
     onAsk,
     stale,
     onRefresh,
+    onMutationInvalidate,
+    onMutationRefresh,
     onMutated,
   }: {
     app: App;
@@ -63,13 +67,25 @@ export function DoclistBody(
     /** Une action plus bas a changé ce que cette liste montre. */
     stale?: { at: string; subject?: string };
     onRefresh?: () => void;
+    /** Invalide immédiatement une relecture partie avant la mutation. */
+    onMutationInvalidate?: () => void;
+    /** Relecture racine obligatoire après mutation, coalescée par le viewer. */
+    onMutationRefresh?: () => void;
     /** Une action d'ici (valider, annuler) vient de changer `subject`. */
     onMutated?: (subject: string) => void;
   },
 ) {
   const t = useT();
   const narrow = layout !== "wide";
-  const { rows, rowAction, expandedId } = list;
+  const { rows, rowAction: payloadRowAction, expandedId } = list;
+  const serverTools = app.getHostCapabilities()?.serverTools;
+  const rowAction = payloadRowAction && canCallViewerTool(
+      serverTools,
+      data._availableTools,
+      payloadRowAction.toolName,
+    )
+    ? payloadRowAction
+    : undefined;
   type Expanded = { id: string | null; data: Row | null; loading: boolean };
   const [expanded, setExpandedState] = useState<Expanded>({
     id: null,
@@ -82,10 +98,10 @@ export function DoclistBody(
     setExpandedState(next);
   };
   const pendingRowIdRef = useRef<string | null>(null);
-  const actionTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  // Le corps se démonte à chaque retour : le timer de relecture part avec lui.
-  useEffect(() => () => clearTimeout(actionTimerRef.current), []);
-  const hasLocalDetail = rows.length > 0 && rows[0]._detail != null;
+  useEffect(() => () => {
+    pendingRowIdRef.current = null;
+  }, []);
+  const hasLocalDetail = fixture && rows.some((row) => row._detail != null);
   const isClickable = !!rowAction || hasLocalDetail;
 
   // La ligne active vit dans la pile ; son détail chargé reste local.
@@ -170,7 +186,10 @@ export function DoclistBody(
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<boolean> {
-    if (fixture) return false;
+    if (
+      fixture ||
+      !canCallViewerTool(serverTools, data._availableTools, toolName)
+    ) return false;
     try {
       const result = await app.callServerTool({
         name: toolName,
@@ -179,33 +198,47 @@ export function DoclistBody(
       if (result.isError) return false;
       const currentId = expandedId;
       if (currentId) onMutated?.(currentId);
-      clearTimeout(actionTimerRef.current);
-      actionTimerRef.current = setTimeout(async () => {
-        if (currentId && rowAction && pendingRowIdRef.current === currentId) {
-          try {
-            const r = await app.callServerTool({
-              name: rowAction.toolName,
-              arguments: {
-                ...rowAction.extraArgs,
-                [rowAction.argName]: currentId,
-              },
-            }, { timeout: TOOL_CALL_TIMEOUT_MS });
-            if (pendingRowIdRef.current !== currentId) return;
-            if (!r.isError) {
-              const text = extractToolResultText(r);
-              if (text) {
-                const p = JSON.parse(text);
-                setExpanded({
-                  id: currentId,
-                  data: p.data ?? p,
-                  loading: false,
-                });
-              }
-            }
-          } catch { /* ignore */ }
-        }
-      }, 1500);
-      return true;
+      onMutationInvalidate?.();
+
+      // Le bouton reste busy pendant la fenêtre de cohérence ERPNext. Il ne
+      // redevient jamais actionnable sur l'ancien docstatus entre l'écriture
+      // et la relecture canonique.
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, CANONICAL_READBACK_DELAY_MS)
+      );
+      if (!currentId || !rowAction || pendingRowIdRef.current !== currentId) {
+        onMutationRefresh?.();
+        return true;
+      }
+      try {
+        const readBack = await app.callServerTool({
+          name: rowAction.toolName,
+          arguments: {
+            ...rowAction.extraArgs,
+            [rowAction.argName]: currentId,
+          },
+        }, { timeout: TOOL_CALL_TIMEOUT_MS });
+        if (pendingRowIdRef.current !== currentId) return true;
+        if (readBack.isError) throw new Error("canonical read-back failed");
+        const text = extractToolResultText(readBack);
+        if (!text) throw new Error("canonical read-back is empty");
+        const parsed = JSON.parse(text);
+        setExpanded({
+          id: currentId,
+          data: parsed.data ?? parsed,
+          loading: false,
+        });
+        onError(null);
+        return true;
+      } catch {
+        // La mutation a pu réussir sans relecture fiable : fermer l'ancien
+        // état empêche une seconde action sur un docstatus désormais périmé.
+        onError(t("doclist.error.load_details"));
+        list.setExpandedId(null);
+        return false;
+      } finally {
+        onMutationRefresh?.();
+      }
     } catch {
       return false;
     }
@@ -329,6 +362,7 @@ export function DoclistBody(
             doctype={data.doctype}
             sendMessageHints={data._sendMessageHints}
             fixture={fixture}
+            availableTools={serverTools ? data._availableTools : []}
             layout={layout}
             onClose={() => list.setExpandedId(null)}
             onAction={handleDetailAction}

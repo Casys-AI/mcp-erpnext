@@ -13,8 +13,9 @@
  *   3. sinon ne fait rien — et le dit, pour que la vue n'affiche pas un
  *      retour mensonger.
  *
- * Le texte poussé est borné par construction : un libellé, une valeur, une
- * action suggérée. Pas de liste, pas de payload — un point, comme au clic.
+ * Le contexte poussé est borné par construction : un libellé et une valeur.
+ * L'action suggérée reste réservée au fallback conversationnel explicite : le
+ * contexte ne glisse ainsi aucune consigne cachée au modèle.
  */
 
 import { t } from "./i18n.ts";
@@ -37,30 +38,67 @@ interface TextBlock {
   text: string;
 }
 
+interface SupportedContextModalities {
+  text?: unknown;
+  structuredContent?: unknown;
+}
+
+interface SupportedMessageModalities {
+  text?: unknown;
+  structuredContent?: unknown;
+}
+
 /** Ce que la vue lit des capacités de l'hôte — le reste ne nous regarde pas. */
 export interface HostCapabilities {
-  updateModelContext?: unknown;
-  message?: unknown;
+  updateModelContext?: SupportedContextModalities;
+  message?: SupportedMessageModalities;
+  /** Présent uniquement pour garantir qu'il ne vaut jamais capacité message. */
   serverTools?: unknown;
 }
 
 /** Le strict nécessaire de `App` — structurel, pour tester sans le SDK. */
 export interface DrillDownHost {
   getHostCapabilities(): HostCapabilities | undefined;
-  updateModelContext(params: { content: TextBlock[] }): Promise<unknown>;
+  updateModelContext(params: {
+    content?: TextBlock[];
+    structuredContent?: Record<string, unknown>;
+  }): Promise<unknown>;
   sendMessage(
     params: { role: "user"; content: TextBlock[] },
   ): Promise<unknown>;
+}
+
+type ContextModality = "text" | "structuredContent";
+
+function advertises(modality: unknown): boolean {
+  return typeof modality === "object" && modality !== null;
+}
+
+function contextModality(
+  caps: HostCapabilities | undefined,
+): ContextModality | null {
+  if (advertises(caps?.updateModelContext?.text)) return "text";
+  if (advertises(caps?.updateModelContext?.structuredContent)) {
+    return "structuredContent";
+  }
+  return null;
+}
+
+function canSendTextMessage(caps: HostCapabilities | undefined): boolean {
+  return advertises(caps?.message?.text);
+}
+
+function requestWasRejected(result: unknown): boolean {
+  return typeof result === "object" && result !== null &&
+    "isError" in result && result.isError === true;
 }
 
 export function drillDownChannel(
   caps: HostCapabilities | undefined,
 ): DrillDownChannel {
   if (!caps) return "none";
-  if (caps.updateModelContext) return "context";
-  // `message` est la capacité explicite ; `serverTools` est le signal qu'on
-  // lisait jusqu'ici — gardé pour les hôtes qui ne déclarent que lui.
-  if (caps.message || caps.serverTools) return "message";
+  if (contextModality(caps)) return "context";
+  if (canSendTextMessage(caps)) return "message";
   return "none";
 }
 
@@ -70,35 +108,70 @@ export function selectionContext(sel: Selection): string {
     view: sel.view,
     label: sel.label,
     value: sel.value ? ` — ${sel.value}` : "",
-    suggested: sel.suggested,
   });
+}
+
+function selectionStructuredContent(sel: Selection): Record<string, unknown> {
+  return {
+    selection: {
+      view: sel.view,
+      label: sel.label,
+      ...(sel.value ? { value: sel.value } : {}),
+    },
+  };
+}
+
+async function trySendMessage(
+  host: DrillDownHost,
+  suggested: string,
+): Promise<boolean> {
+  try {
+    const result = await host.sendMessage({
+      role: "user",
+      content: [{ type: "text", text: suggested }],
+    });
+    return !requestWasRejected(result);
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Partage la sélection par le meilleur canal disponible et dit lequel.
  *
- * Un refus de l'hôte vaut « none » : la vue n'a rien à confirmer.
+ * Un refus du contexte retombe sur `message.text` seulement si cette modalité
+ * est elle aussi annoncée. Tout refus final vaut « none » : la vue n'a rien à
+ * confirmer.
  */
 export async function shareSelection(
   host: DrillDownHost,
   sel: Selection,
 ): Promise<DrillDownChannel> {
-  const channel = drillDownChannel(host.getHostCapabilities());
-  try {
-    if (channel === "context") {
-      await host.updateModelContext({
-        content: [{ type: "text", text: selectionContext(sel) }],
-      });
-    } else if (channel === "message") {
-      await host.sendMessage({
-        role: "user",
-        content: [{ type: "text", text: sel.suggested }],
-      });
+  const caps = host.getHostCapabilities();
+  const modality = contextModality(caps);
+
+  if (modality) {
+    try {
+      const params = modality === "text"
+        ? { content: [{ type: "text" as const, text: selectionContext(sel) }] }
+        : { structuredContent: selectionStructuredContent(sel) };
+      const result = await host.updateModelContext(params);
+      if (!requestWasRejected(result)) return "context";
+    } catch {
+      // Un hôte peut refuser une modalité pourtant annoncée. Le message texte
+      // explicite reste alors le seul fallback autorisé.
     }
-  } catch {
+
+    if (canSendTextMessage(caps) && await trySendMessage(host, sel.suggested)) {
+      return "message";
+    }
     return "none";
   }
-  return channel;
+
+  if (canSendTextMessage(caps) && await trySendMessage(host, sel.suggested)) {
+    return "message";
+  }
+  return "none";
 }
 
 /** Le retour à afficher pour le canal emprunté — null quand rien n'est parti. */

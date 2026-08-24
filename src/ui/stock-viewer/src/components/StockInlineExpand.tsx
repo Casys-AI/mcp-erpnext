@@ -16,7 +16,11 @@ import { cx } from "~/shared/ui";
 import type { StockEntry } from "../types.ts";
 
 export function StockInlineExpand(
-  { row, isDanger }: { row: StockEntry; isDanger: boolean },
+  { row, isDanger, onAsk }: {
+    row: StockEntry;
+    isDanger: boolean;
+    onAsk?: (message: string) => unknown;
+  },
 ) {
   const t = useT();
   return (
@@ -52,6 +56,39 @@ export function StockInlineExpand(
           value={formatNumber(row.valuation_rate, 2)}
         />
       </div>
+      {onAsk && (
+        <div class="mt-2.5 flex flex-wrap gap-1.5 border-t border-t-line-inner pt-2.5">
+          {[
+            {
+              label: t("stock.detail.action.chart"),
+              message: t("stock.nav.chart.message", {
+                itemCode: row.item_code,
+              }),
+            },
+            {
+              label: t("stock.detail.action.item"),
+              message: t("stock.nav.details.message", {
+                itemCode: row.item_code,
+              }),
+            },
+            {
+              label: t("stock.detail.action.entries"),
+              message: t("stock.nav.entries.message", {
+                itemCode: row.item_code,
+              }),
+            },
+          ].map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              class="rounded-[3px] border border-line px-2 py-1 font-mono text-chip text-accent-text transition-colors hover:border-accent-edge hover:bg-accent/8 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+              onClick={() => void onAsk(action.message)}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

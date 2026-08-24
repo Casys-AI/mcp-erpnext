@@ -48,13 +48,24 @@ import {
   resolveKanbanRefreshRequest,
 } from "~/shared/kanban/refresh";
 import { clampKanbanFocusIndex } from "~/shared/kanban/layout";
-import { extractToolResultText } from "~/shared/refresh";
+import {
+  beginUiRefresh,
+  completeUiRefresh,
+  createUiRefreshSequence,
+  extractToolResultText,
+  invalidateUiRefresh,
+} from "~/shared/refresh";
 import { jumpFromHint, type NavHint } from "~/shared/jumps";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
 import type { CardDetailState } from "~/shared/kanban/state";
+import { sendTextMessage } from "~/shared/host-message";
+import { canCallViewerTool, hasAvailableTool } from "~/shared/viewer-tools";
+import { createSerialQueue } from "~/shared/single-flight";
 import { kanbanNavVars } from "./kanban-nav";
+import { kanbanViewerCapabilities } from "./capabilities";
 import { CardDetailModal } from "./DetailModal";
 import {
   isFixtureMode,
@@ -620,6 +631,7 @@ function KanbanColumn({
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             onTitleClick={onTitleClick}
+            enableDrag={board.capabilities.canMoveCards}
           />
         ))}
         {cards.length === 0 && (
@@ -820,7 +832,7 @@ function KanbanBoardWithNav({
   onDragOverColumn: (columnId: string, event: KanbanDragEvent) => void;
   onTitleClick: (card: KanbanCardData) => void;
   onClose: () => void;
-  onNavigate: (message: string) => Promise<void>;
+  onNavigate: (message: string) => Promise<boolean>;
   onSave: (
     doctype: string,
     name: string,
@@ -845,15 +857,39 @@ function KanbanBoardWithNav({
     title: board.title,
     kind: "root",
     origin: "list",
+    key: viewerRootKey(
+      "kanban",
+      {
+        toolName: "erpnext_kanban_get_board",
+        arguments: board.refreshArguments,
+      },
+      { boardId: board.boardId, doctype: board.doctype },
+    ),
   }, { fixture });
   const nav = viewerNav.nav;
   // Liste du niveau courant (racine → vide ; niveau empilé liste → payload de l'outil).
   const { list } = viewerNav;
 
   // Sauts disponibles uniquement quand l'hôte relaie les outils serveur.
-  const { jumpsEnabled } = viewerNav;
+  const { jumpsEnabled, messagesEnabled } = viewerNav;
   const boardHints = (board as BoardWithHints)._sendMessageHints;
-  const hasHints = jumpsEnabled && !!boardHints && boardHints.length > 0;
+  const typedBoardHints = jumpsEnabled
+    ? boardHints?.filter((hint) =>
+      typeof hint.tool === "string" &&
+      hasAvailableTool(board._availableTools, hint.tool)
+    ) ?? []
+    : [];
+  const hasHints = typedBoardHints.length > 0;
+  const actionCapabilities = kanbanViewerCapabilities(
+    board,
+    app.getHostCapabilities()?.serverTools,
+    fixture,
+  );
+  const actionableBoard = actionCapabilities.canMove ? board : {
+    ...board,
+    allowedTransitions: [],
+    capabilities: { ...board.capabilities, canMoveCards: false },
+  };
 
   const narrow = layout !== "wide";
   const useFocusMode = narrow && board.columns.length > 1;
@@ -911,7 +947,7 @@ function KanbanBoardWithNav({
           </div>
           {!narrow && nav.isRoot && (
             <span class="font-mono text-chip text-ink-faint shrink-0">
-              {board.moveToolName}
+              {actionCapabilities.canMove ? board.moveToolName : null}
             </span>
           )}
         </header>
@@ -945,7 +981,7 @@ function KanbanBoardWithNav({
           {useFocusMode
             ? (
               <MobileColumnNavWrapper
-                board={board}
+                board={actionableBoard}
                 layout={layout}
                 onMove={onMove}
                 onDragStart={onDragStart}
@@ -970,7 +1006,7 @@ function KanbanBoardWithNav({
                     <KanbanColumn
                       key={column.id}
                       column={column}
-                      board={board}
+                      board={actionableBoard}
                       cards={board.cards.filter((card) =>
                         card.columnId === column.id
                       )}
@@ -1007,16 +1043,16 @@ function KanbanBoardWithNav({
       {detail.selectedCardId && nav.isRoot && (
         <CardDetailModal
           detail={detail}
-          board={board}
+          board={actionableBoard}
           onClose={onClose}
           onMove={onMove}
-          onSave={onSave}
-          onAssign={onAssign}
-          onUnassign={onUnassign}
-          onLoadUsers={onLoadUsers}
-          hints={hasHints ? boardHints : undefined}
+          onSave={actionCapabilities.canEdit ? onSave : undefined}
+          onAssign={actionCapabilities.canAssign ? onAssign : undefined}
+          onUnassign={actionCapabilities.canUnassign ? onUnassign : undefined}
+          onLoadUsers={actionCapabilities.canAssign ? onLoadUsers : undefined}
+          hints={hasHints ? typedBoardHints : undefined}
           onJump={hasHints ? handleModalJump : undefined}
-          onNavigate={!fixture ? onNavigate : undefined}
+          onNavigate={messagesEnabled ? onNavigate : undefined}
         />
       )}
     </>
@@ -1062,10 +1098,11 @@ export function KanbanViewer() {
   const draggedCardIdRef = useRef<string | null>(null);
   const draggingRef = useRef(false);
   const refreshRequestRef = useRef<KanbanRefreshRequestData | null>(null);
-  const refreshInFlightRef = useRef(false);
+  const refreshSequenceRef = useRef(createUiRefreshSequence());
   const refreshAfterMutationRef = useRef(false);
   const lastRefreshStartedAtRef = useRef(0);
   const detailFetchCardIdRef = useRef<string | null>(null);
+  const detailSaveQueueRef = useRef(createSerialQueue());
   const fixtureDetailsRef = useRef<Record<string, Record<string, unknown>>>({
     ...KANBAN_FIXTURE_DETAILS,
   });
@@ -1097,7 +1134,7 @@ export function KanbanViewer() {
   }
 
   async function requestBoardRefresh(
-    options: { ignoreInterval?: boolean } = {},
+    options: { ignoreInterval?: boolean; force?: boolean } = {},
   ) {
     if (fixture) return false;
     const board = boardRef.current;
@@ -1105,6 +1142,28 @@ export function KanbanViewer() {
       board,
       refreshRequestRef.current,
     );
+
+    if (
+      !request ||
+      !canCallViewerTool(
+        app.getHostCapabilities()?.serverTools,
+        board?._availableTools,
+        request.toolName,
+      )
+    ) {
+      return false;
+    }
+
+    const sequence = refreshSequenceRef.current;
+    if (sequence.inFlight !== null) {
+      if (options.force) {
+        refreshSequenceRef.current = beginUiRefresh(sequence, {
+          force: true,
+        }).state;
+      }
+      return false;
+    }
+    const forced = Boolean(options.force || sequence.pendingForced);
 
     if (
       !canRequestBoardRefresh({
@@ -1116,46 +1175,58 @@ export function KanbanViewer() {
         dragging: draggingRef.current,
         processingMove: processingRef.current,
         queuedMoves: queueRef.current.length,
-        refreshInFlight: refreshInFlightRef.current,
+        refreshInFlight: false,
         now: Date.now(),
         lastRefreshStartedAt: lastRefreshStartedAtRef.current,
         minIntervalMs: AUTO_REFRESH_INTERVAL_MS,
-      }, options)
+      }, { ignoreInterval: options.ignoreInterval || forced })
     ) {
       return false;
     }
 
-    if (!request || !app.getHostCapabilities()?.serverTools) {
-      return false;
-    }
+    const started = beginUiRefresh(sequence, { force: forced });
+    refreshSequenceRef.current = started.state;
+    if (started.generation === null) return false;
 
-    refreshInFlightRef.current = true;
     lastRefreshStartedAtRef.current = Date.now();
     setRefreshing(true);
 
+    let result: ToolResultPayload | null = null;
     try {
-      const result = await app.callServerTool({
+      result = await app.callServerTool({
         name: request.toolName,
         arguments: request.arguments,
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
-
-      if (result.isError) {
-        return false;
-      }
-
-      const text = extractTextContent(result);
-      if (!text) {
-        return false;
-      }
-
-      updateBoard(parseBoard(text));
-      return true;
     } catch {
-      return false;
-    } finally {
-      refreshInFlightRef.current = false;
-      setRefreshing(false);
+      // Refresh failures are passive; settle the generation before deciding
+      // whether this call is still allowed to affect the visible board.
     }
+
+    const completed = completeUiRefresh(
+      refreshSequenceRef.current,
+      started.generation,
+    );
+    refreshSequenceRef.current = completed.state;
+    setRefreshing(false);
+
+    let refreshed = false;
+    if (completed.accept && result && !result.isError) {
+      const text = extractTextContent(result);
+      if (text) {
+        try {
+          updateBoard(parseBoard(text));
+          refreshed = true;
+        } catch {
+          // Keep the current board when a passive refresh payload is invalid.
+        }
+      }
+    }
+
+    if (completed.runPending) {
+      void requestBoardRefresh({ ignoreInterval: true, force: true });
+    }
+
+    return refreshed;
   }
 
   async function processQueue() {
@@ -1179,7 +1250,13 @@ export function KanbanViewer() {
     }
 
     try {
-      if (!app.getHostCapabilities()?.serverTools) {
+      if (
+        !canCallViewerTool(
+          app.getHostCapabilities()?.serverTools,
+          boardRef.current._availableTools,
+          nextMove.moveToolName,
+        )
+      ) {
         throw new Error(t("common.error.no_proxy"));
       }
 
@@ -1253,7 +1330,7 @@ export function KanbanViewer() {
         void processQueue();
       } else if (refreshAfterMutationRef.current) {
         refreshAfterMutationRef.current = false;
-        void requestBoardRefresh({ ignoreInterval: true });
+        void requestBoardRefresh({ ignoreInterval: true, force: true });
       }
     }
   }
@@ -1261,6 +1338,14 @@ export function KanbanViewer() {
   function requestMove(card: KanbanCardData, toColumn: string, label: string) {
     const board = boardRef.current;
     if (!board || card.pending || card.columnId === toColumn) return;
+    if (
+      !fixture &&
+      !kanbanViewerCapabilities(
+        board,
+        app.getHostCapabilities()?.serverTools,
+        false,
+      ).canMove
+    ) return;
 
     const transition = board.allowedTransitions.find((candidate) =>
       candidate.allowed &&
@@ -1295,6 +1380,12 @@ export function KanbanViewer() {
       return;
     }
 
+    // A refresh started before this mutation must not overwrite the optimistic
+    // board while the move queue is being processed.
+    refreshSequenceRef.current = invalidateUiRefresh(
+      refreshSequenceRef.current,
+    );
+
     const shouldStartImmediately = !processingRef.current &&
       queueRef.current.length === 0;
     if (shouldStartImmediately) {
@@ -1328,6 +1419,13 @@ export function KanbanViewer() {
     };
 
     app.ontoolresult = (result: ToolResultPayload) => {
+      refreshSequenceRef.current = invalidateUiRefresh(
+        refreshSequenceRef.current,
+      );
+      if (result.isError) {
+        setError(extractToolError(result));
+        return;
+      }
       const text = extractTextContent(result);
       if (!text) {
         setError(t("kanban.error.no_payload"));
@@ -1470,6 +1568,22 @@ export function KanbanViewer() {
     selectCard(cardId);
 
     if (fixture) return;
+    const capabilities = kanbanViewerCapabilities(
+      boardRef.current,
+      app.getHostCapabilities()?.serverTools,
+      false,
+    );
+    if (!capabilities.canLoadDetail) {
+      hydrateDetail({
+        name: card.id,
+        subject: card.title,
+        status: card.columnId,
+        ...(card.description ? { description: card.description } : {}),
+        ...(card.dueDate ? { exp_end_date: card.dueDate } : {}),
+        _assign: JSON.stringify(card.assignee ? [card.assignee] : []),
+      });
+      return;
+    }
 
     void (async () => {
       try {
@@ -1503,16 +1617,9 @@ export function KanbanViewer() {
     })();
   }
 
-  async function handleNavigate(message: string): Promise<void> {
-    if (fixture) return;
-    try {
-      await app.sendMessage({
-        role: "user",
-        content: [{ type: "text", text: message }],
-      });
-    } catch {
-      // Best-effort: host may not support sendMessage
-    }
+  async function handleNavigate(message: string): Promise<boolean> {
+    if (fixture) return false;
+    return await sendTextMessage(app, message);
   }
 
   async function handleSaveDetail(
@@ -1520,57 +1627,100 @@ export function KanbanViewer() {
     name: string,
     data: Record<string, string>,
   ) {
-    if (fixture) {
-      const next = { ...fixtureDetailsRef.current[name], ...data, name };
-      fixtureDetailsRef.current[name] = next;
-      hydrateDetail(next);
-      return;
-    }
-    if (!app.getHostCapabilities()?.serverTools) {
-      throw new Error(t("common.error.no_proxy"));
-    }
-
-    const coerced: Record<string, unknown> = {};
-    const originalDetail = state.detail.cardDetail;
-    for (const [key, val] of Object.entries(data)) {
-      const orig = originalDetail?.[key];
-      if (typeof orig === "number") {
-        const num = Number(val);
-        coerced[key] = Number.isFinite(num) ? num : val;
-      } else {
-        coerced[key] = val;
+    const originalDetail = state.detail.selectedCardId === name
+      ? state.detail.cardDetail
+      : null;
+    return await detailSaveQueueRef.current.run(async () => {
+      if (fixture) {
+        const next = { ...fixtureDetailsRef.current[name], ...data, name };
+        fixtureDetailsRef.current[name] = next;
+        if (detailFetchCardIdRef.current === name) hydrateDetail(next);
+        return;
       }
-    }
-
-    const result = await app.callServerTool({
-      name: "erpnext_doc_update",
-      arguments: { doctype, name, data: coerced },
-    }, { timeout: TOOL_CALL_TIMEOUT_MS });
-
-    if (result.isError) {
-      throw new Error(extractToolError(result));
-    }
-
-    const refreshResult = await app.callServerTool({
-      name: "erpnext_doc_get",
-      arguments: { doctype, name },
-    }, { timeout: TOOL_CALL_TIMEOUT_MS });
-
-    if (!refreshResult.isError) {
-      const text = extractTextContent(refreshResult);
-      if (text) {
-        hydrateDetail(unwrapDoc(JSON.parse(text) as Record<string, unknown>));
+      const capabilities = boardRef.current
+        ? kanbanViewerCapabilities(
+          boardRef.current,
+          app.getHostCapabilities()?.serverTools,
+          false,
+        )
+        : null;
+      if (!capabilities?.canEdit) {
+        throw new Error(t("common.error.no_proxy"));
       }
-    }
 
-    void requestBoardRefresh({ ignoreInterval: true });
+      const coerced: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(data)) {
+        const orig = originalDetail?.[key];
+        if (typeof orig === "number") {
+          const num = Number(val);
+          coerced[key] = Number.isFinite(num) ? num : val;
+        } else {
+          coerced[key] = val;
+        }
+      }
+
+      const result = await app.callServerTool({
+        name: "erpnext_doc_update",
+        arguments: { doctype, name, data: coerced },
+      }, { timeout: TOOL_CALL_TIMEOUT_MS });
+
+      if (result.isError) {
+        throw new Error(extractToolError(result));
+      }
+
+      // L'update est désormais commis. Un readback indisponible ne doit pas le
+      // requalifier en échec ni rebaser le formulaire sur l'ancien document.
+      let canonicalDetail: Record<string, unknown> = {
+        ...originalDetail,
+        ...coerced,
+        name,
+      };
+      if (capabilities.canLoadDetail) {
+        try {
+          const refreshResult = await app.callServerTool({
+            name: "erpnext_doc_get",
+            arguments: { doctype, name },
+          }, { timeout: TOOL_CALL_TIMEOUT_MS });
+
+          if (!refreshResult.isError) {
+            const text = extractTextContent(refreshResult);
+            if (text) {
+              canonicalDetail = unwrapDoc(
+                JSON.parse(text) as Record<string, unknown>,
+              );
+            }
+          }
+        } catch {
+          // Le snapshot optimiste ci-dessus décrit déjà la mutation commise.
+        }
+      }
+
+      // Une réponse de A ne doit jamais hydrater le panneau désormais ouvert
+      // sur B (ou fermé). La mise à jour ERP, elle, reste bien commise.
+      if (detailFetchCardIdRef.current === name) {
+        hydrateDetail(canonicalDetail);
+      }
+      void requestBoardRefresh({ ignoreInterval: true, force: true });
+    });
+  }
+
+  function handleCloseDetail() {
+    detailFetchCardIdRef.current = null;
+    closeDetail();
   }
 
   async function handleLoadAssignableUsers(): Promise<
     Array<{ name: string; full_name?: string }>
   > {
     if (fixture) return KANBAN_FIXTURE_USERS;
-    if (!app.getHostCapabilities()?.serverTools) {
+    if (
+      !boardRef.current ||
+      !kanbanViewerCapabilities(
+        boardRef.current,
+        app.getHostCapabilities()?.serverTools,
+        false,
+      ).canAssign
+    ) {
       throw new Error(t("common.error.no_proxy"));
     }
     const result = await app.callServerTool({
@@ -1615,7 +1765,14 @@ export function KanbanViewer() {
       hydrateDetail(next);
       return;
     }
-    if (!app.getHostCapabilities()?.serverTools) {
+    if (
+      !boardRef.current ||
+      !kanbanViewerCapabilities(
+        boardRef.current,
+        app.getHostCapabilities()?.serverTools,
+        false,
+      ).canAssign
+    ) {
       throw new Error(t("common.error.no_proxy"));
     }
     const result = await app.callServerTool({
@@ -1647,7 +1804,7 @@ export function KanbanViewer() {
         );
       }
     }
-    void requestBoardRefresh({ ignoreInterval: true });
+    void requestBoardRefresh({ ignoreInterval: true, force: true });
   }
 
   async function handleUnassignDetail(
@@ -1678,7 +1835,14 @@ export function KanbanViewer() {
       hydrateDetail(next);
       return;
     }
-    if (!app.getHostCapabilities()?.serverTools) {
+    if (
+      !boardRef.current ||
+      !kanbanViewerCapabilities(
+        boardRef.current,
+        app.getHostCapabilities()?.serverTools,
+        false,
+      ).canUnassign
+    ) {
       throw new Error(t("common.error.no_proxy"));
     }
     const result = await app.callServerTool({
@@ -1712,7 +1876,7 @@ export function KanbanViewer() {
         );
       }
     }
-    void requestBoardRefresh({ ignoreInterval: true });
+    void requestBoardRefresh({ ignoreInterval: true, force: true });
   }
 
   // ── Render ──
@@ -1763,7 +1927,7 @@ export function KanbanViewer() {
       onDragEnd={handleDragEnd}
       onDragOverColumn={handleDragOverColumn}
       onTitleClick={handleCardTitleClick}
-      onClose={closeDetail}
+      onClose={handleCloseDetail}
       onNavigate={handleNavigate}
       onSave={handleSaveDetail}
       onAssign={handleAssignDetail}

@@ -1,5 +1,10 @@
 import { assertEquals } from "@std/assert";
-import { createKanbanInitialState, kanbanStateReducer } from "./state.ts";
+import {
+  createKanbanInitialState,
+  kanbanStateReducer,
+  rebaseCardEdits,
+  resolveCardDetailCloseIntent,
+} from "./state.ts";
 import type { KanbanBoardData } from "./types.ts";
 
 function makeBoard(): KanbanBoardData {
@@ -95,6 +100,50 @@ Deno.test("kanban state - close-detail resets detail state", () => {
   assertEquals(state.detail.selectedCardId, null);
   assertEquals(state.detail.cardDetail, null);
   assertEquals(state.detail.detailLoading, false);
+});
+
+Deno.test("kanban state - closes detail immediately when nothing changed", () => {
+  assertEquals(resolveCardDetailCloseIntent({}), "close");
+});
+
+Deno.test("kanban state - asks before discarding any edited value", () => {
+  assertEquals(
+    resolveCardDetailCloseIntent({ subject: "Updated title" }),
+    "confirm-discard",
+  );
+  assertEquals(
+    resolveCardDetailCloseIntent({ description: "", progress: "0" }),
+    "confirm-discard",
+  );
+});
+
+Deno.test("kanban state - a save keeps only values differing from its canonical result", () => {
+  assertEquals(
+    rebaseCardEdits(
+      { subject: "newer title", description: "added while saving" },
+      { subject: "submitted title", description: "original" },
+    ),
+    { subject: "newer title", description: "added while saving" },
+  );
+  assertEquals(
+    rebaseCardEdits(
+      { subject: "submitted title", description: "added while saving" },
+      { subject: "submitted title", description: "original" },
+    ),
+    { description: "added while saving" },
+  );
+});
+
+Deno.test("kanban state - a pending save preserves an explicit return to the old value", () => {
+  const original = { subject: "O" };
+  const submitted = { subject: "A" };
+  const inputWhileSaving = { subject: "O" };
+
+  assertEquals(
+    rebaseCardEdits(inputWhileSaving, { ...original, ...submitted }),
+    { subject: "O" },
+  );
+  assertEquals(rebaseCardEdits(inputWhileSaving, original), {});
 });
 
 Deno.test("kanban state - detail-error sets error on detail", () => {

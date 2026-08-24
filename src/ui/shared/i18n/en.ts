@@ -52,6 +52,11 @@ export const en: Record<string, string> = {
   "chart.scatter.no_data": "No scatter data",
   "chart.treemap.no_data": "No treemap data",
   "chart.error.parse_failed": "Failed to parse chart data",
+  "chart.keyboard.target": "{label} · {series} · {value}",
+  "chart.keyboard.target_single": "{label} · {value}",
+  "chart.keyboard.help":
+    "Left and right change the point; up and down change the series; Enter selects it.",
+  "chart.keyboard.control": "Explore chart: {target}. {help}",
   // ── /chart-viewer ─────────────────────────────────────────────────────────
 
   // ── stock-viewer ──────────────────────────────────────────────────────────
@@ -158,6 +163,9 @@ export const en: Record<string, string> = {
   "funnel.conversion.overall": "Overall Conversion",
   "funnel.autorefresh": "Auto-refresh on focus",
   "funnel.stage.click_to_see": "Click to see {label}",
+  "funnel.stage.aria_open": "Open {label}, {count}",
+  "funnel.stage.aria_context": "Select {label}, {count}, as active context",
+  "funnel.stage.aria_ask": "Ask about {label}, {count}",
   "funnel.error.parse_failed": "Failed to parse funnel payload",
   "funnel.drill_down.leads": "Show all leads",
   "funnel.drill_down.opportunities": "Show all open opportunities",
@@ -197,10 +205,18 @@ export const en: Record<string, string> = {
   "doclist.detail.back_list_label": "‹ list",
   // ── /doclist-viewer ───────────────────────────────────────────────────────
   // ── drill-down (partage d'une sélection) ──
-  "drill.context":
-    "User selection in “{view}”: {label}{value}. If they ask for details: {suggested}",
+  "drill.context": "Active selection in “{view}”: {label}{value}.",
   "drill.shared": "Selection shared — ask for details in the conversation",
   "drill.sent": "Sent to the conversation",
+  "message.sending": "Sending…",
+  "message.send_error": "Could not send to the conversation",
+  "context.active.label": "Context",
+  "context.active.items": "Active context selections",
+  "context.active.select": "Select {label} as active context",
+  "context.active.clear": "Remove {label} from active context",
+  "context.active.clear_all": "Clear all",
+  "context.active.error": "Context not updated",
+  "context.active.evicted": "8 max · removed {label}",
   "chart.tooltip.click": "click",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Back",
@@ -326,6 +342,12 @@ export const en: Record<string, string> = {
   "kanban.modal.saving": "Saving…",
   "kanban.modal.saved": "Saved",
   "kanban.modal.save_error": "Failed to save",
+  "kanban.modal.discard.title": "Discard unsaved changes?",
+  "kanban.modal.discard.detail":
+    "This card has changes that have not been saved. Go back to keep editing, or discard them to continue.",
+  "kanban.modal.discard.action": "Discard and close",
+  "kanban.modal.discard.move_action": "Discard and move",
+  "kanban.modal.discard.continue_action": "Discard and continue",
   "kanban.modal.section.general": "general",
   "kanban.modal.section.progress": "progress",
   "kanban.modal.section.assignees": "assignees",

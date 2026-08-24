@@ -22,8 +22,12 @@ import { useViewerLayout } from "~/shared/useViewerLayout";
 import { type Tone, TONE_RULE } from "~/shared/status";
 import { formatCurrency, formatInteger, formatNumber } from "~/shared/format";
 import {
+  beginUiRefresh,
   canRequestUiRefresh,
+  completeUiRefresh,
+  createUiRefreshSequence,
   extractToolResultText,
+  invalidateUiRefresh,
   normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
@@ -31,11 +35,18 @@ import {
 } from "~/shared/refresh";
 import { useT } from "~/shared/i18n-hook";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { viewerRootKey } from "~/shared/nav-stack";
+import { canCallViewerTool, hasAvailableTool } from "~/shared/viewer-tools";
 import { PathBar } from "~/shared/PathBar";
 import { type Jump } from "~/shared/jumps";
 import { LevelBody } from "~/shared/levels/LevelBody";
+import { SearchControl, SearchRow } from "~/shared/doclist/SearchControl";
 import { StockDetailPanel } from "./components/StockDetailPanel";
 import { StockInlineExpand } from "./components/StockInlineExpand";
+import {
+  canInteractWithStockRow,
+  stockDetailCapabilities,
+} from "./capabilities.ts";
 import { isFixtureMode, STOCK_FIXTURE } from "./fixture.ts";
 import { buildStockRowJump } from "./stockJumps.ts";
 import type { StockData, StockEntry } from "./types.ts";
@@ -100,7 +111,7 @@ export function StockViewer() {
   const [error, setError] = useState<string | null>(null);
   const dataRef = useRef<StockData | null>(fixture ? STOCK_FIXTURE : null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
-  const refreshInFlightRef = useRef(false);
+  const refreshSequenceRef = useRef(createUiRefreshSequence());
   const lastRefreshStartedAtRef = useRef(0);
 
   function hydrateData(nextData: StockData) {
@@ -134,12 +145,35 @@ export function StockViewer() {
     }
   }
 
-  async function requestRefresh(options: { ignoreInterval?: boolean } = {}) {
+  async function requestRefresh(
+    options: { ignoreInterval?: boolean; force?: boolean } = {},
+  ) {
     if (fixture) return false;
     const request = resolveUiRefreshRequest(
       dataRef.current,
       refreshRequestRef.current,
     );
+    if (
+      !request ||
+      !canCallViewerTool(
+        app.getHostCapabilities()?.serverTools,
+        dataRef.current?._availableTools,
+        request.toolName,
+      )
+    ) {
+      return false;
+    }
+
+    const sequence = refreshSequenceRef.current;
+    if (sequence.inFlight !== null) {
+      if (options.force) {
+        refreshSequenceRef.current = beginUiRefresh(sequence, {
+          force: true,
+        }).state;
+      }
+      return false;
+    }
+    const forced = Boolean(options.force || sequence.pendingForced);
     if (
       !canRequestUiRefresh(
         {
@@ -147,47 +181,64 @@ export function StockViewer() {
           visibilityState: typeof document === "undefined"
             ? "visible"
             : document.visibilityState,
-          refreshInFlight: refreshInFlightRef.current,
+          refreshInFlight: false,
           now: Date.now(),
           lastRefreshStartedAt: lastRefreshStartedAtRef.current,
           minIntervalMs: STOCK_REFRESH_INTERVAL_MS,
         },
-        options,
+        { ignoreInterval: options.ignoreInterval || forced },
       )
     ) {
       return false;
     }
-    if (!request || !app.getHostCapabilities()?.serverTools) return false;
 
-    refreshInFlightRef.current = true;
+    const started = beginUiRefresh(sequence, { force: forced });
+    if (started.generation === null) return false;
+    refreshSequenceRef.current = started.state;
     lastRefreshStartedAtRef.current = Date.now();
     setRefreshing(true);
+
+    let result: ToolResultPayload | null = null;
+    let failure: { cause: unknown } | null = null;
     try {
-      const result = await app.callServerTool(
+      result = await app.callServerTool(
         { name: request.toolName, arguments: request.arguments },
         { timeout: TOOL_CALL_TIMEOUT_MS },
       );
-      if (result.isError) {
-        setError(t("common.error.refresh_failed"));
-        return false;
-      }
-      if (!consumeToolResult(result)) {
-        setError(t("common.error.refresh_no_data"));
-        return false;
-      }
-      return true;
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
-      return false;
-    } finally {
-      refreshInFlightRef.current = false;
-      setRefreshing(false);
+      failure = { cause };
     }
+
+    const completed = completeUiRefresh(
+      refreshSequenceRef.current,
+      started.generation,
+    );
+    refreshSequenceRef.current = completed.state;
+    let succeeded = false;
+    if (completed.accept) {
+      if (failure) {
+        setError(normalizeUiRefreshFailureMessage(failure.cause));
+      } else if (result?.isError) {
+        setError(t("common.error.refresh_failed"));
+      } else if (result && consumeToolResult(result)) {
+        succeeded = true;
+      } else {
+        setError(t("common.error.refresh_no_data"));
+      }
+    }
+    setRefreshing(false);
+    if (completed.runPending) {
+      void requestRefresh({ ignoreInterval: true, force: true });
+    }
+    return succeeded;
   }
 
   useEffect(() => {
     if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
+      refreshSequenceRef.current = invalidateUiRefresh(
+        refreshSequenceRef.current,
+      );
       consumeToolResult(result);
     };
     app.ontoolinputpartial = () => {
@@ -275,10 +326,11 @@ function StockContent(
     title: t("stock.title"),
     kind: "root",
     origin: "list",
+    key: viewerRootKey("stock", data.refreshRequest, { doctype: "Bin" }),
   }, { fixture });
   const nav = viewerNav.nav;
   const { isRoot, current } = nav;
-  const { jumpsEnabled } = viewerNav;
+  const { jumpsEnabled, messagesEnabled } = viewerNav;
   // list est nécessaire pour que LevelBody rende les niveaux liste.
   const { list } = viewerNav;
 
@@ -287,18 +339,40 @@ function StockContent(
   // ── État de tri / filtre / expansion (niveau racine) ───────────────
   const [sortKey, setSortKey] = useState<SortKey>("item_code");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [filter, _setFilter] = useState("");
+  const [filter, setFilter] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
-  // Les lignes sont cliquables quand on peut les sauter ou les étendre.
-  // jumpsEnabled couvre le cas serverTools ; fixture couvre le cas prévisualisation.
-  const canDrill = fixture || Boolean(app.getHostCapabilities()?.serverTools);
+  // Avec serverTools la ligne navigue. Sur un hôte message-only elle garde
+  // l'inspecteur et ses questions de repli au lieu de devenir silencieuse.
+  const hostCapabilities = app.getHostCapabilities();
+  const detailCapabilities = stockDetailCapabilities(
+    hostCapabilities?.serverTools,
+    data._availableTools,
+  );
+
+  // Un hint sans outil exact reste un fallback conversationnel, jamais un saut.
+  // On conserve sa position pour que le premier hint reste bien la fiche article.
+  const jumpHints = (data._sendMessageHints ?? []).map((hint) =>
+    typeof hint.tool === "string" &&
+      hasAvailableTool(data._availableTools, hint.tool)
+      ? hint
+      : { ...hint, tool: undefined }
+  );
+  const hasJumpHints = jumpsEnabled && Boolean(jumpHints[0]?.tool);
+  const canInspect = detailCapabilities.canLoadItem ||
+    detailCapabilities.canLoadMovements;
+  const canDrill = canInteractWithStockRow({
+    fixture,
+    hasJump: hasJumpHints,
+    canInspect,
+    messagesEnabled,
+  });
 
   // En mode jump, l'expansion inline disparaît.
   // L'expansion reste le repli : elle ne s'efface que si un saut peut
   // réellement se construire (un hint avec outil), pas dès que l'hôte a des outils.
-  const hasJumpHints = (data._sendMessageHints ?? []).some((h) => !!h.tool);
-  const canInlineExpand = canDrill && !(jumpsEnabled && hasJumpHints);
+  const canInlineExpand = canDrill && !hasJumpHints;
 
   const filtered = useMemo(() => {
     if (!filter) return data.data;
@@ -350,9 +424,9 @@ function StockContent(
   /** Gère le clic sur une ligne : saut nav si possible, expansion sinon. */
   function handleRowClick(row: StockEntry) {
     const key = rowKey(row);
-    if (jumpsEnabled) {
+    if (hasJumpHints) {
       const jump = buildStockRowJump(
-        data._sendMessageHints,
+        jumpHints,
         { id: row.item_code, warehouse: row.warehouse },
         t("nav.linked_to", { id: row.item_code }),
       );
@@ -409,17 +483,36 @@ function StockContent(
               <CountBadge narrow={isMobile}>{current.count}</CountBadge>
             )}
         </div>
-        {isRoot && warehouse && (
-          <span
-            class={cx(
-              "shrink-0 font-mono text-ink-faint",
-              isMobile ? "text-micro" : "text-chip",
+        {isRoot && (
+          <div class="flex min-w-0 shrink-0 items-center gap-2">
+            {warehouse && (
+              <span
+                class={cx(
+                  "max-w-40 truncate font-mono text-ink-faint",
+                  isMobile ? "text-micro" : "text-chip",
+                )}
+              >
+                {warehouse}
+              </span>
             )}
-          >
-            {warehouse}
-          </span>
+            <SearchControl
+              value={filter}
+              layout={layout}
+              open={searchOpen}
+              onOpenChange={setSearchOpen}
+              onInput={setFilter}
+            />
+          </div>
         )}
       </header>
+
+      {isRoot && layout === "mobile" && searchOpen && (
+        <SearchRow
+          value={filter}
+          onInput={setFilter}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
 
       {/* ── Fil de navigation — invisible au niveau 1 ──── */}
       <PathBar
@@ -531,8 +624,8 @@ function StockContent(
                   <div
                     class={cx(
                       "relative grid border-l-2 border-b border-b-line-soft transition-colors",
-                      // group pour le chevron › au survol (jumpsEnabled)
-                      jumpsEnabled && "group",
+                      // group pour le chevron › au survol (saut réellement disponible)
+                      hasJumpHints && "group",
                       TONE_RULE[tone],
                       isDanger || isSelected
                         ? "bg-row-selected"
@@ -622,7 +715,7 @@ function StockContent(
                         Positionné en absolu dans le padding droit (16 px)
                         pour ne pas perturber la grille. */
                     }
-                    {jumpsEnabled && (
+                    {hasJumpHints && (
                       <span
                         aria-hidden="true"
                         class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[14px] text-accent opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
@@ -635,13 +728,20 @@ function StockContent(
                   {/* Inline expansion — uniquement en mode fixture (pas de jump) */}
                   {isSelected && (
                     isMobile
-                      ? <StockInlineExpand row={row} isDanger={isDanger} />
+                      ? (
+                        <StockInlineExpand
+                          row={row}
+                          isDanger={isDanger}
+                          onAsk={messagesEnabled ? ask : undefined}
+                        />
+                      )
                       : (
                         <StockDetailPanel
                           app={app}
                           itemCode={row.item_code}
                           warehouse={row.warehouse}
                           fixture={fixture}
+                          availableTools={data._availableTools}
                           onClose={() => setExpandedKey(null)}
                         />
                       )

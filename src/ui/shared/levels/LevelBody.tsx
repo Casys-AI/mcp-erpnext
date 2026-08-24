@@ -16,7 +16,7 @@ import { useT } from "../i18n-hook";
 import { StateMessage } from "../ui";
 import type { ViewerLayout } from "../useViewerLayout";
 import { BarsLevel } from "./BarsLevel";
-import { chartOf, listOf, recordOf } from "./bodies";
+import { chartHintAt, chartOf, listOf, recordOf } from "./bodies";
 import { RecordLevel } from "./RecordLevel";
 
 export const EMPTY_LIST: DoclistData = { count: 0, data: [] };
@@ -39,6 +39,8 @@ export function LevelBody(
     onError,
     onRefresh,
     onMutated,
+    onMutationInvalidate,
+    onMutationRefresh,
     children,
   }: {
     level: NavLevel;
@@ -54,6 +56,9 @@ export function LevelBody(
     onRefresh?: () => void;
     /** Une action d'un niveau vient de changer `subject`. */
     onMutated?: (subject: string) => void;
+    /** Invalider puis relire la racine autour d'une mutation de liste. */
+    onMutationInvalidate?: () => void;
+    onMutationRefresh?: () => void;
     /** Ce que la vue rend pour sa racine (niveau 1). */
     children?: ComponentChildren;
   },
@@ -92,31 +97,40 @@ export function LevelBody(
   if (level.kind === "chart") {
     const chart = chartOf(level.body);
     if (!chart) return unexpected;
-    // Une barre ouvre un niveau de plus — une liste — quand le serveur a
-    // décrit le saut de ce libellé et que l'hôte relaie les outils.
-    const pointJumps = onJump ? chart.pointJumps : undefined;
-    const barJump = (index: number): Jump | null => {
-      const hint = pointJumps?.[chart.labels[index]];
+    // Le segment exact prime sur le saut générique du libellé. Une série
+    // dérivée sans hint (Net Profit) reste lisible mais n'invente aucun saut.
+    const pointJump = (
+      labelIndex: number,
+      seriesIndex: number,
+    ): Jump | null => {
+      if (!onJump) return null;
+      const hint = chartHintAt(chart, labelIndex, seriesIndex);
+      const label = chart.labels[labelIndex];
+      const series = chart.datasets[seriesIndex]?.label;
+      const target = series ? `${label} · ${series}` : label;
       return hint
         ? jumpFromHint(
           hint,
           {},
-          t("nav.linked_to", { id: chart.labels[index] }),
+          t("nav.linked_to", { id: target }),
         )
         : null;
     };
-    const clickable = !!pointJumps &&
-      chart.labels.some((_, index) => barJump(index) !== null);
+    const clickable = chart.labels.some((_, labelIndex) =>
+      chart.datasets.some((_, seriesIndex) =>
+        pointJump(labelIndex, seriesIndex) !== null
+      )
+    );
     return (
       <BarsLevel
-        labels={chart.labels}
-        values={chart.values}
-        unit={chart.unit}
+        chart={chart}
         narrow={narrow}
         caption={clickable ? t("nav.bar_click") : undefined}
-        onBarClick={clickable
-          ? (index) => {
-            const jump = barJump(index);
+        isPointInteractive={(labelIndex, seriesIndex) =>
+          pointJump(labelIndex, seriesIndex) !== null}
+        onPointClick={clickable
+          ? (labelIndex, seriesIndex) => {
+            const jump = pointJump(labelIndex, seriesIndex);
             if (jump) onJump?.(jump);
           }
           : undefined}
@@ -138,6 +152,8 @@ export function LevelBody(
       stale={level.stale}
       onRefresh={onRefresh}
       onMutated={onMutated}
+      onMutationInvalidate={onMutationInvalidate}
+      onMutationRefresh={onMutationRefresh}
     />
   );
 }

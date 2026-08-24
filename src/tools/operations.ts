@@ -542,10 +542,53 @@ export const operationsTools: ErpNextTool[] = [
           description:
             "Frappe filters as array of [fieldname, operator, value] tuples, or " +
             "[child doctype, fieldname, operator, value] to filter on a child table. " +
+            "Values may be strings, numbers, booleans, null, or string/number arrays for in/not in. " +
             'Example: [["status","=","Open"],["company","=","Acme"]]',
           items: {
             type: "array",
-            items: { type: "string" },
+            anyOf: [
+              {
+                prefixItems: [
+                  { type: "string", minLength: 1 },
+                  { type: "string", minLength: 1 },
+                  {
+                    oneOf: [
+                      { type: ["string", "number", "boolean", "null"] },
+                      {
+                        type: "array",
+                        items: { type: ["string", "number"] },
+                      },
+                    ],
+                  },
+                ],
+                minItems: 3,
+                maxItems: 3,
+              },
+              {
+                prefixItems: [
+                  { type: "string", minLength: 1 },
+                  { type: "string", minLength: 1 },
+                  { type: "string", minLength: 1 },
+                  {
+                    oneOf: [
+                      { type: ["string", "number", "boolean", "null"] },
+                      {
+                        type: "array",
+                        items: { type: ["string", "number"] },
+                      },
+                    ],
+                  },
+                ],
+                minItems: 4,
+                maxItems: 4,
+              },
+              {
+                // 3.0.x advertised arbitrary string arrays. Keep accepting
+                // that legacy surface while describing real 3/4-part Frappe
+                // tuples precisely for modern clients.
+                items: { type: "string" },
+              },
+            ],
           },
         },
         limit: { type: "number", description: "Max results (default 20)" },

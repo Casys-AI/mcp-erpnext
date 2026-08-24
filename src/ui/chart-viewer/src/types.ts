@@ -1,5 +1,5 @@
 import type { NavHint } from "../../shared/jumps.ts";
-import type { UiRefreshRequestData } from "~/shared/refresh";
+import type { UiRefreshRequestData } from "../../shared/refresh.ts";
 
 export type ChartType =
   | "bar"
@@ -29,6 +29,9 @@ export interface Dataset {
   showDots?: boolean;
   /** Line style: "solid" | "dashed". Default "solid" */
   strokeStyle?: "solid" | "dashed";
+  /** Optional per-series format; takes priority over the chart-wide format. */
+  unit?: string;
+  currency?: string;
 }
 
 export interface ScatterPoint {
@@ -54,6 +57,8 @@ export interface TreeNode {
 export interface ChartData {
   /** Par libellé : le saut qu'un point, une barre ou une part ouvre. */
   _pointJumps?: Record<string, NavHint>;
+  /** Par libellé puis série : le saut exact qu'un segment ouvre. */
+  _seriesPointJumps?: Record<string, Record<string, NavHint>>;
   title: string;
   subtitle?: string;
   type?: ChartType;

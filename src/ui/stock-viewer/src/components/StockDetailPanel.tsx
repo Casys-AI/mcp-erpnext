@@ -1,11 +1,14 @@
 /** @jsxImportSource preact */
 /** Inline detail for a stock line — item facts, recent movements, navigation. */
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { useT } from "~/shared/i18n-hook";
 import { Button, cx, InfoRow, StateMessage } from "~/shared/ui";
 import { extractToolResultText } from "~/shared/refresh";
+import { canSendTextMessage, sendTextMessage } from "~/shared/host-message";
+import { createSingleFlightGate } from "~/shared/single-flight.ts";
+import { stockDetailCapabilities } from "../capabilities.ts";
 import { fixtureItemDetail } from "../fixture.ts";
 import type { StockItemDetail } from "../types.ts";
 
@@ -16,12 +19,14 @@ export function StockDetailPanel({
   itemCode,
   warehouse,
   fixture,
+  availableTools,
   onClose,
 }: {
   app: App;
   itemCode: string;
   warehouse: string;
   fixture: boolean;
+  availableTools?: readonly string[];
   onClose: () => void;
 }) {
   const t = useT();
@@ -33,6 +38,20 @@ export function StockDetailPanel({
     seeded?.movements ?? null,
   );
   const [loading, setLoading] = useState(!fixture);
+  const [navigationStatus, setNavigationStatus] = useState<
+    "idle" | "pending" | "error"
+  >("idle");
+  const navigationGateRef = useRef(createSingleFlightGate());
+  const messagesEnabled = !fixture &&
+    canSendTextMessage(app.getHostCapabilities());
+
+  useEffect(() => {
+    navigationGateRef.current.reset();
+    setNavigationStatus("idle");
+    return () => {
+      navigationGateRef.current.reset();
+    };
+  }, [itemCode]);
 
   useEffect(() => {
     if (fixture) {
@@ -42,38 +61,62 @@ export function StockDetailPanel({
       setLoading(false);
       return;
     }
+    const capabilities = stockDetailCapabilities(
+      app.getHostCapabilities()?.serverTools,
+      availableTools,
+    );
+    setItemData(null);
+    setMovements(null);
+    if (!capabilities.canLoadItem && !capabilities.canLoadMovements) {
+      // Sur un hôte message-only, le panneau reste utile pour ses actions de
+      // conversation. Sans canal du tout, son contenu reste statique.
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     (async () => {
       try {
         const [itemRes, moveRes] = await Promise.all([
-          app.callServerTool(
-            { name: "erpnext_item_get", arguments: { name: itemCode } },
-            { timeout: TOOL_CALL_TIMEOUT_MS },
-          ),
-          app.callServerTool(
-            {
-              name: "erpnext_stock_entry_list",
-              arguments: { limit: 5, item_code: itemCode },
-            },
-            { timeout: TOOL_CALL_TIMEOUT_MS },
-          ),
+          capabilities.canLoadItem
+            ? app.callServerTool(
+              { name: "erpnext_item_get", arguments: { name: itemCode } },
+              { timeout: TOOL_CALL_TIMEOUT_MS },
+            ).catch(() => null)
+            : Promise.resolve(null),
+          capabilities.canLoadMovements
+            ? app.callServerTool(
+              {
+                name: "erpnext_stock_entry_list",
+                arguments: { limit: 5, item_code: itemCode },
+              },
+              { timeout: TOOL_CALL_TIMEOUT_MS },
+            ).catch(() => null)
+            : Promise.resolve(null),
         ]);
         if (cancelled) return;
-        if (!itemRes.isError) {
+        if (itemRes && !itemRes.isError) {
           const t = extractToolResultText(itemRes);
           if (t) {
-            const p = JSON.parse(t) as StockItemDetail["item"] & {
-              data?: Record<string, unknown>;
-            };
-            setItemData(p.data ?? p);
+            try {
+              const p = JSON.parse(t) as StockItemDetail["item"] & {
+                data?: Record<string, unknown>;
+              };
+              setItemData(p.data ?? p);
+            } catch {
+              // Une réponse illisible ne doit pas masquer l'autre lecture.
+            }
           }
         }
-        if (!moveRes.isError) {
+        if (moveRes && !moveRes.isError) {
           const t = extractToolResultText(moveRes);
           if (t) {
-            const p = JSON.parse(t) as { data?: Record<string, unknown>[] };
-            setMovements(p.data ?? []);
+            try {
+              const p = JSON.parse(t) as { data?: Record<string, unknown>[] };
+              setMovements(p.data ?? []);
+            } catch {
+              // Une réponse illisible ne doit pas masquer l'autre lecture.
+            }
           }
         }
       } catch {
@@ -84,17 +127,15 @@ export function StockDetailPanel({
     return () => {
       cancelled = true;
     };
-  }, [app, fixture, itemCode]);
+  }, [app, fixture, itemCode, availableTools]);
 
   async function navigate(message: string) {
-    try {
-      await app.sendMessage({
-        role: "user",
-        content: [{ type: "text", text: message }],
-      });
-    } catch {
-      // Hosts without sendMessage (Inspector) ignore this.
-    }
+    const token = navigationGateRef.current.begin();
+    if (token === null) return;
+    setNavigationStatus("pending");
+    const sent = await sendTextMessage(app, message);
+    if (!navigationGateRef.current.settle(token)) return;
+    setNavigationStatus(sent ? "idle" : "error");
   }
 
   const facts = itemData
@@ -215,37 +256,59 @@ export function StockDetailPanel({
           ligne alors que la largeur est là.
         */
         }
-        <div
-          class={cx(
-            "col-span-full flex flex-wrap gap-1.5",
-            facts.length > 0 || recent.length > 0 ? "pt-1" : "",
-          )}
-        >
-          <Button
-            variant="secondary"
-            class="text-chip py-1"
-            onClick={() =>
-              void navigate(t("stock.nav.chart.message", { itemCode }))}
+        {(fixture || messagesEnabled) && (
+          <div
+            class={cx(
+              "col-span-full flex flex-wrap gap-1.5",
+              facts.length > 0 || recent.length > 0 ? "pt-1" : "",
+            )}
+            aria-busy={navigationStatus === "pending"}
           >
-            {t("stock.detail.action.chart")}
-          </Button>
-          <Button
-            variant="secondary"
-            class="text-chip py-1"
-            onClick={() =>
-              void navigate(t("stock.nav.details.message", { itemCode }))}
-          >
-            {t("stock.detail.action.item")}
-          </Button>
-          <Button
-            variant="secondary"
-            class="text-chip py-1"
-            onClick={() =>
-              void navigate(t("stock.nav.entries.message", { itemCode }))}
-          >
-            {t("stock.detail.action.entries")}
-          </Button>
-        </div>
+            <Button
+              variant="secondary"
+              class="text-chip py-1"
+              disabled={fixture || navigationStatus === "pending"}
+              onClick={() =>
+                void navigate(t("stock.nav.chart.message", { itemCode }))}
+            >
+              {t("stock.detail.action.chart")}
+            </Button>
+            <Button
+              variant="secondary"
+              class="text-chip py-1"
+              disabled={fixture || navigationStatus === "pending"}
+              onClick={() =>
+                void navigate(t("stock.nav.details.message", { itemCode }))}
+            >
+              {t("stock.detail.action.item")}
+            </Button>
+            <Button
+              variant="secondary"
+              class="text-chip py-1"
+              disabled={fixture || navigationStatus === "pending"}
+              onClick={() =>
+                void navigate(t("stock.nav.entries.message", { itemCode }))}
+            >
+              {t("stock.detail.action.entries")}
+            </Button>
+            {navigationStatus !== "idle" && (
+              <span
+                role="status"
+                aria-live="polite"
+                class={cx(
+                  "basis-full font-mono text-chip",
+                  navigationStatus === "error" ? "text-bad" : "text-ink-faint",
+                )}
+              >
+                {t(
+                  navigationStatus === "error"
+                    ? "message.send_error"
+                    : "message.sending",
+                )}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -2,7 +2,14 @@ import type { InvoicePayload, ItemRecord, StockRow } from "./types.ts";
 
 /** Mock payload so the bundled HTML can be opened without a host. */
 export const INVOICE_FIXTURE: InvoicePayload = {
+  _availableTools: [
+    "erpnext_doc_submit",
+    "erpnext_doc_cancel",
+    "erpnext_item_get",
+    "erpnext_stock_balance",
+  ],
   data: {
+    doctype: "Sales Invoice",
     name: "ACC-SINV-2026-00042",
     customer: "CUST-ACME",
     customer_name: "Acme Corp",

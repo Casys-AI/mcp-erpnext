@@ -16,12 +16,18 @@ import {
 } from "~/shared/ui";
 import { useViewerLayout } from "~/shared/useViewerLayout";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { type Jump } from "~/shared/jumps";
+import { canCallViewerTool, readAvailableTools } from "~/shared/viewer-tools";
 import { LevelBody } from "~/shared/levels/LevelBody";
 import {
+  beginUiRefresh,
   canRequestUiRefresh,
+  completeUiRefresh,
+  createUiRefreshSequence,
   extractToolResultText,
+  invalidateUiRefresh,
   normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
@@ -31,7 +37,7 @@ import { isFixtureMode, KPI_FIXTURE } from "./fixture.ts";
 import type { KpiData } from "./types.ts";
 import { currentLocale, formatNumber, toNumber } from "~/shared/format";
 import { t } from "~/shared/i18n.ts";
-import { useT } from "~/shared/i18n-hook.ts";
+import { type TFunction, useT } from "~/shared/i18n-hook.ts";
 import {
   type DrillDownChannel,
   drillDownChannel,
@@ -39,6 +45,10 @@ import {
   shareSelection,
 } from "~/shared/drill-down";
 import { kpiNumberAction, kpiTrendAction } from "./kpi-jumps.ts";
+import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
+import { useActiveContext } from "~/shared/useActiveContext.ts";
+import type { ContextSelectionItem } from "~/shared/active-context.ts";
+import { contextFallbackForInlineJump } from "~/shared/active-context-flow.ts";
 
 const app = new App({ name: "KPI Viewer", version: "1.0.0" });
 const KPI_REFRESH_INTERVAL_MS = 15_000;
@@ -91,6 +101,45 @@ function formatDeltaValue(data: KpiData): string {
     return `${amount} ${symbol}`;
   }
   return formatNumber(v, 2);
+}
+
+function kpiNumberContext(data: KpiData): ContextSelectionItem {
+  const { amount, unit } = formatKpiParts(data);
+  return {
+    id: `kpi:${data.label}:value`,
+    view: "KPI",
+    label: data.label,
+    value: [amount, unit].filter(Boolean).join(" "),
+  };
+}
+
+function kpiTrendContext(
+  data: KpiData,
+  tf: TFunction,
+): ContextSelectionItem {
+  const sparkline = data.sparkline && data.sparkline.length >= 2
+    ? data.sparkline
+    : undefined;
+  return {
+    id: `kpi:${data.label}:trend`,
+    view: "KPI",
+    label: `${data.label} · ${tf("kpi.sparkline.trend_label")}`,
+    value: sparkline?.length
+      ? formatNumber(sparkline[sparkline.length - 1], 2)
+      : undefined,
+  };
+}
+
+function kpiContextCandidates(
+  data: KpiData,
+  tf: TFunction,
+): ContextSelectionItem[] {
+  return [
+    kpiNumberContext(data),
+    ...(data.sparkline && data.sparkline.length >= 2
+      ? [kpiTrendContext(data, tf)]
+      : []),
+  ];
 }
 
 /* ── Accessibilité clavier ────────────────────────────────────────── */
@@ -375,6 +424,7 @@ function KpiCard({
   error,
   layout,
   jumpsEnabled,
+  activeContext,
   onJump,
   onRefresh,
 }: {
@@ -382,13 +432,19 @@ function KpiCard({
   error: string | null;
   layout: "wide" | "panel" | "mobile";
   jumpsEnabled: boolean;
+  activeContext: ReturnType<typeof useActiveContext>;
   onJump?: (jump: Jump) => void;
   onRefresh?: () => void;
 }) {
   const t = useT();
-  const canDrill = drillDownChannel(app.getHostCapabilities()) !== "none";
+  const legacyChannel = drillDownChannel(app.getHostCapabilities());
+  const canFallback = activeContext.supported || legacyChannel === "message";
   const sparkline = data.sparkline && data.sparkline.length >= 2
     ? data.sparkline
+    : undefined;
+  const { amount, unit } = formatKpiParts(data);
+  const periodLabel = sparkline
+    ? t("kpi.sparkline.weeks", { n: sparkline.length })
     : undefined;
 
   const [shared, setShared] = useState<DrillDownChannel | null>(null);
@@ -405,9 +461,8 @@ function KpiCard({
     jumpsEnabled,
   );
 
-  async function drillDown(message: string) {
-    if (!canDrill) return;
-    const { amount, unit } = formatKpiParts(data);
+  async function legacyDrillDown(message: string) {
+    if (legacyChannel !== "message") return;
     const channel = await shareSelection(app, {
       view: "KPI",
       label: data.label,
@@ -419,6 +474,36 @@ function KpiCard({
     setTimeout(() => setShared(null), 1500);
   }
 
+  const numberContext = kpiNumberContext(data);
+  const trendContext = kpiTrendContext(data, t);
+
+  function activate(
+    selection: ContextSelectionItem,
+    fallbackMessage?: string,
+  ) {
+    void activeContext.activate(selection, fallbackMessage).then((result) => {
+      if (result === "message") {
+        setShared("message");
+        setTimeout(() => setShared(null), 1500);
+      }
+    });
+  }
+
+  function activateAndJump(
+    selection: ContextSelectionItem,
+    jump: Jump,
+    fallbackMessage?: string,
+  ) {
+    const jumped = onJump !== undefined;
+    if (activeContext.supported) {
+      activate(
+        selection,
+        contextFallbackForInlineJump(fallbackMessage, jumped),
+      );
+    }
+    if (jumped) onJump(jump);
+  }
+
   // La couleur du chevron annonce le niveau qui arrive : accent pour une
   // liste, brand pour un graphique.
   const numberChevron = data._jumps?.number?.kind === "chart"
@@ -428,22 +513,40 @@ function KpiCard({
     ? "text-brand"
     : "text-accent";
   const handleNumber: (() => void) | undefined = numberAction?.kind === "jump"
-    ? () => onJump?.(numberAction.jump)
-    : numberAction?.kind === "drill" && canDrill
-    ? () => void drillDown(numberAction.message)
+    ? () => activateAndJump(numberContext, numberAction.jump, data._drillDown)
+    : numberAction?.kind === "drill" && canFallback
+    ? () => {
+      if (activeContext.supported) {
+        activate(numberContext, numberAction.message);
+      } else {
+        void legacyDrillDown(numberAction.message);
+      }
+    }
     : undefined;
 
   const handleTrend: (() => void) | undefined = trendAction?.kind === "jump"
-    ? () => onJump?.(trendAction.jump)
-    : trendAction?.kind === "drill" && canDrill
-    ? () => void drillDown(trendAction.message)
+    ? () =>
+      activateAndJump(trendContext, trendAction.jump, data._trendDrillDown)
+    : trendAction?.kind === "drill" && canFallback
+    ? () => {
+      if (activeContext.supported) {
+        activate(trendContext, trendAction.message);
+      } else {
+        void legacyDrillDown(trendAction.message);
+      }
+    }
     : undefined;
-
-  const { amount, unit } = formatKpiParts(data);
+  const numberAriaLabel = handleNumber
+    ? numberAction?.kind === "drill" && activeContext.supported
+      ? t("context.active.select", { label: numberContext.label })
+      : t("kpi.drilldown.aria_detail", { label: data.label })
+    : undefined;
+  const trendAriaLabel = handleTrend
+    ? trendAction?.kind === "drill" && activeContext.supported
+      ? t("context.active.select", { label: trendContext.label })
+      : t("kpi.drilldown.aria_trend", { label: data.label })
+    : undefined;
   const compact = layout !== "wide";
-  const periodLabel = sparkline
-    ? t("kpi.sparkline.weeks", { n: sparkline.length })
-    : undefined;
 
   /* ── Layout mobile / panel ─────────────────────────────────────── */
   if (compact) {
@@ -451,13 +554,22 @@ function KpiCard({
       <>
         <div class="flex flex-col gap-[10px] p-[14px_12px]">
           {/* Label + dot */}
-          <div class="flex items-center gap-2">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
             <span class="font-mono text-nano uppercase tracking-eyebrow text-ink-faint">
               {data.label}
             </span>
             {data.trend !== undefined && (
               <StatusDot trend={data.trend} trendIsGood={data.trendIsGood} />
             )}
+            <ActiveContextChip
+              compact
+              selections={activeContext.selections}
+              failed={activeContext.failed}
+              evictedLabel={activeContext.evictedLabel}
+              popoverAlign="start"
+              onRemove={(selection) => activeContext.remove(selection)}
+              onClear={() => activeContext.clear()}
+            />
           </div>
 
           {/* Valeur principale */}
@@ -467,18 +579,16 @@ function KpiCard({
               "text-[length:var(--text-metric-compact)]",
               numberAction?.kind === "jump" &&
                 "group/num cursor-pointer hover:underline decoration-dotted underline-offset-[6px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-              numberAction?.kind === "drill" && canDrill &&
+              numberAction?.kind === "drill" && canFallback &&
                 "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
             )}
-            style={numberAction?.kind === "drill" && canDrill
+            style={numberAction?.kind === "drill" && canFallback
               ? {
                 borderBottom: "1px dashed var(--color-accent-edge)",
                 paddingBottom: "1px",
               }
               : undefined}
-            aria-label={handleNumber
-              ? t("kpi.drilldown.aria_detail", { label: data.label })
-              : undefined}
+            aria-label={numberAriaLabel}
             {...activationHandlers(handleNumber)}
           >
             {amount}
@@ -526,12 +636,10 @@ function KpiCard({
                 "border-t border-line-soft pt-1.5",
                 trendAction?.kind === "jump" &&
                   "group/trend cursor-pointer rounded-[4px] hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-                trendAction?.kind === "drill" && canDrill &&
+                trendAction?.kind === "drill" && canFallback &&
                   "cursor-pointer rounded-[4px] hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
               )}
-              aria-label={handleTrend
-                ? t("kpi.drilldown.aria_trend", { label: data.label })
-                : undefined}
+              aria-label={trendAriaLabel}
               {...activationHandlers(handleTrend)}
             >
               {trendAction?.kind === "jump" && (
@@ -571,13 +679,21 @@ function KpiCard({
         {/* Colonne gauche */}
         <div class="flex flex-col gap-[10px] p-[18px_16px]">
           {/* Label + dot */}
-          <div class="flex items-center gap-2">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
             <span class="font-mono text-micro uppercase tracking-eyebrow text-ink-faint">
               {data.label}
             </span>
             {data.trend !== undefined && (
               <StatusDot trend={data.trend} trendIsGood={data.trendIsGood} />
             )}
+            <ActiveContextChip
+              selections={activeContext.selections}
+              failed={activeContext.failed}
+              evictedLabel={activeContext.evictedLabel}
+              popoverAlign="start"
+              onRemove={(selection) => activeContext.remove(selection)}
+              onClear={() => activeContext.clear()}
+            />
           </div>
 
           {/* Valeur principale — H1 : jump › ou soulignement pointillé au survol */}
@@ -587,19 +703,17 @@ function KpiCard({
               "text-[length:var(--text-metric)]",
               numberAction?.kind === "jump" &&
                 "group/num cursor-pointer hover:underline decoration-dotted underline-offset-[6px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-              numberAction?.kind === "drill" && canDrill &&
+              numberAction?.kind === "drill" && canFallback &&
                 "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
             )}
-            style={numberAction?.kind === "drill" && canDrill
+            style={numberAction?.kind === "drill" && canFallback
               ? {
                 /* style inline légal : valeur de layout/interaction, pas une couleur brute */
                 borderBottom: "1px dashed var(--color-accent-edge)",
                 paddingBottom: "1px",
               }
               : undefined}
-            aria-label={handleNumber
-              ? t("kpi.drilldown.aria_detail", { label: data.label })
-              : undefined}
+            aria-label={numberAriaLabel}
             {...activationHandlers(handleNumber)}
           >
             {amount}
@@ -646,13 +760,11 @@ function KpiCard({
               "hover:outline hover:outline-1 hover:outline-accent-edge",
               trendAction?.kind === "jump" &&
                 "group/trend cursor-pointer rounded-[4px] hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-              trendAction?.kind === "drill" && canDrill &&
+              trendAction?.kind === "drill" && canFallback &&
                 "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
             )}
             style={{ outlineOffset: "-1px" }}
-            aria-label={handleTrend
-              ? t("kpi.drilldown.aria_trend", { label: data.label })
-              : undefined}
+            aria-label={trendAriaLabel}
             {...activationHandlers(handleTrend)}
           >
             {/* Label période + tendance → — H2 */}
@@ -707,10 +819,19 @@ function KpiViewerContent({
   onRefresh: () => void;
 }) {
   const { ref: shellRef, layout } = useViewerLayout<HTMLDivElement>();
+  const t = useT();
+  const rootKey = viewerRootKey("kpi", data.refreshRequest, {
+    label: data.label,
+  });
+  const activeContext = useActiveContext(app, rootKey);
+  useEffect(() => {
+    void activeContext.reconcile(kpiContextCandidates(data, t));
+  }, [data, activeContext.selections]);
   const viewerNav = useViewerNav(app, {
     title: data.label,
     kind: "root",
     origin: "chart",
+    key: rootKey,
   }, { fixture });
   const nav = viewerNav.nav;
   const { current, isRoot } = nav;
@@ -733,6 +854,16 @@ function KpiViewerContent({
           title={nav.current.title}
           count={nav.current.count}
           layout={layout}
+          actions={
+            <ActiveContextChip
+              compact={layout !== "wide"}
+              selections={activeContext.selections}
+              failed={activeContext.failed}
+              evictedLabel={activeContext.evictedLabel}
+              onRemove={(selection) => activeContext.remove(selection)}
+              onClear={() => activeContext.clear()}
+            />
+          }
         />
       )}
       {/* PathBar : null au niveau 1, visible dès le 2e niveau */}
@@ -767,6 +898,7 @@ function KpiViewerContent({
           error={error}
           layout={layout}
           jumpsEnabled={jumpsEnabled}
+          activeContext={activeContext}
           onJump={jumpsEnabled ? nav.jump : undefined}
           onRefresh={onRefresh}
         />
@@ -787,7 +919,7 @@ export function KpiViewer() {
   const [error, setError] = useState<string | null>(null);
   const dataRef = useRef<KpiData | null>(fixture ? KPI_FIXTURE : null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
-  const refreshInFlightRef = useRef(false);
+  const refreshSequenceRef = useRef(createUiRefreshSequence());
   const lastRefreshStartedAtRef = useRef(0);
 
   function hydrateData(nextData: KpiData) {
@@ -821,13 +953,14 @@ export function KpiViewer() {
       dataRef.current,
       refreshRequestRef.current,
     );
+    const sequence = refreshSequenceRef.current;
     if (
       !canRequestUiRefresh({
         request,
         visibilityState: typeof document === "undefined"
           ? "visible"
           : document.visibilityState,
-        refreshInFlight: refreshInFlightRef.current,
+        refreshInFlight: sequence.inFlight !== null,
         now: Date.now(),
         lastRefreshStartedAt: lastRefreshStartedAtRef.current,
         minIntervalMs: KPI_REFRESH_INTERVAL_MS,
@@ -835,35 +968,58 @@ export function KpiViewer() {
     ) {
       return false;
     }
-    if (!request || !app.getHostCapabilities()?.serverTools) return false;
+    if (
+      !request ||
+      !canCallViewerTool(
+        app.getHostCapabilities()?.serverTools,
+        readAvailableTools(dataRef.current),
+        request.toolName,
+      )
+    ) {
+      return false;
+    }
 
-    refreshInFlightRef.current = true;
+    const started = beginUiRefresh(sequence);
+    if (started.generation === null) return false;
+    refreshSequenceRef.current = started.state;
     lastRefreshStartedAtRef.current = Date.now();
+
+    let result: ToolResultPayload | null = null;
+    let failure: { cause: unknown } | null = null;
     try {
-      const result = await app.callServerTool({
+      result = await app.callServerTool({
         name: request.toolName,
         arguments: request.arguments,
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
-      if (result.isError) {
-        setError(t("common.error.refresh_failed"));
-        return false;
-      }
-      if (!consumeToolResult(result)) {
-        setError(t("common.error.refresh_no_data"));
-        return false;
-      }
-      return true;
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
-      return false;
-    } finally {
-      refreshInFlightRef.current = false;
+      failure = { cause };
     }
+
+    const completed = completeUiRefresh(
+      refreshSequenceRef.current,
+      started.generation,
+    );
+    refreshSequenceRef.current = completed.state;
+    if (completed.accept) {
+      if (failure) {
+        setError(normalizeUiRefreshFailureMessage(failure.cause));
+      } else if (result?.isError) {
+        setError(t("common.error.refresh_failed"));
+      } else if (result && consumeToolResult(result)) {
+        return true;
+      } else {
+        setError(t("common.error.refresh_no_data"));
+      }
+    }
+    return false;
   }
 
   useEffect(() => {
     if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
+      refreshSequenceRef.current = invalidateUiRefresh(
+        refreshSequenceRef.current,
+      );
       consumeToolResult(result);
     };
     app.ontoolinputpartial = () => {

@@ -165,14 +165,14 @@ export const analyticsTools: ErpNextTool[] = [
       const filters: FrappeFilter[] = [];
 
       if (!input.include_drafts) {
-        filters.push(["docstatus", "=", 1]); // Submitted only
+        filters.push(["docstatus", "=", 1]);
       }
 
       if (groupBy === "status") {
         // Get invoice counts + amounts by status — fetch more to cover all statuses
         const invoices = await ctx.client.list("Sales Invoice", {
           fields: ["name", "status", "grand_total"],
-          filters: [["docstatus", "!=", 2]], // exclude cancelled
+          filters: [["docstatus", "!=", 2]],
           limit: 500,
           order_by: "modified desc",
         });
@@ -580,6 +580,7 @@ export const analyticsTools: ErpNextTool[] = [
             color: "#fbbf24",
             type: "line",
             yAxisId: "right",
+            unit: "orders",
             showDots: true,
           },
         ],

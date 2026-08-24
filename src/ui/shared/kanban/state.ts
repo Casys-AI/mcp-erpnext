@@ -7,6 +7,38 @@ export interface CardDetailState {
   detailError: string | null;
 }
 
+export type CardDetailCloseIntent = "close" | "confirm-discard";
+
+/**
+ * Décide si une demande de fermeture peut partir directement.
+ *
+ * `editedFields` ne contient déjà que les valeurs différentes du document
+ * chargé. La présence d'une clé suffit donc, même si sa nouvelle valeur est
+ * une chaîne vide ou "0".
+ */
+export function resolveCardDetailCloseIntent(
+  editedFields: Readonly<Record<string, string>>,
+): CardDetailCloseIntent {
+  return Object.keys(editedFields).length === 0 ? "close" : "confirm-discard";
+}
+
+/**
+ * Rebase les saisies locales sur la dernière valeur canonique connue.
+ * Toute valeur identique au document est retirée ; une intention plus récente
+ * reste explicitement à sauver, y compris un retour à l'ancienne valeur.
+ */
+export function rebaseCardEdits(
+  current: Readonly<Record<string, string>>,
+  canonical: Readonly<Record<string, unknown>>,
+): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const [key, value] of Object.entries(current)) {
+    const canonicalValue = String(canonical[key] ?? "");
+    if (value !== canonicalValue) next[key] = value;
+  }
+  return next;
+}
+
 export interface KanbanViewerState {
   board: KanbanBoardData | null;
   loading: boolean;

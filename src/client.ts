@@ -26,7 +26,84 @@ import type {
 } from "@casys/mcp-server";
 import { getFrappeClient } from "./api/frappe-client.ts";
 import { runWithLinkDisambiguation } from "./mrtr/link-disambiguation.ts";
-import { withUiRefreshRequest } from "./tools/ui-refresh.ts";
+import {
+  withUiRefreshRequest,
+  withViewerToolCapabilities,
+} from "./tools/ui-refresh.ts";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A mutating tool may opt into viewer refresh only by returning an explicit,
+ * valid request for a safe read-back tool. Read-only tools keep the generic
+ * same-tool refresh behaviour.
+ */
+function withSafeUiRefresh(
+  result: unknown,
+  tool: ErpNextTool,
+  args: Record<string, unknown>,
+  availableToolNames: ReadonlySet<string>,
+): unknown {
+  const readOnly = tool.annotations?.readOnlyHint === true;
+  if (!isRecord(result)) {
+    return result;
+  }
+  // Certains outils déclarent leur viewer seulement sur la définition MCP.
+  // Le payload enrichi doit connaître cette URI pour recevoir son contrat de
+  // capacités et son refresh avant d'être sérialisé pour l'iframe.
+  const resultMeta = isRecord(result._meta) ? result._meta : {};
+  const declaredUi = tool._meta?.ui;
+  const viewerResult = declaredUi && !isRecord(resultMeta.ui)
+    ? {
+      ...result,
+      _meta: { ...resultMeta, ...tool._meta, ui: declaredUi },
+    }
+    : result;
+
+  const request = isRecord(viewerResult.refreshRequest)
+    ? viewerResult.refreshRequest
+    : null;
+  const target = request && typeof request.toolName === "string"
+    ? getToolByName(request.toolName)
+    : undefined;
+  const hasSafeExplicitRefresh = request !== null &&
+    typeof request.toolName === "string" &&
+    availableToolNames.has(request.toolName) &&
+    isRecord(request.arguments) &&
+    (request.toolName === tool.name
+      ? readOnly
+      : target?.annotations?.readOnlyHint === true);
+
+  if (hasSafeExplicitRefresh) {
+    return withUiRefreshRequest(
+      viewerResult,
+      tool.name,
+      args,
+      new Date(),
+      availableToolNames,
+    );
+  }
+
+  // A malformed or mutating explicit target is more dangerous than no
+  // refresh: strip it before the payload reaches a viewer.
+  let sanitized = viewerResult;
+  if ("refreshRequest" in viewerResult) {
+    sanitized = { ...viewerResult };
+    delete sanitized.refreshRequest;
+  }
+
+  return readOnly
+    ? withUiRefreshRequest(
+      sanitized,
+      tool.name,
+      args,
+      new Date(),
+      availableToolNames,
+    )
+    : withViewerToolCapabilities(sanitized, availableToolNames);
+}
 
 // Re-export from tools
 export {
@@ -133,6 +210,7 @@ export class ErpNextToolsClient {
    */
   buildHandlersMap(): Map<string, ToolHandler> {
     const handlers = new Map<string, ToolHandler>();
+    const availableToolNames = new Set(this.tools.map((tool) => tool.name));
     for (const tool of this.tools) {
       const toolMeta = tool._meta;
       handlers.set(tool.name, async (
@@ -172,10 +250,11 @@ export class ErpNextToolsClient {
         ) {
           return execution.result;
         }
-        const result = withUiRefreshRequest(
+        const result = withSafeUiRefresh(
           execution.result,
-          tool.name,
+          tool,
           execution.args,
+          availableToolNames,
         );
 
         // Every JSON object remains machine-readable, whether or not it has a
@@ -214,7 +293,12 @@ export class ErpNextToolsClient {
     }
     const client = getFrappeClient();
     const result = await tool.handler(args, { client });
-    return withUiRefreshRequest(result, tool.name, args);
+    return withSafeUiRefresh(
+      result,
+      tool,
+      args,
+      new Set(this.tools.map((candidate) => candidate.name)),
+    );
   }
 
   /** Get tool count */

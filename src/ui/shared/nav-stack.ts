@@ -23,6 +23,15 @@ export interface ToolCall {
 }
 
 /**
+ * La requête qui sait reconstruire une racine de viewer. Elle reprend la
+ * forme `refreshRequest` des payloads sans coupler la pile à leur module.
+ */
+export interface ViewerRootRequest {
+  toolName: string;
+  arguments: Record<string, unknown>;
+}
+
+/**
  * L'état d'interface qu'un niveau garde et restaure : celui d'une liste
  * (tri, filtre, page, ligne active, chips) — le fil les décrit — et ce qui
  * ne se décrit pas (la recherche ouverte).
@@ -65,6 +74,8 @@ export interface NavLevel {
 
 export interface NavStack {
   levels: NavLevel[];
+  /** Identité de la racine : un changement remplace toute la pile. */
+  rootIdentity: string;
   /** Le prochain id : un niveau repoussé après un retour n'hérite jamais de l'ancien. */
   nextId: number;
 }
@@ -85,8 +96,33 @@ export function createStack(root: LevelInit): NavStack {
       ...root,
       id: levelId(0, root.title),
     }],
+    rootIdentity: navRootIdentity(root),
     nextId: 1,
   };
+}
+
+/**
+ * L'identité métier d'une racine. Une clé explicite prime ; sinon le chrome
+ * stable suffit. Le corps, le compte et l'état d'interface n'en font pas
+ * partie : leur actualisation ne doit pas jeter le parcours ouvert.
+ */
+export function navRootIdentity(root: LevelInit): string {
+  if (root.key) return `key:${root.key}`;
+  return `root:${
+    stableJson({
+      title: root.title,
+      kind: root.kind,
+      origin: root.origin ?? null,
+      tool: root.tool ?? null,
+    })
+  }`;
+}
+
+/** Garde la pile pour la même racine ; repart proprement pour une autre. */
+export function reconcileRoot(stack: NavStack, root: LevelInit): NavStack {
+  return stack.rootIdentity === navRootIdentity(root)
+    ? stack
+    : createStack(root);
 }
 
 export function pushLevel(stack: NavStack, level: LevelInit): NavStack {
@@ -97,6 +133,7 @@ export function pushLevel(stack: NavStack, level: LevelInit): NavStack {
       ...level,
       id: levelId(stack.nextId, level.title),
     }],
+    rootIdentity: stack.rootIdentity,
     nextId: stack.nextId + 1,
   };
 }
@@ -144,6 +181,30 @@ export function currentLevel(stack: NavStack): NavLevel {
 /** L'identité d'un niveau : son outil et ses arguments, clés triées. */
 export function levelKey(tool: ToolCall): string {
   return `${tool.name}:${stableJson(tool.args)}`;
+}
+
+/**
+ * Clé métier d'un viewer racine.
+ *
+ * La requête de refresh est l'identité la plus précise : elle distingue par
+ * exemple deux stocks filtrés sur des entrepôts différents, même si leur
+ * titre est identique. Sans elle, `identity` porte l'identité intrinsèque
+ * disponible dans la payload (doctype, boardId, nom de pièce). Les libellés,
+ * lignes, totaux et timestamps restent volontairement hors de la clé dès
+ * qu'une requête existe afin qu'un auto-refresh conserve la pile.
+ */
+export function viewerRootKey(
+  viewer: string,
+  request?: ViewerRootRequest,
+  identity?: Record<string, unknown>,
+): string {
+  return `${viewer}:${
+    stableJson(
+      request
+        ? { request: { name: request.toolName, args: request.arguments } }
+        : { identity: identity ?? null },
+    )
+  }`;
 }
 
 function stableJson(value: unknown): string {
@@ -203,6 +264,8 @@ export interface Crumbs {
   elided: Crumb[];
   /** Deux parents au plus : l'origine et le précédent. */
   parents: Crumb[];
+  /** Ordre visuel des ancêtres : origine, ellipse éventuelle, précédent. */
+  trail: Array<Crumb | { elided: Crumb[] }>;
   current: Crumb;
 }
 
@@ -211,24 +274,36 @@ export function crumbs(stack: NavStack): Crumbs {
   const depth = levels.length;
   const current = levels[depth - 1];
   if (depth <= 1) {
-    return { depth, showBar: false, elided: [], parents: [], current };
+    return {
+      depth,
+      showBar: false,
+      elided: [],
+      parents: [],
+      trail: [],
+      current,
+    };
   }
   if (depth <= 3) {
+    const parents = levels.slice(0, depth - 1);
     return {
       depth,
       showBar: true,
       elided: [],
-      parents: levels.slice(0, depth - 1),
+      parents,
+      trail: parents,
       current,
     };
   }
   // L'origine reste le premier segment, même à cinq niveaux : c'est elle
   // qui dit d'où l'on vient quand tout le reste est tabulaire.
+  const elided = levels.slice(1, depth - 2);
+  const parents = [levels[0], levels[depth - 2]];
   return {
     depth,
     showBar: true,
-    elided: levels.slice(1, depth - 2),
-    parents: [levels[0], levels[depth - 2]],
+    elided,
+    parents,
+    trail: [parents[0], { elided }, parents[1]],
     current,
   };
 }

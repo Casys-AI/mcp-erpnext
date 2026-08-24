@@ -5,7 +5,10 @@ import { App } from "@modelcontextprotocol/ext-apps";
 import { Button, cx, StateMessage } from "~/shared/ui";
 import { extractToolResultText } from "~/shared/refresh";
 import { useT } from "~/shared/i18n-hook";
+import { canSendTextMessage, sendTextMessage } from "~/shared/host-message";
+import { canCallViewerTool, hasAvailableTool } from "~/shared/viewer-tools";
 import { ITEM_FIXTURES } from "../fixture.ts";
+import { canOfferNavigation } from "../nav.ts";
 import type { ItemRecord, StockRow } from "../types.ts";
 
 const TOOL_CALL_TIMEOUT_MS = 10_000;
@@ -21,6 +24,7 @@ export function ItemDetailPanel({
   availableQty,
   lineQty,
   hints,
+  availableTools,
   onJump,
 }: {
   app: App;
@@ -39,26 +43,33 @@ export function ItemDetailPanel({
   lineQty?: number;
   /** Les hints de la pièce (le serveur y met « item » et « stock », avec `{item}`). */
   hints?: NavHint[];
+  /** Outils exacts autorisés par le registre serveur pour ce viewer. */
+  availableTools?: readonly string[];
   /** Présent quand l'hôte relaie les outils : les boutons deviennent des sauts. */
   onJump?: (jump: Jump) => void;
 }) {
   const t = useT();
   const vars = { item: itemCode };
   const subtitle = t("nav.linked_to", { id: itemCode });
+  const usableHints = hints?.filter((hint) =>
+    !hint.tool || hasAvailableTool(availableTools, hint.tool)
+  );
   const stockJump = onJump
     ? jumpFromHint(
-      hints?.find((h) => h.key === "stock") ?? { label: "" },
+      usableHints?.find((h) => h.key === "stock") ?? { label: "" },
       vars,
       subtitle,
     )
     : null;
   const itemJump = onJump
     ? jumpFromHint(
-      hints?.find((h) => h.key === "item") ?? { label: "" },
+      usableHints?.find((h) => h.key === "item") ?? { label: "" },
       vars,
       subtitle,
     )
     : null;
+  const messagesEnabled = !fixture &&
+    canSendTextMessage(app.getHostCapabilities());
 
   const [itemData, setItemData] = useState<ItemRecord | null>(null);
   const [stockData, setStockData] = useState<StockRow[] | null>(null);
@@ -77,23 +88,42 @@ export function ItemDetailPanel({
       setLoading(false);
       return;
     }
+    const serverTools = app.getHostCapabilities()?.serverTools;
+    const canLoadItem = canCallViewerTool(
+      serverTools,
+      availableTools,
+      "erpnext_item_get",
+    );
+    const canLoadStock = canCallViewerTool(
+      serverTools,
+      availableTools,
+      "erpnext_stock_balance",
+    );
+    if (!canLoadItem && !canLoadStock) {
+      setLoading(false);
+      return;
+    }
 
     let cancelled = false;
     (async () => {
       try {
         const [itemResult, stockResult] = await Promise.all([
-          app.callServerTool({
-            name: "erpnext_item_get",
-            arguments: { name: itemCode },
-          }, { timeout: TOOL_CALL_TIMEOUT_MS }),
-          app.callServerTool({
-            name: "erpnext_stock_balance",
-            arguments: { item_code: itemCode },
-          }, { timeout: TOOL_CALL_TIMEOUT_MS }),
+          canLoadItem
+            ? app.callServerTool({
+              name: "erpnext_item_get",
+              arguments: { name: itemCode },
+            }, { timeout: TOOL_CALL_TIMEOUT_MS })
+            : Promise.resolve(null),
+          canLoadStock
+            ? app.callServerTool({
+              name: "erpnext_stock_balance",
+              arguments: { item_code: itemCode },
+            }, { timeout: TOOL_CALL_TIMEOUT_MS })
+            : Promise.resolve(null),
         ]);
         if (cancelled) return;
 
-        if (!itemResult.isError) {
+        if (itemResult && !itemResult.isError) {
           const text = extractToolResultText(itemResult);
           if (text) {
             const parsed = JSON.parse(text);
@@ -101,7 +131,7 @@ export function ItemDetailPanel({
           }
         }
 
-        if (!stockResult.isError) {
+        if (stockResult && !stockResult.isError) {
           const text = extractToolResultText(stockResult);
           if (text) {
             const parsed = JSON.parse(text);
@@ -109,7 +139,13 @@ export function ItemDetailPanel({
           }
         }
 
-        if (itemResult.isError && stockResult.isError) {
+        const attempted = [itemResult, stockResult].filter((result) =>
+          result !== null
+        );
+        if (
+          attempted.length > 0 &&
+          attempted.every((result) => result?.isError === true)
+        ) {
           setError(t("invoice.item.error.load_failed"));
         }
       } catch (e) {
@@ -127,18 +163,12 @@ export function ItemDetailPanel({
     return () => {
       cancelled = true;
     };
-  }, [itemCode, fixture]);
+  }, [itemCode, fixture, availableTools]);
 
   async function send(message: string) {
-    if (fixture) return;
-    try {
-      await app.sendMessage({
-        role: "user",
-        content: [{ type: "text", text: message }],
-      });
-    } catch {
-      // Hosts without sendMessage (Inspector) ignore this.
-    }
+    const sent = await sendTextMessage(app, message);
+    if (!sent) setError(t("invoice.error.action_failed"));
+    return sent;
   }
 
   /* ── Valeurs dérivées pour la grille 4 cellules ───────────────── */
@@ -253,50 +283,54 @@ export function ItemDetailPanel({
           au style soft-accent de la maquette (rgba(62,193,207,0.14)).
         */
         }
-        <Button
-          variant="accent"
-          disabled={fixture}
-          title={fixture
-            ? t("invoice.preview.title")
-            : t("invoice.item.btn.stock.title")}
-          class="group"
-          onClick={() => {
-            if (stockJump) onJump!(stockJump);
-            else void send(t("invoice.item.stock.message", { itemCode }));
-          }}
-        >
-          {t("invoice.item.btn.stock.label")}
-          {stockJump && (
-            <span
-              aria-hidden="true"
-              class="ml-1 text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
-            >
-              ›
-            </span>
-          )}
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={fixture}
-          title={fixture
-            ? t("invoice.preview.title")
-            : t("invoice.item.btn.details.title")}
-          class="group"
-          onClick={() => {
-            if (itemJump) onJump!(itemJump);
-            else void send(t("invoice.item.details.message", { itemCode }));
-          }}
-        >
-          {t("invoice.item.btn.details.label")}
-          {itemJump && (
-            <span
-              aria-hidden="true"
-              class="ml-1 text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
-            >
-              ›
-            </span>
-          )}
-        </Button>
+        {canOfferNavigation(stockJump, messagesEnabled, Boolean(fixture)) && (
+          <Button
+            variant="accent"
+            disabled={fixture}
+            title={fixture
+              ? t("invoice.preview.title")
+              : t("invoice.item.btn.stock.title")}
+            class="group"
+            onClick={() => {
+              if (stockJump) onJump!(stockJump);
+              else void send(t("invoice.item.stock.message", { itemCode }));
+            }}
+          >
+            {t("invoice.item.btn.stock.label")}
+            {stockJump && (
+              <span
+                aria-hidden="true"
+                class="ml-1 text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+              >
+                ›
+              </span>
+            )}
+          </Button>
+        )}
+        {canOfferNavigation(itemJump, messagesEnabled, Boolean(fixture)) && (
+          <Button
+            variant="secondary"
+            disabled={fixture}
+            title={fixture
+              ? t("invoice.preview.title")
+              : t("invoice.item.btn.details.title")}
+            class="group"
+            onClick={() => {
+              if (itemJump) onJump!(itemJump);
+              else void send(t("invoice.item.details.message", { itemCode }));
+            }}
+          >
+            {t("invoice.item.btn.details.label")}
+            {itemJump && (
+              <span
+                aria-hidden="true"
+                class="ml-1 text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+              >
+                ›
+              </span>
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );

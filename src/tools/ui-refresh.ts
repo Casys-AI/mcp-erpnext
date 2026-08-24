@@ -60,7 +60,12 @@ interface UiRefreshableResult {
   _stageJumps?: Record<string, NavJump>;
   /** Graphique : chaque libellé (point, barre, part) ouvre la liste de ses pièces. */
   _pointJumps?: Record<string, NavJump>;
+  /** Graphique multi-séries : le segment exact prime sur le saut du libellé. */
+  _seriesPointJumps?: Record<string, Record<string, NavJump>>;
+  /** Outils précis que ce viewer peut appeler dans ce déploiement. */
+  _availableTools?: string[];
   labels?: unknown;
+  moveToolName?: unknown;
   doctype?: string;
   data?: unknown;
   [key: string]: unknown;
@@ -325,7 +330,8 @@ const KPI_DRILL_DOWN: Record<
     _trendDrillDown: "Show order breakdown chart for the last 6 months",
   },
   "erpnext_kpi_gross_margin": {
-    _drillDown: "Show gross profit breakdown by item",
+    _drillDown:
+      "Show the non-cancelled Sales Order Items and Bin valuation rates used to estimate this gross margin",
     _trendDrillDown: "Show profit and loss chart for the last 12 months",
   },
   "erpnext_kpi_overdue": {
@@ -343,9 +349,10 @@ const CHART_DRILL_DOWN: Record<string, string> = {
   "erpnext_stock_chart": "Show stock balance for item {label}",
   "erpnext_revenue_trend": "Show sales orders for month {label}",
   "erpnext_order_breakdown": "Show sales orders for {label}",
-  "erpnext_ar_aging": "Show overdue sales invoices in the {label} aging bucket",
+  "erpnext_ar_aging": "Show outstanding sales invoices for customer {label}",
   "erpnext_gross_profit": "Show gross profit details for {label}",
-  "erpnext_profit_loss": "Show accounting details for month {label}",
+  "erpnext_profit_loss":
+    "Show submitted sales and purchase orders for month {label}",
 };
 
 /**
@@ -510,7 +517,7 @@ const INVOICE_LIST_FIELDS = [
  */
 export const KPI_JUMPS: Record<
   string,
-  (range: MonthRange) => { number: NavJump; trend: NavJump }
+  (range: MonthRange) => { number?: NavJump; trend: NavJump }
 > = {
   "erpnext_kpi_revenue": (r) => ({
     number: {
@@ -598,13 +605,6 @@ export const KPI_JUMPS: Record<
     },
   }),
   "erpnext_kpi_gross_margin": () => ({
-    number: {
-      key: "gross_profit_items",
-      label: "Gross profit by item",
-      tool: "erpnext_gross_profit",
-      args: { limit: 20 },
-      kind: "chart",
-    },
     trend: {
       key: "profit_loss",
       label: "Profit and loss",
@@ -640,6 +640,42 @@ export const KPI_JUMPS: Record<
   }),
 };
 
+const FUNNEL_LIST_FIELDS: Record<string, string[]> = {
+  "Leads": [
+    "name",
+    "lead_name",
+    "company_name",
+    "status",
+    "lead_owner",
+    "creation",
+  ],
+  "Opportunities": [
+    "name",
+    "opportunity_from",
+    "party_name",
+    "status",
+    "opportunity_amount",
+    "currency",
+    "probability",
+    "opportunity_owner",
+    "transaction_date",
+  ],
+  "Quotations": [
+    "name",
+    "party_name",
+    "transaction_date",
+    "status",
+    "grand_total",
+  ],
+  "Orders": [
+    "name",
+    "customer",
+    "transaction_date",
+    "status",
+    "grand_total",
+  ],
+};
+
 /** Les sauts du funnel, par libellé d'étape : la liste des documents de l'étape. */
 export const FUNNEL_STAGE_JUMPS: Record<string, NavJump> = {
   "Leads": {
@@ -659,22 +695,105 @@ export const FUNNEL_STAGE_JUMPS: Record<string, NavJump> = {
   "Quotations": {
     key: "quotations",
     label: "Quotations",
-    tool: "erpnext_quotation_list",
-    args: { limit: 20 },
+    tool: "erpnext_doc_list",
+    args: {
+      doctype: "Quotation",
+      fields: FUNNEL_LIST_FIELDS.Quotations,
+      filters: [["docstatus", "!=", 2]],
+      limit: 20,
+    },
     kind: "list",
   },
   "Orders": {
     key: "sales_orders",
     label: "Sales orders",
-    tool: "erpnext_sales_order_list",
-    args: { limit: 20 },
+    tool: "erpnext_doc_list",
+    args: {
+      doctype: "Sales Order",
+      fields: FUNNEL_LIST_FIELDS.Orders,
+      filters: [["docstatus", "!=", 2]],
+      limit: 20,
+    },
     kind: "list",
   },
 };
 
+function funnelPeriodStart(
+  period: unknown,
+  now: Date,
+): string | undefined {
+  const year = now.getFullYear();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  if (period === "this_month") {
+    return `${year}-${pad(now.getMonth() + 1)}-01`;
+  }
+  if (period === "this_quarter") {
+    const firstMonth = Math.floor(now.getMonth() / 3) * 3 + 1;
+    return `${year}-${pad(firstMonth)}-01`;
+  }
+  if (period === "this_year") return `${year}-01-01`;
+  return undefined;
+}
+
+/**
+ * Les listes d'un funnel reprennent la borne basse utilisée par son calcul.
+ * Lead est daté par `creation`, les trois autres étapes par `transaction_date`.
+ */
+export function funnelStageJumps(
+  args: Record<string, unknown>,
+  now: Date,
+): Record<string, NavJump> {
+  const since = funnelPeriodStart(args.period, now);
+  if (!since) return FUNNEL_STAGE_JUMPS;
+
+  const scopedJump = (
+    stage: string,
+    doctype: string,
+    dateField: "creation" | "transaction_date",
+  ): NavJump => {
+    const base = FUNNEL_STAGE_JUMPS[stage];
+    const baseFilters = Array.isArray(base.args.filters)
+      ? base.args.filters
+      : [];
+    return {
+      ...base,
+      tool: "erpnext_doc_list",
+      args: {
+        doctype,
+        fields: FUNNEL_LIST_FIELDS[stage],
+        filters: [[dateField, ">=", since], ...baseFilters],
+        limit: 20,
+      },
+    };
+  };
+
+  return {
+    "Leads": scopedJump("Leads", "Lead", "creation"),
+    "Opportunities": scopedJump(
+      "Opportunities",
+      "Opportunity",
+      "transaction_date",
+    ),
+    "Quotations": scopedJump(
+      "Quotations",
+      "Quotation",
+      "transaction_date",
+    ),
+    "Orders": scopedJump("Orders", "Sales Order", "transaction_date"),
+  };
+}
+
 const SALES_ORDER_LIST_FIELDS = [
   "name",
   "customer",
+  "transaction_date",
+  "status",
+  "grand_total",
+];
+
+const PURCHASE_ORDER_LIST_FIELDS = [
+  "name",
+  "supplier",
   "transaction_date",
   "status",
   "grand_total",
@@ -750,34 +869,23 @@ export function chartPointJumps(
       }
       break;
     }
-    case "erpnext_profit_loss": {
-      // Le handler lit les commandes (et achats) soumis du mois : le point
-      // ouvre les commandes de vente — le côté « revenu » de la barre.
-      const months = Number(args.months ?? 6);
-      for (const { label, range } of monthBuckets(months, now)) {
-        if (!labels.includes(label)) continue;
-        jumps[label] = docList(label, "Sales Order", SALES_ORDER_LIST_FIELDS, [
-          ["transaction_date", ">=", range.from],
-          ["transaction_date", "<=", range.to],
-          ["docstatus", "=", 1],
-        ]);
-      }
-      break;
-    }
     case "erpnext_sales_chart": {
-      // Les libellés sont ceux du handler : nom d'article (pas le code), nom
-      // de client, statut. Par statut, le handler garde aussi les brouillons.
       const groupBy = String(args.group_by ?? "customer");
-      byLabel((label) =>
-        docList(label, "Sales Invoice", INVOICE_LIST_FIELDS, [
+      byLabel((label) => {
+        const filters: unknown[] = [
           groupBy === "item"
             ? ["Sales Invoice Item", "item_name", "=", label]
             : groupBy === "status"
             ? ["status", "=", label]
             : ["customer_name", "=", label],
-          groupBy === "status" ? ["docstatus", "<", 2] : ["docstatus", "=", 1],
-        ])
-      );
+        ];
+        if (groupBy === "status") {
+          filters.push(["docstatus", "!=", 2]);
+        } else if (groupBy === "item" || args.include_drafts !== true) {
+          filters.push(["docstatus", "=", 1]);
+        }
+        return docList(label, "Sales Invoice", INVOICE_LIST_FIELDS, filters);
+      });
       break;
     }
     case "erpnext_order_breakdown":
@@ -790,14 +898,11 @@ export function chartPointJumps(
       );
       break;
     case "erpnext_ar_aging":
-      byLabel((label) =>
-        docList(label, "Sales Invoice", INVOICE_LIST_FIELDS, [
-          ["customer_name", "=", label],
-          ["outstanding_amount", ">", 0],
-          ["docstatus", "=", 1],
-        ])
-      );
-      break;
+    case "erpnext_profit_loss":
+      // AR Aging classe sur due_date avec repli sur posting_date : une liste
+      // Frappe ne peut pas exprimer exactement cette condition. P&L, lui,
+      // exige la série cliquée ; ses sauts sont construits ci-dessous.
+      return undefined;
     case "erpnext_gross_profit": {
       const groupBy = String(args.group_by ?? "item");
       byLabel((label) =>
@@ -826,6 +931,46 @@ export function chartPointJumps(
       break;
     default:
       return undefined;
+  }
+  return Object.keys(jumps).length > 0 ? jumps : undefined;
+}
+
+/**
+ * Sauts d'un graphique multi-séries, par libellé puis série. P&L sépare les
+ * commandes soumises qui composent Income et Expenses ; Net Profit est dérivé
+ * et reste donc une sélection de contexte, sans navigation trompeuse.
+ */
+export function chartSeriesPointJumps(
+  toolName: string,
+  args: Record<string, unknown>,
+  labels: string[],
+  now: Date,
+): Record<string, Record<string, NavJump>> | undefined {
+  if (toolName !== "erpnext_profit_loss") return undefined;
+
+  const jumps: Record<string, Record<string, NavJump>> = {};
+  const months = Number(args.months ?? 6);
+  for (const { label, range } of monthBuckets(months, now)) {
+    if (!labels.includes(label)) continue;
+    const filters = [
+      ["transaction_date", ">=", range.from],
+      ["transaction_date", "<=", range.to],
+      ["docstatus", "=", 1],
+    ];
+    jumps[label] = {
+      "Income": docList(
+        `${label} · Income`,
+        "Sales Order",
+        SALES_ORDER_LIST_FIELDS,
+        filters,
+      ),
+      "Expenses": docList(
+        `${label} · Expenses`,
+        "Purchase Order",
+        PURCHASE_ORDER_LIST_FIELDS,
+        filters,
+      ),
+    };
   }
   return Object.keys(jumps).length > 0 ? jumps : undefined;
 }
@@ -877,11 +1022,257 @@ function isDoclistViewer(result: UiRefreshableResult): boolean {
   return uri === "ui://mcp-erpnext/doclist-viewer";
 }
 
+/**
+ * Appels codés dans les viewers, donc invisibles dans les hints dynamiques.
+ * La liste envoyée reste bornée à la surface du viewer courant : elle ne
+ * recopie jamais l'intégralité de `tools/list` dans le résultat métier.
+ */
+const VIEWER_TOOL_CANDIDATES: Record<string, readonly string[]> = {
+  "ui://mcp-erpnext/invoice-viewer": [
+    "erpnext_item_get",
+    "erpnext_stock_balance",
+  ],
+  "ui://mcp-erpnext/doclist-viewer": [],
+  "ui://mcp-erpnext/kanban-viewer": [
+    "erpnext_doc_get",
+    "erpnext_doc_update",
+    "erpnext_user_list",
+    "erpnext_doc_assign",
+    "erpnext_doc_unassign",
+  ],
+  "ui://mcp-erpnext/stock-viewer": [
+    "erpnext_item_get",
+    "erpnext_stock_entry_list",
+  ],
+};
+
+/**
+ * DocTypes connus comme soumis/annulables dans les surfaces ERPNext couvertes.
+ * Une absence est volontairement un refus : les outils génériques ne doivent
+ * jamais transformer une fiche maître simplement parce qu'ils sont chargés.
+ */
+const SUBMITTABLE_VIEWER_DOCTYPES = new Set([
+  "Quotation",
+  "Sales Order",
+  "Delivery Note",
+  "Sales Invoice",
+  "Purchase Order",
+  "Purchase Receipt",
+  "Purchase Invoice",
+  "Stock Entry",
+  "Journal Entry",
+  "Payment Entry",
+  "Timesheet",
+  "Leave Application",
+  "Salary Slip",
+  "BOM",
+  "Work Order",
+  "Job Card",
+  "Asset",
+  "Asset Movement",
+  "Shipment",
+]);
+
+const INVOICE_DEDICATED_MUTATION_TOOLS: Record<
+  string,
+  readonly string[]
+> = {
+  "Sales Order": [
+    "erpnext_sales_order_submit",
+    "erpnext_sales_order_cancel",
+  ],
+  "Sales Invoice": ["erpnext_sales_invoice_submit"],
+};
+
+function addDoctypeMutationCandidates(
+  target: Set<string>,
+  uri: string | undefined,
+  doctype: string | undefined,
+): void {
+  if (!doctype || !SUBMITTABLE_VIEWER_DOCTYPES.has(doctype)) return;
+  if (
+    uri === "ui://mcp-erpnext/invoice-viewer" ||
+    uri === "ui://mcp-erpnext/doclist-viewer"
+  ) {
+    target.add("erpnext_doc_submit");
+    target.add("erpnext_doc_cancel");
+  }
+  if (uri === "ui://mcp-erpnext/invoice-viewer") {
+    for (const tool of INVOICE_DEDICATED_MUTATION_TOOLS[doctype] ?? []) {
+      target.add(tool);
+    }
+  }
+}
+
+function addJumpTools(
+  target: Set<string>,
+  jumps: Record<string, NavJump> | undefined,
+): void {
+  if (!jumps) return;
+  for (const jump of Object.values(jumps)) target.add(jump.tool);
+}
+
+function addSeriesJumpTools(
+  target: Set<string>,
+  jumps: Record<string, Record<string, NavJump>> | undefined,
+): void {
+  if (!jumps) return;
+  for (const seriesJumps of Object.values(jumps)) {
+    addJumpTools(target, seriesJumps);
+  }
+}
+
+/** Outils référencés par le payload et appels codés du viewer, filtrés au serveur. */
+export function availableViewerToolNames(
+  result: UiRefreshableResult,
+  availableToolNames: ReadonlySet<string>,
+): string[] {
+  const candidates = new Set<string>();
+  const uri = result._meta?.ui?.resourceUri;
+  for (const name of uri ? VIEWER_TOOL_CANDIDATES[uri] ?? [] : []) {
+    candidates.add(name);
+  }
+  addDoctypeMutationCandidates(candidates, uri, resultDoctype(result));
+  if (result.refreshRequest) candidates.add(result.refreshRequest.toolName);
+  if (result._rowAction) candidates.add(result._rowAction.toolName);
+  for (const hint of result._sendMessageHints ?? []) {
+    if (hint.tool) candidates.add(hint.tool);
+  }
+  addJumpTools(
+    candidates,
+    result._jumps
+      ? Object.fromEntries(
+        Object.entries(result._jumps).filter(
+          (entry): entry is [string, NavJump] => entry[1] !== undefined,
+        ),
+      )
+      : undefined,
+  );
+  addJumpTools(candidates, result._stageJumps);
+  addJumpTools(candidates, result._pointJumps);
+  addSeriesJumpTools(candidates, result._seriesPointJumps);
+  if (typeof result.moveToolName === "string") {
+    candidates.add(result.moveToolName);
+  }
+  return [...candidates].filter((name) => availableToolNames.has(name)).sort();
+}
+
+function filterJumpMap(
+  jumps: Record<string, NavJump>,
+  availableToolNames: ReadonlySet<string>,
+): Record<string, NavJump> | undefined {
+  const available = Object.fromEntries(
+    Object.entries(jumps).filter(([, jump]) =>
+      availableToolNames.has(jump.tool)
+    ),
+  );
+  return Object.keys(available).length > 0 ? available : undefined;
+}
+
+function filterSeriesJumpMap(
+  jumps: Record<string, Record<string, NavJump>>,
+  availableToolNames: ReadonlySet<string>,
+): Record<string, Record<string, NavJump>> | undefined {
+  const available: Record<string, Record<string, NavJump>> = {};
+  for (const [label, seriesJumps] of Object.entries(jumps)) {
+    const filtered = filterJumpMap(seriesJumps, availableToolNames);
+    if (filtered) available[label] = filtered;
+  }
+  return Object.keys(available).length > 0 ? available : undefined;
+}
+
+/** Retire les sauts que l'hôte ne peut pas exécuter, sans muter le résultat. */
+export function filterNavJumpsByAvailableTools(
+  result: UiRefreshableResult,
+  availableToolNames?: ReadonlySet<string>,
+): UiRefreshableResult {
+  if (!availableToolNames) return result;
+
+  const filtered: UiRefreshableResult = { ...result };
+  if (result._jumps) {
+    const jumps = filterJumpMap(
+      Object.fromEntries(
+        Object.entries(result._jumps).filter(
+          (entry): entry is [string, NavJump] => entry[1] !== undefined,
+        ),
+      ),
+      availableToolNames,
+    );
+    if (jumps) filtered._jumps = jumps;
+    else delete filtered._jumps;
+  }
+  if (result._stageJumps) {
+    const jumps = filterJumpMap(result._stageJumps, availableToolNames);
+    if (jumps) filtered._stageJumps = jumps;
+    else delete filtered._stageJumps;
+  }
+  if (result._pointJumps) {
+    const jumps = filterJumpMap(result._pointJumps, availableToolNames);
+    if (jumps) filtered._pointJumps = jumps;
+    else delete filtered._pointJumps;
+  }
+  if (result._seriesPointJumps) {
+    const jumps = filterSeriesJumpMap(
+      result._seriesPointJumps,
+      availableToolNames,
+    );
+    if (jumps) filtered._seriesPointJumps = jumps;
+    else delete filtered._seriesPointJumps;
+  }
+
+  if (
+    result._rowAction &&
+    !availableToolNames.has(result._rowAction.toolName)
+  ) {
+    const doctype = resultDoctype(result);
+    if (doctype && availableToolNames.has("erpnext_doc_get")) {
+      filtered._rowAction = {
+        toolName: "erpnext_doc_get",
+        idField: "name",
+        argName: "name",
+        extraArgs: { doctype },
+      };
+    } else {
+      delete filtered._rowAction;
+    }
+  }
+
+  if (result._sendMessageHints) {
+    filtered._sendMessageHints = result._sendMessageHints.map((hint) => {
+      if (!hint.tool || availableToolNames.has(hint.tool)) return hint;
+      // La question reste utilisable sur un hôte conversationnel, mais le
+      // viewer ne doit jamais tenter un outil absent de ce déploiement.
+      return { key: hint.key, label: hint.label, message: hint.message };
+    });
+  }
+  // Écrase toute valeur fournie par un handler : seul le registre réellement
+  // chargé au démarrage fait autorité pour les appels initiés par le viewer.
+  filtered._availableTools = availableViewerToolNames(
+    filtered,
+    availableToolNames,
+  );
+  return filtered;
+}
+
+/**
+ * Applique le contrat de capacités sans synthétiser de refresh. Utile pour
+ * les résultats mutateurs : ils ne doivent ni rejouer leur propre outil, ni
+ * laisser passer une liste `_availableTools` forgée par un handler.
+ */
+export function withViewerToolCapabilities(
+  result: unknown,
+  availableToolNames: ReadonlySet<string>,
+): unknown {
+  if (!isRecord(result) || !hasUiResource(result)) return result;
+  return filterNavJumpsByAvailableTools(result, availableToolNames);
+}
+
 export function withUiRefreshRequest(
   result: unknown,
   toolName: string,
   args: Record<string, unknown>,
   now: Date = new Date(),
+  availableToolNames?: ReadonlySet<string>,
 ): unknown {
   if (!isRecord(result) || !hasUiResource(result)) {
     return result;
@@ -957,19 +1348,18 @@ export function withUiRefreshRequest(
     if (jumps) enriched._jumps = jumps(monthRange(now));
   }
   if (isFunnelViewer(enriched) && !enriched._stageJumps) {
-    enriched._stageJumps = FUNNEL_STAGE_JUMPS;
+    enriched._stageJumps = funnelStageJumps(args, now);
   }
-  if (
-    isChartViewer(enriched) && !enriched._pointJumps &&
-    Array.isArray(enriched.labels)
-  ) {
-    const jumps = chartPointJumps(
-      toolName,
-      args,
-      enriched.labels.map(String),
-      now,
-    );
-    if (jumps) enriched._pointJumps = jumps;
+  if (isChartViewer(enriched) && Array.isArray(enriched.labels)) {
+    const labels = enriched.labels.map(String);
+    if (!enriched._pointJumps) {
+      const jumps = chartPointJumps(toolName, args, labels, now);
+      if (jumps) enriched._pointJumps = jumps;
+    }
+    if (!enriched._seriesPointJumps) {
+      const jumps = chartSeriesPointJumps(toolName, args, labels, now);
+      if (jumps) enriched._seriesPointJumps = jumps;
+    }
   }
   // Facture, stock, kanban : les hints typés de la pièce ou du tableau.
   // Un `_get` renvoie `{ data: doc }` : le doctype est sur le document.
@@ -986,5 +1376,5 @@ export function withUiRefreshRequest(
     }
   }
 
-  return enriched;
+  return filterNavJumpsByAvailableTools(enriched, availableToolNames);
 }

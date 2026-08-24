@@ -420,17 +420,56 @@ export function DetailSheet(
 ) {
   const t = useT();
   const sheetRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const sheet = sheetRef.current;
+      if (!sheet) return;
+      const focusable = Array.from(
+        sheet.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute("hidden"));
+
+      if (focusable.length === 0) {
+        event.preventDefault();
+        sheet.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === sheet)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     // Le focus part sur la feuille : sans ça il reste sur la carte du fond et
     // la tabulation continue de parcourir ce que le voile a masqué.
     sheetRef.current?.focus();
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, []);
 
   return (
     <div

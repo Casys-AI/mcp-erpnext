@@ -1,4 +1,4 @@
-# Tools Reference (124)
+# Tools Reference (125)
 
 Full reference for all ERPNext MCP tools. See [README](../README.md) for
 overview.
@@ -153,7 +153,7 @@ overview.
 | `erpnext_asset_maintenance_get`  | Asset Maintenance | Get with maintenance tasks                            |
 | `erpnext_asset_category_list`    | Asset Category    | List all categories                                   |
 
-## Generic Operations (10) → doclist-viewer
+## Generic Operations (11) → doclist-viewer
 
 | Tool                   | Operation | Notes                                             |
 | ---------------------- | --------- | ------------------------------------------------- |
@@ -166,7 +166,11 @@ overview.
 | `erpnext_doc_cancel`   | Cancel    | Any submitted document                            |
 | `erpnext_doc_assign`   | Assign    | Native assignment (ToDo + notification) to users  |
 | `erpnext_doc_unassign` | Unassign  | Remove one user's native assignment               |
+| `erpnext_file_list`    | List      | Read attachments and native File metadata         |
 | `erpnext_file_upload`  | Upload    | Attach base64 data as a native File               |
+
+`erpnext_file_list` requires `attached_to_doctype` and `attached_to_name`. Its
+optional `limit` is an integer from 1 to 500 and defaults to 50.
 
 `erpnext_file_upload` requires `file_name`, `content_base64`,
 `attached_to_doctype`, and `attached_to_name`; `attached_to_field` is optional.

@@ -2,10 +2,76 @@ name: Publish
 
 on:
   workflow_call:
+    inputs:
+      npm_dist_tag:
+        description: npm distribution tag (auto selects next for prereleases)
+        required: false
+        type: string
+        default: auto
   workflow_dispatch:
+    inputs:
+      npm_dist_tag:
+        description: npm distribution tag
+        required: true
+        type: choice
+        default: auto
+        options:
+          - auto
+          - next
+          - latest
 
 jobs:
+  release_guard:
+    runs-on: ubuntu-latest
+    outputs:
+      npm_dist_tag: ${{ steps.release.outputs.npm_dist_tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: release
+        name: Validate release ref, versions, and npm channel
+        env:
+          REQUESTED_NPM_DIST_TAG: ${{ inputs.npm_dist_tag }}
+        run: |
+          VERSION=$(node -p "JSON.parse(require('node:fs').readFileSync('deno.json', 'utf8')).version")
+          RUNTIME_VERSION=$(node -e '
+            const source = require("node:fs").readFileSync("server.ts", "utf8");
+            const match = source.match(/version:\s*"([^"]+)"/);
+            if (!match) process.exit(1);
+            process.stdout.write(match[1]);
+          ')
+
+          if [ "$VERSION" != "$RUNTIME_VERSION" ]; then
+            echo "::error::deno.json ($VERSION) and server.ts ($RUNTIME_VERSION) versions differ"
+            exit 1
+          fi
+
+          if [ "$GITHUB_REF" != "refs/tags/v$VERSION" ]; then
+            echo "::error::Publish must run from refs/tags/v$VERSION, got $GITHUB_REF"
+            exit 1
+          fi
+
+          if [[ "$VERSION" == *-* ]]; then
+            EXPECTED_NPM_DIST_TAG=next
+          else
+            EXPECTED_NPM_DIST_TAG=latest
+          fi
+
+          NPM_DIST_TAG=${REQUESTED_NPM_DIST_TAG:-auto}
+          if [ "$NPM_DIST_TAG" = auto ]; then
+            NPM_DIST_TAG=$EXPECTED_NPM_DIST_TAG
+          fi
+          if [ "$NPM_DIST_TAG" != "$EXPECTED_NPM_DIST_TAG" ]; then
+            echo "::error::$VERSION must publish with npm tag $EXPECTED_NPM_DIST_TAG, not $NPM_DIST_TAG"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "npm_dist_tag=$NPM_DIST_TAG" >> "$GITHUB_OUTPUT"
+
   publish-jsr:
+    needs: release_guard
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,9 +98,26 @@ jobs:
           fi
 
       - name: Publish to JSR
-        run: npx jsr publish --allow-dirty
+        env:
+          RELEASE_VERSION: ${{ needs.release_guard.outputs.version }}
+        run: |
+          if curl -fsSL --retry 3 https://jsr.io/@casys/mcp-erpnext/meta.json |
+            RELEASE_VERSION="$RELEASE_VERSION" node -e '
+              let body = "";
+              process.stdin.on("data", chunk => body += chunk);
+              process.stdin.on("end", () => {
+                const meta = JSON.parse(body);
+                process.exit(meta.versions?.[process.env.RELEASE_VERSION] ? 0 : 1);
+              });
+            '
+          then
+            echo "JSR version $RELEASE_VERSION already published, skipping"
+          else
+            npx jsr publish --allow-dirty
+          fi
 
   publish-npm:
+    needs: [release_guard, publish-jsr]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -69,22 +152,13 @@ jobs:
       - name: Publish to npm
         run: |
           cd dist-node/bin
-          set +e
-          PUBLISH_OUTPUT=$(npm publish --access public 2>&1)
-          PUBLISH_STATUS=$?
-          set -e
-
-          echo "$PUBLISH_OUTPUT"
-
-          if [ "$PUBLISH_STATUS" -eq 0 ]; then
-            exit 0
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if npm view "@casys/mcp-erpnext@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            echo "npm version $PACKAGE_VERSION already published; ensuring dist-tag $NPM_DIST_TAG"
+            npm dist-tag add "@casys/mcp-erpnext@$PACKAGE_VERSION" "$NPM_DIST_TAG"
+          else
+            npm publish --access public --tag "$NPM_DIST_TAG"
           fi
-
-          if echo "$PUBLISH_OUTPUT" | grep -qiE "cannot publish over the previously published versions|cannot publish over previously published version|you cannot publish over"; then
-            echo "Version already published, skipping"
-            exit 0
-          fi
-
-          exit "$PUBLISH_STATUS"
         env:
+          NPM_DIST_TAG: ${{ needs.release_guard.outputs.npm_dist_tag }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

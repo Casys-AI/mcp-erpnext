@@ -69,6 +69,10 @@ Code、VS Code Copilot 或自訂代理）。
 完整的發布歷程請參閱
 [CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
 
+> **3.1 Beta 預覽版：** 使用 `npx -y @casys/mcp-erpnext@next` 安裝。此版本維持與
+> 3.0 工具介面的相容性， 並依 MCP
+> 主機宣告的能力逐步啟用檢視器內導覽與作用中內容。
+
 ## 文件
 
 依照 [Diátaxis](https://diataxis.fr) 依「你正在做什麼」分類：
@@ -175,41 +179,43 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 七個互動式 [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
 檢視器，已登錄為 `ui://mcp-erpnext/{name}`：
 
-| 檢視器           | 說明                                               | 互動功能                                                                                                          |
-| ---------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `doclist-viewer` | 通用文件表格，支援排序、篩選、分頁與 CSV 匯出      | 點擊列 → 含提交／取消及 sendMessage 導覽的內嵌詳細面板。狀態欄位的晶片篩選器。最多顯示 6 欄，其餘呈現於詳細面板。 |
-| `invoice-viewer` | 含交易方、品項、金額合計的銷售／採購發票           | 點擊品項 → 庫存結餘及品項資訊面板。提交／取消／付款操作。sendMessage 至付款紀錄及客戶發票。                       |
-| `stock-viewer`   | 含色碼數量標籤的庫存結餘表格                       | 點擊列 → 品項資訊及近期異動。sendMessage 至庫存圖表、品項詳情、庫存記錄。                                         |
-| `chart-viewer`   | 通用圖表渲染器（透過 Recharts 支援 12 種圖表類型） | 點擊長條／圓餅／折線資料點 → sendMessage 下鑽至底層文件。                                                         |
-| `kanban-viewer`  | 可讀寫的 Task、Opportunity、Issue 看板             | 拖放移動、內嵌編輯（優先順序、進度、日期）、sendMessage 至工時單／報價單／相關文件。                              |
-| `kpi-viewer`     | 含差異值、迷你圖、趨勢的大數字卡片                 | 點擊數字 → sendMessage 至例外清單。點擊迷你圖 → 趨勢圖表。                                                        |
-| `funnel-viewer`  | 含轉換率的梯形銷售漏斗                             | 點擊階段 → sendMessage 至該階段的文件清單。階段操作按鈕。                                                         |
+| 檢視器           | 說明                                               | 互動功能                                                       |
+| ---------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| `doclist-viewer` | 通用文件表格，支援排序、篩選、分頁與 CSV 匯出      | 內嵌詳情、具型別的巢狀導覽、提交／取消，以及精簡的狀態篩選器。 |
+| `invoice-viewer` | 含交易方、品項與金額合計的銷售／採購文件           | 品項、庫存、交易方與付款導覽，以及受保護的提交／取消操作。     |
+| `stock-viewer`   | 含色碼數量標籤的庫存結餘表格                       | 品項詳情、近期異動、庫存圖表與庫存記錄導覽。                   |
+| `chart-viewer`   | 通用圖表渲染器（透過 Recharts 支援 12 種圖表類型） | 精確的資料點／數列導覽，以及簡單與組合圖表的作用中內容選取。   |
+| `kanban-viewer`  | 可讀寫的 Task、Opportunity、Issue 看板             | 拖放、內嵌編輯、循序儲存，以及具型別的相關文件導覽。           |
+| `kpi-viewer`     | 含差異值、迷你圖與趨勢的大數字卡片                 | 數值與趨勢導覽，以及有上限的作用中內容選取。                   |
+| `funnel-viewer`  | 含轉換率的梯形銷售漏斗                             | 保留期間條件的階段導覽，以及有上限的作用中內容選取。           |
 
-### 跨檢視器導覽
+### 導覽與作用中內容
 
-各檢視器透過 `app.sendMessage()` 互相溝通 —
-點擊某一檢視器中的按鈕，即會在對話中注入一則訊息，進而觸發 AI
-呼叫對應工具並開啟適當的檢視器。
+檢視器會依主機宣告的能力，逐步採用最合適的互動方式：
 
-伺服器會自動在工具結果中注入導覽後設資料：
+- `serverTools` 透過 `app.callServerTool()`，直接在目前檢視器內開啟具型別的
+  清單、文件或圖表層級。麵包屑與返回導覽會還原各層級的介面狀態。
+- `updateModelContext` 可將圖表、KPI 與漏斗中的選取項目加入有上限的作用中內容。
+  精簡的內容晶片最多保留八個項目，並可逐項移除或全部清除。傳送的快照只包含
+  使用者選取的值，不含給模型的隱藏指令。
+- 無法直接導覽或更新內容時，`message.text` 會保留 `app.sendMessage()` 作為
+  對話式後備方式。
+- 主機未提供上述能力時，仍可使用本機檢視功能，不支援的遠端操作則不會顯示。
 
-- `_rowAction` — 點擊列時要呼叫的工具
-- `_sendMessageHints` — 詳細面板中顯示的導覽按鈕（例如「訂單」、「發票」）
-- `_drillDown` / `_trendDrillDown` — KPI 與圖表點擊穿透的 sendMessage 範本
+伺服器會提供具型別的導覽後設資料，以及各檢視器實際可呼叫的
+`_availableTools`，因此在類別篩選的部署中不會顯示未載入的工具。
 
 ### 重新整理模式
 
-所有檢視器均攜帶 `refreshRequest` 酬載，可透過 `app.callServerTool()`
-安全地重新驗證：
-
-- `kanban-viewer` 在異動後及焦點切換時重新驗證
-- 所有其他檢視器支援焦點重新整理及手動重新整理按鈕
+唯讀檢視器會在重新取得焦點或使用重新整理控制項時重新驗證。資料異動後只會
+透過明確的唯讀工具讀回已提交狀態，不會自動重播寫入工具。若較新的主機資料或
+異動結果已生效，較舊或重疊的重新整理回應會被忽略。
 
 ### 建置 UI 檢視器
 
 ```bash
 cd src/ui
-npm install
+npm ci
 node build-all.mjs
 ```
 
@@ -228,8 +234,8 @@ node build-all.mjs
 - **Manufacturing（製造）** — 物料清單（BOM）、工單及工作卡。
 - **CRM** — 潛在客戶、商機、聯絡人及行銷活動。
 - **Assets（資產）** — 資產、異動、維護紀錄及類別。
-- **Operations（作業）** — 任何 DocType 的通用 CRUD 及原生指派
-  （`erpnext_doc_*`）。
+- **Operations（作業）** — 任何 DocType 的通用 CRUD、原生指派，以及附件清單
+  與上傳（`erpnext_doc_*`、`erpnext_file_list`、`erpnext_file_upload`）。
 - **Kanban（看板）** — 支援拖放的 Task、Opportunity、Issue 可讀寫看板。
 - **Analytics（分析）** — 圖表（長條圖、面積圖、樹狀圖、雷達圖、散佈圖、損益表
   等）、含迷你圖的 KPI，以及銷售漏斗。

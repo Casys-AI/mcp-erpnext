@@ -2,6 +2,47 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.1.0-beta.1] - 2026-08-24
+
+### Added
+
+- **In-view navigation across all seven MCP Apps.** Compatible hosts open typed
+  list, record, and chart targets inside the current viewer, with back and
+  breadcrumb navigation that preserves each level's state. Text messaging
+  remains available as a host-gated conversational fallback.
+- **Active context for charts, KPIs, and funnels.** Compatible hosts receive a
+  bounded snapshot through `updateModelContext`. A compact context chip keeps up
+  to eight selections, supports individual removal and clear-all, survives
+  nested navigation, and resets for a genuinely new viewer root.
+- **`erpnext_file_list`** lists a document's attachments with their URL, size,
+  privacy, and metadata. Tool count increases from 124 to 125.
+
+### Changed
+
+- Rebuilt all seven viewers with Preact and Tailwind, including responsive wide,
+  panel, and mobile layouts, host-aware theme and locale, and complete English
+  and French UI catalogs.
+- Submit, cancel, and discarding unsaved Kanban edits now use explicit compact
+  confirmation sheets.
+- Analytical navigation preserves the originating period, filters, clicked
+  point, and clicked series. Nested charts retain their chart type, stack, axes,
+  currency, unit, and negative-value semantics.
+
+### Fixed
+
+- Viewer actions are gated by host capabilities and the exact tools loaded by
+  the server. Category-filtered deployments no longer expose unavailable actions
+  or typed navigation targets.
+- Mutations refresh through explicit read-only tools instead of risking a replay
+  of the write operation.
+- Stale or overlapping refresh, navigation, and save responses no longer
+  overwrite newer host payloads or edits. Kanban preserves changes entered
+  during slow saves and serializes updates.
+- Chart and funnel navigation now follows the displayed period and series;
+  counts retain their own unit instead of inheriting a chart currency.
+- Legacy 3.0 payloads and the published generic-filter schema remain accepted
+  while newer payloads carry explicit document and tool identities.
+
 ## [3.0.2] - 2026-08-21
 
 ### Fixed

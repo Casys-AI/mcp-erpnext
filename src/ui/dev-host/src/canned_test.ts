@@ -4,11 +4,14 @@ import {
   cannedResult,
   DEV_DOCUMENT_DOCTYPE,
   DEV_DOCUMENT_NAME,
+  DEV_INVOICE_DOCTYPE,
+  DEV_INVOICE_NAME,
   INITIAL_TOOL,
   initialResult,
   isCannedDownloadToolResult,
   resetCannedState,
   summarizeDownloadContents,
+  summarizeModelContextContents,
   toolArgumentsForLog,
   withDevViewerTools,
 } from "./canned.ts";
@@ -53,6 +56,15 @@ Deno.test("dev-host canned - keeps eight viewers and exposes exact generic docum
     "erpnext_file_list",
     "erpnext_file_upload",
   ]);
+
+  const invoice = object(
+    withDevViewerTools("invoice", initialResult("invoice")),
+  );
+  assertEquals(object(invoice.data).name, DEV_INVOICE_NAME);
+  assertEquals(
+    (invoice._availableTools as string[]).slice(-3),
+    ["erpnext_file_download", "erpnext_file_list", "erpnext_file_upload"],
+  );
 });
 
 Deno.test("dev-host canned - file list is attached to the exact document", () => {
@@ -81,6 +93,13 @@ Deno.test("dev-host canned - file list is attached to the exact document", () =>
     cannedResult("invoice", "erpnext_file_list", documentArgs),
     null,
   );
+
+  const invoiceResult = object(cannedResult("invoice", "erpnext_file_list", {
+    attached_to_doctype: DEV_INVOICE_DOCTYPE,
+    attached_to_name: DEV_INVOICE_NAME,
+    limit: 1,
+  }));
+  assertEquals(invoiceResult.count, 1);
 });
 
 Deno.test("dev-host canned - upload is relisted and can be downloaded", () => {
@@ -141,25 +160,22 @@ Deno.test("dev-host canned - download matches the single embedded-resource contr
   });
   assert(isCannedDownloadToolResult(result));
   assertEquals(result.content.length, 2);
-  assertEquals(result.content[0], {
-    type: "text",
-    text: "Prepared control-cabinet-drawing.pdf for download (16 bytes).",
-  });
-  assertEquals(result.content[1].resource, {
-    uri: "file:///control-cabinet-drawing.pdf",
-    mimeType: "application/pdf",
-    blob: "JVBERi0xLjQKJcTl8uXrCg==",
-  });
-  assertEquals(
-    JSON.stringify(result).split("JVBERi0xLjQKJcTl8uXrCg==").length - 1,
-    1,
-  );
+  const resource = result.content[1].resource;
+  const pdf = atob(resource.blob);
+  assertEquals(result.content[0].type, "text");
+  assertEquals(resource.uri, "file:///control-cabinet-drawing.pdf");
+  assertEquals(resource.mimeType, "application/pdf");
+  assertEquals(pdf.startsWith("%PDF-1.4"), true);
+  assertEquals(pdf.includes("/Count 3"), true);
+  assertEquals(pdf.includes("/PageMode /UseThumbs"), true);
+  assertEquals(pdf.endsWith("%%EOF\n"), true);
 
   const summary = summarizeDownloadContents([result.content[1]]);
   assertEquals(summary, [{
     name: "control-cabinet-drawing.pdf",
     mimeType: "application/pdf",
-    approximateBytes: 16,
+    approximateBytes: resource.blob.length / 4 * 3 -
+      (resource.blob.endsWith("==") ? 2 : resource.blob.endsWith("=") ? 1 : 0),
   }]);
   assertEquals(JSON.stringify(summary).includes("JVBER"), false);
 });
@@ -203,4 +219,22 @@ Deno.test("dev-host canned - journal metadata omits uploaded and downloaded blob
     content_base64: "[base64 omitted; approximately 5 bytes]",
   });
   assertEquals(JSON.stringify(logged).includes("SGVsbG8="), false);
+
+  const context = summarizeModelContextContents([{
+    type: "resource",
+    resource: {
+      uri: "file:///hello.txt",
+      mimeType: "text/plain",
+      blob: "SGVsbG8=",
+    },
+  }]);
+  assertEquals(context, [{
+    type: "resource",
+    resource: {
+      uri: "file:///hello.txt",
+      mimeType: "text/plain",
+      approximateBytes: 5,
+    },
+  }]);
+  assertEquals(JSON.stringify(context).includes("SGVsbG8="), false);
 });

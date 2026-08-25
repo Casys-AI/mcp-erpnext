@@ -9,10 +9,11 @@ import {
   availableViewerToolNames,
   chartPointJumps,
   chartSeriesPointJumps,
+  documentNavigationHints,
   filterNavJumpsByAvailableTools,
   FUNNEL_STAGE_JUMPS,
   funnelStageJumps,
-  INVOICE_HINTS,
+  invoiceNavigationHints,
   KPI_JUMPS,
   monthRange,
   type NavJump,
@@ -307,9 +308,37 @@ Deno.test("ui refresh - every navigation hint targets a real tool with valid arg
   const byName = new Map(allTools.map((tool) => [tool.name, tool]));
   const allHints = {
     ...DOCTYPE_SEND_MESSAGE_HINTS,
-    ...Object.fromEntries(
-      Object.entries(INVOICE_HINTS).map(([k, v]) => [`invoice:${k}`, v]),
+    "document:Sales Order": documentNavigationHints("Sales Order", {
+      customer: "CUST-1",
+    }),
+    "document:Sales Invoice": documentNavigationHints("Sales Invoice", {
+      customer: "CUST-1",
+    }),
+    "document:Purchase Invoice": documentNavigationHints(
+      "Purchase Invoice",
+      { supplier: "SUPP-1" },
     ),
+    "document:Quotation/Customer": documentNavigationHints("Quotation", {
+      quotation_to: "Customer",
+      party_name: "CUST-1",
+    }),
+    "document:Quotation/Lead": documentNavigationHints("Quotation", {
+      quotation_to: "Lead",
+      party_name: "LEAD-1",
+    }),
+    "invoice:Sales Order": invoiceNavigationHints("Sales Order", {
+      customer: "CUST-1",
+    }),
+    "invoice:Sales Invoice": invoiceNavigationHints("Sales Invoice", {
+      customer: "CUST-1",
+    }),
+    "invoice:Purchase Invoice": invoiceNavigationHints("Purchase Invoice", {
+      supplier: "SUPP-1",
+    }),
+    "invoice:Quotation": invoiceNavigationHints("Quotation", {
+      quotation_to: "Lead",
+      party_name: "LEAD-1",
+    }),
     "stock:Bin": STOCK_HINTS,
   };
   for (const [doctype, hints] of Object.entries(allHints)) {
@@ -810,23 +839,166 @@ Deno.test("ui refresh - mutating viewer payload cannot forge capabilities", () =
   assertEquals(filtered._availableTools, ["erpnext_sales_invoice_submit"]);
 });
 
-Deno.test("ui refresh - invoice, stock and kanban results get typed hints", () => {
-  // La forme réelle d'un `_get` : le document sous `data`, le doctype dessus.
-  const invoice = withUiRefreshRequest(
-    {
-      data: { doctype: "Sales Invoice", name: "X" },
-      _meta: { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } },
-    },
-    "erpnext_sales_invoice_get",
-    {},
-  ) as { _sendMessageHints?: { key: string; kind?: string }[] };
-  assertEquals(invoice._sendMessageHints?.map((h) => h.key), [
+Deno.test("ui refresh - every commercial document keeps its canonical related hints", () => {
+  type HintResult = {
+    _sendMessageHints?: {
+      key: string;
+      label: string;
+      message: string;
+      kind?: string;
+      tool?: string;
+      args?: Record<string, unknown>;
+    }[];
+  };
+  const viewer = (
+    resourceUri: "invoice-viewer" | "doc-viewer",
+    data: Record<string, unknown>,
+  ) =>
+    withUiRefreshRequest(
+      {
+        data,
+        _meta: { ui: { resourceUri: `ui://mcp-erpnext/${resourceUri}` } },
+      },
+      "erpnext_doc_get",
+      {},
+    ) as HintResult;
+
+  const salesOrder = viewer("invoice-viewer", {
+    doctype: "Sales Order",
+    name: "SO-1",
+    customer: "CUST-1",
+  });
+  assertEquals(salesOrder._sendMessageHints?.map((hint) => hint.key), [
+    "customer",
+    "invoices",
+    "deliveries",
+    "item",
+    "stock",
+  ]);
+  assertEquals(salesOrder._sendMessageHints?.[0], {
+    key: "customer",
+    label: "Customer",
+    message: "Show customer CUST-1",
+    tool: "erpnext_customer_get",
+    args: { name: "CUST-1" },
+    kind: "record",
+  });
+  assertEquals(salesOrder._sendMessageHints?.[1].label, "Invoices");
+  assertEquals(
+    salesOrder._sendMessageHints?.[1].args?.doctype,
+    "Sales Invoice",
+  );
+  assertEquals(salesOrder._sendMessageHints?.[1].args?.filters, [[
+    "Sales Invoice Item",
+    "sales_order",
+    "=",
+    "{id}",
+  ]]);
+  assertEquals(salesOrder._sendMessageHints?.[2].label, "Delivery notes");
+  assertEquals(
+    salesOrder._sendMessageHints?.[2].args?.doctype,
+    "Delivery Note",
+  );
+  assertEquals(salesOrder._sendMessageHints?.[2].args?.filters, [[
+    "Delivery Note Item",
+    "against_sales_order",
+    "=",
+    "{id}",
+  ]]);
+
+  const salesInvoice = viewer("invoice-viewer", {
+    doctype: "Sales Invoice",
+    name: "SINV-1",
+    customer: "CUST-1",
+  });
+  assertEquals(salesInvoice._sendMessageHints?.map((hint) => hint.key), [
     "payments",
     "customer",
     "item",
     "stock",
   ]);
-  assertEquals(invoice._sendMessageHints?.[1].kind, "record");
+  assertEquals(
+    salesInvoice._sendMessageHints?.[0].args?.doctype,
+    "Payment Entry",
+  );
+  assertEquals(salesInvoice._sendMessageHints?.[1].label, "Customer");
+  assertEquals(salesInvoice._sendMessageHints?.[1].args, { name: "CUST-1" });
+
+  const purchaseInvoice = viewer("doc-viewer", {
+    doctype: "Purchase Invoice",
+    name: "PINV-1",
+    supplier: "SUPP-1",
+  });
+  assertEquals(purchaseInvoice._sendMessageHints?.map((hint) => hint.key), [
+    "payments",
+    "supplier",
+  ]);
+  assertEquals(
+    purchaseInvoice._sendMessageHints?.[0].args?.doctype,
+    "Payment Entry",
+  );
+  assertEquals(purchaseInvoice._sendMessageHints?.[1], {
+    key: "supplier",
+    label: "Supplier",
+    message: "Show supplier SUPP-1",
+    tool: "erpnext_supplier_get",
+    args: { name: "SUPP-1" },
+    kind: "record",
+  });
+
+  for (
+    const [quotationTo, partyName, partyKey, partyTool] of [
+      ["Customer", "CUST-2", "customer", "erpnext_customer_get"],
+      ["Lead", "LEAD-2", "lead", "erpnext_lead_get"],
+    ] as const
+  ) {
+    const quotation = viewer("invoice-viewer", {
+      doctype: "Quotation",
+      name: "QTN-1",
+      quotation_to: quotationTo,
+      party_name: partyName,
+    });
+    assertEquals(quotation._sendMessageHints?.map((hint) => hint.key), [
+      partyKey,
+      "item",
+      "stock",
+    ]);
+    assertEquals(quotation._sendMessageHints?.[0].tool, partyTool);
+    assertEquals(quotation._sendMessageHints?.[0].args, { name: partyName });
+    assertEquals(quotation._sendMessageHints?.[0].label, quotationTo);
+  }
+});
+
+Deno.test("ui refresh - invoice hints compose canonical document hints plus item actions", () => {
+  const document = { customer: "CUST-1" };
+  const related = documentNavigationHints("Sales Order", document);
+  const invoice = invoiceNavigationHints("Sales Order", document);
+  assertEquals(invoice.slice(0, related.length), related);
+  assertEquals(invoice.slice(related.length).map((hint) => hint.key), [
+    "item",
+    "stock",
+  ]);
+  assertEquals(new Set(invoice.map((hint) => hint.key)).size, invoice.length);
+});
+
+Deno.test("ui refresh - malformed Quotation dynamic links fail closed", () => {
+  assertEquals(
+    documentNavigationHints("Quotation", {
+      quotation_to: "Supplier",
+      party_name: "SUPP-1",
+    }),
+    [],
+  );
+  assertEquals(
+    documentNavigationHints("Quotation", {
+      quotation_to: "Lead",
+      party_name: " ",
+    }),
+    [],
+  );
+});
+
+Deno.test("ui refresh - stock and kanban results get typed hints", () => {
   const stock = withUiRefreshRequest(
     {
       doctype: "Bin",

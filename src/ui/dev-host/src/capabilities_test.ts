@@ -9,14 +9,14 @@ Deno.test("dev-host capabilities - maps the five profiles exactly", () => {
   assertEquals(capabilitiesForProfile("full"), {
     serverTools: {},
     downloadFile: {},
-    updateModelContext: { text: {} },
+    updateModelContext: { text: {}, resource: {} },
     message: { text: {} },
   });
   assertEquals(capabilitiesForProfile("serverTools-only"), {
     serverTools: {},
   });
   assertEquals(capabilitiesForProfile("context-only"), {
-    updateModelContext: { text: {} },
+    updateModelContext: { text: {}, resource: {} },
   });
   assertEquals(capabilitiesForProfile("message-only"), {
     message: { text: {} },
@@ -55,5 +55,24 @@ Deno.test("dev-host capabilities - keeps download fail-closed outside full", () 
     ] as const
   ) {
     assertEquals("downloadFile" in capabilitiesForProfile(profile), false);
+  }
+});
+
+Deno.test("dev-host capabilities - exposes resources only with model context", () => {
+  assertEquals(
+    capabilitiesForProfile("full").updateModelContext?.resource,
+    {},
+  );
+  assertEquals(
+    capabilitiesForProfile("context-only").updateModelContext?.resource,
+    {},
+  );
+  for (
+    const profile of ["serverTools-only", "message-only", "none"] as const
+  ) {
+    assertEquals(
+      capabilitiesForProfile(profile).updateModelContext?.resource,
+      undefined,
+    );
   }
 });

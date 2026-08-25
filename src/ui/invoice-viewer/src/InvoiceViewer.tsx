@@ -13,6 +13,8 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
+import { ActiveContextChip } from "~/shared/ActiveContextChip";
+import { canShareActiveContextResource } from "~/shared/active-context";
 import { bindHostContext } from "~/shared/host-context-hook";
 import type { DocumentChangeEvent } from "~/shared/document-events";
 import { AttachmentsSection } from "~/shared/document/AttachmentsSection";
@@ -42,6 +44,7 @@ import {
 import { useT } from "~/shared/i18n-hook";
 import { ConfirmSheet, type ConfirmState, useConfirm } from "~/shared/confirm";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { useActiveContext } from "~/shared/useActiveContext";
 import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
@@ -56,10 +59,11 @@ import {
 } from "./fixture.ts";
 import {
   canOfferNavigation,
-  invoiceJumps,
   invoiceMutationActions,
   invoiceRootDocumentChange,
   type InvoiceRootMutation,
+  type InvoiceRootNavigationAction,
+  invoiceRootNavigationActions,
   nextInvoiceMutationCommitted,
 } from "./nav.ts";
 import {
@@ -508,15 +512,17 @@ function InvoiceContent({
   const t = useT();
 
   // Pile de navigation : titre racine = nom de la pièce.
+  const rootKey = viewerRootKey("invoice", undefined, {
+    doctype: data.doctype,
+    name: data.name,
+  });
   const viewerNav = useViewerNav(app, {
     title: data.name,
     kind: "root",
     origin: "record",
-    key: viewerRootKey("invoice", undefined, {
-      doctype: data.doctype,
-      name: data.name,
-    }),
+    key: rootKey,
   }, { fixture });
+  const activeContext = useActiveContext(app, rootKey);
   const nav = viewerNav.nav;
 
   const rootLevelId = nav.stack.levels[0].id;
@@ -597,9 +603,6 @@ function InvoiceContent({
 
   const ccy = data.currency ?? "EUR";
   const doctype = data.doctype;
-  const isCustomer = Boolean(
-    data.customer || (data.quotation_to === "Customer" && data.party_name),
-  );
   const partyName = data.customer_name ?? data.customer ?? data.supplier_name ??
     data.supplier ?? data.party_name ?? "—";
   const outstanding = data.outstanding_amount ?? 0;
@@ -617,8 +620,6 @@ function InvoiceContent({
   );
   const messagesEnabled = !fixture &&
     canSendTextMessage(app.getHostCapabilities());
-  const paymentMessagesEnabled = messagesEnabled &&
-    (doctype === "Sales Invoice" || doctype === "Purchase Invoice");
   const canExpand = canInspectItem || messagesEnabled || fixture;
   const rows: LineRow[] = items.map((item, idx) => ({ ...item, idx }));
   const previewTitle = fixture ? t("invoice.preview.title") : undefined;
@@ -639,6 +640,16 @@ function InvoiceContent({
       </span>
     )
     : null;
+  const activeContextChip = (
+    <ActiveContextChip
+      selections={activeContext.selections}
+      failed={activeContext.failed}
+      evictedLabel={activeContext.evictedLabel}
+      onRemove={activeContext.remove}
+      onClear={activeContext.clear}
+      compact={!isWide}
+    />
+  );
 
   const showAttachments = fixture ||
     baseDocumentCapabilities.canListAttachments;
@@ -650,24 +661,27 @@ function InvoiceContent({
         controller={attachments}
         capabilities={attachmentCapabilities}
         layout={layout}
+        context={{
+          canShareResource: (resource) =>
+            canShareActiveContextResource(hostCapabilities, resource),
+          activate: activeContext.activate,
+          isSelected: activeContext.isSelected,
+        }}
       />
     )
     : null;
 
   /* ── Sauts de navigation ─────────────────────────────────────────────── */
 
-  /**
-   * jumpsEnabled = false en mode fixture et sans serverTools.
-   * Dans ce cas invoiceJumps reçoit null → sauts null → navigate() est utilisé.
-   */
   const { jumpsEnabled } = viewerNav;
   const party = data.customer ?? data.supplier ?? data.party_name ?? "";
   const jumpSubtitle = t("nav.linked_to", { id: data.name });
-  const { payments: paymentsJump, party: partyJump } = invoiceJumps(
-    jumpsEnabled ? hints : null,
+  const rootNavigationActions = invoiceRootNavigationActions(
+    hints,
     { id: data.name, doctype, party },
     jumpSubtitle,
-    jumpsEnabled ? availableTools : [],
+    availableTools,
+    jumpsEnabled,
   );
   const mutations = invoiceMutationActions(
     doctype,
@@ -700,111 +714,55 @@ function InvoiceContent({
 
   /* ── Boutons d'action ─────────────────────────────────────────────────── */
 
-  /**
-   * Paiements : saut › si l'hôte relaie et que le hint est disponible,
-   * sinon navigate() envoie une phrase au chat — identique à l'original.
-   */
-  const btnPayments = canOfferNavigation(
-    paymentsJump,
-    paymentMessagesEnabled,
-    fixture,
-  ) && (
-    <Button
-      variant="accent"
-      class={cx(
-        "group",
-        isMobile ? "min-h-[44px] rounded-touch text-body w-full" : "text-cell",
-      )}
-      disabled={fixture || actionLoading === "nav_payments"}
-      title={fixture ? previewTitle : t("invoice.btn.payments.title")}
-      onClick={() => {
-        if (paymentsJump) {
-          void nav.jump(paymentsJump);
-        } else {
-          void onNavigate(
-            "nav_payments",
-            t("invoice.nav.payments.message", { doctype, name: data.name }),
-          );
-        }
-      }}
-    >
-      {actionLoading === "nav_payments" ? "…" : t("invoice.btn.payments.label")}
-      {paymentsJump && (
-        <span
-          aria-hidden="true"
-          class={cx(
-            "ml-1 text-accent",
-            !isMobile &&
-              "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
-          )}
-        >
-          ›
-        </span>
-      )}
-    </Button>
-  );
+  function navigationButton(action: InvoiceRootNavigationAction) {
+    if (
+      !canOfferNavigation(
+        action.jump,
+        messagesEnabled && action.message !== null,
+        fixture,
+      )
+    ) return null;
+    const actionKey = `nav_${action.key}`;
+    return (
+      <Button
+        key={action.key}
+        variant={action.key === "payments" ? "accent" : "secondary"}
+        class={cx(
+          "group",
+          isMobile
+            ? "min-h-[44px] w-full rounded-touch text-body"
+            : "text-cell",
+        )}
+        disabled={fixture || actionLoading === actionKey}
+        title={fixture
+          ? previewTitle
+          : t("invoice.btn.related.title", { label: action.label })}
+        onClick={() => {
+          if (action.jump) {
+            void nav.jump(action.jump);
+          } else if (action.message) {
+            void onNavigate(actionKey, action.message);
+          }
+        }}
+      >
+        {actionLoading === actionKey ? "…" : action.label}
+        {action.jump && (
+          <span
+            aria-hidden="true"
+            class={cx(
+              "ml-1 text-accent",
+              !isMobile &&
+                "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
+            )}
+          >
+            ›
+          </span>
+        )}
+      </Button>
+    );
+  }
 
-  /**
-   * Tiers (client ou fournisseur) : saut › vers la fiche si l'hôte relaie,
-   * sinon navigate() envoie une phrase au chat — identique à l'original.
-   */
-  const btnParty = canOfferNavigation(partyJump, messagesEnabled, fixture) &&
-    (data.customer ?? data.supplier) && (
-    <Button
-      variant="secondary"
-      class={cx(
-        "group",
-        isMobile ? "flex-1 min-h-[44px] rounded-touch text-body" : "text-cell",
-      )}
-      disabled={fixture || actionLoading === "nav_party"}
-      title={fixture
-        ? previewTitle
-        : isCustomer
-        ? t("invoice.btn.party.title.customer")
-        : t("invoice.btn.party.title.supplier")}
-      onClick={() => {
-        if (partyJump) {
-          void nav.jump(partyJump);
-        } else {
-          void onNavigate(
-            "nav_party",
-            t(
-              isCustomer
-                ? "invoice.nav.party.message.customer"
-                : "invoice.nav.party.message.supplier",
-              { party: data.customer ?? data.supplier },
-            ),
-          );
-        }
-      }}
-    >
-      {
-        /* Un saut ouvre la fiche du tiers : il porte le libellé du hint (« Client »),
-          pas celui de la phrase (« Factures du client »). */
-      }
-      {actionLoading === "nav_party"
-        ? "…"
-        : partyJump
-        ? partyJump.label
-        : isMobile
-        ? t("invoice.btn.party.label.mobile")
-        : isCustomer
-        ? t("invoice.btn.party.label.customer")
-        : t("invoice.btn.party.label.supplier")}
-      {partyJump && (
-        <span
-          aria-hidden="true"
-          class={cx(
-            "ml-1 text-accent",
-            !isMobile &&
-              "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
-          )}
-        >
-          ›
-        </span>
-      )}
-    </Button>
-  );
+  const rootNavigationButtons = rootNavigationActions.map(navigationButton);
 
   const btnSubmit = isDraft && (mutations.submit || fixture) && (
     <Button
@@ -873,7 +831,8 @@ function InvoiceContent({
     </Button>
   );
   const hasActionButtons = Boolean(
-    btnPayments || btnParty || btnSubmit || btnCancel,
+    rootNavigationButtons.some((button) => button !== null) || btnSubmit ||
+      btnCancel,
   );
 
   /* ── Totaux ───────────────────────────────────────────────────────────── */
@@ -940,6 +899,7 @@ function InvoiceContent({
                 </span>
               )}
               {rootStaleIndicator}
+              {activeContextChip}
               {nav.isRoot && (
                 <span class="text-data text-ink-muted">
                   {partyName}
@@ -1108,10 +1068,9 @@ function InvoiceContent({
                 class="grid border-t border-line"
                 style={{ gridTemplateColumns: "1fr 300px" }}
               >
-                <div class="flex items-center gap-2 px-4 py-3.5">
+                <div class="flex flex-wrap items-center gap-2 px-4 py-3.5">
                   {btnSubmit}
-                  {btnPayments}
-                  {btnParty}
+                  {rootNavigationButtons}
                   {btnCancel}
                 </div>
                 {totalsPanel}
@@ -1175,6 +1134,7 @@ function InvoiceContent({
             <div class="flex flex-col items-end gap-[5px]">
               <StatusBadge status={data.status} />
               {rootStaleIndicator}
+              {activeContextChip}
               {data.due_date && (
                 <span class="font-mono text-chip text-ink-muted">
                   {t("invoice.header.due", { date: data.due_date.slice(5) })}
@@ -1274,8 +1234,7 @@ function InvoiceContent({
         {/* CTA section */}
         {hasActionButtons && (
           <div class="flex flex-col gap-[7px] px-3 py-[11px]">
-            {btnPayments}
-            <div class="flex gap-[7px]">{btnParty}</div>
+            {rootNavigationButtons}
             {btnCancel}
             {btnSubmit}
           </div>

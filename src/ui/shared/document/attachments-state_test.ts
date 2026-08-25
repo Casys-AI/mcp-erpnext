@@ -52,6 +52,10 @@ Deno.test("attachment uploads are single-flight", () => {
     false,
   );
   assert(canStartAttachmentUpload({ ...state, upload: "error" }));
+  assertEquals(
+    canStartAttachmentUpload({ ...state, load: "loading" }),
+    false,
+  );
 });
 
 Deno.test("failed upload releases the list load it superseded", () => {

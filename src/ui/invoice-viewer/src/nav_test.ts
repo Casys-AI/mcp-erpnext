@@ -7,9 +7,9 @@ import { assertEquals } from "@std/assert";
 import { setLangSource } from "../../shared/i18n.ts";
 import {
   canOfferNavigation,
-  invoiceJumps,
   invoiceMutationActions,
   invoiceRootDocumentChange,
+  invoiceRootNavigationActions,
   nextInvoiceMutationCommitted,
 } from "./nav.ts";
 import { INVOICE_ATTACHMENT_FIXTURES, INVOICE_FIXTURE } from "./fixture.ts";
@@ -22,7 +22,7 @@ import {
 // Langue stable pour les libellés traduits ("Paiements" en fr)
 setLangSource(() => "en-US");
 
-const SALES_HINTS = [
+const SALES_INVOICE_HINTS = [
   {
     key: "payments",
     label: "Payments",
@@ -45,9 +45,9 @@ const SALES_HINTS = [
   {
     key: "customer",
     label: "Customer",
-    message: "Show customer {party}",
+    message: "Show customer CUST-ACME",
     tool: "erpnext_customer_get",
-    args: { name: "{party}" },
+    args: { name: "CUST-ACME" },
     kind: "record" as const,
   },
 ];
@@ -64,9 +64,9 @@ const PURCHASE_HINTS = [
   {
     key: "supplier",
     label: "Supplier",
-    message: "Show supplier {party}",
+    message: "Show supplier SUPP-1",
     tool: "erpnext_supplier_get",
-    args: { name: "{party}" },
+    args: { name: "SUPP-1" },
     kind: "record" as const,
   },
 ];
@@ -76,140 +76,217 @@ const PURCHASE_TOOLS = ["erpnext_doc_list", "erpnext_supplier_get"];
 
 // ── Cas limites ───────────────────────────────────────────────────────────────
 
-Deno.test("invoice nav : hints null → sauts null", () => {
-  assertEquals(invoiceJumps(null, { id: "X" }, "sub", []), {
-    payments: null,
-    party: null,
-  });
-});
-
-Deno.test("invoice nav : hints vide → sauts null", () => {
-  assertEquals(invoiceJumps([], { id: "X" }, "sub", []), {
-    payments: null,
-    party: null,
-  });
+Deno.test("invoice nav : hints absents → aucune action racine", () => {
+  assertEquals(
+    invoiceRootNavigationActions(null, { id: "X" }, "sub", [], true),
+    [],
+  );
+  assertEquals(
+    invoiceRootNavigationActions([], { id: "X" }, "sub", [], true),
+    [],
+  );
 });
 
 Deno.test("invoice nav : action visible pour un saut ou message.text, jamais sans canal", () => {
-  const jump = invoiceJumps(
-    SALES_HINTS,
-    { id: "SINV-1", party: "CUST-1" },
+  const jump = invoiceRootNavigationActions(
+    SALES_INVOICE_HINTS,
+    { id: "SINV-1" },
     "sub",
     SALES_TOOLS,
-  ).payments;
+    true,
+  )[0].jump;
   assertEquals(canOfferNavigation(jump, false, false), true);
   assertEquals(canOfferNavigation(null, true, false), true);
   assertEquals(canOfferNavigation(null, false, false), false);
   assertEquals(canOfferNavigation(null, false, true), true);
 });
 
-Deno.test("invoice nav : hints sans outil → questions seules, sauts null", () => {
+Deno.test("invoice nav : hints sans outil deviennent des questions exactes", () => {
   const noTool = [
     { key: "payments", label: "Payments", message: "Tell me about {id}" },
-    { key: "customer", label: "Customer", message: "Tell me about {party}" },
+    { key: "customer", label: "Customer", message: "Tell me about CUST-1" },
   ];
-  const r = invoiceJumps(noTool, { id: "X", party: "C" }, "sub", []);
-  assertEquals(r.payments, null, "payments sans tool doit rester null");
-  assertEquals(r.party, null, "party sans tool doit rester null");
+  const actions = invoiceRootNavigationActions(
+    noTool,
+    { id: "SINV-1", party: "" },
+    "sub",
+    [],
+    false,
+  );
+  assertEquals(actions.map(({ key, jump, message }) => [key, jump, message]), [
+    ["payments", null, "Tell me about SINV-1"],
+    ["customer", null, "Tell me about CUST-1"],
+  ]);
 });
 
-Deno.test("invoice nav : clés inconnues (pas payments/customer/supplier) → sauts null", () => {
-  const unknown = [
-    { key: "foo", label: "Foo", tool: "some_tool", args: {} },
-    { key: "bar", label: "Bar", tool: "other_tool", args: {} },
+Deno.test("invoice nav : consomme toutes les relations racine sauf item et stock", () => {
+  const hints = [
+    {
+      key: "customer",
+      label: "Customer",
+      message: "Show customer CUST-1",
+      tool: "erpnext_customer_get",
+      args: { name: "CUST-1" },
+      kind: "record" as const,
+    },
+    {
+      key: "invoices",
+      label: "Invoices",
+      message: "Show invoices for {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Sales Invoice",
+        filters: [["sales_order", "=", "{id}"]],
+      },
+      kind: "list" as const,
+    },
+    {
+      key: "deliveries",
+      label: "Delivery notes",
+      message: "Show delivery notes for {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Delivery Note",
+        filters: [["sales_order", "=", "{id}"]],
+      },
+      kind: "list" as const,
+    },
+    {
+      key: "item",
+      label: "Item",
+      message: "Show item {item}",
+      tool: "erpnext_item_get",
+      args: { name: "{item}" },
+      kind: "record" as const,
+    },
+    {
+      key: "stock",
+      label: "Stock",
+      message: "Show stock for {item}",
+      tool: "erpnext_stock_balance",
+      args: { item_code: "{item}" },
+      kind: "list" as const,
+    },
   ];
-  const r = invoiceJumps(
-    unknown,
-    { id: "X" },
-    "sub",
-    ["some_tool", "other_tool"],
+  const actions = invoiceRootNavigationActions(
+    hints,
+    { id: "SO-1" },
+    "liées à SO-1",
+    ["erpnext_customer_get", "erpnext_doc_list"],
+    true,
   );
-  assertEquals(r.payments, null);
-  assertEquals(r.party, null);
+  assertEquals(actions.map((action) => action.key), [
+    "customer",
+    "invoices",
+    "deliveries",
+  ]);
+  assertEquals(actions.map((action) => action.jump?.kind), [
+    "record",
+    "list",
+    "list",
+  ]);
+  assertEquals(actions[1].jump?.tool.args.filters, [[
+    "sales_order",
+    "=",
+    "SO-1",
+  ]]);
 });
 
-Deno.test("invoice nav : party manquant dans vars → pas de saut tiers (gabarit non rempli)", () => {
-  // vars.party absent : un {party} vide ne doit jamais partir au serveur
-  const r = invoiceJumps(
-    SALES_HINTS,
-    { id: "SINV-1" },
+Deno.test("invoice nav : gabarit incomplet ne devient ni saut ni question", () => {
+  const actions = invoiceRootNavigationActions(
+    [{
+      key: "customer",
+      label: "Customer",
+      message: "Show customer {party}",
+      tool: "erpnext_customer_get",
+      args: { name: "{party}" },
+      kind: "record",
+    }],
+    { id: "SINV-1", party: "" },
     "sub",
-    SALES_TOOLS,
+    ["erpnext_customer_get"],
+    true,
   );
-  assertEquals(r.party, null);
-  assertEquals(r.payments?.tool.name, "erpnext_doc_list");
+  assertEquals(actions, []);
 });
 
 // ── Chemin normal : Sales Invoice ────────────────────────────────────────────
 
 Deno.test("invoice nav : Sales Invoice → paiements (liste) + client (fiche)", () => {
-  const r = invoiceJumps(
-    SALES_HINTS,
-    { id: "SINV-1", party: "CUST-ACME" },
+  const actions = invoiceRootNavigationActions(
+    SALES_INVOICE_HINTS,
+    { id: "SINV-1" },
     "liée à SINV-1",
     SALES_TOOLS,
+    true,
   );
-  assertEquals(r.payments?.kind, "list");
-  assertEquals(r.payments?.tool.name, "erpnext_doc_list");
-  assertEquals(r.payments?.subtitle, "liée à SINV-1");
+  const payments = actions.find((action) => action.key === "payments")!;
+  const customer = actions.find((action) => action.key === "customer")!;
+  assertEquals(payments.jump?.kind, "list");
+  assertEquals(payments.jump?.tool.name, "erpnext_doc_list");
+  assertEquals(payments.jump?.subtitle, "liée à SINV-1");
   assertEquals(
-    (r.payments?.tool.args["filters"] as unknown[][])[0][3],
+    (payments.jump?.tool.args["filters"] as unknown[][])[0][3],
     "SINV-1",
     "le filtre {id} doit être substitué",
   );
-  assertEquals(r.party?.kind, "record");
-  assertEquals(r.party?.tool.name, "erpnext_customer_get");
-  assertEquals(r.party?.tool.args["name"], "CUST-ACME");
-  assertEquals(r.party?.subtitle, "liée à SINV-1");
+  assertEquals(customer.jump?.kind, "record");
+  assertEquals(customer.jump?.tool.name, "erpnext_customer_get");
+  assertEquals(customer.jump?.tool.args["name"], "CUST-ACME");
+  assertEquals(customer.message, "Show customer CUST-ACME");
 });
 
 // ── Chemin normal : Purchase Invoice ─────────────────────────────────────────
 
 Deno.test("invoice nav : Purchase Invoice → paiements + fournisseur", () => {
-  const r = invoiceJumps(
+  const actions = invoiceRootNavigationActions(
     PURCHASE_HINTS,
-    { id: "PINV-1", party: "SUPP-1" },
+    { id: "PINV-1" },
     "sub",
     PURCHASE_TOOLS,
+    true,
   );
-  assertEquals(r.payments?.tool.name, "erpnext_doc_list");
-  assertEquals(r.party?.tool.name, "erpnext_supplier_get");
-  assertEquals(r.party?.tool.args["name"], "SUPP-1");
+  assertEquals(actions.map((action) => action.key), ["payments", "supplier"]);
+  assertEquals(actions[0].jump?.tool.name, "erpnext_doc_list");
+  assertEquals(actions[1].jump?.tool.name, "erpnext_supplier_get");
+  assertEquals(actions[1].jump?.tool.args["name"], "SUPP-1");
 });
 
-// ── Mix : payments présent, customer absent ───────────────────────────────────
-
-Deno.test("invoice nav : payments seul présent → party null", () => {
-  const payOnly = [SALES_HINTS[0]];
-  const r = invoiceJumps(
-    payOnly,
-    { id: "X", party: "C" },
+Deno.test("invoice nav : outil absent conserve seulement le repli conversationnel", () => {
+  const actions = invoiceRootNavigationActions(
+    SALES_INVOICE_HINTS,
+    { id: "SINV-1" },
     "sub",
-    SALES_TOOLS,
+    [],
+    true,
   );
-  assertEquals(r.payments?.kind, "list");
-  assertEquals(r.party, null);
+  assertEquals(actions.map(({ jump, message }) => [jump, message]), [
+    [null, "Show payment entries for invoice SINV-1"],
+    [null, "Show customer CUST-ACME"],
+  ]);
 });
 
-Deno.test("invoice nav : un hint périmé sans outil disponible ne survit pas", () => {
-  const r = invoiceJumps(
-    SALES_HINTS,
-    { id: "SO-1", party: "CUST-1" },
+Deno.test("invoice nav : Quotation garde une cible Lead exacte", () => {
+  const actions = invoiceRootNavigationActions(
+    [{
+      key: "lead",
+      label: "Lead",
+      message: "Show lead LEAD-1",
+      tool: "erpnext_lead_get",
+      args: { name: "LEAD-1" },
+      kind: "record",
+    }],
+    { id: "QTN-1" },
     "sub",
-    ["erpnext_sales_order_get"],
+    ["erpnext_lead_get"],
+    true,
   );
-  assertEquals(r, { payments: null, party: null });
-});
-
-Deno.test("invoice nav : chaque saut exige son outil exact dans le nouveau payload", () => {
-  const r = invoiceJumps(
-    SALES_HINTS,
-    { id: "SINV-1", party: "CUST-1" },
-    "sub",
-    ["erpnext_doc_list"],
-  );
-  assertEquals(r.payments?.tool.name, "erpnext_doc_list");
-  assertEquals(r.party, null);
+  assertEquals(actions[0].key, "lead");
+  assertEquals(actions[0].label, "Lead");
+  assertEquals(actions[0].jump?.tool, {
+    name: "erpnext_lead_get",
+    args: { name: "LEAD-1" },
+  });
 });
 
 Deno.test("invoice payload : préfère le DocType explicite et tolère le payload 3.0.x", () => {

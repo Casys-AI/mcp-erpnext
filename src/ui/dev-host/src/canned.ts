@@ -41,6 +41,9 @@ const DEV_AVAILABLE_TOOLS: Partial<Record<ViewerKey, readonly string[]>> = {
     "erpnext_doc_list",
     "erpnext_customer_get",
     "erpnext_doc_get",
+    "erpnext_file_download",
+    "erpnext_file_list",
+    "erpnext_file_upload",
   ],
   doclist: [
     "erpnext_sales_invoice_list",
@@ -92,6 +95,8 @@ type Row = Record<string, unknown>;
 
 export const DEV_DOCUMENT_DOCTYPE = "BOM";
 export const DEV_DOCUMENT_NAME = "BOM-2026-00042";
+export const DEV_INVOICE_DOCTYPE = "Sales Invoice";
+export const DEV_INVOICE_NAME = "ACC-SINV-2026-00042";
 
 /**
  * Fiche générique volontairement différente des viewers métier dédiés. Les
@@ -188,19 +193,56 @@ interface CannedAttachment {
   blob: string;
 }
 
+/** Small valid three-page PDF used to exercise native page thumbnails. */
+function demoPdfBase64(): string {
+  const pageText = (page: number) =>
+    `BT /F1 24 Tf 72 700 Td (Control cabinet drawing - page ${page}) Tj ET\n`;
+  const stream = (content: string) =>
+    `<< /Length ${content.length} >>\nstream\n${content}endstream`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R /PageMode /UseThumbs >>",
+    "<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R >> >> /Contents 4 0 R >>",
+    stream(pageText(1)),
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R >> >> /Contents 6 0 R >>",
+    stream(pageText(2)),
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R >> >> /Contents 8 0 R >>",
+    stream(pageText(3)),
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n% Casys dev-host multipage fixture\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += "0000000000 65535 f \n";
+  pdf += offsets.slice(1).map((offset) =>
+    `${String(offset).padStart(10, "0")} 00000 n \n`
+  ).join("");
+  pdf += `trailer\n<< /Size ${
+    objects.length + 1
+  } /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return btoa(pdf);
+}
+
+const DEMO_PDF_BLOB = demoPdfBase64();
+
 const INITIAL_DOCUMENT_FILES: readonly CannedAttachment[] = [
   {
     name: "FILE-BOM-001",
     file_name: "control-cabinet-drawing.pdf",
     file_url: "/private/files/control-cabinet-drawing.pdf",
-    file_size: 16,
+    file_size: approximateBase64Bytes(DEMO_PDF_BLOB),
     is_private: true,
     attached_to_field: null,
     creation: "2026-08-24 15:10:00",
     modified: "2026-08-24 15:10:00",
     owner: "engineering@casys.ai",
     mimeType: "application/pdf",
-    blob: "JVBERi0xLjQKJcTl8uXrCg==",
+    blob: DEMO_PDF_BLOB,
   },
   {
     name: "FILE-BOM-002",
@@ -268,9 +310,20 @@ function fileListRow(file: CannedAttachment): Row {
   };
 }
 
-function targetsDevDocument(args: Record<string, unknown>): boolean {
-  return args.attached_to_doctype === DEV_DOCUMENT_DOCTYPE &&
-    args.attached_to_name === DEV_DOCUMENT_NAME;
+function attachmentTarget(
+  viewer: ViewerKey,
+  args: Record<string, unknown>,
+): { doctype: string; name: string } | null {
+  const target = viewer === "doc"
+    ? { doctype: DEV_DOCUMENT_DOCTYPE, name: DEV_DOCUMENT_NAME }
+    : viewer === "invoice"
+    ? { doctype: DEV_INVOICE_DOCTYPE, name: DEV_INVOICE_NAME }
+    : null;
+  if (
+    !target || args.attached_to_doctype !== target.doctype ||
+    args.attached_to_name !== target.name
+  ) return null;
+  return target;
 }
 
 export interface CannedDownloadToolResult {
@@ -336,6 +389,25 @@ export function summarizeDownloadContents(
         : "application/octet-stream",
       approximateBytes: approximateBase64Bytes(resource.blob),
     }];
+  });
+}
+
+/** Preserve context metadata in the journal without retaining binary payloads. */
+export function summarizeModelContextContents(contents: unknown): unknown {
+  if (!Array.isArray(contents)) return contents;
+  return contents.map((content) => {
+    const item = record(content);
+    const resource = item ? record(item.resource) : null;
+    if (!resource || typeof resource.blob !== "string") return content;
+    const blob = resource.blob;
+    const { blob: _blob, ...metadata } = resource;
+    return {
+      ...item,
+      resource: {
+        ...metadata,
+        approximateBytes: approximateBase64Bytes(blob),
+      },
+    };
   });
 }
 
@@ -882,7 +954,7 @@ export function cannedResult(
   if (name === INITIAL_TOOL[viewer]) return initialResult(viewer);
   switch (name) {
     case "erpnext_file_list": {
-      if (viewer !== "doc" || !targetsDevDocument(args)) return null;
+      if (!attachmentTarget(viewer, args)) return null;
       const limit = typeof args.limit === "number" &&
           Number.isInteger(args.limit) && args.limit > 0
         ? args.limit
@@ -891,7 +963,8 @@ export function cannedResult(
       return { count: data.length, data };
     }
     case "erpnext_file_upload": {
-      if (viewer !== "doc" || !targetsDevDocument(args)) return null;
+      const target = attachmentTarget(viewer, args);
+      if (!target) return null;
       const fileName = typeof args.file_name === "string"
         ? args.file_name.trim()
         : "";
@@ -936,15 +1009,14 @@ export function cannedResult(
         data: {
           ...fileListRow(file),
           is_private: file.is_private ? 1 : 0,
-          attached_to_doctype: DEV_DOCUMENT_DOCTYPE,
-          attached_to_name: DEV_DOCUMENT_NAME,
+          attached_to_doctype: target.doctype,
+          attached_to_name: target.name,
         },
-        message:
-          `${fileName} attached to ${DEV_DOCUMENT_DOCTYPE} ${DEV_DOCUMENT_NAME}`,
+        message: `${fileName} attached to ${target.doctype} ${target.name}`,
       };
     }
     case "erpnext_file_download": {
-      if (viewer !== "doc" || !targetsDevDocument(args)) return null;
+      if (!attachmentTarget(viewer, args)) return null;
       const file = documentFiles.find((candidate) =>
         candidate.name === args.file_id
       );

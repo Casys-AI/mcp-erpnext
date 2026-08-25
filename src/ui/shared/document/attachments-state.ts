@@ -7,7 +7,7 @@ export type AttachmentUploadState =
   | "error";
 
 export interface PersistentAttachmentError {
-  operation: "list" | "upload" | "download";
+  operation: "list" | "upload" | "preview" | "download";
   message: string;
   fileName?: string;
 }
@@ -18,6 +18,7 @@ export interface AttachmentsState {
   nextRequest: number;
   load: AttachmentLoadState;
   upload: AttachmentUploadState;
+  previewingFile: string | null;
   downloadingFile: string | null;
   error: PersistentAttachmentError | null;
 }
@@ -35,6 +36,7 @@ export function createAttachmentsState(documentKey: string): AttachmentsState {
     nextRequest: 1,
     load: "idle",
     upload: "idle",
+    previewingFile: null,
     downloadingFile: null,
     error: null,
   };
@@ -81,7 +83,8 @@ export function acceptsAttachmentToken(
 }
 
 export function canStartAttachmentUpload(state: AttachmentsState): boolean {
-  return state.upload === "idle" || state.upload === "error";
+  return state.load !== "loading" &&
+    (state.upload === "idle" || state.upload === "error");
 }
 
 /**

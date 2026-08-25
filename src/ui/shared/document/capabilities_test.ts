@@ -17,6 +17,7 @@ Deno.test("document capabilities fail closed without a server manifest", () => {
       canRefresh: false,
       canListAttachments: false,
       canUploadAttachment: false,
+      canPreviewAttachment: false,
       canDownloadAttachment: false,
       canSubmit: false,
       canCancel: false,
@@ -39,6 +40,7 @@ Deno.test("document capabilities require both host and exact tools", () => {
       canRefresh: true,
       canListAttachments: true,
       canUploadAttachment: true,
+      canPreviewAttachment: true,
       canDownloadAttachment: true,
       canSubmit: true,
       canCancel: true,
@@ -62,5 +64,15 @@ Deno.test("upload and download cannot bypass attachment listing", () => {
     ["erpnext_file_upload", "erpnext_file_download"],
   );
   assertEquals(capabilities.canUploadAttachment, false);
+  assertEquals(capabilities.canPreviewAttachment, false);
+  assertEquals(capabilities.canDownloadAttachment, false);
+});
+
+Deno.test("preview needs serverTools but not the host download channel", () => {
+  const capabilities = documentCapabilities(
+    { serverTools: {} },
+    ["erpnext_file_list", "erpnext_file_download"],
+  );
+  assertEquals(capabilities.canPreviewAttachment, true);
   assertEquals(capabilities.canDownloadAttachment, false);
 });

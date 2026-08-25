@@ -59,11 +59,38 @@ export const fr: Record<string, string> = {
   "document.attachments.private": "Privé",
   "document.attachments.public": "Public",
   "document.attachments.privacy": "Confidentialité de la pièce jointe",
+  "document.attachments.privacy_private":
+    "Pièce jointe privée. Activer pour la rendre publique",
+  "document.attachments.privacy_public":
+    "Pièce jointe publique. Activer pour la rendre privée",
   "document.attachments.private_hint":
     "Seuls les utilisateurs ERPNext authentifiés et autorisés pourront récupérer ce fichier",
   "document.attachments.public_hint":
     "ERPNext exposera ce fichier depuis son espace de fichiers publics",
   "document.attachments.download": "Télécharger {name}",
+  "document.attachments.download_short": "Télécharger",
+  "document.attachments.download_in_progress":
+    "Téléchargement de la pièce jointe…",
+  "document.attachments.preview": "Prévisualiser {name}",
+  "document.attachments.preview_loading": "Préparation de l'aperçu…",
+  "document.attachments.preview_loading_name": "Préparation de {name}…",
+  "document.attachments.preview_pdf": "Aperçu PDF de {name}",
+  "document.attachments.preview_truncated":
+    "Seul le début de ce fichier texte est affiché",
+  "document.attachments.preview_unsupported":
+    "Ce format ne peut pas être affiché dans le viewer",
+  "document.attachments.preview_download_fallback":
+    "Le fichier original reste téléchargeable",
+  "document.attachments.context_add": "Ajouter au contexte",
+  "document.attachments.context_added": "Dans le contexte",
+  "document.attachments.context_update": "Actualiser le contexte",
+  "document.attachments.context_sharing": "Ajout…",
+  "document.attachments.context_note": "Note de contexte facultative",
+  "document.attachments.context_note_placeholder":
+    "Sur quoi le modèle doit-il porter son attention ?",
+  "document.attachments.context_entire_file": "Pièce jointe complète",
+  "document.attachments.context_error":
+    "L'hôte n'a pas pu actualiser le contexte du modèle",
   "document.attachments.reading": "Lecture du fichier…",
   "document.attachments.reading_progress": "Lecture {value} %",
   "document.attachments.uploading": "Envoi…",
@@ -71,9 +98,13 @@ export const fr: Record<string, string> = {
   "document.attachments.dismiss_error": "Fermer l'erreur de pièce jointe",
   "document.attachments.error.list": "Impossible de charger les pièces jointes",
   "document.attachments.error.upload": "Impossible d'envoyer ce fichier",
+  "document.attachments.error.too_large":
+    "Ce fichier dépasse la limite d'envoi de {limit} Mo",
   "document.attachments.error.relist":
     "Fichier ajouté, mais la liste des pièces jointes n'a pas pu être vérifiée",
   "document.attachments.error.download": "Impossible de télécharger ce fichier",
+  "document.attachments.error.preview":
+    "Impossible de prévisualiser ce fichier",
   "document.attachments.error.host_denied":
     "L'hôte a annulé ou refusé le téléchargement",
 
@@ -160,13 +191,7 @@ export const fr: Record<string, string> = {
   "invoice.totals.subtotal": "sous-total",
   "invoice.totals.taxes": "taxes",
   "invoice.totals.grand_total": "total",
-  "invoice.btn.payments.title": "Voir les écritures de paiement",
-  "invoice.btn.payments.label": "Paiements",
-  "invoice.btn.party.title.customer": "Voir les factures du client",
-  "invoice.btn.party.title.supplier": "Voir les factures du fournisseur",
-  "invoice.btn.party.label.mobile": "Client",
-  "invoice.btn.party.label.customer": "Factures du client",
-  "invoice.btn.party.label.supplier": "Factures du fournisseur",
+  "invoice.btn.related.title": "Ouvrir : {label}",
   "invoice.btn.submit.title": "Soumettre la facture",
   "invoice.btn.submit.label": "Soumettre",
   "invoice.btn.cancel.title": "Annuler la facture",
@@ -310,6 +335,7 @@ export const fr: Record<string, string> = {
   "doclist.hint.invoices": "Factures",
   "doclist.hint.invoice": "Facture",
   "doclist.hint.delivery": "Livraison",
+  "doclist.hint.deliveries": "Livraisons",
   "doclist.hint.payments": "Paiements",
   "doclist.hint.stock": "Stock",
   "doclist.hint.po": "Commandes d'achat",
@@ -321,6 +347,7 @@ export const fr: Record<string, string> = {
   "doclist.hint.opportunities": "Opportunités",
   "doclist.hint.customer": "Client",
   "doclist.hint.supplier": "Fournisseur",
+  "doclist.hint.lead": "Prospect",
   "doclist.hint.item": "Article",
   "doclist.hint.movements": "Mouvements de stock",
   "doclist.hint.warehouse": "Stock de l'entrepôt",
@@ -358,12 +385,6 @@ export const fr: Record<string, string> = {
   "stock.nav.entries.message":
     "Affiche les écritures de stock de l'article {itemCode}",
   "common.total": "total",
-  "invoice.nav.payments.message":
-    "Affiche les écritures de paiement de {doctype} {name}",
-  "invoice.nav.party.message.customer":
-    "Affiche toutes les factures de vente du client {party}",
-  "invoice.nav.party.message.supplier":
-    "Affiche toutes les factures d'achat du fournisseur {party}",
   "invoice.item.stock.message": "Montre le stock de l'article {itemCode}",
   "invoice.item.details.message":
     "Montre-moi la fiche complète de l'article {itemCode}",

@@ -315,6 +315,7 @@ Deno.test("buildHandlersMap - sales-only Sales Order advertises its exact submit
       structuredContent: Record<string, unknown>;
     };
     assertEquals(result.structuredContent._availableTools, [
+      "erpnext_customer_get",
       "erpnext_sales_order_cancel",
       "erpnext_sales_order_get",
       "erpnext_sales_order_submit",

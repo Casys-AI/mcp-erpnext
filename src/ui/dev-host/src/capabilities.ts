@@ -14,7 +14,10 @@ export type HostChannel =
 export interface DevHostCapabilities {
   serverTools?: Record<string, never>;
   downloadFile?: Record<string, never>;
-  updateModelContext?: { text: Record<string, never> };
+  updateModelContext?: {
+    text: Record<string, never>;
+    resource?: Record<string, never>;
+  };
   message?: { text: Record<string, never> };
 }
 
@@ -45,13 +48,13 @@ export function capabilitiesForProfile(
       return {
         serverTools: {},
         downloadFile: {},
-        updateModelContext: { text: {} },
+        updateModelContext: { text: {}, resource: {} },
         message: { text: {} },
       };
     case "serverTools-only":
       return { serverTools: {} };
     case "context-only":
-      return { updateModelContext: { text: {} } };
+      return { updateModelContext: { text: {}, resource: {} } };
     case "message-only":
       return { message: { text: {} } };
     case "none":

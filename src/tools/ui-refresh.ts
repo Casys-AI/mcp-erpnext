@@ -120,10 +120,7 @@ const DOCTYPE_GET_TOOLS: Record<string, string> = {
   "Stock Entry": "erpnext_stock_entry_get",
 };
 
-/**
- * Cross-viewer navigation hints by DocType.
- * Shown as buttons in the InlineDetailPanel via sendMessage.
- */
+/** Relations documentaires invariantes, communes à tous les viewers. */
 export const DOCTYPE_SEND_MESSAGE_HINTS: Record<string, SendMessageHint[]> = {
   "Customer": [
     {
@@ -143,8 +140,8 @@ export const DOCTYPE_SEND_MESSAGE_HINTS: Record<string, SendMessageHint[]> = {
   ],
   "Sales Order": [
     {
-      key: "invoice",
-      label: "Invoice",
+      key: "invoices",
+      label: "Invoices",
       message: "Show invoices linked to sales order {id}",
       tool: "erpnext_doc_list",
       args: {
@@ -155,8 +152,8 @@ export const DOCTYPE_SEND_MESSAGE_HINTS: Record<string, SendMessageHint[]> = {
       },
     },
     {
-      key: "delivery",
-      label: "Delivery",
+      key: "deliveries",
+      label: "Delivery notes",
       message: "Show delivery notes for sales order {id}",
       tool: "erpnext_doc_list",
       args: {
@@ -185,6 +182,27 @@ export const DOCTYPE_SEND_MESSAGE_HINTS: Record<string, SendMessageHint[]> = {
         filters: [["Payment Entry Reference", "reference_name", "=", "{id}"]],
         limit: 20,
       },
+    },
+  ],
+  "Purchase Invoice": [
+    {
+      key: "payments",
+      label: "Payments",
+      message: "Show payment entries for purchase invoice {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Payment Entry",
+        fields: [
+          "name",
+          "posting_date",
+          "paid_amount",
+          "mode_of_payment",
+          "docstatus",
+        ],
+        filters: [["Payment Entry Reference", "reference_name", "=", "{id}"]],
+        limit: 20,
+      },
+      kind: "list",
     },
   ],
   "Item": [
@@ -355,10 +373,6 @@ const CHART_DRILL_DOWN: Record<string, string> = {
     "Show submitted sales and purchase orders for month {label}",
 };
 
-/**
- * Les sauts d'une pièce ouverte dans la vue facture : ses paiements (liste),
- * son tiers (fiche). `{id}` est la pièce, `{party}` le client ou fournisseur.
- */
 /** Les sauts d'une ligne d'article de la facture : sa fiche, son stock. `{item}` est l'article. */
 export const INVOICE_ITEM_HINTS: SendMessageHint[] = [
   {
@@ -379,68 +393,108 @@ export const INVOICE_ITEM_HINTS: SendMessageHint[] = [
   },
 ];
 
-export const INVOICE_HINTS: Record<string, SendMessageHint[]> = {
-  "Sales Invoice": [
-    {
-      key: "payments",
-      label: "Payments",
-      message: "Show payment entries for invoice {id}",
-      tool: "erpnext_doc_list",
-      args: {
-        doctype: "Payment Entry",
-        fields: [
-          "name",
-          "posting_date",
-          "paid_amount",
-          "mode_of_payment",
-          "docstatus",
-        ],
-        filters: [["Payment Entry Reference", "reference_name", "=", "{id}"]],
-        limit: 20,
-      },
-      kind: "list",
-    },
-    {
+function nonEmptyDocumentString(
+  document: Record<string, unknown> | undefined,
+  key: string,
+): string | null {
+  const value = document?.[key];
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+/**
+ * Le tiers est résolu depuis la pièce canonique, jamais deviné par le viewer.
+ * Quotation est un Dynamic Link limité par ERPNext à Customer ou Lead ; toute
+ * autre valeur est ignorée afin de ne pas fabriquer une cible arbitraire.
+ */
+function documentPartyHint(
+  doctype: string,
+  document: Record<string, unknown> | undefined,
+): SendMessageHint | null {
+  if (doctype === "Sales Order" || doctype === "Sales Invoice") {
+    const customer = nonEmptyDocumentString(document, "customer");
+    return customer
+      ? {
+        key: "customer",
+        label: "Customer",
+        message: `Show customer ${customer}`,
+        tool: "erpnext_customer_get",
+        args: { name: customer },
+        kind: "record",
+      }
+      : null;
+  }
+  if (doctype === "Purchase Invoice") {
+    const supplier = nonEmptyDocumentString(document, "supplier");
+    return supplier
+      ? {
+        key: "supplier",
+        label: "Supplier",
+        message: `Show supplier ${supplier}`,
+        tool: "erpnext_supplier_get",
+        args: { name: supplier },
+        kind: "record",
+      }
+      : null;
+  }
+  if (doctype !== "Quotation") return null;
+
+  const party = nonEmptyDocumentString(document, "party_name");
+  const target = nonEmptyDocumentString(document, "quotation_to");
+  if (!party || (target !== "Customer" && target !== "Lead")) return null;
+  return target === "Customer"
+    ? {
       key: "customer",
       label: "Customer",
-      message: "Show customer {party}",
+      message: `Show customer ${party}`,
       tool: "erpnext_customer_get",
-      args: { name: "{party}" },
+      args: { name: party },
       kind: "record",
-    },
-    ...INVOICE_ITEM_HINTS,
-  ],
-  "Purchase Invoice": [
-    {
-      key: "payments",
-      label: "Payments",
-      message: "Show payment entries for invoice {id}",
-      tool: "erpnext_doc_list",
-      args: {
-        doctype: "Payment Entry",
-        fields: [
-          "name",
-          "posting_date",
-          "paid_amount",
-          "mode_of_payment",
-          "docstatus",
-        ],
-        filters: [["Payment Entry Reference", "reference_name", "=", "{id}"]],
-        limit: 20,
-      },
-      kind: "list",
-    },
-    {
-      key: "supplier",
-      label: "Supplier",
-      message: "Show supplier {party}",
-      tool: "erpnext_supplier_get",
-      args: { name: "{party}" },
+    }
+    : {
+      key: "lead",
+      label: "Lead",
+      message: `Show lead ${party}`,
+      tool: "erpnext_lead_get",
+      args: { name: party },
       kind: "record",
-    },
-    ...INVOICE_ITEM_HINTS,
-  ],
-};
+    };
+}
+
+/**
+ * Registre canonique des relations d'une pièce, partagé par doc-viewer,
+ * doclist-viewer et invoice-viewer. Les relations invariantes restent dans
+ * DOCTYPE_SEND_MESSAGE_HINTS ; le tiers est ajouté seulement quand la réponse
+ * contient la fiche canonique permettant de viser son identifiant exact.
+ */
+export function documentNavigationHints(
+  doctype: string,
+  document?: Record<string, unknown>,
+): SendMessageHint[] {
+  const base = DOCTYPE_SEND_MESSAGE_HINTS[doctype] ?? [];
+  const party = documentPartyHint(doctype, document);
+  if (!party) return [...base];
+  return doctype === "Sales Order" ? [party, ...base] : [...base, party];
+}
+
+const INVOICE_LINE_ITEM_DOCTYPES = new Set([
+  "Sales Order",
+  "Sales Invoice",
+  "Purchase Invoice",
+  "Quotation",
+]);
+
+/** La vue facture ajoute uniquement les deux actions propres à chaque ligne. */
+export function invoiceNavigationHints(
+  doctype: string,
+  document?: Record<string, unknown>,
+): SendMessageHint[] {
+  const documentHints = documentNavigationHints(doctype, document);
+  return INVOICE_LINE_ITEM_DOCTYPES.has(doctype)
+    ? [...documentHints, ...INVOICE_ITEM_HINTS]
+    : documentHints;
+}
 
 /**
  * Les sauts d'une ligne de stock (Bin) : l'article (fiche), ses mouvements
@@ -998,6 +1052,13 @@ function resultDoctype(result: UiRefreshableResult): string | undefined {
   return undefined;
 }
 
+/** La fiche canonique d'un résultat `_get`, si ce résultat en contient une. */
+function resultDocument(
+  result: UiRefreshableResult,
+): Record<string, unknown> | undefined {
+  return isRecord(result.data) ? result.data : undefined;
+}
+
 function isInvoiceViewer(result: UiRefreshableResult): boolean {
   const uri = result._meta?.ui?.resourceUri;
   return uri === "ui://mcp-erpnext/invoice-viewer";
@@ -1331,8 +1392,8 @@ export function withUiRefreshRequest(
     isDoclistResult(enriched) && isDoclistViewer(enriched) &&
     !enriched._sendMessageHints
   ) {
-    const hints = DOCTYPE_SEND_MESSAGE_HINTS[enriched.doctype!];
-    if (hints) {
+    const hints = documentNavigationHints(enriched.doctype!);
+    if (hints.length > 0) {
       enriched._sendMessageHints = hints;
     }
   }
@@ -1380,15 +1441,15 @@ export function withUiRefreshRequest(
   if (!enriched._sendMessageHints) {
     const doctype = resultDoctype(enriched);
     if (isInvoiceViewer(enriched) && doctype) {
-      const hints = INVOICE_HINTS[doctype];
-      if (hints) enriched._sendMessageHints = hints;
+      const hints = invoiceNavigationHints(doctype, resultDocument(enriched));
+      if (hints.length > 0) enriched._sendMessageHints = hints;
     } else if (isStockViewer(enriched)) {
       enriched._sendMessageHints = STOCK_HINTS;
     } else if (
       (isKanbanViewer(enriched) || isDocViewer(enriched)) && doctype
     ) {
-      const hints = DOCTYPE_SEND_MESSAGE_HINTS[doctype];
-      if (hints) enriched._sendMessageHints = hints;
+      const hints = documentNavigationHints(doctype, resultDocument(enriched));
+      if (hints.length > 0) enriched._sendMessageHints = hints;
     }
   }
 

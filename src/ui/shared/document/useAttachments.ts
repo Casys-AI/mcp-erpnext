@@ -18,18 +18,40 @@ import {
   attachmentListFromToolResult,
   type DocumentAttachment,
   downloadResourceFromToolResult,
+  type EmbeddedDownloadResource,
 } from "./attachment-results.ts";
+import {
+  prepareAttachmentPreview,
+  type PreparedAttachmentPreview,
+  resourceFromPreparedPreview,
+} from "./attachment-preview.ts";
 import type { DocumentEnvelope } from "./types.ts";
 
 const TOOL_CALL_TIMEOUT_MS = 30_000;
+export const MAX_ATTACHMENT_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+export interface PreparedDocumentAttachment {
+  documentKey: string;
+  fileId: string;
+  fileName: string;
+  preview: PreparedAttachmentPreview;
+}
 
 export interface AttachmentsController {
+  documentKey: string;
+  document: { doctype: string; name: string };
   state: AttachmentsState;
   files: readonly DocumentAttachment[];
   readProgress: number | null;
   refresh: () => Promise<boolean>;
   upload: (file: File, isPrivate: boolean) => Promise<boolean>;
-  download: (file: DocumentAttachment) => Promise<boolean>;
+  preview: (file: DocumentAttachment) => Promise<
+    PreparedDocumentAttachment | null
+  >;
+  download: (
+    file: DocumentAttachment,
+    prepared?: PreparedDocumentAttachment,
+  ) => Promise<boolean>;
   dismissError: () => void;
 }
 
@@ -52,6 +74,16 @@ function resultError(result: unknown, fallback: string): string {
     if (text && !text.trim().startsWith("{")) return text;
   }
   return fallback;
+}
+
+type AttachmentTransferPurpose = "preview" | "download";
+
+interface AttachmentTransfer {
+  token: symbol;
+  generation: number;
+  documentKey: string;
+  fileId: string;
+  purpose: AttachmentTransferPurpose;
 }
 
 function readFile(
@@ -104,16 +136,18 @@ export function useAttachments({
   );
   const [readProgress, setReadProgress] = useState<number | null>(null);
   const uploadInFlightRef = useRef(false);
-  const downloadInFlightRef = useRef<string | null>(null);
+  const lifecycleRef = useRef(0);
+  const transferInFlightRef = useRef<AttachmentTransfer | null>(null);
   const readerRef = useRef<FileReader | null>(null);
 
   // Invalidate old async work synchronously during render. The layout effect
   // then swaps the visible state before the browser paints the new document.
   if (identityRef.current !== key) {
     identityRef.current = key;
+    lifecycleRef.current += 1;
     stateRef.current = resetAttachmentsState(stateRef.current, key);
     uploadInFlightRef.current = false;
-    downloadInFlightRef.current = null;
+    transferInFlightRef.current = null;
     readerRef.current?.abort();
     readerRef.current = null;
   }
@@ -204,6 +238,21 @@ export function useAttachments({
       !capabilities.canUploadAttachment || uploadInFlightRef.current ||
       !canStartAttachmentUpload(stateRef.current)
     ) return false;
+
+    if (file.size > MAX_ATTACHMENT_UPLOAD_BYTES) {
+      commitState((current) => ({
+        ...current,
+        upload: "error",
+        error: {
+          operation: "upload",
+          fileName: file.name,
+          message: t("document.attachments.error.too_large", {
+            limit: Math.round(MAX_ATTACHMENT_UPLOAD_BYTES / 1024 / 1024),
+          }),
+        },
+      }));
+      return false;
+    }
 
     uploadInFlightRef.current = true;
     const base = resetAttachmentsState(stateRef.current, key);
@@ -304,89 +353,184 @@ export function useAttachments({
     t,
   ]);
 
-  const download = useCallback(async (
+  const beginTransfer = useCallback((
     file: DocumentAttachment,
-  ): Promise<boolean> => {
-    if (
-      !capabilities.canDownloadAttachment ||
-      downloadInFlightRef.current !== null
-    ) return false;
-    downloadInFlightRef.current = file.id;
+    purpose: AttachmentTransferPurpose,
+  ): AttachmentTransfer | null => {
+    if (transferInFlightRef.current !== null) return null;
+    const transfer = {
+      token: Symbol(`${purpose}:${file.id}`),
+      generation: lifecycleRef.current,
+      documentKey: key,
+      fileId: file.id,
+      purpose,
+    };
+    transferInFlightRef.current = transfer;
     commitState((current) => ({
       ...current,
-      downloadingFile: file.id,
+      previewingFile: purpose === "preview" ? file.id : null,
+      downloadingFile: purpose === "download" ? file.id : null,
       error: null,
     }));
-    const requestKey = key;
+    return transfer;
+  }, [commitState, key]);
+
+  const transferIsCurrent = useCallback((
+    transfer: AttachmentTransfer,
+  ): boolean => {
+    const current = transferInFlightRef.current;
+    return identityRef.current === transfer.documentKey &&
+      lifecycleRef.current === transfer.generation &&
+      current?.token === transfer.token;
+  }, []);
+
+  const finishTransfer = useCallback((transfer: AttachmentTransfer) => {
+    if (!transferIsCurrent(transfer)) return;
+    transferInFlightRef.current = null;
+    commitState((current) => ({
+      ...current,
+      previewingFile: null,
+      downloadingFile: null,
+    }));
+  }, [commitState, transferIsCurrent]);
+
+  const fetchAttachment = useCallback(async (
+    file: DocumentAttachment,
+    transfer: AttachmentTransfer,
+  ): Promise<EmbeddedDownloadResource | null> => {
+    const result = await app.callServerTool({
+      name: "erpnext_file_download",
+      arguments: {
+        file_id: file.id,
+        attached_to_doctype: doctype,
+        attached_to_name: name,
+      },
+    }, { timeout: TOOL_CALL_TIMEOUT_MS });
+    if (!transferIsCurrent(transfer)) return null;
+    if (result.isError) {
+      throw new Error(resultError(
+        result,
+        t(
+          transfer.purpose === "preview"
+            ? "document.attachments.error.preview"
+            : "document.attachments.error.download",
+        ),
+      ));
+    }
+    const resource = downloadResourceFromToolResult(result);
+    return transferIsCurrent(transfer) ? resource : null;
+  }, [app, doctype, name, t, transferIsCurrent]);
+
+  const settleTransferError = useCallback((
+    transfer: AttachmentTransfer,
+    file: DocumentAttachment,
+    cause: unknown,
+  ) => {
+    if (!transferIsCurrent(transfer)) return;
+    commitState((current) => ({
+      ...current,
+      error: {
+        operation: transfer.purpose,
+        fileName: file.fileName,
+        message: cause instanceof Error && cause.message ? cause.message : t(
+          transfer.purpose === "preview"
+            ? "document.attachments.error.preview"
+            : "document.attachments.error.download",
+        ),
+      },
+    }));
+  }, [commitState, t, transferIsCurrent]);
+
+  const preview = useCallback(async (
+    file: DocumentAttachment,
+  ): Promise<PreparedDocumentAttachment | null> => {
+    if (!capabilities.canPreviewAttachment) return null;
+    const transfer = beginTransfer(file, "preview");
+    if (!transfer) return null;
     try {
-      const result = await app.callServerTool({
-        name: "erpnext_file_download",
-        arguments: {
-          file_id: file.id,
-          attached_to_doctype: doctype,
-          attached_to_name: name,
-        },
-      }, { timeout: TOOL_CALL_TIMEOUT_MS });
-      if (identityRef.current !== requestKey) return false;
-      if (result.isError) {
-        throw new Error(
-          resultError(result, t("document.attachments.error.download")),
-        );
-      }
-      const resource = downloadResourceFromToolResult(result);
-      if (identityRef.current !== requestKey) return false;
+      const resource = await fetchAttachment(file, transfer);
+      if (!resource || !transferIsCurrent(transfer)) return null;
+      const prepared = prepareAttachmentPreview(resource);
+      if (!transferIsCurrent(transfer)) return null;
+      return {
+        documentKey: key,
+        fileId: file.id,
+        fileName: file.fileName,
+        preview: prepared,
+      };
+    } catch (cause) {
+      settleTransferError(transfer, file, cause);
+      return null;
+    } finally {
+      finishTransfer(transfer);
+    }
+  }, [
+    beginTransfer,
+    capabilities.canPreviewAttachment,
+    fetchAttachment,
+    finishTransfer,
+    key,
+    settleTransferError,
+    transferIsCurrent,
+  ]);
+
+  const download = useCallback(async (
+    file: DocumentAttachment,
+    prepared?: PreparedDocumentAttachment,
+  ): Promise<boolean> => {
+    if (!capabilities.canDownloadAttachment) return false;
+    const transfer = beginTransfer(file, "download");
+    if (!transfer) return false;
+    try {
+      const reusable = prepared?.documentKey === key &&
+          prepared.fileId === file.id
+        ? resourceFromPreparedPreview(prepared.preview)
+        : null;
+      const resource = reusable ?? await fetchAttachment(file, transfer);
+      if (!resource || !transferIsCurrent(transfer)) return false;
       const hostResult = await app.downloadFile(
         { contents: [resource] },
         { timeout: TOOL_CALL_TIMEOUT_MS },
       );
+      if (!transferIsCurrent(transfer)) return false;
       if (hostResult.isError) {
         throw new Error(t("document.attachments.error.host_denied"));
       }
       return true;
     } catch (cause) {
-      if (identityRef.current !== requestKey) return false;
-      commitState((current) => ({
-        ...current,
-        error: {
-          operation: "download",
-          fileName: file.fileName,
-          message: cause instanceof Error && cause.message
-            ? cause.message
-            : t("document.attachments.error.download"),
-        },
-      }));
+      settleTransferError(transfer, file, cause);
       return false;
     } finally {
-      if (
-        identityRef.current === requestKey &&
-        downloadInFlightRef.current === file.id
-      ) {
-        downloadInFlightRef.current = null;
-        commitState((current) => ({ ...current, downloadingFile: null }));
-      }
+      finishTransfer(transfer);
     }
   }, [
     app,
+    beginTransfer,
     capabilities.canDownloadAttachment,
-    commitState,
-    doctype,
+    fetchAttachment,
+    finishTransfer,
     key,
-    name,
+    settleTransferError,
     t,
+    transferIsCurrent,
   ]);
 
   useLayoutEffect(() => {
     readerRef.current?.abort();
     readerRef.current = null;
     uploadInFlightRef.current = false;
-    downloadInFlightRef.current = null;
+    transferInFlightRef.current = null;
     const next = resetAttachmentsState(stateRef.current, key);
     stateRef.current = next;
     setState(next);
     setFiles(fixtureFiles ?? []);
     setReadProgress(null);
     if (!fixtureFiles && capabilities.canListAttachments) void load();
-    return () => readerRef.current?.abort();
+    return () => {
+      lifecycleRef.current += 1;
+      transferInFlightRef.current = null;
+      readerRef.current?.abort();
+    };
   }, [key, fixtureFiles, capabilities.canListAttachments, load]);
 
   const dismissError = useCallback(() => {
@@ -398,11 +542,14 @@ export function useAttachments({
   }, [commitState]);
 
   return {
+    documentKey: key,
+    document: { doctype, name },
     state,
     files: state.documentKey === key ? files : [],
     readProgress,
     refresh: load,
     upload,
+    preview,
     download,
     dismissError,
   };

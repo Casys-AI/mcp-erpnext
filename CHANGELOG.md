@@ -2,6 +2,43 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.1.0-beta.4] - 2026-08-27
+
+### Added
+
+- **Inline attachment previews in document and invoice viewers.** PDF, common
+  image, text, CSV, Markdown, and JSON files open from the filename without a
+  separate large action. Multipage PDFs use the host browser's native page and
+  thumbnail navigation; unsupported or oversized formats remain download-only.
+- **Optional document context.** Hosts advertising the MCP Apps resource
+  modality can add one bounded attachment, plus an optional note, to the active
+  context without sending a chat message.
+
+### Changed
+
+- Downloads started from an open preview reuse the already validated bytes
+  instead of fetching the attachment twice. Attachment controls now retain
+  keyboard focus, expose larger touch targets, and fail closed when the host
+  lacks the required capability.
+- Sales and generic document navigation now share the same relation registry,
+  including customer, supplier, invoice, delivery, payment, item, and stock
+  targets where the exact server tools are available.
+- Kanban task details now use a wider responsive sheet with related fields
+  grouped into compact sections instead of one long single-column form.
+- Chart exploration separates navigation from context capture: a single click
+  follows the configured drill-down, while a double-click adds the exact mark to
+  the active context.
+
+### Fixed
+
+- Document lists fit bounded MCP App frames, render their rows immediately, and
+  open record details inline below the selected row instead of in a cramped side
+  inspector.
+- Analytical charts use a stable intrinsic height, honour an explicit payload
+  height, and visibly outline the bar, point, or slice stored in context.
+- The active-context menu now uses the themed control surface and modal border,
+  avoiding the mismatched dropdown background in dark hosts.
+
 ## [3.1.0-beta.3] - 2026-08-25
 
 ### Fixed

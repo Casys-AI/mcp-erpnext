@@ -9,6 +9,7 @@ export interface DocumentCapabilities {
   canRefresh: boolean;
   canListAttachments: boolean;
   canUploadAttachment: boolean;
+  canPreviewAttachment: boolean;
   canDownloadAttachment: boolean;
   canSubmit: boolean;
   canCancel: boolean;
@@ -30,12 +31,14 @@ export function documentCapabilities(
     availableTools.includes(toolName);
 
   const canListAttachments = has("erpnext_file_list");
+  const canPreviewAttachment = canListAttachments &&
+    has("erpnext_file_download");
   return {
     canRefresh: Boolean(refreshRequest && has(refreshRequest.toolName)),
     canListAttachments,
     canUploadAttachment: canListAttachments && has("erpnext_file_upload"),
-    canDownloadAttachment: canListAttachments &&
-      has("erpnext_file_download") && Boolean(host?.downloadFile),
+    canPreviewAttachment,
+    canDownloadAttachment: canPreviewAttachment && Boolean(host?.downloadFile),
     canSubmit: has("erpnext_doc_submit"),
     canCancel: has("erpnext_doc_cancel"),
   };

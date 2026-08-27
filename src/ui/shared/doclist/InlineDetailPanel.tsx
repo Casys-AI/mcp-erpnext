@@ -1,11 +1,6 @@
 /** @jsxImportSource preact */
 /**
- * L'inspecteur.
- *
- * La maquette le sort de la ligne : il n'est plus une ligne dépliée sous le
- * document, mais une colonne de 268 px à droite du tableau, sur fond enfoncé.
- * La liste reste donc lisible pendant qu'on inspecte, et le tableau ne saute
- * plus quand on ouvre une pièce.
+ * Détail de document réutilisable en inspecteur ou en accordéon de ligne.
  */
 
 import type { App } from "@modelcontextprotocol/ext-apps";
@@ -42,6 +37,8 @@ interface InlineDetailPanelProps {
   fixture?: boolean;
   /** Mise en page courante — détermine le header de l'inspecteur et les tailles. */
   layout?: ViewerLayout;
+  /** Insère le détail dans la liste, immédiatement sous sa ligne. */
+  embedded?: boolean;
   onClose: () => void;
   /** Présent quand l'hôte relaie les outils : les hints deviennent des sauts « › ». */
   onJump?: (jump: Jump) => void;
@@ -84,6 +81,7 @@ export function InlineDetailPanel(
     loading,
     fixture,
     layout,
+    embedded,
     onClose,
     onJump,
     onAsk,
@@ -94,6 +92,21 @@ export function InlineDetailPanel(
   const narrow = layout !== "wide";
 
   if (loading) {
+    if (embedded) {
+      return (
+        <div
+          role="status"
+          class="flex h-[144px] flex-col gap-3.5 border-y border-accent/45 bg-surface p-4"
+        >
+          <Skeleton class="h-[15px] w-3/4" />
+          <Skeleton class="h-[15px] w-1/3" />
+          {Array.from(
+            { length: 3 },
+            (_, index) => <Skeleton key={index} class="h-3" />,
+          )}
+        </div>
+      );
+    }
     return (
       <InspectorFrame narrow={narrow} onClose={onClose}>
         <div class="flex flex-col gap-3.5 p-3.5">
@@ -116,6 +129,7 @@ export function InlineDetailPanel(
       envelope={documentEnvelope}
       fixture={fixture}
       outerLayout={layout ?? "panel"}
+      embedded={embedded}
       onClose={onClose}
       onJump={onJump}
       onAsk={onAsk}
@@ -130,6 +144,7 @@ function InlineDocument({
   envelope,
   fixture,
   outerLayout,
+  embedded,
   onClose,
   onJump,
   onAsk,
@@ -140,6 +155,7 @@ function InlineDocument({
   envelope: DocumentEnvelope;
   fixture?: boolean;
   outerLayout: ViewerLayout;
+  embedded?: boolean;
   onClose: () => void;
   onJump?: (jump: Jump) => void;
   onAsk?: (message: string) => void;
@@ -154,10 +170,12 @@ function InlineDocument({
   const [actLoading, setActLoading] = useState<string | null>(null);
   const [actMsg, setActMsg] = useState<string | null>(null);
   const [actOk, setActOk] = useState(true);
-  const surfaceLayout: ViewerLayout = outerLayout === "mobile"
+  const surfaceLayout: ViewerLayout = embedded
+    ? outerLayout
+    : outerLayout === "mobile"
     ? "mobile"
     : "panel";
-  const outerNarrow = outerLayout !== "wide";
+  const outerNarrow = !embedded && outerLayout !== "wide";
   const model = documentModelOf(envelope);
   const capabilities = documentCapabilities(
     app.getHostCapabilities(),
@@ -354,7 +372,11 @@ function InlineDocument({
           )
           : undefined}
         actions={actions}
-        class="h-full"
+        class={embedded
+          ? outerLayout === "wide"
+            ? "h-[320px] border-y border-accent/45"
+            : "h-[360px] border-y border-accent/45"
+          : "h-full"}
       />
       <ConfirmSheet confirm={confirm} />
     </>

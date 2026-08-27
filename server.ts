@@ -34,7 +34,7 @@
 import { launchInspector, MCP_APP_MIME_TYPE, McpApp } from "@casys/mcp-server";
 import { ErpNextToolsClient } from "./src/client.ts";
 import { FrappeAPIError } from "./src/api/frappe-client.ts";
-import { UI_VIEWERS } from "./src/ui/viewers.ts";
+import { UI_VIEWERS, withViewerResourceMeta } from "./src/ui/viewers.ts";
 import {
   readViewerDist,
   resolveViewerDistPath,
@@ -105,7 +105,7 @@ async function main() {
   // Build MCP server
   const server = new McpApp({
     name: "mcp-erpnext",
-    version: "3.1.0-beta.3",
+    version: "3.1.0-beta.4",
     transport: "stateless",
     cache: {
       ttlMs: 3_600_000,
@@ -146,15 +146,19 @@ async function main() {
 
     if (distPath) {
       server.registerResource(
-        {
+        withViewerResourceMeta({
           uri: resourceUri,
           name: `ERPNext ${humanName}`,
           description: `ERPNext UI: ${viewerName}`,
           mimeType: MCP_APP_MIME_TYPE,
-        },
+        }),
         async () => {
           const html = await readViewerDist(distPath, readTextFile);
-          return { uri: resourceUri, mimeType: MCP_APP_MIME_TYPE, text: html };
+          return withViewerResourceMeta({
+            uri: resourceUri,
+            mimeType: MCP_APP_MIME_TYPE,
+            text: html,
+          });
         },
       );
       console.error(`[mcp-erpnext] Registered UI resource: ${resourceUri}`);

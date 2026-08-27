@@ -2,19 +2,26 @@
  * Logique pure de navigation pour invoice-viewer.
  * Pas d'import Preact — testable dans Deno directement.
  *
- * Extrait depuis les `_sendMessageHints` du serveur les deux sauts utiles à la
- * vue : le saut vers la liste des paiements (key "payments") et le saut vers la
- * fiche du tiers (key "customer" ou "supplier"). Renvoie null quand un hint est
- * absent ou n'a pas d'outil associé (= question seule, chemin de secours).
+ * Transforme les `_sendMessageHints` canoniques du serveur en actions racine.
+ * La même action devient un saut interne quand l'hôte relaie les outils, ou une
+ * question équivalente quand seule la conversation est disponible.
  */
 import type { Jump, NavHint } from "../../shared/jumps.ts";
-import { jumpFromHint } from "../../shared/jumps.ts";
+import {
+  fillTemplate,
+  hasUnfilledTemplate,
+  hintLabel,
+  jumpFromHint,
+} from "../../shared/jumps.ts";
 import type { DocumentChangeEvent } from "../../shared/document-events.ts";
 import { hasAvailableTool } from "../../shared/viewer-tools.ts";
 
-export interface InvoiceJumps {
-  payments: Jump | null;
-  party: Jump | null;
+export interface InvoiceRootNavigationAction {
+  key: string;
+  label: string;
+  jump: Jump | null;
+  /** Même destination exprimée pour un hôte conversationnel sans proxy. */
+  message: string | null;
 }
 
 export interface InvoiceMutationAction {
@@ -147,34 +154,42 @@ export function canOfferNavigation(
   return jump !== null || messagesEnabled || fixture;
 }
 
+const LINE_ITEM_HINT_KEYS = new Set(["item", "stock"]);
+
 /**
- * Construit les sauts paiements + tiers depuis la liste de hints serveur.
- *
- * @param hints    `_sendMessageHints` du payload ; null/vide → { null, null }.
- * @param vars     Variables à substituer : { id, doctype, party }.
- * @param subtitle Note de pied du niveau ouvert, ex. « liée à SINV-1 ».
- * @param availableTools Outils exacts annoncés par ce même payload.
+ * Tous les raccourcis de la pièce, indépendamment de sa présentation.
+ * `item` et `stock` restent réservés au détail de ligne. Un outil absent peut
+ * encore conserver sa phrase de repli, mais aucun gabarit incomplet ne sort.
  */
-export function invoiceJumps(
+export function invoiceRootNavigationActions(
   hints: NavHint[] | null | undefined,
   vars: Record<string, string>,
   subtitle: string,
   availableTools: readonly string[] | undefined,
-): InvoiceJumps {
-  if (!hints?.length) return { payments: null, party: null };
-  const paymentsHint = hints.find((hint) =>
-    hint.key === "payments" &&
-    hint.tool !== undefined &&
-    hasAvailableTool(availableTools, hint.tool)
-  ) ?? null;
-  const partyHint =
-    hints.find((hint) =>
-      (hint.key === "customer" || hint.key === "supplier") &&
-      hint.tool !== undefined &&
-      hasAvailableTool(availableTools, hint.tool)
-    ) ?? null;
-  return {
-    payments: paymentsHint ? jumpFromHint(paymentsHint, vars, subtitle) : null,
-    party: partyHint ? jumpFromHint(partyHint, vars, subtitle) : null,
-  };
+  jumpsEnabled: boolean,
+): InvoiceRootNavigationAction[] {
+  if (!hints?.length) return [];
+  const seen = new Set<string>();
+  const filledVars = Object.fromEntries(
+    Object.entries(vars).filter(([, value]) => value !== ""),
+  );
+  return hints.flatMap((hint, index): InvoiceRootNavigationAction[] => {
+    const key = hint.key?.trim() || `related-${index}`;
+    if (LINE_ITEM_HINT_KEYS.has(key) || seen.has(key)) return [];
+
+    const jump = jumpsEnabled && hint.tool &&
+        hasAvailableTool(availableTools, hint.tool)
+      ? jumpFromHint(hint, filledVars, subtitle)
+      : null;
+    const filledMessage = hint.message
+      ? fillTemplate(hint.message, filledVars)
+      : null;
+    const message = filledMessage && !hasUnfilledTemplate(filledMessage)
+      ? filledMessage
+      : null;
+    if (!jump && !message) return [];
+
+    seen.add(key);
+    return [{ key, label: jump?.label ?? hintLabel(hint), jump, message }];
+  });
 }

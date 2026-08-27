@@ -2,6 +2,8 @@
 
 import { App } from "@modelcontextprotocol/ext-apps";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
+import { canShareActiveContextResource } from "~/shared/active-context.ts";
 import { ConfirmSheet, useConfirm } from "~/shared/confirm.tsx";
 import type { DocumentChangeEvent } from "~/shared/document-events.ts";
 import { AttachmentsSection } from "~/shared/document/AttachmentsSection.tsx";
@@ -39,6 +41,7 @@ import {
 } from "~/shared/ui.tsx";
 import { useViewerLayout } from "~/shared/useViewerLayout.ts";
 import { useViewerNav } from "~/shared/useViewerNav.ts";
+import { useActiveContext } from "~/shared/useActiveContext.ts";
 import { hasAvailableTool } from "~/shared/viewer-tools.ts";
 import { canonicalReadbackSupersedesMutation } from "./canonical-readback.ts";
 import { DOC_FIXTURE, DOC_FIXTURE_FILES, isFixtureMode } from "./fixture.ts";
@@ -271,21 +274,24 @@ function DocumentContent({
   const [mutationBaseline, setMutationBaseline] = useState<number | null>(null);
   const delayedRefreshRef = useRef<number | null>(null);
   const model = documentModelOf(envelope);
+  const hostCapabilities = fixture ? undefined : app.getHostCapabilities();
   const capabilities = documentCapabilities(
-    fixture ? undefined : app.getHostCapabilities(),
+    hostCapabilities,
     envelope.availableTools,
     envelope.refreshRequest,
   );
+  const rootKey = viewerRootKey("document", envelope.refreshRequest, {
+    doctype: envelope.doctype,
+    name: envelope.name,
+  });
   const viewerNav = useViewerNav(app, {
     title: envelope.name,
     kind: "root",
     origin: "record",
     body: envelope,
-    key: viewerRootKey("document", envelope.refreshRequest, {
-      doctype: envelope.doctype,
-      name: envelope.name,
-    }),
+    key: rootKey,
   }, { fixture });
+  const activeContext = useActiveContext(app, rootKey);
   const nav = viewerNav.nav;
   const rootId = nav.stack.levels[0].id;
 
@@ -487,11 +493,25 @@ function DocumentContent({
         controller={attachments}
         capabilities={capabilities}
         layout={layout}
+        context={{
+          canShareResource: (resource) =>
+            canShareActiveContextResource(hostCapabilities, resource),
+          activate: activeContext.activate,
+          isSelected: activeContext.isSelected,
+        }}
       />
     )
     : undefined;
   const headerActions = (
     <>
+      <ActiveContextChip
+        selections={activeContext.selections}
+        failed={activeContext.failed}
+        evictedLabel={activeContext.evictedLabel}
+        onRemove={activeContext.remove}
+        onClear={activeContext.clear}
+        compact={layout !== "wide"}
+      />
       {rootStale && (
         <span
           role="status"

@@ -62,11 +62,37 @@ export const en: Record<string, string> = {
   "document.attachments.private": "Private",
   "document.attachments.public": "Public",
   "document.attachments.privacy": "Attachment privacy",
+  "document.attachments.privacy_private":
+    "Private attachment. Activate to make it public",
+  "document.attachments.privacy_public":
+    "Public attachment. Activate to make it private",
   "document.attachments.private_hint":
     "Only authenticated ERPNext users with access can retrieve this file",
   "document.attachments.public_hint":
     "ERPNext will expose this file from its public files area",
   "document.attachments.download": "Download {name}",
+  "document.attachments.download_short": "Download",
+  "document.attachments.download_in_progress": "Downloading attachment…",
+  "document.attachments.preview": "Preview {name}",
+  "document.attachments.preview_loading": "Preparing preview…",
+  "document.attachments.preview_loading_name": "Preparing {name}…",
+  "document.attachments.preview_pdf": "PDF preview of {name}",
+  "document.attachments.preview_truncated":
+    "Only the beginning of this text file is shown",
+  "document.attachments.preview_unsupported":
+    "This format is not displayed inside the viewer",
+  "document.attachments.preview_download_fallback":
+    "You can still download the original file",
+  "document.attachments.context_add": "Add to context",
+  "document.attachments.context_added": "In context",
+  "document.attachments.context_update": "Update context",
+  "document.attachments.context_sharing": "Adding…",
+  "document.attachments.context_note": "Optional context note",
+  "document.attachments.context_note_placeholder":
+    "What should the model pay attention to?",
+  "document.attachments.context_entire_file": "Entire attachment",
+  "document.attachments.context_error":
+    "The host could not update the model context",
   "document.attachments.reading": "Reading file…",
   "document.attachments.reading_progress": "Reading {value}%",
   "document.attachments.uploading": "Uploading…",
@@ -74,9 +100,12 @@ export const en: Record<string, string> = {
   "document.attachments.dismiss_error": "Dismiss attachment error",
   "document.attachments.error.list": "Could not load attachments",
   "document.attachments.error.upload": "Could not upload this file",
+  "document.attachments.error.too_large":
+    "This file exceeds the {limit} MB upload limit",
   "document.attachments.error.relist":
     "File added, but the attachment list could not be verified",
   "document.attachments.error.download": "Could not download this file",
+  "document.attachments.error.preview": "Could not preview this file",
   "document.attachments.error.host_denied":
     "The host cancelled or refused the download",
 
@@ -99,7 +128,7 @@ export const en: Record<string, string> = {
   "chart.keyboard.target": "{label} · {series} · {value}",
   "chart.keyboard.target_single": "{label} · {value}",
   "chart.keyboard.help":
-    "Left and right change the point; up and down change the series; Enter selects it.",
+    "Left and right change the point; up and down change the series; Enter opens details; Space adds context.",
   "chart.keyboard.control": "Explore chart: {target}. {help}",
   // ── /chart-viewer ─────────────────────────────────────────────────────────
 
@@ -161,13 +190,7 @@ export const en: Record<string, string> = {
   "invoice.totals.subtotal": "subtotal",
   "invoice.totals.taxes": "taxes",
   "invoice.totals.grand_total": "grand total",
-  "invoice.btn.payments.title": "Show payment entries",
-  "invoice.btn.payments.label": "Payments",
-  "invoice.btn.party.title.customer": "Show customer invoices",
-  "invoice.btn.party.title.supplier": "Show supplier invoices",
-  "invoice.btn.party.label.mobile": "Party",
-  "invoice.btn.party.label.customer": "Customer invoices",
-  "invoice.btn.party.label.supplier": "Supplier invoices",
+  "invoice.btn.related.title": "Open {label}",
   "invoice.btn.submit.title": "Submit invoice",
   "invoice.btn.submit.label": "Submit",
   "invoice.btn.cancel.title": "Cancel invoice",
@@ -245,7 +268,7 @@ export const en: Record<string, string> = {
   "doclist.detail.action.cancel_label": "Cancel document",
   "doclist.detail.back_to_list": "Back to list",
   "doclist.detail.inspector_label": "inspector",
-  "doclist.detail.close_inspector": "Close inspector",
+  "doclist.detail.close_inspector": "Close details",
   "doclist.detail.back_list_label": "‹ list",
   // ── /doclist-viewer ───────────────────────────────────────────────────────
   // ── drill-down (partage d'une sélection) ──
@@ -262,6 +285,7 @@ export const en: Record<string, string> = {
   "context.active.error": "Context not updated",
   "context.active.evicted": "8 max · removed {label}",
   "chart.tooltip.click": "click",
+  "chart.tooltip.double_click_context": "double-click ↔ add to context",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Back",
   "nav.elided": "…{n}",
@@ -308,6 +332,7 @@ export const en: Record<string, string> = {
   "doclist.hint.invoices": "Invoices",
   "doclist.hint.invoice": "Invoice",
   "doclist.hint.delivery": "Delivery",
+  "doclist.hint.deliveries": "Delivery notes",
   "doclist.hint.payments": "Payments",
   "doclist.hint.stock": "Stock",
   "doclist.hint.po": "Purchase orders",
@@ -319,6 +344,7 @@ export const en: Record<string, string> = {
   "doclist.hint.opportunities": "Opportunities",
   "doclist.hint.customer": "Customer",
   "doclist.hint.supplier": "Supplier",
+  "doclist.hint.lead": "Lead",
   "doclist.hint.item": "Item",
   "doclist.hint.movements": "Stock entries",
   "doclist.hint.warehouse": "Warehouse stock",
@@ -351,11 +377,6 @@ export const en: Record<string, string> = {
   "stock.nav.details.message": "Show me the full record of item {itemCode}",
   "stock.nav.entries.message": "Show stock entries for item {itemCode}",
   "common.total": "total",
-  "invoice.nav.payments.message": "Show payment entries for {doctype} {name}",
-  "invoice.nav.party.message.customer":
-    "Show all sales invoices for customer {party}",
-  "invoice.nav.party.message.supplier":
-    "Show all purchase invoices for supplier {party}",
   "invoice.item.stock.message": "Show the stock of item {itemCode}",
   "invoice.item.details.message": "Show me the full record of item {itemCode}",
 
@@ -396,7 +417,7 @@ export const en: Record<string, string> = {
   "kanban.modal.section.progress": "progress",
   "kanban.modal.section.assignees": "assignees",
   "kanban.section.dates": "dates",
-  "kanban.section.time": "time tracking",
+  "kanban.section.time": "workload and time",
   "kanban.section.financial": "financial",
   "kanban.section.people": "people",
   "kanban.section.details": "other",

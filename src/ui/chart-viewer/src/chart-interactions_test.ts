@@ -6,6 +6,7 @@ import {
   chartSeriesFromTarget,
   contextFallbackForJump,
   moveChartCursor,
+  resolveChartStageHeight,
 } from "./chart-interactions.ts";
 import type { ChartData } from "./types.ts";
 
@@ -131,4 +132,13 @@ Deno.test("chart activation - inline jump suppresses only the prompt fallback", 
     contextFallbackForJump(false, "Show submitted purchase orders"),
     "Show submitted purchase orders",
   );
+});
+
+Deno.test("chart stage height - uses an intrinsic default and clamps payloads", () => {
+  assertEquals(resolveChartStageHeight(undefined, false), 300);
+  assertEquals(resolveChartStageHeight(undefined, true), 260);
+  assertEquals(resolveChartStageHeight(Number.NaN, false), 300);
+  assertEquals(resolveChartStageHeight(180, false), 240);
+  assertEquals(resolveChartStageHeight(360.4, false), 360);
+  assertEquals(resolveChartStageHeight(900, false), 520);
 });

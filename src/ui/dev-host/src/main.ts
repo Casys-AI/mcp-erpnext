@@ -19,6 +19,7 @@ import {
   isCannedDownloadToolResult,
   resetCannedState,
   summarizeDownloadContents,
+  summarizeModelContextContents,
   toolArgumentsForLog,
   type ViewerKey,
   withDevViewerTools,
@@ -155,7 +156,7 @@ async function mount() {
     note(
       "ctx",
       "canal updateModelContext · ui/update-model-context (aucun message)",
-      params.content,
+      summarizeModelContextContents(params.content),
     );
     return {};
   };

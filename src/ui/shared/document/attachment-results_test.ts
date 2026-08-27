@@ -94,4 +94,15 @@ Deno.test("download rejects links and ambiguous multiple resources", () => {
     Error,
     "one inline resource",
   );
+  assertThrows(
+    () =>
+      downloadResourceFromToolResult({
+        content: [{
+          type: "resource",
+          resource: { uri: "file:///a", blob: "not base64" },
+        }],
+      }),
+    Error,
+    "one inline resource",
+  );
 });

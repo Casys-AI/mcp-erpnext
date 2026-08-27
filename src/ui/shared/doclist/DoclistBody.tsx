@@ -1,7 +1,7 @@
 /**
- * Le corps d'une liste, sans son chrome : chips, tableau, total, inspecteur,
- * pied de liste. Le viewer doclist le rend sous son en-tête et son fil ; une
- * autre vue le rend comme niveau « liste » de sa pile.
+ * Le corps d'une liste, sans son chrome : chips, tableau, détail accordéon,
+ * total et pied de liste. Le viewer doclist le rend sous son en-tête et son
+ * fil ; une autre vue le rend comme niveau « liste » de sa pile.
  */
 
 import type { App } from "@modelcontextprotocol/ext-apps";
@@ -82,7 +82,6 @@ export function DoclistBody(
   },
 ) {
   const t = useT();
-  const narrow = layout !== "wide";
   const { rows, rowAction: payloadRowAction, expandedId } = list;
   const serverTools = app.getHostCapabilities()?.serverTools;
   const rowAction = payloadRowAction && canCallViewerTool(
@@ -299,6 +298,23 @@ export function DoclistBody(
   }
 
   const inspecting = expandedId !== null;
+  const inlineDetail = inspecting
+    ? (
+      <InlineDetailPanel
+        app={app}
+        envelope={expanded.data}
+        loading={expanded.loading}
+        fixture={fixture}
+        layout={layout}
+        embedded
+        onClose={() => list.setExpandedId(null)}
+        onAction={handleDetailAction}
+        onJump={onJump}
+        onAsk={onAsk}
+        onDocumentChanged={handleAttachmentDocumentChanged}
+      />
+    )
+    : undefined;
   return (
     <>
       {layout === "mobile" && list.searchOpen && (
@@ -338,90 +354,64 @@ export function DoclistBody(
         </div>
       )}
       {error && <StateMessage tone="bad">{error}</StateMessage>}
-      <div
-        class={`grid min-h-0 flex-1 ${
-          inspecting && !narrow ? "grid-cols-[1fr_268px]" : "grid-cols-1"
-        }`}
-      >
-        {!(inspecting && narrow) && (
-          <div
-            class={`flex min-h-0 flex-col ${
-              inspecting && !narrow ? "border-r border-line" : ""
-            }`}
-          >
-            <div class="scroll-slim min-h-0 flex-1 overflow-y-auto">
-              <DoclistTable
-                columns={list.tableColumns}
-                rows={list.pageRows}
-                rowId={(row, index) =>
-                  resolveRowId(row, rowAction, String(index))}
-                selectedId={expandedId}
-                struckId={stale?.subject ?? null}
-                sortKey={list.sortKey}
-                sortDir={list.sortDir}
-                onSort={list.handleSort}
-                onSelect={isClickable ? onRowClick : undefined}
-                layout={layout}
-                amountKey={list.amountKey}
-              />
-            </div>
-            {list.amountTotal !== null && (
-              <TotalRow
-                layout={layout}
-                label={list.amountKey?.replace(/_/g, " ") ?? t("common.total")}
-              >
-                {formatCell(list.amountTotal)}
-              </TotalRow>
-            )}
-            {/* Pied de liste : l'effectif, la note du niveau, la pagination. */}
-            <div class="flex shrink-0 items-center gap-3 border-t border-line-soft bg-sunken px-4 py-[9px]">
-              <span class="font-mono text-[10.5px] text-ink-faint">
-                {t("nav.of", { n: list.sorted.length, total: rows.length })}
-              </span>
-              {subtitle && (
-                <span class="font-mono text-[10.5px] text-ink-faint">
-                  {subtitle}
-                </span>
-              )}
-              <div class="flex-1" />
-              {list.totalPages > 1 && (
-                <span class="flex items-center gap-1.5">
-                  <ToolButton
-                    disabled={list.page === 0}
-                    aria-label={t("common.pagination.prev")}
-                    onClick={() => list.setPage(list.page - 1)}
-                  >
-                    ‹
-                  </ToolButton>
-                  <span class="font-mono text-meta text-ink-muted">
-                    {list.page + 1} / {list.totalPages}
-                  </span>
-                  <ToolButton
-                    disabled={list.page >= list.totalPages - 1}
-                    aria-label={t("common.pagination.next")}
-                    onClick={() => list.setPage(list.page + 1)}
-                  >
-                    ›
-                  </ToolButton>
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-        {inspecting && (
-          <InlineDetailPanel
-            app={app}
-            envelope={expanded.data}
-            loading={expanded.loading}
-            fixture={fixture}
+      <div class="flex min-h-0 flex-1 flex-col">
+        <div class="scroll-slim min-h-0 flex-1 overflow-y-auto">
+          <DoclistTable
+            columns={list.tableColumns}
+            rows={list.pageRows}
+            rowId={(row, index) => resolveRowId(row, rowAction, String(index))}
+            selectedId={expandedId}
+            struckId={stale?.subject ?? null}
+            sortKey={list.sortKey}
+            sortDir={list.sortDir}
+            onSort={list.handleSort}
+            onSelect={isClickable ? onRowClick : undefined}
             layout={layout}
-            onClose={() => list.setExpandedId(null)}
-            onAction={handleDetailAction}
-            onJump={onJump}
-            onAsk={onAsk}
-            onDocumentChanged={handleAttachmentDocumentChanged}
+            amountKey={list.amountKey}
+            detail={inlineDetail}
           />
+        </div>
+        {list.amountTotal !== null && (
+          <TotalRow
+            layout={layout}
+            label={list.amountKey?.replace(/_/g, " ") ?? t("common.total")}
+          >
+            {formatCell(list.amountTotal)}
+          </TotalRow>
         )}
+        {/* Pied de liste : l'effectif, la note du niveau, la pagination. */}
+        <div class="flex shrink-0 items-center gap-3 border-t border-line-soft bg-sunken px-4 py-[9px]">
+          <span class="font-mono text-[10.5px] text-ink-faint">
+            {t("nav.of", { n: list.sorted.length, total: rows.length })}
+          </span>
+          {subtitle && (
+            <span class="font-mono text-[10.5px] text-ink-faint">
+              {subtitle}
+            </span>
+          )}
+          <div class="flex-1" />
+          {list.totalPages > 1 && (
+            <span class="flex items-center gap-1.5">
+              <ToolButton
+                disabled={list.page === 0}
+                aria-label={t("common.pagination.prev")}
+                onClick={() => list.setPage(list.page - 1)}
+              >
+                ‹
+              </ToolButton>
+              <span class="font-mono text-meta text-ink-muted">
+                {list.page + 1} / {list.totalPages}
+              </span>
+              <ToolButton
+                disabled={list.page >= list.totalPages - 1}
+                aria-label={t("common.pagination.next")}
+                onClick={() => list.setPage(list.page + 1)}
+              >
+                ›
+              </ToolButton>
+            </span>
+          )}
+        </div>
       </div>
     </>
   );

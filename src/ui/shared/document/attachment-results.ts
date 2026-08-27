@@ -31,6 +31,13 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function canonicalBase64(value: string): boolean {
+  return value.length > 0 && value.length % 4 === 0 &&
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+      value,
+    );
+}
+
 /** Parse the bounded attachment-list contract without trusting file URLs. */
 export function attachmentListFromToolResult(
   result: unknown,
@@ -92,7 +99,7 @@ export function downloadResourceFromToolResult(
     if (block?.type !== "resource" || !resource) return [];
     const uri = optionalString(resource.uri);
     const blob = optionalString(resource.blob);
-    if (!uri || !blob) return [];
+    if (!uri || !blob || !canonicalBase64(blob)) return [];
     const mimeType = optionalString(resource.mimeType);
     return [{
       type: "resource" as const,

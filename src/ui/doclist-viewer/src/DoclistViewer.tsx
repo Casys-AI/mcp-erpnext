@@ -312,7 +312,7 @@ function DoclistContent({
   }, [rootFreshEvent, rootMutationEvent, rootLevelId]);
 
   return (
-    <ViewerShell class="h-screen" containerRef={shellRef}>
+    <ViewerShell class="h-[460px]" containerRef={shellRef}>
       <ViewerHeader
         title={isRoot ? rootTitle : current.title}
         count={isList

@@ -410,12 +410,14 @@ export function ProgressBar(
  * du système — sans lui, une surface flottante n'appartient à rien.
  */
 export function DetailSheet(
-  { title, eyebrow, children, footer, onClose }: {
+  { title, eyebrow, children, footer, onClose, size = "compact", bodyClass }: {
     title: string;
     eyebrow?: string;
     children: ComponentChildren;
     footer?: ComponentChildren;
     onClose: () => void;
+    size?: "compact" | "wide" | "preview";
+    bodyClass?: string;
   },
 ) {
   const t = useT();
@@ -440,7 +442,7 @@ export function DetailSheet(
       if (!sheet) return;
       const focusable = Array.from(
         sheet.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          'a[href], button:not([disabled]), iframe, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
       ).filter((element) => !element.hasAttribute("hidden"));
 
@@ -473,7 +475,10 @@ export function DetailSheet(
 
   return (
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-scrim p-6"
+      class={cx(
+        "fixed inset-0 z-50 flex items-center justify-center bg-scrim",
+        size === "preview" ? "p-3 md:p-6" : "p-6",
+      )}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -484,7 +489,14 @@ export function DetailSheet(
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        class="flex max-h-full w-full max-w-[436px] flex-col overflow-hidden rounded-card border border-line-modal bg-surface shadow-modal outline-none"
+        class={cx(
+          "flex max-h-full w-full flex-col overflow-hidden rounded-card border border-line-modal bg-surface shadow-modal outline-none",
+          size === "preview"
+            ? "h-[min(92vh,860px)] max-w-[1080px]"
+            : size === "wide"
+            ? "max-w-[680px]"
+            : "max-w-[436px]",
+        )}
       >
         <div class="brand-rule" />
 
@@ -499,7 +511,10 @@ export function DetailSheet(
             type="button"
             onClick={onClose}
             aria-label={t("common.close")}
-            class="-mr-1 -mt-1 flex size-8 shrink-0 items-center justify-center rounded-touch text-lede leading-none text-ink-faint transition-colors hover:bg-row-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            class={cx(
+              "-mr-1 -mt-1 flex shrink-0 items-center justify-center rounded-touch text-lede leading-none text-ink-faint transition-colors hover:bg-row-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+              size === "preview" ? "size-11" : "size-8",
+            )}
           >
             ×
           </button>
@@ -513,7 +528,13 @@ export function DetailSheet(
           Seul le défilement vit ici — le voile, lui, ne défile pas.
         */
         }
-        <div class="scroll-slim flex min-h-0 flex-col gap-4 overflow-y-auto bg-surface p-4">
+        <div
+          class={cx(
+            "scroll-slim flex min-h-0 flex-col overflow-y-auto bg-surface",
+            size === "preview" ? "gap-0 p-0" : "gap-4 p-4",
+            bodyClass,
+          )}
+        >
           {children}
         </div>
 

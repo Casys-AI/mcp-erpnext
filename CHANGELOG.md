@@ -2,7 +2,7 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
-## [Unreleased]
+## [3.1.0-beta.4] - 2026-08-27
 
 ### Added
 
@@ -23,6 +23,21 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 - Sales and generic document navigation now share the same relation registry,
   including customer, supplier, invoice, delivery, payment, item, and stock
   targets where the exact server tools are available.
+- Kanban task details now use a wider responsive sheet with related fields
+  grouped into compact sections instead of one long single-column form.
+- Chart exploration separates navigation from context capture: a single click
+  follows the configured drill-down, while a double-click adds the exact mark to
+  the active context.
+
+### Fixed
+
+- Document lists fit bounded MCP App frames, render their rows immediately, and
+  open record details inline below the selected row instead of in a cramped side
+  inspector.
+- Analytical charts use a stable intrinsic height, honour an explicit payload
+  height, and visibly outline the bar, point, or slice stored in context.
+- The active-context menu now uses the themed control surface and modal border,
+  avoiding the mismatched dropdown background in dark hosts.
 
 ## [3.1.0-beta.3] - 2026-08-25
 

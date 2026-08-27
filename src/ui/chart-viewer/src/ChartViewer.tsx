@@ -84,8 +84,8 @@ import {
   chartPointLabel,
   chartSelectionAt,
   chartSeriesFromTarget,
-  contextFallbackForJump,
   moveChartCursor,
+  resolveChartStageHeight,
 } from "./chart-interactions.ts";
 
 const app = new App({ name: "Chart Viewer", version: "3.0.0" });
@@ -102,8 +102,15 @@ const MONO_FONT = "var(--font-mono)";
 const fonts = { mono: MONO_FONT } as const;
 const CHART_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
+const CHART_PRIMARY_CLICK_DELAY_MS = 320;
 
-type ChartDataClick = (label: string, series?: string) => void;
+type ChartActivationMode = "navigate" | "context";
+type ChartDataClick = (
+  label: string,
+  series?: string,
+  mode?: ChartActivationMode,
+) => void;
+type ChartSelectionPredicate = (label: string, series?: string) => boolean;
 
 /**
  * Un clic de graphe catégoriel n'est traité qu'ici. La géométrie SVG porte
@@ -114,6 +121,7 @@ function activateCategoricalPoint(
   onDataClick: ChartDataClick,
   state: Record<string, unknown> | null | undefined,
   target: unknown,
+  mode: ChartActivationMode,
 ) {
   const label = chartPointLabel(data.labels, state);
   if (!label) return;
@@ -121,7 +129,7 @@ function activateCategoricalPoint(
     target,
     data.datasets.flatMap((dataset) => dataset.label ? [dataset.label] : []),
   );
-  onDataClick(label, series);
+  onDataClick(label, series, mode);
 }
 
 /**
@@ -179,6 +187,85 @@ function toRows(data: ChartData) {
   });
 }
 
+interface ChartDotShapeProps {
+  cx?: number;
+  cy?: number;
+  index?: number;
+  payload?: { name?: unknown };
+}
+
+/** Une sélection garde une bordure visible après la disparition du tooltip. */
+function selectedBarShape(
+  rows: Array<Record<string, string | number>>,
+  series: string | undefined,
+  opacityAt: (index: number) => number,
+  isSelected?: ChartSelectionPredicate,
+) {
+  return (props: BarShapeProps) => {
+    const index = typeof props.index === "number" ? props.index : -1;
+    const label = String(rows[index]?.name ?? "");
+    const selected = label !== "" && isSelected?.(label, series) === true;
+    return (
+      <g data-chart-series={series}>
+        <Rectangle
+          {...props}
+          data-chart-series={series}
+          opacity={selected ? 1 : opacityAt(index)}
+          stroke={selected ? "var(--color-accent)" : "none"}
+          strokeWidth={selected ? 6 : 0}
+          style={selected
+            ? { filter: "drop-shadow(0 0 2.5px var(--color-accent))" }
+            : undefined}
+        />
+        {selected && (
+          <Rectangle
+            {...props}
+            data-chart-series={series}
+            fill="none"
+            opacity={1}
+            pointerEvents="none"
+            stroke="var(--color-surface)"
+            strokeWidth={2}
+          />
+        )}
+      </g>
+    );
+  };
+}
+
+/** Point persistant entouré pour les courbes et aires sélectionnées. */
+function selectedPointShape(
+  rows: Array<Record<string, string | number>>,
+  series: string | undefined,
+  color: string,
+  showBase: boolean,
+  isSelected?: ChartSelectionPredicate,
+) {
+  return (props: ChartDotShapeProps) => {
+    const index = typeof props.index === "number" ? props.index : -1;
+    const label = String(props.payload?.name ?? rows[index]?.name ?? "");
+    const selected = label !== "" && isSelected?.(label, series) === true;
+    if (!showBase && !selected) return <g />;
+    const cx = props.cx ?? 0;
+    const cy = props.cy ?? 0;
+    return (
+      <g data-chart-series={series}>
+        {selected && (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={7.5}
+            fill="var(--color-surface)"
+            stroke="var(--color-accent)"
+            strokeWidth={3}
+          />
+        )}
+        <circle cx={cx} cy={cy} r={selected ? 3.2 : 2.6} fill={color} />
+      </g>
+    );
+  };
+}
+
 function fmtValue(v: number, data: ChartData, dataset?: Dataset) {
   const format = dataset
     ? chartSeriesFormat(data, dataset)
@@ -216,11 +303,6 @@ const ACTIVE_DOT_BASE = {
 /** Opacités des aires empilées : décroissant par palier 0.02. */
 const STACKED_AREA_OPACITY = [0.26, 0.24, 0.22, 0.20, 0.18, 0.16, 0.14, 0.12];
 const MARGIN = { top: 8, right: 16, left: 12, bottom: 4 };
-/** Style de la zone de rendu : gradient 2px + header ≈ 50px + footer ≈ 38px = 90px. */
-const CHART_STAGE_STYLE = {
-  height: "calc(100vh - 106px)",
-  minHeight: 220,
-};
 /**
  * La légende, en HTML de la charte — jamais celle de Recharts.
  *
@@ -313,12 +395,20 @@ function BandCursor(
   );
 }
 
-function ChartTooltip({ active, payload, label, data, drillDown }: {
+function ChartTooltip({
+  active,
+  payload,
+  label,
+  data,
+  drillDown,
+  contextEnabled,
+}: {
   active?: boolean;
   payload?: Array<{ name: string; value: number; color: string }>;
   label?: string;
   data: ChartData;
   drillDown?: string;
+  contextEnabled?: boolean;
 }) {
   const t = useT();
   if (!active || !payload?.length) return null;
@@ -382,7 +472,7 @@ function ChartTooltip({ active, payload, label, data, drillDown }: {
           </span>
         </div>
       ))}
-      {drillDown && (
+      {(drillDown || contextEnabled) && (
         <div
           style={{
             borderTop: "1px solid var(--color-line)",
@@ -390,10 +480,20 @@ function ChartTooltip({ active, payload, label, data, drillDown }: {
             paddingTop: 4,
             fontSize: 10,
             color: "var(--color-accent-text)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
           }}
         >
-          {t("chart.tooltip.click")} → «{" "}
-          {drillDown.replace(/\{label\}/g, label ?? "…")} »
+          {drillDown && (
+            <span>
+              {t("chart.tooltip.click")} → «{" "}
+              {drillDown.replace(/\{label\}/g, label ?? "…")} »
+            </span>
+          )}
+          {contextEnabled && (
+            <span>{t("chart.tooltip.double_click_context")}</span>
+          )}
         </div>
       )}
     </div>
@@ -457,9 +557,10 @@ function SharedYAxis(
 }
 
 function VerticalBarChart(
-  { data, onDataClick }: {
+  { data, onDataClick, isSelected }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
+    isSelected?: ChartSelectionPredicate;
   },
 ) {
   const rows = toRows(data);
@@ -468,12 +569,6 @@ function VerticalBarChart(
   /* Série seule : 0,85 partout, la dernière barre à 1 — la valeur du moment,
      que la maquette fait ressortir. Par `shape` et non par des <Cell> : sous
      Preact, des Cell enfants font disparaître les barres au premier survol. */
-  const soloBar = (props: BarShapeProps) => (
-    <Rectangle
-      {...props}
-      opacity={props.index === rows.length - 1 ? 1 : 0.85}
-    />
-  );
 
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -485,7 +580,13 @@ function VerticalBarChart(
           <SharedYAxis yAxisId="right" orientation="right" />
         )}
         <Tooltip
-          content={<ChartTooltip data={data} drillDown={data._drillDown} />}
+          content={
+            <ChartTooltip
+              data={data}
+              drillDown={data._drillDown}
+              contextEnabled={isSelected !== undefined}
+            />
+          }
           cursor={CURSOR}
           isAnimationActive={false}
         />
@@ -496,7 +597,7 @@ function VerticalBarChart(
             fill={dsColor(ds, i, data.datasets.length)}
             /* Empilé : seul le segment du sommet est arrondi, comme la maquette. */
             radius={stacked && i < data.datasets.length - 1 ? 0 : [3, 3, 0, 0]}
-            opacity={single ? undefined : 0.85}
+            opacity={undefined}
             maxBarSize={40}
             stackId={stacked ? (ds.stack ?? "default") : undefined}
             yAxisId={ds.yAxisId}
@@ -507,9 +608,23 @@ function VerticalBarChart(
                 onDataClick(
                   String(entry.payload?.name ?? ""),
                   ds.label || undefined,
+                  "navigate",
                 )
               : undefined}
-            shape={single ? soloBar : undefined}
+            onDoubleClick={onDataClick
+              ? (entry: { payload?: { name?: unknown } }) =>
+                onDataClick(
+                  String(entry.payload?.name ?? ""),
+                  ds.label || undefined,
+                  "context",
+                )
+              : undefined}
+            shape={selectedBarShape(
+              rows,
+              ds.label || undefined,
+              (index) => single && index === rows.length - 1 ? 1 : 0.85,
+              isSelected,
+            )}
           />
         ))}
       </BarChart>
@@ -518,9 +633,10 @@ function VerticalBarChart(
 }
 
 function HorizontalBarChart(
-  { data, onDataClick }: {
+  { data, onDataClick, isSelected }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
+    isSelected?: ChartSelectionPredicate;
   },
 ) {
   const rows = toRows(data);
@@ -543,7 +659,13 @@ function HorizontalBarChart(
           tickLine={false}
         />
         <Tooltip
-          content={<ChartTooltip data={data} drillDown={data._drillDown} />}
+          content={
+            <ChartTooltip
+              data={data}
+              drillDown={data._drillDown}
+              contextEnabled={isSelected !== undefined}
+            />
+          }
           cursor={CURSOR}
           isAnimationActive={false}
         />
@@ -553,7 +675,7 @@ function HorizontalBarChart(
             dataKey={ds.label}
             fill={dsColor(ds, i, data.datasets.length)}
             radius={[0, 3, 3, 0]}
-            opacity={0.85}
+            opacity={undefined}
             maxBarSize={24}
             isAnimationActive={false}
             cursor={onDataClick ? "pointer" : undefined}
@@ -562,8 +684,23 @@ function HorizontalBarChart(
                 onDataClick(
                   String(entry.payload?.name ?? ""),
                   ds.label || undefined,
+                  "navigate",
                 )
               : undefined}
+            onDoubleClick={onDataClick
+              ? (entry: { payload?: { name?: unknown } }) =>
+                onDataClick(
+                  String(entry.payload?.name ?? ""),
+                  ds.label || undefined,
+                  "context",
+                )
+              : undefined}
+            shape={selectedBarShape(
+              rows,
+              ds.label || undefined,
+              () => 0.85,
+              isSelected,
+            )}
           />
         ))}
       </BarChart>
@@ -572,9 +709,10 @@ function HorizontalBarChart(
 }
 
 function LineChartView(
-  { data, onDataClick }: {
+  { data, onDataClick, isSelected }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
+    isSelected?: ChartSelectionPredicate;
   },
 ) {
   const rows = toRows(data);
@@ -591,6 +729,17 @@ function LineChartView(
               onDataClick,
               state as unknown as Record<string, unknown>,
               event.target,
+              "navigate",
+            )
+          : undefined}
+        onDoubleClick={onDataClick
+          ? (state, event) =>
+            activateCategoricalPoint(
+              data,
+              onDataClick,
+              state as unknown as Record<string, unknown>,
+              event.target,
+              "context",
             )
           : undefined}
       >
@@ -601,7 +750,13 @@ function LineChartView(
           <SharedYAxis yAxisId="right" orientation="right" />
         )}
         <Tooltip
-          content={<ChartTooltip data={data} drillDown={data._drillDown} />}
+          content={
+            <ChartTooltip
+              data={data}
+              drillDown={data._drillDown}
+              contextEnabled={isSelected !== undefined}
+            />
+          }
           cursor={<BandCursor count={rows.length} />}
           isAnimationActive={false}
         />
@@ -619,13 +774,13 @@ function LineChartView(
               stroke={dsColor(ds, i, data.datasets.length)}
               strokeWidth={2}
               strokeDasharray={ds.strokeStyle === "dashed" ? "6 3" : undefined}
-              dot={ds.showDots !== false && ds.strokeStyle !== "dashed"
-                ? {
-                  r: 2.6,
-                  fill: dsColor(ds, i, data.datasets.length),
-                  ...marker,
-                }
-                : false}
+              dot={selectedPointShape(
+                rows,
+                ds.label || undefined,
+                dsColor(ds, i, data.datasets.length),
+                ds.showDots !== false && ds.strokeStyle !== "dashed",
+                isSelected,
+              )}
               activeDot={onDataClick
                 ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
                 : ACTIVE_DOT_BASE}
@@ -641,9 +796,10 @@ function LineChartView(
 }
 
 function AreaChartView(
-  { data, onDataClick }: {
+  { data, onDataClick, isSelected }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
+    isSelected?: ChartSelectionPredicate;
   },
 ) {
   const rows = toRows(data);
@@ -661,6 +817,17 @@ function AreaChartView(
               onDataClick,
               state as unknown as Record<string, unknown>,
               event.target,
+              "navigate",
+            )
+          : undefined}
+        onDoubleClick={onDataClick
+          ? (state, event) =>
+            activateCategoricalPoint(
+              data,
+              onDataClick,
+              state as unknown as Record<string, unknown>,
+              event.target,
+              "context",
             )
           : undefined}
       >
@@ -691,7 +858,13 @@ function AreaChartView(
         <SharedXAxis data={data} />
         <SharedYAxis />
         <Tooltip
-          content={<ChartTooltip data={data} drillDown={data._drillDown} />}
+          content={
+            <ChartTooltip
+              data={data}
+              drillDown={data._drillDown}
+              contextEnabled={isSelected !== undefined}
+            />
+          }
           cursor={<BandCursor count={rows.length} />}
           isAnimationActive={false}
         />
@@ -716,7 +889,13 @@ function AreaChartView(
                   Math.min(i, STACKED_AREA_OPACITY.length - 1)
                 ]
                 : undefined}
-              dot={ds.showDots ? { r: 2.6, fill: color, ...marker } : false}
+              dot={selectedPointShape(
+                rows,
+                ds.label || undefined,
+                color,
+                ds.showDots === true,
+                isSelected,
+              )}
               activeDot={onDataClick
                 ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
                 : ACTIVE_DOT_BASE}
@@ -732,9 +911,10 @@ function AreaChartView(
 }
 
 function ComposedChartView(
-  { data, onDataClick }: {
+  { data, onDataClick, isSelected }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
+    isSelected?: ChartSelectionPredicate;
   },
 ) {
   const rows = toRows(data);
@@ -751,6 +931,17 @@ function ComposedChartView(
               onDataClick,
               state as unknown as Record<string, unknown>,
               event.target,
+              "navigate",
+            )
+          : undefined}
+        onDoubleClick={onDataClick
+          ? (state, event) =>
+            activateCategoricalPoint(
+              data,
+              onDataClick,
+              state as unknown as Record<string, unknown>,
+              event.target,
+              "context",
             )
           : undefined}
       >
@@ -761,7 +952,13 @@ function ComposedChartView(
           <SharedYAxis yAxisId="right" orientation="right" />
         )}
         <Tooltip
-          content={<ChartTooltip data={data} drillDown={data._drillDown} />}
+          content={
+            <ChartTooltip
+              data={data}
+              drillDown={data._drillDown}
+              contextEnabled={isSelected !== undefined}
+            />
+          }
           cursor={<BandCursor count={rows.length} />}
           isAnimationActive={false}
         />
@@ -784,9 +981,13 @@ function ComposedChartView(
                 strokeDasharray={ds.strokeStyle === "dashed"
                   ? "6 3"
                   : undefined}
-                dot={ds.showDots !== false && ds.strokeStyle !== "dashed"
-                  ? { r: 2.6, fill: color, ...marker }
-                  : false}
+                dot={selectedPointShape(
+                  rows,
+                  ds.label || undefined,
+                  color,
+                  ds.showDots !== false && ds.strokeStyle !== "dashed",
+                  isSelected,
+                )}
                 activeDot={onDataClick
                   ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
                   : ACTIVE_DOT_BASE}
@@ -807,6 +1008,13 @@ function ComposedChartView(
                 stroke={color}
                 fill={color}
                 fillOpacity={0.15}
+                dot={selectedPointShape(
+                  rows,
+                  ds.label || undefined,
+                  color,
+                  ds.showDots === true,
+                  isSelected,
+                )}
                 yAxisId={ds.yAxisId}
                 isAnimationActive={false}
                 activeDot={onDataClick
@@ -836,9 +1044,26 @@ function ComposedChartView(
                   onDataClick(
                     String(entry.payload?.name ?? ""),
                     ds.label || undefined,
+                    "navigate",
                   );
                 }
                 : undefined}
+              onDoubleClick={onDataClick
+                ? (entry, _index, event) => {
+                  event.stopPropagation();
+                  onDataClick(
+                    String(entry.payload?.name ?? ""),
+                    ds.label || undefined,
+                    "context",
+                  );
+                }
+                : undefined}
+              shape={selectedBarShape(
+                rows,
+                ds.label || undefined,
+                () => 0.7,
+                isSelected,
+              )}
             />
           );
         })}
@@ -848,10 +1073,11 @@ function ComposedChartView(
 }
 
 function PieDonutChart(
-  { data, isDonut, onDataClick }: {
+  { data, isDonut, onDataClick, isSelected }: {
     data: ChartData;
     isDonut: boolean;
     onDataClick?: ChartDataClick;
+    isSelected?: ChartSelectionPredicate;
   },
 ) {
   const t = useT();
@@ -895,18 +1121,49 @@ function PieDonutChart(
               cursor={onDataClick ? "pointer" : undefined}
               onClick={onDataClick
                 ? (entry: { name?: unknown }) =>
-                  onDataClick(String(entry.name ?? ""), ds.label || undefined)
+                  onDataClick(
+                    String(entry.name ?? ""),
+                    ds.label || undefined,
+                    "navigate",
+                  )
+                : undefined}
+              onDoubleClick={onDataClick
+                ? (entry: { name?: unknown }) =>
+                  onDataClick(
+                    String(entry.name ?? ""),
+                    ds.label || undefined,
+                    "context",
+                  )
                 : undefined}
             >
-              {pieData.map((_, i) => (
-                <Cell
-                  key={i}
-                  fill={CATEGORICAL[Math.min(i, CATEGORICAL.length - 1)]}
-                />
-              ))}
+              {pieData.map((item, i) => {
+                const selected = isSelected?.(
+                  item.name,
+                  ds.label || undefined,
+                ) === true;
+                return (
+                  <Cell
+                    key={i}
+                    fill={CATEGORICAL[Math.min(i, CATEGORICAL.length - 1)]}
+                    stroke={selected ? "var(--color-accent)" : "none"}
+                    strokeWidth={selected ? 4 : 0}
+                    style={selected
+                      ? {
+                        filter: "drop-shadow(0 0 2.5px var(--color-accent))",
+                      }
+                      : undefined}
+                  />
+                );
+              })}
             </Pie>
             <Tooltip
-              content={<ChartTooltip data={data} drillDown={data._drillDown} />}
+              content={
+                <ChartTooltip
+                  data={data}
+                  drillDown={data._drillDown}
+                  contextEnabled={isSelected !== undefined}
+                />
+              }
               isAnimationActive={false}
             />
           </PieChart>
@@ -1243,6 +1500,11 @@ function ChartKeyboardNavigator(
       aria-atomic="true"
       title={help}
       onKeyDown={(event) => {
+        if (event.key === " ") {
+          event.preventDefault();
+          onActivate(selection.label, selection.series, "context");
+          return;
+        }
         const move = KEYBOARD_CURSOR_MOVES[event.key];
         if (!move) return;
         event.preventDefault();
@@ -1255,7 +1517,7 @@ function ChartKeyboardNavigator(
           )
         );
       }}
-      onClick={() => onActivate(selection.label, selection.series)}
+      onClick={() => onActivate(selection.label, selection.series, "navigate")}
       class={cx(
         "pointer-events-none absolute bottom-1.5 left-1.5 z-20 h-px w-px overflow-hidden whitespace-nowrap border-0 p-0 opacity-0",
         "focus:pointer-events-auto focus:flex focus:h-auto focus:w-auto focus:max-w-[calc(100%-0.75rem)] focus:items-center focus:gap-2 focus:overflow-visible focus:rounded-[4px] focus:border focus:border-accent/50 focus:bg-control focus:px-2.5 focus:py-1.5 focus:opacity-100 focus:shadow-modal",
@@ -1275,34 +1537,89 @@ function ChartKeyboardNavigator(
 }
 
 function ChartRouter(
-  { data, onDataClick }: {
+  { data, onDataClick, isSelected }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
+    isSelected?: ChartSelectionPredicate;
   },
 ) {
   const type = data.type ?? "bar";
 
   switch (type) {
     case "bar":
-      return <VerticalBarChart data={data} onDataClick={onDataClick} />;
+      return (
+        <VerticalBarChart
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
+      );
     case "stacked-bar":
-      return <VerticalBarChart data={data} onDataClick={onDataClick} />;
+      return (
+        <VerticalBarChart
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
+      );
     case "horizontal-bar":
-      return <HorizontalBarChart data={data} onDataClick={onDataClick} />;
+      return (
+        <HorizontalBarChart
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
+      );
     case "line":
-      return <LineChartView data={data} onDataClick={onDataClick} />;
+      return (
+        <LineChartView
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
+      );
     case "area":
-      return <AreaChartView data={data} onDataClick={onDataClick} />;
+      return (
+        <AreaChartView
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
+      );
     case "stacked-area":
-      return <AreaChartView data={data} onDataClick={onDataClick} />;
+      return (
+        <AreaChartView
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
+      );
     case "composed":
-      return <ComposedChartView data={data} onDataClick={onDataClick} />;
+      return (
+        <ComposedChartView
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
+      );
     case "pie":
       return (
-        <PieDonutChart data={data} isDonut={false} onDataClick={onDataClick} />
+        <PieDonutChart
+          data={data}
+          isDonut={false}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
       );
     case "donut":
-      return <PieDonutChart data={data} isDonut onDataClick={onDataClick} />;
+      return (
+        <PieDonutChart
+          data={data}
+          isDonut
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
+      );
     case "radar":
       return <RadarChartView data={data} />;
     case "scatter":
@@ -1310,7 +1627,13 @@ function ChartRouter(
     case "treemap":
       return <TreemapView data={data} />;
     default:
-      return <VerticalBarChart data={data} onDataClick={onDataClick} />;
+      return (
+        <VerticalBarChart
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
+      );
   }
 }
 
@@ -1349,6 +1672,9 @@ function ChartContent(
   },
 ) {
   const [shared, setShared] = useState<DrillDownChannel | null>(null);
+  const pendingNavigationRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const legacyChannel = drillDownChannel(app.getHostCapabilities());
   function flashShared(channel: DrillDownChannel) {
     if (channel === "none") return;
@@ -1374,6 +1700,13 @@ function ChartContent(
   const { list } = viewerNav;
   const [levelError, setLevelError] = useState<string | null>(null);
   const { ask } = viewerNav;
+  useEffect(() => {
+    return () => {
+      if (pendingNavigationRef.current !== null) {
+        clearTimeout(pendingNavigationRef.current);
+      }
+    };
+  }, []);
   useLayoutEffect(() => {
     const root = nav.stack.levels[0];
     if (rootFreshEvent > rootMutationEvent && root?.stale) {
@@ -1439,28 +1772,69 @@ function ChartContent(
       .replace(/\{series\}/g, series ?? "");
   }
 
-  const onDataClick = (tryJump || activeContext.supported ||
-      (legacyChannel === "message" && data._drillDown))
-    ? (label: string, series?: string) => {
+  function isPointSelected(label: string, series?: string): boolean {
+    return activeContext.isSelected(pointContext(label, series)) ||
+      (series !== undefined &&
+        activeContext.isSelected(pointContext(label)));
+  }
+
+  const legacyMessageEnabled = legacyChannel === "message" &&
+    data._drillDown !== undefined;
+  const contextEnabled = activeContext.supported || legacyMessageEnabled;
+
+  function cancelPendingNavigation() {
+    if (pendingNavigationRef.current === null) return;
+    clearTimeout(pendingNavigationRef.current);
+    pendingNavigationRef.current = null;
+  }
+
+  function navigatePoint(label: string, series?: string) {
+    if (tryJump?.(label, series)) return;
+    if (!legacyMessageEnabled || activeContext.supported) return;
+    const suggested = pointFallback(label, series);
+    if (!suggested) return;
+    const context = pointContext(label, series);
+    void shareSelection(app, {
+      view: data.title,
+      label: context.label,
+      suggested,
+    }).then(flashShared);
+  }
+
+  function addPointContext(label: string, series?: string) {
+    const context = pointContext(label, series);
+    const fallback = pointFallback(label, series);
+    if (activeContext.supported) {
+      void activeContext.activate(context, fallback).then((result) => {
+        if (result === "message") flashShared("message");
+      });
+      return;
+    }
+    if (!legacyMessageEnabled || !fallback) return;
+    void shareSelection(app, {
+      view: data.title,
+      label: context.label,
+      suggested: fallback,
+    }).then(flashShared);
+  }
+
+  const onDataClick = (tryJump || contextEnabled)
+    ? (
+      label: string,
+      series?: string,
+      mode: ChartActivationMode = "navigate",
+    ) => {
       if (!label) return;
-      const context = pointContext(label, series);
-      const fallback = pointFallback(label, series);
-      const jumped = tryJump?.(label, series) ?? false;
-      if (activeContext.supported) {
-        void activeContext.activate(
-          context,
-          contextFallbackForJump(jumped, fallback),
-        )
-          .then((result) => {
-            if (result === "message") flashShared("message");
-          });
+      if (mode === "context") {
+        cancelPendingNavigation();
+        addPointContext(label, series);
+        return;
       }
-      if (jumped || activeContext.supported) return;
-      if (legacyChannel !== "message" || !data._drillDown) return;
-      const suggested = fallback;
-      if (!suggested) return;
-      shareSelection(app, { view: data.title, label: context.label, suggested })
-        .then(flashShared);
+      cancelPendingNavigation();
+      pendingNavigationRef.current = setTimeout(() => {
+        pendingNavigationRef.current = null;
+        navigatePoint(label, series);
+      }, CHART_PRIMARY_CLICK_DELAY_MS);
     }
     : undefined;
 
@@ -1577,7 +1951,9 @@ function ChartContent(
             "flex flex-col gap-[10px]",
             narrow ? "px-3 py-[10px]" : "px-4 py-[18px]",
           )}
-          style={CHART_STAGE_STYLE}
+          style={{
+            height: `${resolveChartStageHeight(data.height, narrow)}px`,
+          }}
         >
           {
             /* Les libellés d'axes vivent en HTML, pas dans le SVG : la maquette
@@ -1593,12 +1969,12 @@ function ChartContent(
             <ChartRouter
               data={data}
               onDataClick={onDataClick}
+              isSelected={contextEnabled ? isPointSelected : undefined}
             />
             <ChartKeyboardNavigator
               data={data}
               onActivate={onDataClick}
-              isSelected={(label, series) =>
-                activeContext.isSelected(pointContext(label, series))}
+              isSelected={contextEnabled ? isPointSelected : undefined}
             />
           </div>
           {data.xAxisLabel && (

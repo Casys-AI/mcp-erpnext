@@ -410,13 +410,13 @@ export function ProgressBar(
  * du système — sans lui, une surface flottante n'appartient à rien.
  */
 export function DetailSheet(
-  { title, eyebrow, children, footer, onClose, size = "default", bodyClass }: {
+  { title, eyebrow, children, footer, onClose, size = "compact", bodyClass }: {
     title: string;
     eyebrow?: string;
     children: ComponentChildren;
     footer?: ComponentChildren;
     onClose: () => void;
-    size?: "default" | "preview";
+    size?: "compact" | "wide" | "preview";
     bodyClass?: string;
   },
 ) {
@@ -493,6 +493,8 @@ export function DetailSheet(
           "flex max-h-full w-full flex-col overflow-hidden rounded-card border border-line-modal bg-surface shadow-modal outline-none",
           size === "preview"
             ? "h-[min(92vh,860px)] max-w-[1080px]"
+            : size === "wide"
+            ? "max-w-[680px]"
             : "max-w-[436px]",
         )}
       >

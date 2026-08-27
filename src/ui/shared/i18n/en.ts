@@ -128,7 +128,7 @@ export const en: Record<string, string> = {
   "chart.keyboard.target": "{label} · {series} · {value}",
   "chart.keyboard.target_single": "{label} · {value}",
   "chart.keyboard.help":
-    "Left and right change the point; up and down change the series; Enter selects it.",
+    "Left and right change the point; up and down change the series; Enter opens details; Space adds context.",
   "chart.keyboard.control": "Explore chart: {target}. {help}",
   // ── /chart-viewer ─────────────────────────────────────────────────────────
 
@@ -268,7 +268,7 @@ export const en: Record<string, string> = {
   "doclist.detail.action.cancel_label": "Cancel document",
   "doclist.detail.back_to_list": "Back to list",
   "doclist.detail.inspector_label": "inspector",
-  "doclist.detail.close_inspector": "Close inspector",
+  "doclist.detail.close_inspector": "Close details",
   "doclist.detail.back_list_label": "‹ list",
   // ── /doclist-viewer ───────────────────────────────────────────────────────
   // ── drill-down (partage d'une sélection) ──
@@ -285,6 +285,7 @@ export const en: Record<string, string> = {
   "context.active.error": "Context not updated",
   "context.active.evicted": "8 max · removed {label}",
   "chart.tooltip.click": "click",
+  "chart.tooltip.double_click_context": "double-click ↔ add to context",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Back",
   "nav.elided": "…{n}",
@@ -416,7 +417,7 @@ export const en: Record<string, string> = {
   "kanban.modal.section.progress": "progress",
   "kanban.modal.section.assignees": "assignees",
   "kanban.section.dates": "dates",
-  "kanban.section.time": "time tracking",
+  "kanban.section.time": "workload and time",
   "kanban.section.financial": "financial",
   "kanban.section.people": "people",
   "kanban.section.details": "other",

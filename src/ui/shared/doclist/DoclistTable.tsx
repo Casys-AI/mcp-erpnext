@@ -21,6 +21,7 @@ import {
   TONE_RULE,
   toneForStatus,
 } from "~/shared/status";
+import { type ComponentChildren, Fragment } from "preact";
 import type { ViewerLayout } from "~/shared/useViewerLayout";
 import { useT } from "~/shared/i18n-hook";
 import { formatCell, isStatusField } from "./helpers";
@@ -50,6 +51,8 @@ interface CommonProps {
   /** La ligne qu'une action vient de changer : barrée sur place, pas rechargée. */
   struckId?: string | null;
   onSelect?: (row: Record<string, unknown>) => void;
+  /** Détail accordéon inséré immédiatement sous la ligne sélectionnée. */
+  detail?: ComponentChildren;
 }
 
 type ModeProps = CommonProps & {
@@ -183,7 +186,17 @@ function activationHandlers(onActivate?: () => void) {
 /* ── Large ────────────────────────────────────────────────────────── */
 
 function WideTable(
-  { columns, rows, shape, statusKey, sortKey, sortDir, onSort, onSelect }:
+  {
+    columns,
+    rows,
+    shape,
+    statusKey,
+    sortKey,
+    sortDir,
+    onSort,
+    onSelect,
+    detail,
+  }:
     & ModeProps
     & {
       statusKey?: string;
@@ -256,58 +269,66 @@ function WideTable(
         {rows.map((raw, index) => {
           const { id, row, selected, tone, struck } = shape(raw, index);
           return (
-            <tr
-              key={id}
-              aria-selected={onSelect ? selected : undefined}
-              class={`border-b border-line-soft ${
-                rowClasses(selected, !!onSelect, struck)
-              }`}
-              {...activationHandlers(onSelect && (() => onSelect(row)))}
-            >
-              {columns.map((column, columnIndex) => {
-                const value = row[column.id];
-                const isFirst = columnIndex === 0;
-                const isLast = columnIndex === columns.length - 1;
-                return (
-                  <td
-                    key={column.id}
-                    class={[
-                      "truncate py-2",
-                      // Le liseré occupe 2 px du padding gauche de la 1re cellule.
-                      isFirst
-                        ? `border-l-2 ${TONE_RULE[tone]} pl-[14px] pr-3.5`
-                        : "px-3.5",
-                      // Et le bord de sélection 2 px de la dernière : sur <tr>
-                      // il ne se peindrait pas en border-collapse.
-                      isLast && selectionEdge(selected, !!onSelect),
-                      column.numeric
-                        ? "text-right font-mono text-cell tabular-nums"
+            <Fragment key={id}>
+              <tr
+                aria-selected={onSelect ? selected : undefined}
+                class={`border-b border-line-soft ${
+                  rowClasses(selected, !!onSelect, struck)
+                }`}
+                {...activationHandlers(onSelect && (() => onSelect(row)))}
+              >
+                {columns.map((column, columnIndex) => {
+                  const value = row[column.id];
+                  const isFirst = columnIndex === 0;
+                  const isLast = columnIndex === columns.length - 1;
+                  return (
+                    <td
+                      key={column.id}
+                      class={[
+                        "truncate py-2",
+                        // Le liseré occupe 2 px du padding gauche de la 1re cellule.
+                        isFirst
+                          ? `border-l-2 ${TONE_RULE[tone]} pl-[14px] pr-3.5`
+                          : "px-3.5",
+                        // Et le bord de sélection 2 px de la dernière : sur <tr>
+                        // il ne se peindrait pas en border-collapse.
+                        isLast && selectionEdge(selected, !!onSelect),
+                        column.numeric
+                          ? "text-right font-mono text-cell tabular-nums"
+                          : isFirst
+                          ? "font-mono text-data"
+                          : "text-cell",
+                        // La première cellule (ID) est en accent-text quand la ligne
+                        // est sélectionnée : elle sert d'ancre visuelle. Les autres
+                        // cellules restent en text-ink (légèrement plus clair).
+                        isFirst && selected
+                          ? "text-accent-text"
+                          : selected
+                          ? "text-ink"
+                          : "text-ink-2",
+                      ].filter(Boolean).join(" ")}
+                    >
+                      {statusKey === column.id && typeof value === "string"
+                        ? <StatusCell value={value} />
+                        : value == null
+                        ? <span class="text-ink-ghost">—</span>
+                        // La première colonne porte l'identifiant : elle se
+                        // tronque par la gauche, seule la fin distingue les pièces.
                         : isFirst
-                        ? "font-mono text-data"
-                        : "text-cell",
-                      // La première cellule (ID) est en accent-text quand la ligne
-                      // est sélectionnée : elle sert d'ancre visuelle. Les autres
-                      // cellules restent en text-ink (légèrement plus clair).
-                      isFirst && selected
-                        ? "text-accent-text"
-                        : selected
-                        ? "text-ink"
-                        : "text-ink-2",
-                    ].filter(Boolean).join(" ")}
-                  >
-                    {statusKey === column.id && typeof value === "string"
-                      ? <StatusCell value={value} />
-                      : value == null
-                      ? <span class="text-ink-ghost">—</span>
-                      // La première colonne porte l'identifiant : elle se
-                      // tronque par la gauche, seule la fin distingue les pièces.
-                      : isFirst
-                      ? shortenId(formatCell(value))
-                      : formatCell(value)}
+                        ? shortenId(formatCell(value))
+                        : formatCell(value)}
+                    </td>
+                  );
+                })}
+              </tr>
+              {selected && detail && (
+                <tr>
+                  <td class="p-0" colSpan={columns.length}>
+                    {detail}
                   </td>
-                );
-              })}
-            </tr>
+                </tr>
+              )}
+            </Fragment>
           );
         })}
       </tbody>
@@ -335,7 +356,7 @@ const MOBILE_HEAD =
  * il n'y a pas la place pour l'exercice, et c'est le numéro qui distingue.
  */
 function CompactTable(
-  { columns, rows, shape, amountKey, onSelect }: ModeProps,
+  { columns, rows, shape, amountKey, onSelect, detail }: ModeProps,
 ) {
   const t = useT();
   const { idKey, labelKey } = pickNarrowColumns(
@@ -395,6 +416,7 @@ function CompactTable(
                   {due == null ? "—" : formatCell(due)}
                 </span>
               </div>
+              {selected && detail}
             </li>
           );
         })}
@@ -413,7 +435,7 @@ function CompactTable(
  * lisibles y valent mieux que trois colonnes serrées.
  */
 function StackedList(
-  { columns, rows, shape, amountKey, onSelect }: ModeProps,
+  { columns, rows, shape, amountKey, onSelect, detail }: ModeProps,
 ) {
   const { idKey, labelKey } = pickNarrowColumns(
     columns,
@@ -464,6 +486,7 @@ function StackedList(
                 {due == null ? "—" : formatCell(due)}
               </span>
             </div>
+            {selected && detail}
           </li>
         );
       })}

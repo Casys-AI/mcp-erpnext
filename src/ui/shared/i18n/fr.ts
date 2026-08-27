@@ -127,7 +127,7 @@ export const fr: Record<string, string> = {
   "chart.keyboard.target": "{label} · {series} · {value}",
   "chart.keyboard.target_single": "{label} · {value}",
   "chart.keyboard.help":
-    "Gauche et droite changent le point ; haut et bas changent la série ; Entrée la sélectionne.",
+    "Gauche et droite changent le point ; haut et bas changent la série ; Entrée ouvre le détail ; Espace ajoute au contexte.",
   "chart.keyboard.control": "Explorer le graphique : {target}. {help}",
   // ── /chart-viewer ─────────────────────────────────────────────────────────
 
@@ -272,7 +272,7 @@ export const fr: Record<string, string> = {
   "doclist.detail.action.cancel_label": "Annuler la pièce",
   "doclist.detail.back_to_list": "Retour à la liste",
   "doclist.detail.inspector_label": "inspecteur",
-  "doclist.detail.close_inspector": "Fermer l'inspecteur",
+  "doclist.detail.close_inspector": "Fermer le détail",
   "doclist.detail.back_list_label": "‹ liste",
   // ── /doclist-viewer ───────────────────────────────────────────────────────
   // ── drill-down (partage d'une sélection) ──
@@ -290,6 +290,7 @@ export const fr: Record<string, string> = {
   "context.active.error": "Contexte non mis à jour",
   "context.active.evicted": "8 max · {label} retiré",
   "chart.tooltip.click": "clic",
+  "chart.tooltip.double_click_context": "double-clic ↔ ajouter au contexte",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Retour",
   "nav.elided": "…{n}",
@@ -426,7 +427,7 @@ export const fr: Record<string, string> = {
   "kanban.modal.section.progress": "progression",
   "kanban.modal.section.assignees": "responsables",
   "kanban.section.dates": "dates",
-  "kanban.section.time": "suivi du temps",
+  "kanban.section.time": "charge et temps",
   "kanban.section.financial": "finances",
   "kanban.section.people": "personnes",
   "kanban.section.details": "autres",

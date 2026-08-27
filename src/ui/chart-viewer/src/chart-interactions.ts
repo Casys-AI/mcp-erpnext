@@ -19,6 +19,32 @@ export interface ChartSelection {
   value?: number;
 }
 
+const DEFAULT_CHART_STAGE_HEIGHT = 300;
+const NARROW_CHART_STAGE_HEIGHT = 260;
+const MIN_CHART_STAGE_HEIGHT = 240;
+const MAX_CHART_STAGE_HEIGHT = 520;
+
+/**
+ * La hauteur du tracé est intrinsèque : une valeur liée à `100vh` figeait la
+ * première petite taille proposée par certains hôtes MCP et écrasait le graphe.
+ */
+export function resolveChartStageHeight(
+  requestedHeight: number | undefined,
+  narrow: boolean,
+): number {
+  const fallback = narrow
+    ? NARROW_CHART_STAGE_HEIGHT
+    : DEFAULT_CHART_STAGE_HEIGHT;
+  if (
+    typeof requestedHeight !== "number" ||
+    !Number.isFinite(requestedHeight)
+  ) return fallback;
+  return Math.min(
+    MAX_CHART_STAGE_HEIGHT,
+    Math.max(MIN_CHART_STAGE_HEIGHT, Math.round(requestedHeight)),
+  );
+}
+
 function wrap(index: number, length: number): number {
   if (length <= 0) return 0;
   return ((index % length) + length) % length;

@@ -242,7 +242,7 @@ export function ActiveContextChip(
               class={cx(
                 "absolute top-full z-30 mt-1.5 w-56 max-w-[calc(100vw-24px)]",
                 popoverAlign === "start" ? "left-0" : "right-0",
-                "rounded-card border border-line bg-canvas p-1.5 shadow-[var(--shadow-tooltip)]",
+                "rounded-card border border-line-modal bg-control p-1.5 shadow-modal",
               )}
             >
               <span class="flex max-h-64 flex-col overflow-y-auto">

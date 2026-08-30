@@ -1,9 +1,9 @@
-# Tools Reference (127)
+# Tools Reference
 
 Full reference for all ERPNext MCP tools. See [README](../README.md) for
 overview.
 
-## Setup (3)
+## Setup
 
 | Tool                     | DocType | Operations                                     |
 | ------------------------ | ------- | ---------------------------------------------- |
@@ -11,7 +11,7 @@ overview.
 | `erpnext_company_list`   | Company | List companies                                 |
 | `erpnext_company_create` | Company | Create (name, abbr, currency, country, domain) |
 
-## Sales (17) → doclist-viewer / doc-viewer / invoice-viewer
+## Sales → doclist-viewer / doc-viewer / invoice-viewer
 
 | Tool                           | DocType       | Operations                                   |
 | ------------------------------ | ------------- | -------------------------------------------- |
@@ -33,7 +33,7 @@ overview.
 | `erpnext_quotation_get`        | Quotation     | Get with line items                          |
 | `erpnext_quotation_create`     | Quotation     | Create (Customer/Lead + items)               |
 
-## Inventory (9) → doclist-viewer / doc-viewer / stock-viewer
+## Inventory → doclist-viewer / doc-viewer / stock-viewer
 
 | Tool                         | DocType     | Operations                                   |
 | ---------------------------- | ----------- | -------------------------------------------- |
@@ -47,7 +47,7 @@ overview.
 | `erpnext_stock_entry_get`    | Stock Entry | Get with item details                        |
 | `erpnext_stock_entry_create` | Stock Entry | Create (type + items + warehouses)           |
 
-## Purchasing (11) → doclist-viewer / doc-viewer
+## Purchasing → doclist-viewer / doc-viewer
 
 | Tool                              | DocType            | Operations                                    |
 | --------------------------------- | ------------------ | --------------------------------------------- |
@@ -63,7 +63,7 @@ overview.
 | `erpnext_purchase_receipt_get`    | Purchase Receipt   | Get with received items                       |
 | `erpnext_supplier_quotation_list` | Supplier Quotation | List + filters                                |
 
-## Accounting (6) → doclist-viewer / doc-viewer
+## Accounting → doclist-viewer / doc-viewer
 
 | Tool                           | DocType       | Operations                                        |
 | ------------------------------ | ------------- | ------------------------------------------------- |
@@ -74,7 +74,7 @@ overview.
 | `erpnext_payment_entry_list`   | Payment Entry | List + filters (type, party, dates)               |
 | `erpnext_payment_entry_get`    | Payment Entry | Get with references                               |
 
-## HR (12) → doclist-viewer / doc-viewer
+## HR → doclist-viewer / doc-viewer
 
 | Tool                               | DocType           | Operations                                   |
 | ---------------------------------- | ----------------- | -------------------------------------------- |
@@ -91,7 +91,7 @@ overview.
 | `erpnext_expense_claim_create`     | Expense Claim     | Create (employee + expenses[])               |
 | `erpnext_leave_balance`            | Leave Allocation  | Get allocations by employee                  |
 
-## Project (9) → doclist-viewer / doc-viewer
+## Project → doclist-viewer / doc-viewer
 
 | Tool                     | DocType   | Operations                                           |
 | ------------------------ | --------- | ---------------------------------------------------- |
@@ -105,7 +105,7 @@ overview.
 | `erpnext_timesheet_list` | Timesheet | List + filters (employee, project, status)           |
 | `erpnext_timesheet_get`  | Timesheet | Get with time log details                            |
 
-## Delivery (5) → doclist-viewer / doc-viewer
+## Delivery → doclist-viewer / doc-viewer
 
 | Tool                           | DocType       | Operations                                      |
 | ------------------------------ | ------------- | ----------------------------------------------- |
@@ -115,7 +115,7 @@ overview.
 | `erpnext_shipment_list`        | Shipment      | List + filters (status, carrier, dates)         |
 | `erpnext_shipment_get`         | Shipment      | Get with parcels                                |
 
-## Manufacturing (7) → doclist-viewer / doc-viewer
+## Manufacturing → doclist-viewer / doc-viewer
 
 | Tool                        | DocType    | Operations                                      |
 | --------------------------- | ---------- | ----------------------------------------------- |
@@ -127,7 +127,7 @@ overview.
 | `erpnext_job_card_list`     | Job Card   | List + filters (work_order, status, operation)  |
 | `erpnext_job_card_get`      | Job Card   | Get with time logs + material transfers         |
 
-## CRM (8) → doclist-viewer / doc-viewer
+## CRM → doclist-viewer / doc-viewer
 
 | Tool                       | DocType     | Operations                                   |
 | -------------------------- | ----------- | -------------------------------------------- |
@@ -140,7 +140,7 @@ overview.
 | `erpnext_contact_get`      | Contact     | Get by name                                  |
 | `erpnext_campaign_list`    | Campaign    | List + filters (campaign_type)               |
 
-## Assets (8) → doclist-viewer / doc-viewer
+## Assets → doclist-viewer / doc-viewer
 
 | Tool                             | DocType           | Operations                                            |
 | -------------------------------- | ----------------- | ----------------------------------------------------- |
@@ -153,7 +153,7 @@ overview.
 | `erpnext_asset_maintenance_get`  | Asset Maintenance | Get with maintenance tasks                            |
 | `erpnext_asset_category_list`    | Asset Category    | List all categories                                   |
 
-## Generic Operations (13) → doc-viewer / doclist-viewer
+## Generic Operations → doc-viewer / doclist-viewer
 
 | Tool                    | Operation | Notes                                                                    |
 | ----------------------- | --------- | ------------------------------------------------------------------------ |
@@ -201,14 +201,14 @@ The response contains one inline MCP resource for the host's `downloadFile`
 channel. Downloads are capped at 10 MiB by default; override the positive byte
 limit with `ERPNEXT_MAX_DOWNLOAD_BYTES`.
 
-## Kanban (2) → kanban-viewer
+## Kanban → kanban-viewer
 
 | Tool                       | Description                                                         |
 | -------------------------- | ------------------------------------------------------------------- |
 | `erpnext_kanban_get_board` | Get a normalized kanban board for `Task`, `Opportunity`, or `Issue` |
 | `erpnext_kanban_move_card` | Execute a validated card move with business error handling          |
 
-## Analytics (17) → chart-viewer / kpi-viewer / funnel-viewer
+## Analytics → chart-viewer / kpi-viewer / funnel-viewer
 
 | Tool                        | Viewer | Description                                           |
 | --------------------------- | ------ | ----------------------------------------------------- |

@@ -2,6 +2,24 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.0.3] - 2026-08-30
+
+### Added
+
+- **Allowlisted Frappe method calls.** `erpnext_method_call` provides a
+  deny-by-default escape hatch for custom-app `@frappe.whitelist` methods,
+  business methods that cannot be represented as direct document updates, and
+  GET-only endpoints. Deployments opt in with exact method paths, `prefix.*`, or
+  an explicit global `*` through `ERPNEXT_METHOD_ALLOWLIST`; successful mutating
+  calls can also invalidate a named document in the read cache. This resolves
+  [#21](https://github.com/Casys-AI/mcp-erpnext/issues/21). Many thanks to
+  [@notnotkeshav](https://github.com/notnotkeshav) for answering our help-wanted
+  request and implementing the feature in
+  [#27](https://github.com/Casys-AI/mcp-erpnext/pull/27).
+
+This is an intentionally focused stable maintenance release. The separate 3.1
+viewer and attachment work remains on the prerelease channel.
+
 ## [3.1.0-beta.4] - 2026-08-27
 
 ### Added

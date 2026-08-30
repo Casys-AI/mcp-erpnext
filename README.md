@@ -267,9 +267,9 @@ Quotation, which retain the specialized invoice surface.
 - **Manufacturing** — BOMs, Work Orders, and Job Cards.
 - **CRM** — Leads, Opportunities, Contacts, and Campaigns.
 - **Assets** — Assets, Movements, Maintenance records, and Categories.
-- **Operations** — Generic CRUD, native assignment, and attachment listing,
-  upload, or host-mediated download for any DocType (`erpnext_doc_*`,
-  `erpnext_file_*`).
+- **Operations** — Generic CRUD, native assignment, attachment listing, upload,
+  host-mediated download, and deny-by-default Frappe method calls
+  (`erpnext_doc_*`, `erpnext_file_*`, `erpnext_method_call`).
 - **Kanban** — Read-write boards for Task, Opportunity, and Issue with
   drag-and-drop.
 - **Analytics** — Charts (bar, area, treemap, radar, scatter, P&L…), KPIs with
@@ -287,6 +287,7 @@ Full per-tool reference with parameters: [`docs/tools.md`](docs/tools.md).
 | `ERPNEXT_API_SECRET`         | Yes      | API Secret from User Settings                                                                                                    |
 | `ERPNEXT_MAX_UPLOAD_BYTES`   | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                                    |
 | `ERPNEXT_MAX_DOWNLOAD_BYTES` | No       | Maximum attachment-download size in bytes (positive integer; default: 10 MiB)                                                    |
+| `ERPNEXT_METHOD_ALLOWLIST`   | No       | Comma-separated exact method paths or `prefix.*`; unset means `erpnext_method_call` denies every method, while `*` allows all    |
 | `MCP_MRTR_SIGNING_KEY`       | No       | Exactly 64 lowercase hex characters; enables signed ambiguous-link elicitation. **Single-instance deployments only** — see below |
 
 MRTR is opt-in. Without this key, or when the client does not advertise

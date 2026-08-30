@@ -249,8 +249,9 @@ doclist-viewer。通用與專用的文件讀取會使用 doc-viewer，但銷售�
 - **Manufacturing（製造）** — 物料清單（BOM）、工單及工作卡。
 - **CRM** — 潛在客戶、商機、聯絡人及行銷活動。
 - **Assets（資產）** — 資產、異動、維護紀錄及類別。
-- **Operations（作業）** — 任何 DocType 的通用 CRUD、原生指派，以及附件清單、
-  上傳或由主機代理下載（`erpnext_doc_*`、`erpnext_file_*`）。
+- **Operations（作業）** — 通用 CRUD、原生指派、附件清單、上傳、由主機代理下載，
+  以及預設拒絕的 Frappe 方法呼叫（`erpnext_doc_*`、`erpnext_file_*`、
+  `erpnext_method_call`）。
 - **Kanban（看板）** — 支援拖放的 Task、Opportunity、Issue 可讀寫看板。
 - **Analytics（分析）** — 圖表（長條圖、面積圖、樹狀圖、雷達圖、散佈圖、損益表
   等）、含迷你圖的 KPI，以及銷售漏斗。
@@ -267,6 +268,7 @@ doclist-viewer。通用與專用的文件讀取會使用 doc-viewer，但銷售�
 | `ERPNEXT_API_SECRET`         | 是   | 來自使用者設定的 API Secret                                                                               |
 | `ERPNEXT_MAX_UPLOAD_BYTES`   | 否   | 解碼後檔案上傳大小上限（正整數位元組；預設 10 MiB）                                                       |
 | `ERPNEXT_MAX_DOWNLOAD_BYTES` | 否   | 附件下載大小上限（正整數位元組；預設 10 MiB）                                                             |
+| `ERPNEXT_METHOD_ALLOWLIST`   | 否   | 以逗號分隔的完整方法路徑或 `prefix.*`；未設定時 `erpnext_method_call` 會拒絕所有方法，`*` 則允許全部      |
 | `MCP_MRTR_SIGNING_KEY`       | 否   | 恰為 64 個小寫十六進位字元；啟用已簽章的模糊連結 elicitation。**僅限單一執行個體部署**，詳見下方說明      |
 
 MRTR 為選用功能。未設定此金鑰，或用戶端未宣告 elicitation

@@ -6,6 +6,7 @@ English | [繁體中文](README.zh-TW.md)
 [![npm](https://img.shields.io/npm/v/@casys/mcp-erpnext?logo=npm&color=cb3837)](https://www.npmjs.com/package/@casys/mcp-erpnext)
 [![CI](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
+[![M8ven Score](https://m8ven.ai/badge/mcp/casys-ai-mcp-erpnext-1kev4k)](https://m8ven.ai/mcp/casys-ai-mcp-erpnext-1kev4k)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Let any MCP-compatible AI agent operate your [ERPNext](https://erpnext.com) /
@@ -237,8 +238,9 @@ click, inline detail, and cross-viewer navigation.
 - **Manufacturing** — BOMs, Work Orders, and Job Cards.
 - **CRM** — Leads, Opportunities, Contacts, and Campaigns.
 - **Assets** — Assets, Movements, Maintenance records, and Categories.
-- **Operations** — Generic CRUD, native assignment, and file upload for any
-  DocType (`erpnext_doc_*`, `erpnext_file_upload`).
+- **Operations** — Generic CRUD, native assignment, file upload, and
+  deny-by-default Frappe method calls (`erpnext_doc_*`, `erpnext_file_upload`,
+  `erpnext_method_call`).
 - **Kanban** — Read-write boards for Task, Opportunity, and Issue with
   drag-and-drop.
 - **Analytics** — Charts (bar, area, treemap, radar, scatter, P&L…), KPIs with
@@ -255,6 +257,7 @@ Full per-tool reference with parameters: [`docs/tools.md`](docs/tools.md).
 | `ERPNEXT_API_KEY`          | Yes      | API Key from User Settings                                                                                                       |
 | `ERPNEXT_API_SECRET`       | Yes      | API Secret from User Settings                                                                                                    |
 | `ERPNEXT_MAX_UPLOAD_BYTES` | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                                    |
+| `ERPNEXT_METHOD_ALLOWLIST` | No       | Comma-separated exact method paths or `prefix.*`; unset means `erpnext_method_call` denies every method, while `*` allows all    |
 | `MCP_MRTR_SIGNING_KEY`     | No       | Exactly 64 lowercase hex characters; enables signed ambiguous-link elicitation. **Single-instance deployments only** — see below |
 
 MRTR is opt-in. Without this key, or when the client does not advertise

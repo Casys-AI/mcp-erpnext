@@ -6,6 +6,7 @@
 [![npm](https://img.shields.io/npm/v/@casys/mcp-erpnext?logo=npm&color=cb3837)](https://www.npmjs.com/package/@casys/mcp-erpnext)
 [![CI](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
+[![M8ven Score](https://m8ven.ai/badge/mcp/casys-ai-mcp-erpnext-1kev4k)](https://m8ven.ai/mcp/casys-ai-mcp-erpnext-1kev4k)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 讓任何相容 MCP 的 AI 智慧代理操作您的 [ERPNext](https://erpnext.com) / Frappe
@@ -228,8 +229,8 @@ node build-all.mjs
 - **Manufacturing（製造）** — 物料清單（BOM）、工單及工作卡。
 - **CRM** — 潛在客戶、商機、聯絡人及行銷活動。
 - **Assets（資產）** — 資產、異動、維護紀錄及類別。
-- **Operations（作業）** — 任何 DocType 的通用 CRUD 及原生指派
-  （`erpnext_doc_*`）。
+- **Operations（作業）** — 通用 CRUD、原生指派、檔案上傳，以及預設拒絕的 Frappe
+  方法呼叫（`erpnext_doc_*`、`erpnext_file_upload`、 `erpnext_method_call`）。
 - **Kanban（看板）** — 支援拖放的 Task、Opportunity、Issue 可讀寫看板。
 - **Analytics（分析）** — 圖表（長條圖、面積圖、樹狀圖、雷達圖、散佈圖、損益表
   等）、含迷你圖的 KPI，以及銷售漏斗。
@@ -239,12 +240,13 @@ node build-all.mjs
 
 ## 環境變數
 
-| 變數                   | 必填 | 說明                                                                                                      |
-| ---------------------- | ---- | --------------------------------------------------------------------------------------------------------- |
-| `ERPNEXT_URL`          | 是   | ERPNext 基礎 URL — 自行託管（例如 `http://localhost:8000`）或雲端（例如 `https://mycompany.erpnext.com`） |
-| `ERPNEXT_API_KEY`      | 是   | 來自使用者設定的 API Key                                                                                  |
-| `ERPNEXT_API_SECRET`   | 是   | 來自使用者設定的 API Secret                                                                               |
-| `MCP_MRTR_SIGNING_KEY` | 否   | 恰為 64 個小寫十六進位字元；啟用已簽章的模糊連結 elicitation。**僅限單一執行個體部署**，詳見下方說明      |
+| 變數                       | 必填 | 說明                                                                                                      |
+| -------------------------- | ---- | --------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_URL`              | 是   | ERPNext 基礎 URL — 自行託管（例如 `http://localhost:8000`）或雲端（例如 `https://mycompany.erpnext.com`） |
+| `ERPNEXT_API_KEY`          | 是   | 來自使用者設定的 API Key                                                                                  |
+| `ERPNEXT_API_SECRET`       | 是   | 來自使用者設定的 API Secret                                                                               |
+| `ERPNEXT_METHOD_ALLOWLIST` | 否   | 以逗號分隔的完整方法路徑或 `prefix.*`；未設定時 `erpnext_method_call` 會拒絕所有方法，`*` 則允許全部      |
+| `MCP_MRTR_SIGNING_KEY`     | 否   | 恰為 64 個小寫十六進位字元；啟用已簽章的模糊連結 elicitation。**僅限單一執行個體部署**，詳見下方說明      |
 
 MRTR 為選用功能。未設定此金鑰，或用戶端未宣告 elicitation
 時，模糊連結會維持既有的 可操作歧義錯誤，而不會要求選擇。

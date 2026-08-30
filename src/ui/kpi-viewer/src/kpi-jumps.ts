@@ -19,6 +19,35 @@ export type KpiAction =
   | { kind: "drill"; message: string }
   | null;
 
+export type KpiActivation = "context" | "detail";
+
+export interface KpiInteractionPlan {
+  updateContext: boolean;
+  toggleLevel: boolean;
+  sendMessage: boolean;
+}
+
+/** Les gestes de contexte et de detail restent strictement independants. */
+export function kpiInteractionPlan(
+  activation: KpiActivation,
+  hasJump: boolean,
+  contextSupported: boolean,
+  messageSupported: boolean,
+): KpiInteractionPlan {
+  if (activation === "context") {
+    return {
+      updateContext: contextSupported,
+      toggleLevel: false,
+      sendMessage: false,
+    };
+  }
+  return {
+    updateContext: false,
+    toggleLevel: hasJump,
+    sendMessage: !hasJump && messageSupported,
+  };
+}
+
 /**
  * Action pour le nombre principal.
  *

@@ -5,7 +5,10 @@ import { useState } from "preact/hooks";
 import { useT } from "../i18n-hook";
 import type { ViewerLayout } from "../useViewerLayout";
 import { cx } from "../ui";
-import { ChildTableSection } from "./ChildTableSection";
+import {
+  type ChildRowDisclosure,
+  ChildTableSection,
+} from "./ChildTableSection";
 import { DocumentHeader } from "./DocumentHeader";
 import {
   type DocumentSectionTab,
@@ -13,6 +16,7 @@ import {
 } from "./DocumentSectionTabs";
 import { ScalarFields } from "./ScalarFields";
 import type { ChildTableModel, DocumentModel } from "./types.ts";
+import type { ContextInteractionTarget } from "./context-interaction.ts";
 
 export interface DocumentSurfaceProps {
   model: DocumentModel;
@@ -32,6 +36,21 @@ export interface DocumentSurfaceProps {
   /** Permet à un hôte de piloter les onglets mobiles. */
   activeSectionId?: string;
   onActiveSectionChange?: (id: string) => void;
+  /** `flow` laisse la surface grandir dans le scroll de son parent. */
+  scrollMode?: "contained" | "flow";
+  renderChildRowActions?: (
+    table: ChildTableModel,
+    row: ChildTableModel["rows"][number],
+    rowIndex: number,
+  ) => ComponentChildren;
+  childRowActionsPlacement?: "disclosure" | "visible";
+  childRowsExpandable?: boolean;
+  contextTarget?: ContextInteractionTarget;
+  renderChildRowContextTarget?: (
+    table: ChildTableModel,
+    row: ChildTableModel["rows"][number],
+    rowIndex: number,
+  ) => ContextInteractionTarget | undefined;
 }
 
 interface TableSection {
@@ -85,6 +104,12 @@ export function DocumentSurface({
   idPrefix,
   activeSectionId,
   onActiveSectionChange,
+  scrollMode = "contained",
+  renderChildRowActions,
+  childRowActionsPlacement = "disclosure",
+  contextTarget,
+  renderChildRowContextTarget,
+  childRowsExpandable = true,
 }: DocumentSurfaceProps) {
   const t = useT();
   const defaultPrefix = `document-${slug(model.envelope.doctype)}-${
@@ -96,6 +121,10 @@ export function DocumentSurface({
     documentKey,
     sectionId: "fields",
   });
+  const [disclosureState, setDisclosureState] = useState<{
+    documentKey: string;
+    row: ChildRowDisclosure | null;
+  }>({ documentKey, row: null });
   const localActive = localSelection.documentKey === documentKey
     ? localSelection.sectionId
     : "fields";
@@ -127,12 +156,26 @@ export function DocumentSurface({
   const active = tabs.some((tab) => tab.id === requestedActive)
     ? requestedActive
     : tabs[0]?.id ?? "fields";
+  const contained = scrollMode === "contained";
+  const activeDisclosure = disclosureState.documentKey === documentKey
+    ? disclosureState.row
+    : null;
+  const surfaceClass = cx(
+    "flex flex-col bg-surface",
+    contained && "min-h-0 flex-1",
+    klass,
+  );
 
   function selectSection(id: string) {
     if (activeSectionId === undefined) {
       setLocalSelection({ documentKey, sectionId: id });
     }
+    setDisclosureState({ documentKey, row: null });
     onActiveSectionChange?.(id);
+  }
+
+  function setActiveDisclosure(row: ChildRowDisclosure | null) {
+    setDisclosureState({ documentKey, row });
   }
 
   const header = (
@@ -146,6 +189,7 @@ export function DocumentSurface({
       navigation={navigation}
       trailing={headerActions}
       live={live}
+      contextTarget={contextTarget}
     />
   );
 
@@ -153,18 +197,20 @@ export function DocumentSurface({
     return (
       <article
         aria-label={t("document.surface", { name: model.envelope.name })}
-        class={cx("flex min-h-0 flex-1 flex-col bg-surface", klass)}
+        class={surfaceClass}
       >
         {header}
         <div
           class={cx(
-            "grid min-h-0 flex-1",
+            "grid",
+            contained && "min-h-0 flex-1",
             hasSidebar ? "grid-cols-[minmax(0,1fr)_268px]" : "grid-cols-1",
           )}
         >
           <main
             class={cx(
-              "scroll-slim min-w-0 overflow-y-auto",
+              "min-w-0",
+              contained && "scroll-slim overflow-y-auto",
               hasSidebar && "border-r border-line",
             )}
           >
@@ -176,13 +222,22 @@ export function DocumentSurface({
                 layout={layout}
                 idPrefix={domPrefix}
                 class="border-t border-line-soft"
+                renderRowActions={renderChildRowActions}
+                rowActionsPlacement={childRowActionsPlacement}
+                renderRowContextTarget={renderChildRowContextTarget}
+                childRowsExpandable={childRowsExpandable}
+                activeDisclosure={activeDisclosure}
+                onDisclosureChange={setActiveDisclosure}
               />
             ))}
           </main>
           {hasSidebar && (
             <aside
               aria-label={t("document.sidebar")}
-              class="scroll-slim min-w-0 overflow-y-auto bg-sunken"
+              class={cx(
+                "min-w-0 bg-sunken",
+                contained && "scroll-slim overflow-y-auto",
+              )}
             >
               {hasAttachments && <div>{attachments}</div>}
               {hasActions && <SlotSection class="p-3.5">{actions}</SlotSection>}
@@ -200,10 +255,14 @@ export function DocumentSurface({
     return (
       <article
         aria-label={t("document.surface", { name: model.envelope.name })}
-        class={cx("flex min-h-0 flex-1 flex-col bg-surface", klass)}
+        class={surfaceClass}
       >
         {header}
-        <main class="scroll-slim min-h-0 flex-1 overflow-y-auto">
+        <main
+          class={cx(
+            contained && "scroll-slim min-h-0 flex-1 overflow-y-auto",
+          )}
+        >
           {hasFields && <DocumentFields model={model} layout={layout} />}
           {tableSections.map(({ id, table }) => (
             <ChildTableSection
@@ -212,6 +271,12 @@ export function DocumentSurface({
               layout={layout}
               idPrefix={domPrefix}
               class="border-t border-line"
+              renderRowActions={renderChildRowActions}
+              rowActionsPlacement={childRowActionsPlacement}
+              renderRowContextTarget={renderChildRowContextTarget}
+              childRowsExpandable={childRowsExpandable}
+              activeDisclosure={activeDisclosure}
+              onDisclosureChange={setActiveDisclosure}
             />
           ))}
           {hasAttachments && <SlotSection>{attachments}</SlotSection>}
@@ -228,7 +293,7 @@ export function DocumentSurface({
   return (
     <article
       aria-label={t("document.surface", { name: model.envelope.name })}
-      class={cx("flex min-h-0 flex-1 flex-col bg-surface", klass)}
+      class={surfaceClass}
     >
       {header}
       {tabs.length > 0 && (
@@ -240,7 +305,11 @@ export function DocumentSurface({
           idPrefix={domPrefix}
         />
       )}
-      <main class="scroll-slim min-h-0 flex-1 overflow-y-auto">
+      <main
+        class={cx(
+          contained && "scroll-slim min-h-0 flex-1 overflow-y-auto",
+        )}
+      >
         {active === "fields" && hasFields && (
           <div
             id={`${domPrefix}-panel-fields`}
@@ -260,6 +329,12 @@ export function DocumentSurface({
               table={activeTable.table}
               layout={layout}
               idPrefix={domPrefix}
+              renderRowActions={renderChildRowActions}
+              rowActionsPlacement={childRowActionsPlacement}
+              renderRowContextTarget={renderChildRowContextTarget}
+              childRowsExpandable={childRowsExpandable}
+              activeDisclosure={activeDisclosure}
+              onDisclosureChange={setActiveDisclosure}
             />
           </div>
         )}

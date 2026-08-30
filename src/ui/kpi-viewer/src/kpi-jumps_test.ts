@@ -1,5 +1,10 @@
-import { assertEquals } from "@std/assert";
-import { type KpiJumps, kpiNumberAction, kpiTrendAction } from "./kpi-jumps.ts";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import {
+  kpiInteractionPlan,
+  type KpiJumps,
+  kpiNumberAction,
+  kpiTrendAction,
+} from "./kpi-jumps.ts";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -100,4 +105,41 @@ Deno.test("kpi-jumps : saut trend absent, number seul → trend retombe sur dril
   const jumpsNoTrend: KpiJumps = { number: JUMPS.number };
   const action = kpiTrendAction(jumpsNoTrend, "Voir la tendance", true);
   assertEquals(action?.kind, "drill");
+});
+
+Deno.test("kpi interactions : clic simple ou Espace ne touche qu'au contexte", () => {
+  assertEquals(kpiInteractionPlan("context", true, true, true), {
+    updateContext: true,
+    toggleLevel: false,
+    sendMessage: false,
+  });
+  assertEquals(kpiInteractionPlan("context", true, false, true), {
+    updateContext: false,
+    toggleLevel: false,
+    sendMessage: false,
+  });
+});
+
+Deno.test("kpi interactions : double-clic, Entree ou chevron ne touche qu'au detail", () => {
+  assertEquals(kpiInteractionPlan("detail", true, true, true), {
+    updateContext: false,
+    toggleLevel: true,
+    sendMessage: false,
+  });
+  assertEquals(kpiInteractionPlan("detail", false, true, true), {
+    updateContext: false,
+    toggleLevel: false,
+    sendMessage: true,
+  });
+});
+
+Deno.test("kpi navigation detail is an action, not a mounted disclosure", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./KpiViewer.tsx", import.meta.url),
+  );
+
+  assertEquals(source.includes("expandedTriggerKey"), false);
+  assertEquals(source.includes("aria-expanded"), false);
+  assertStringIncludes(source, "onOpenJump");
+  assertStringIncludes(source, "void nav.jump(jump)");
 });

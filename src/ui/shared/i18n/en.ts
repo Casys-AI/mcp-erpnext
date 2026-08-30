@@ -128,7 +128,13 @@ export const en: Record<string, string> = {
   "chart.keyboard.target": "{label} · {series} · {value}",
   "chart.keyboard.target_single": "{label} · {value}",
   "chart.keyboard.help":
-    "Left and right change the point; up and down change the series; Enter opens details; Space adds context.",
+    "Left and right change the point; up and down change the series; Space adds it to context; Enter opens or closes available details.",
+  "chart.keyboard.help_context":
+    "Left and right change the point; up and down change the series; Space adds it to context.",
+  "chart.keyboard.help_detail":
+    "Left and right change the point; up and down change the series; Enter opens or closes available details.",
+  "chart.keyboard.help_navigation":
+    "Left and right change the point; up and down change the series.",
   "chart.keyboard.control": "Explore chart: {target}. {help}",
   // ── /chart-viewer ─────────────────────────────────────────────────────────
 
@@ -231,7 +237,7 @@ export const en: Record<string, string> = {
   "funnel.autorefresh": "Auto-refresh on focus",
   "funnel.stage.click_to_see": "Click to see {label}",
   "funnel.stage.aria_open": "Open {label}, {count}",
-  "funnel.stage.aria_context": "Select {label}, {count}, as active context",
+  "funnel.stage.aria_context": "Add {label}, {count}, to active context",
   "funnel.stage.aria_ask": "Ask about {label}, {count}",
   "funnel.error.parse_failed": "Failed to parse funnel payload",
   "funnel.drill_down.leads": "Show all leads",
@@ -267,7 +273,7 @@ export const en: Record<string, string> = {
   "doclist.detail.action.cancel_ok": "Cancelled",
   "doclist.detail.action.cancel_label": "Cancel document",
   "doclist.detail.back_to_list": "Back to list",
-  "doclist.detail.inspector_label": "inspector",
+  "doclist.detail.inspector_label": "details",
   "doclist.detail.close_inspector": "Close details",
   "doclist.detail.back_list_label": "‹ list",
   // ── /doclist-viewer ───────────────────────────────────────────────────────
@@ -279,13 +285,34 @@ export const en: Record<string, string> = {
   "message.send_error": "Could not send to the conversation",
   "context.active.label": "Context",
   "context.active.items": "Active context selections",
-  "context.active.select": "Select {label} as active context",
+  "context.active.select": "Add {label} to active context",
   "context.active.clear": "Remove {label} from active context",
   "context.active.clear_all": "Clear all",
   "context.active.error": "Context not updated",
   "context.active.evicted": "8 max · removed {label}",
-  "chart.tooltip.click": "click",
-  "chart.tooltip.double_click_context": "double-click ↔ add to context",
+  "interaction.detail.open": "Open details for {label}",
+  "interaction.detail.close": "Close details for {label}",
+  "interaction.detail.open_hint": "Details · double-click",
+  "interaction.detail.close_hint": "Close · double-click",
+  "document.row.open_actions":
+    "Click or Space to add {label} to context · double-click or Enter to show its actions",
+  "document.row.close_actions":
+    "Click or Space to add {label} to context · double-click or Enter to close its actions",
+  "document.row.open_actions_only":
+    "Double-click or press Enter to show actions for {label}",
+  "document.row.close_actions_only":
+    "Double-click or press Enter to close actions for {label}",
+  "document.row.open_detail":
+    "Click or Space to add {label} to context · double-click or Enter to open its details",
+  "document.row.close_detail":
+    "Click or Space to add {label} to context · double-click or Enter to close its details",
+  "document.row.open_detail_only":
+    "Double-click or press Enter to open details for {label}",
+  "document.row.close_detail_only":
+    "Double-click or press Enter to close details for {label}",
+  "chart.tooltip.click_action_context": "click + context · 2× details",
+  "chart.tooltip.click_action_context_only": "click + context",
+  "chart.tooltip.click_action_fallback": "2× details",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Back",
   "nav.elided": "…{n}",

@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import { canRefreshDoclistRoot } from "./capabilities.ts";
 
 const REQUEST = {
@@ -27,4 +27,11 @@ Deno.test("doclist refresh capability : message-only, nom absent ou requête abs
     canRefreshDoclistRoot({}, ["erpnext_sales_invoice_list"], null),
     false,
   );
+});
+
+Deno.test("doclist root : une nouvelle racine démonte les gestes en attente", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./DoclistViewer.tsx", import.meta.url),
+  );
+  assertStringIncludes(source, "<DoclistBody\n          key={rootKey}");
 });

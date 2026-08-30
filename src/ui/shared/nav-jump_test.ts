@@ -1,5 +1,10 @@
 import { assertEquals } from "@std/assert";
-import { jumpInto, refreshCurrent, type StackStore } from "./nav-jump.ts";
+import {
+  jumpInto,
+  refreshCurrent,
+  type StackStore,
+  toggleRootJump,
+} from "./nav-jump.ts";
 import type { Jump, ToolHost } from "./jumps.ts";
 import {
   createStack,
@@ -39,6 +44,7 @@ function deferredHost() {
   return {
     host,
     resolve: (i: number, payload: unknown) => pending[i](payload),
+    calls: () => pending.length,
   };
 }
 
@@ -133,6 +139,103 @@ Deno.test("jumpInto - un outil en erreur remplit `error`, pas `body`", async () 
   assertEquals(await jumpInto(store, host, jump("X")), "pushed");
   assertEquals(currentLevel(store.stack).loading, false);
   assertEquals(typeof currentLevel(store.stack).error, "string");
+  assertEquals(currentLevel(store.stack).body, undefined);
+});
+
+Deno.test("toggleRootJump - ouvre puis referme le même enfant sans second appel", async () => {
+  const store = memoryStore(createStack({ title: "Racine", kind: "root" }));
+  const { host, resolve, calls } = deferredHost();
+  const first = toggleRootJump(store, host, jump("A"), "point:a");
+  assertEquals(store.stack.levels.map((level) => level.title), ["Racine", "A"]);
+  assertEquals(currentLevel(store.stack).loading, true);
+  assertEquals(calls(), 1);
+  resolve(0, { count: 1, data: [{ name: "A-1" }] });
+  assertEquals(await first, "pushed");
+  assertEquals(currentLevel(store.stack).count, 1);
+
+  assertEquals(
+    await toggleRootJump(store, host, jump("A"), "point:a"),
+    "closed",
+  );
+  assertEquals(store.stack.levels.map((level) => level.title), ["Racine"]);
+  assertEquals(calls(), 1);
+});
+
+Deno.test("toggleRootJump - un autre point remplace atomiquement toute la branche", async () => {
+  const store = memoryStore(createStack({ title: "Racine", kind: "root" }));
+  const { host, resolve } = deferredHost();
+  const sameJump = jump("Détail");
+  const first = toggleRootJump(store, host, sameJump, "point:a");
+  resolve(0, { data: [] });
+  await first;
+  store.set((stack) =>
+    pushLevel(stack, {
+      title: "Descendant",
+      kind: "record",
+      body: { data: { name: "DOC-1" } },
+    })
+  );
+
+  const replacement = toggleRootJump(store, host, sameJump, "point:b");
+  assertEquals(store.stack.levels.map((level) => level.title), [
+    "Racine",
+    "Détail",
+  ]);
+  assertEquals(currentLevel(store.stack).loading, true);
+  resolve(1, { count: 2, data: [{}, {}] });
+  assertEquals(await replacement, "replaced");
+  assertEquals(currentLevel(store.stack).count, 2);
+});
+
+Deno.test("toggleRootJump - la réponse tardive du point remplacé ne touche pas le nouveau", async () => {
+  const store = memoryStore(createStack({ title: "Racine", kind: "root" }));
+  const { host, resolve } = deferredHost();
+  const old = toggleRootJump(store, host, jump("A"));
+  const current = toggleRootJump(store, host, jump("B"));
+  assertEquals(store.stack.levels.map((level) => level.title), ["Racine", "B"]);
+
+  resolve(0, { count: 7, data: [{ name: "ancien" }] });
+  assertEquals(await old, "pushed");
+  assertEquals(currentLevel(store.stack).title, "B");
+  assertEquals(currentLevel(store.stack).loading, true);
+  assertEquals(currentLevel(store.stack).body, undefined);
+
+  resolve(1, { count: 2, data: [{ name: "nouveau" }] });
+  assertEquals(await current, "replaced");
+  assertEquals(currentLevel(store.stack).count, 2);
+});
+
+Deno.test("toggleRootJump - fermer puis rouvrir pendant le chargement garde un id neuf", async () => {
+  const store = memoryStore(createStack({ title: "Racine", kind: "root" }));
+  const { host, resolve } = deferredHost();
+  const old = toggleRootJump(store, host, jump("A"));
+  const oldId = currentLevel(store.stack).id;
+  assertEquals(await toggleRootJump(store, host, jump("A")), "closed");
+  const current = toggleRootJump(store, host, jump("A"));
+  const currentId = currentLevel(store.stack).id;
+  assertEquals(oldId === currentId, false);
+
+  resolve(0, { count: 7, data: [{ name: "ancien" }] });
+  await old;
+  assertEquals(currentLevel(store.stack).id, currentId);
+  assertEquals(currentLevel(store.stack).loading, true);
+  assertEquals(currentLevel(store.stack).body, undefined);
+
+  resolve(1, { count: 1, data: [{ name: "nouveau" }] });
+  await current;
+  assertEquals(currentLevel(store.stack).count, 1);
+});
+
+Deno.test("toggleRootJump - une ancienne racine ne peut pas hydrater la nouvelle", async () => {
+  const store = memoryStore(createStack({ title: "Racine A", kind: "root" }));
+  const { host, resolve } = deferredHost();
+  const old = toggleRootJump(store, host, jump("Détail"));
+  store.set((stack) =>
+    reconcileRoot(stack, { title: "Racine B", kind: "root" })
+  );
+  resolve(0, { count: 4, data: [{ name: "ancien" }] });
+  await old;
+  assertEquals(store.stack.levels.map((level) => level.title), ["Racine B"]);
   assertEquals(currentLevel(store.stack).body, undefined);
 });
 

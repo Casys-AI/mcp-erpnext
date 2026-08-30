@@ -38,17 +38,21 @@ import type { KpiData } from "./types.ts";
 import { currentLocale, formatNumber, toNumber } from "~/shared/format";
 import { t } from "~/shared/i18n.ts";
 import { type TFunction, useT } from "~/shared/i18n-hook.ts";
+import { type DrillDownChannel, sharedLabel } from "~/shared/drill-down";
 import {
-  type DrillDownChannel,
-  drillDownChannel,
-  sharedLabel,
-  shareSelection,
-} from "~/shared/drill-down";
-import { kpiNumberAction, kpiTrendAction } from "./kpi-jumps.ts";
+  kpiInteractionPlan,
+  kpiNumberAction,
+  kpiTrendAction,
+} from "./kpi-jumps.ts";
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
+import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
-import type { ContextSelectionItem } from "~/shared/active-context.ts";
-import { contextFallbackForInlineJump } from "~/shared/active-context-flow.ts";
+import { useClickIntent } from "~/shared/useClickIntent.ts";
+import {
+  canShareActiveContextResource,
+  type ContextSelectionItem,
+} from "~/shared/active-context.ts";
+import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
 
 const app = new App({ name: "KPI Viewer", version: "1.0.0" });
 const KPI_REFRESH_INTERVAL_MS = 15_000;
@@ -140,23 +144,6 @@ function kpiContextCandidates(
       ? [kpiTrendContext(data, tf)]
       : []),
   ];
-}
-
-/* ── Accessibilité clavier ────────────────────────────────────────── */
-
-/** Rend un élément cliquable accessible au clavier (Entrée / Espace). */
-function activationHandlers(onActivate?: () => void) {
-  if (!onActivate) return {};
-  return {
-    role: "button" as const,
-    tabIndex: 0,
-    onClick: onActivate,
-    onKeyDown: (event: KeyboardEvent) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      onActivate();
-    },
-  };
 }
 
 /* ── Ramp chromatique sparkline ───────────────────────────────────── */
@@ -425,7 +412,8 @@ function KpiCard({
   layout,
   jumpsEnabled,
   activeContext,
-  onJump,
+  onOpenJump,
+  onAsk,
   onRefresh,
 }: {
   data: KpiData;
@@ -433,12 +421,12 @@ function KpiCard({
   layout: "wide" | "panel" | "mobile";
   jumpsEnabled: boolean;
   activeContext: ReturnType<typeof useActiveContext>;
-  onJump?: (jump: Jump) => void;
+  onOpenJump?: (jump: Jump) => void;
+  onAsk?: (message: string) => Promise<boolean>;
   onRefresh?: () => void;
 }) {
   const t = useT();
-  const legacyChannel = drillDownChannel(app.getHostCapabilities());
-  const canFallback = activeContext.supported || legacyChannel === "message";
+  const clickIntent = useClickIntent();
   const sparkline = data.sparkline && data.sparkline.length >= 2
     ? data.sparkline
     : undefined;
@@ -462,89 +450,88 @@ function KpiCard({
   );
 
   async function legacyDrillDown(message: string) {
-    if (legacyChannel !== "message") return;
-    const channel = await shareSelection(app, {
-      view: "KPI",
-      label: data.label,
-      value: [amount, unit].filter(Boolean).join(" "),
-      suggested: message,
-    });
-    if (channel === "none") return;
-    setShared(channel);
+    if (!onAsk || !await onAsk(message)) return;
+    setShared("message");
     setTimeout(() => setShared(null), 1500);
   }
 
   const numberContext = kpiNumberContext(data);
   const trendContext = kpiTrendContext(data, t);
 
-  function activate(
+  function activateContext(
     selection: ContextSelectionItem,
-    fallbackMessage?: string,
   ) {
-    void activeContext.activate(selection, fallbackMessage).then((result) => {
-      if (result === "message") {
-        setShared("message");
-        setTimeout(() => setShared(null), 1500);
-      }
-    });
+    const plan = kpiInteractionPlan(
+      "context",
+      false,
+      activeContext.supported,
+      false,
+    );
+    if (!plan.updateContext) return;
+    return activeContext.activateReversible(selection);
   }
 
-  function activateAndJump(
-    selection: ContextSelectionItem,
-    jump: Jump,
-    fallbackMessage?: string,
-  ) {
-    const jumped = onJump !== undefined;
-    if (activeContext.supported) {
-      activate(
-        selection,
-        contextFallbackForInlineJump(fallbackMessage, jumped),
-      );
-    }
-    if (jumped) onJump(jump);
+  function canOpenDetail(action: ReturnType<typeof kpiNumberAction>): boolean {
+    return action?.kind === "jump"
+      ? onOpenJump !== undefined
+      : action?.kind === "drill" && onAsk !== undefined;
   }
 
-  // La couleur du chevron annonce le niveau qui arrive : accent pour une
-  // liste, brand pour un graphique.
-  const numberChevron = data._jumps?.number?.kind === "chart"
-    ? "text-brand"
-    : "text-accent";
-  const trendChevron = data._jumps?.trend?.kind === "chart"
-    ? "text-brand"
-    : "text-accent";
-  const handleNumber: (() => void) | undefined = numberAction?.kind === "jump"
-    ? () => activateAndJump(numberContext, numberAction.jump, data._drillDown)
-    : numberAction?.kind === "drill" && canFallback
-    ? () => {
-      if (activeContext.supported) {
-        activate(numberContext, numberAction.message);
-      } else {
-        void legacyDrillDown(numberAction.message);
-      }
+  function toggleDetail(
+    action: ReturnType<typeof kpiNumberAction>,
+    selection: ContextSelectionItem,
+  ) {
+    const hasJump = action?.kind === "jump" && onOpenJump !== undefined;
+    const hasMessage = action?.kind === "drill" && onAsk !== undefined;
+    const plan = kpiInteractionPlan(
+      "detail",
+      hasJump,
+      activeContext.supported,
+      hasMessage,
+    );
+    if (plan.toggleLevel && action?.kind === "jump") {
+      onOpenJump?.(action.jump);
+    } else if (plan.sendMessage && action?.kind === "drill") {
+      void legacyDrillDown(action.message);
     }
-    : undefined;
+  }
 
-  const handleTrend: (() => void) | undefined = trendAction?.kind === "jump"
-    ? () =>
-      activateAndJump(trendContext, trendAction.jump, data._trendDrillDown)
-    : trendAction?.kind === "drill" && canFallback
-    ? () => {
-      if (activeContext.supported) {
-        activate(trendContext, trendAction.message);
-      } else {
-        void legacyDrillDown(trendAction.message);
-      }
-    }
-    : undefined;
-  const numberAriaLabel = handleNumber
-    ? numberAction?.kind === "drill" && activeContext.supported
+  function interactionIntent(
+    selection: ContextSelectionItem,
+    action: ReturnType<typeof kpiNumberAction>,
+  ) {
+    return {
+      key: selection.id,
+      onSingle: () => activateContext(selection),
+      onDouble: () => toggleDetail(action, selection),
+    };
+  }
+
+  const numberHasDetail = canOpenDetail(numberAction);
+  const trendHasDetail = canOpenDetail(trendAction);
+  const numberInteractive = activeContext.supported || numberHasDetail;
+  const trendInteractive = activeContext.supported || trendHasDetail;
+  const numberSelected = activeContext.isSelected(numberContext);
+  const trendSelected = activeContext.isSelected(trendContext);
+  const numberAriaLabel = numberInteractive
+    ? activeContext.supported
       ? t("context.active.select", { label: numberContext.label })
       : t("kpi.drilldown.aria_detail", { label: data.label })
     : undefined;
-  const trendAriaLabel = handleTrend
-    ? trendAction?.kind === "drill" && activeContext.supported
+  const trendAriaLabel = trendInteractive
+    ? activeContext.supported
       ? t("context.active.select", { label: trendContext.label })
       : t("kpi.drilldown.aria_trend", { label: data.label })
+    : undefined;
+  const numberKeyShortcuts = numberHasDetail
+    ? activeContext.supported ? "Space Enter" : "Enter"
+    : activeContext.supported
+    ? "Space"
+    : undefined;
+  const trendKeyShortcuts = trendHasDetail
+    ? activeContext.supported ? "Space Enter" : "Enter"
+    : activeContext.supported
+    ? "Space"
     : undefined;
   const compact = layout !== "wide";
 
@@ -572,38 +559,58 @@ function KpiCard({
             />
           </div>
 
-          {/* Valeur principale */}
-          <span
-            class={cx(
-              "font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
-              "text-[length:var(--text-metric-compact)]",
-              numberAction?.kind === "jump" &&
-                "group/num cursor-pointer hover:underline decoration-dotted underline-offset-[6px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-              numberAction?.kind === "drill" && canFallback &&
-                "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-            )}
-            style={numberAction?.kind === "drill" && canFallback
-              ? {
-                borderBottom: "1px dashed var(--color-accent-edge)",
-                paddingBottom: "1px",
-              }
-              : undefined}
-            aria-label={numberAriaLabel}
-            {...activationHandlers(handleNumber)}
-          >
-            {amount}
-            {numberAction?.kind === "jump" && (
-              <span
-                aria-hidden="true"
-                class={`select-none opacity-0 group-hover/num:opacity-100 group-focus-visible/num:opacity-100 ml-0.5 text-[0.5em] align-middle ${numberChevron}`}
-              >
-                {" "}›
+          {/* Valeur principale : donnee a gauche, detail explicite a droite. */}
+          <div class="flex min-w-0 items-center justify-between gap-2">
+            <span
+              class={cx(
+                "rounded-[4px] font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
+                "text-[length:var(--text-metric-compact)]",
+                numberInteractive &&
+                  "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+                numberSelected &&
+                  "bg-sunken outline outline-1 outline-accent-edge",
+              )}
+              role={numberInteractive ? "button" : undefined}
+              tabIndex={numberInteractive ? 0 : undefined}
+              aria-label={numberAriaLabel}
+              aria-pressed={activeContext.supported
+                ? numberSelected
+                : undefined}
+              aria-keyshortcuts={numberKeyShortcuts}
+              onClick={numberInteractive
+                ? (event) =>
+                  clickIntent.click(
+                    interactionIntent(numberContext, numberAction),
+                    event.detail,
+                  )
+                : undefined}
+              onDblClick={numberInteractive
+                ? () =>
+                  clickIntent.doubleClick(
+                    interactionIntent(numberContext, numberAction),
+                  )
+                : undefined}
+              onKeyDown={numberInteractive
+                ? (event) =>
+                  clickIntent.keyDown(
+                    interactionIntent(numberContext, numberAction),
+                    event,
+                  )
+                : undefined}
+            >
+              {amount}{" "}
+              <span class="text-[length:var(--text-metric-unit)] text-ink-faint">
+                {unit}
               </span>
-            )}{" "}
-            <span class="text-[length:var(--text-metric-unit)] text-ink-faint">
-              {unit}
             </span>
-          </span>
+            {numberHasDetail && (
+              <DetailToggleButton
+                label={data.label}
+                onToggle={() => toggleDetail(numberAction, numberContext)}
+                touch
+              />
+            )}
+          </div>
 
           {/* Delta */}
           {data.delta !== undefined && (
@@ -629,30 +636,56 @@ function KpiCard({
           {/* Confirmation drill-down */}
           {shared && <DrillDownConfirm channel={shared} />}
 
-          {/* Sparkline inline — cliquable si handleTrend est défini */}
+          {/* Sparkline inline : surface de contexte et chevron independants. */}
           {sparkline && (
-            <div
-              class={cx(
-                "border-t border-line-soft pt-1.5",
-                trendAction?.kind === "jump" &&
-                  "group/trend cursor-pointer rounded-[4px] hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-                trendAction?.kind === "drill" && canFallback &&
-                  "cursor-pointer rounded-[4px] hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+            <div class="relative border-t border-line-soft pt-1.5">
+              <div
+                class={cx(
+                  "rounded-[4px]",
+                  trendHasDetail && "pr-10",
+                  trendInteractive &&
+                    "cursor-pointer hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+                  trendSelected &&
+                    "bg-sunken outline outline-1 outline-accent-edge",
+                )}
+                role={trendInteractive ? "button" : undefined}
+                tabIndex={trendInteractive ? 0 : undefined}
+                aria-label={trendAriaLabel}
+                aria-pressed={activeContext.supported
+                  ? trendSelected
+                  : undefined}
+                aria-keyshortcuts={trendKeyShortcuts}
+                onClick={trendInteractive
+                  ? (event) =>
+                    clickIntent.click(
+                      interactionIntent(trendContext, trendAction),
+                      event.detail,
+                    )
+                  : undefined}
+                onDblClick={trendInteractive
+                  ? () =>
+                    clickIntent.doubleClick(
+                      interactionIntent(trendContext, trendAction),
+                    )
+                  : undefined}
+                onKeyDown={trendInteractive
+                  ? (event) =>
+                    clickIntent.keyDown(
+                      interactionIntent(trendContext, trendAction),
+                      event,
+                    )
+                  : undefined}
+              >
+                <SparklineBars values={sparkline} height={44} gap={4} />
+              </div>
+              {trendHasDetail && (
+                <DetailToggleButton
+                  label={trendContext.label}
+                  onToggle={() => toggleDetail(trendAction, trendContext)}
+                  touch
+                  class="absolute right-0 top-2"
+                />
               )}
-              aria-label={trendAriaLabel}
-              {...activationHandlers(handleTrend)}
-            >
-              {trendAction?.kind === "jump" && (
-                <div class="flex justify-end mb-0.5">
-                  <span
-                    aria-hidden="true"
-                    class={`font-mono text-micro opacity-0 group-hover/trend:opacity-100 group-focus-visible/trend:opacity-100 select-none ${trendChevron}`}
-                  >
-                    ›
-                  </span>
-                </div>
-              )}
-              <SparklineBars values={sparkline} height={44} gap={4} />
             </div>
           )}
 
@@ -696,36 +729,53 @@ function KpiCard({
             />
           </div>
 
-          {/* Valeur principale — H1 : jump › ou soulignement pointillé au survol */}
-          <span
-            class={cx(
-              "font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
-              "text-[length:var(--text-metric)]",
-              numberAction?.kind === "jump" &&
-                "group/num cursor-pointer hover:underline decoration-dotted underline-offset-[6px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-              numberAction?.kind === "drill" && canFallback &&
-                "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+          {/* Valeur principale — contexte et detail gardent deux cibles. */}
+          <div class="flex min-w-0 items-center gap-2">
+            <span
+              class={cx(
+                "rounded-[4px] font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
+                "text-[length:var(--text-metric)]",
+                numberInteractive &&
+                  "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+                numberSelected &&
+                  "bg-sunken outline outline-1 outline-accent-edge",
+              )}
+              role={numberInteractive ? "button" : undefined}
+              tabIndex={numberInteractive ? 0 : undefined}
+              aria-label={numberAriaLabel}
+              aria-pressed={activeContext.supported
+                ? numberSelected
+                : undefined}
+              aria-keyshortcuts={numberKeyShortcuts}
+              onClick={numberInteractive
+                ? (event) =>
+                  clickIntent.click(
+                    interactionIntent(numberContext, numberAction),
+                    event.detail,
+                  )
+                : undefined}
+              onDblClick={numberInteractive
+                ? () => clickIntent.doubleClick(
+                  interactionIntent(numberContext, numberAction),
+                )
+                : undefined}
+              onKeyDown={numberInteractive
+                ? (event) =>
+                  clickIntent.keyDown(
+                    interactionIntent(numberContext, numberAction),
+                    event,
+                  )
+                : undefined}
+            >
+              {amount} <span class="text-[26px] text-ink-faint">{unit}</span>
+            </span>
+            {numberHasDetail && (
+              <DetailToggleButton
+                label={data.label}
+                onToggle={() => toggleDetail(numberAction, numberContext)}
+              />
             )}
-            style={numberAction?.kind === "drill" && canFallback
-              ? {
-                /* style inline légal : valeur de layout/interaction, pas une couleur brute */
-                borderBottom: "1px dashed var(--color-accent-edge)",
-                paddingBottom: "1px",
-              }
-              : undefined}
-            aria-label={numberAriaLabel}
-            {...activationHandlers(handleNumber)}
-          >
-            {amount}
-            {numberAction?.kind === "jump" && (
-              <span
-                aria-hidden="true"
-                class={`select-none opacity-0 group-hover/num:opacity-100 group-focus-visible/num:opacity-100 ml-0.5 text-[0.5em] align-middle ${numberChevron}`}
-              >
-                {" "}›
-              </span>
-            )} <span class="text-[26px] text-ink-faint">{unit}</span>
-          </span>
+          </div>
 
           {/* Delta */}
           {data.delta !== undefined && (
@@ -756,37 +806,64 @@ function KpiCard({
         {sparkline && (
           <div
             class={cx(
-              "flex flex-col justify-between gap-[10px] border-l border-line bg-sunken p-[18px_16px]",
-              "hover:outline hover:outline-1 hover:outline-accent-edge",
-              trendAction?.kind === "jump" &&
-                "group/trend cursor-pointer rounded-[4px] hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-              trendAction?.kind === "drill" && canFallback &&
-                "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+              "relative border-l border-line bg-sunken p-[18px_16px]",
+              trendSelected && "outline outline-1 outline-accent-edge",
             )}
             style={{ outlineOffset: "-1px" }}
-            aria-label={trendAriaLabel}
-            {...activationHandlers(handleTrend)}
           >
-            {/* Label période + tendance → — H2 */}
-            <div class="flex items-center justify-between">
-              {periodLabel && (
-                <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
-                  {periodLabel}
-                </span>
+            <div
+              class={cx(
+                "flex h-full flex-col justify-between gap-[10px] rounded-[4px]",
+                trendHasDetail && "pr-7",
+                trendInteractive &&
+                  "cursor-pointer hover:outline hover:outline-1 hover:outline-accent-edge focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
               )}
-              <span class="font-mono text-micro text-accent flex items-center gap-1">
-                {t("kpi.sparkline.trend_label")}
-                {trendAction?.kind === "jump" && (
-                  <span
-                    aria-hidden="true"
-                    class={`select-none opacity-0 group-hover/trend:opacity-100 group-focus-visible/trend:opacity-100 ${trendChevron}`}
-                  >
-                    {" "}›
+              role={trendInteractive ? "button" : undefined}
+              tabIndex={trendInteractive ? 0 : undefined}
+              aria-label={trendAriaLabel}
+              aria-pressed={activeContext.supported ? trendSelected : undefined}
+              aria-keyshortcuts={trendKeyShortcuts}
+              onClick={trendInteractive
+                ? (event) =>
+                  clickIntent.click(
+                    interactionIntent(trendContext, trendAction),
+                    event.detail,
+                  )
+                : undefined}
+              onDblClick={trendInteractive
+                ? () =>
+                  clickIntent.doubleClick(
+                    interactionIntent(trendContext, trendAction),
+                  )
+                : undefined}
+              onKeyDown={trendInteractive
+                ? (event) =>
+                  clickIntent.keyDown(
+                    interactionIntent(trendContext, trendAction),
+                    event,
+                  )
+                : undefined}
+            >
+              {/* Label periode + tendance → — H2 */}
+              <div class="flex items-center justify-between">
+                {periodLabel && (
+                  <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+                    {periodLabel}
                   </span>
                 )}
-              </span>
+                <span class="font-mono text-micro text-accent">
+                  {t("kpi.sparkline.trend_label")}
+                </span>
+              </div>
+              <SparklineBars values={sparkline} height={56} gap={5} />
             </div>
-            <SparklineBars values={sparkline} height={56} gap={5} />
+            {trendHasDetail && (
+              <DetailToggleButton
+                label={trendContext.label}
+                onToggle={() => toggleDetail(trendAction, trendContext)}
+                class="absolute right-2 top-2"
+              />
+            )}
           </div>
         )}
       </div>
@@ -838,9 +915,20 @@ function KpiViewerContent({
     label: data.label,
   });
   const activeContext = useActiveContext(app, rootKey);
+  const hostCapabilities = fixture ? undefined : app.getHostCapabilities();
+  const documentContext: DocumentContextController = {
+    supported: !fixture && activeContext.supported,
+    activate: activeContext.activate,
+    activateReversible: activeContext.activateReversible,
+    reconcileView: activeContext.reconcileView,
+    reconcileDocument: activeContext.reconcileDocument,
+    isSelected: activeContext.isSelected,
+    canShareResource: (resource) =>
+      canShareActiveContextResource(hostCapabilities, resource),
+  };
   useEffect(() => {
-    void activeContext.reconcile(kpiContextCandidates(data, t));
-  }, [data, activeContext.selections]);
+    void activeContext.reconcileView("KPI", kpiContextCandidates(data, t));
+  }, [data, activeContext.reconcileView]);
   const viewerNav = useViewerNav(app, {
     title: data.label,
     kind: "root",
@@ -915,6 +1003,8 @@ function KpiViewerContent({
         onMutationInvalidate={onMutationInvalidate}
         onMutationRefresh={onMutationRefresh}
         onRefresh={() => void nav.refreshLevel()}
+        context={documentContext}
+        contextView={data.label}
       >
         <>
           {isRoot && current.stale && (
@@ -948,7 +1038,12 @@ function KpiViewerContent({
             layout={layout}
             jumpsEnabled={jumpsEnabled}
             activeContext={activeContext}
-            onJump={jumpsEnabled ? nav.jump : undefined}
+            onOpenJump={jumpsEnabled
+              ? (jump) => {
+                void nav.jump(jump);
+              }
+              : undefined}
+            onAsk={ask}
             onRefresh={onRefresh}
           />
         </>

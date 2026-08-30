@@ -35,6 +35,8 @@ export interface StackStore {
 
 export type JumpOutcome = "ignored" | "popped" | "pushed";
 
+export type RootJumpOutcome = "closed" | "pushed" | "replaced";
+
 export async function jumpInto(
   store: StackStore,
   host: ToolHost,
@@ -73,6 +75,55 @@ export async function jumpInto(
   store.set((s) => {
     if (s.rootIdentity !== decision.rootIdentity) return s;
     return patchLevel(s, id, {
+      loading: false,
+      body: loaded.body,
+      count: loaded.count,
+      error: loaded.error,
+    });
+  });
+  return decision.outcome;
+}
+
+/**
+ * Ouvre un saut comme enfant direct de la racine.
+ *
+ * La même donnée racine referme toute la branche ; une autre remplace cette
+ * branche en une seule mise à jour. Le chart peut ainsi rester visible sans
+ * qu'un clic sur sa racine empile accidentellement un niveau sous le détail
+ * courant.
+ */
+export async function toggleRootJump(
+  store: StackStore,
+  host: ToolHost,
+  jump: Jump,
+  triggerKey = levelKey(jump.tool),
+): Promise<RootJumpOutcome> {
+  const init = { ...levelFromJump(jump), rootTriggerKey: triggerKey };
+  const decision = {
+    outcome: "pushed" as RootJumpOutcome,
+    id: "",
+    rootIdentity: "",
+  };
+  store.set((s) => {
+    const rootChild = s.levels[1];
+    if (rootChild?.rootTriggerKey === triggerKey) {
+      decision.outcome = "closed";
+      return popToLevel(s, 0);
+    }
+    const replaced = s.levels.length > 1;
+    const rootOnly = replaced ? popToLevel(s, 0) : s;
+    const next = pushLevel(rootOnly, init);
+    decision.id = currentLevel(next).id;
+    decision.rootIdentity = s.rootIdentity;
+    decision.outcome = replaced ? "replaced" : "pushed";
+    return next;
+  });
+  if (decision.outcome === "closed") return decision.outcome;
+
+  const loaded = await loadLevelBody(host, jump.tool);
+  store.set((s) => {
+    if (s.rootIdentity !== decision.rootIdentity) return s;
+    return patchLevel(s, decision.id, {
       loading: false,
       body: loaded.body,
       count: loaded.count,

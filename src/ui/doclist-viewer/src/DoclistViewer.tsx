@@ -41,6 +41,10 @@ import { PathBar } from "~/shared/PathBar";
 import { LevelBody, levelListData } from "~/shared/levels/LevelBody";
 import { DOCLIST_FIXTURE, isFixtureMode } from "./fixture.ts";
 import { canRefreshDoclistRoot } from "./capabilities.ts";
+import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
+import { canShareActiveContextResource } from "~/shared/active-context.ts";
+import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
+import { useActiveContext } from "~/shared/useActiveContext.ts";
 
 const app = new App({ name: "Doclist Viewer", version: "2.0.0" });
 const DOCLIST_REFRESH_INTERVAL_MS = 15_000;
@@ -283,16 +287,19 @@ function DoclistContent({
   onError: (msg: string | null) => void;
 }) {
   const t = useT();
-  const { ref: shellRef, layout } = useViewerLayout<HTMLDivElement>();
+  const { ref: shellRef, layout, boundsStyle } = useViewerLayout<
+    HTMLDivElement
+  >();
   const rootTitle = data._title ?? data.doctype ?? t("doclist.title.default");
+  const rootKey = viewerRootKey("doclist", data.refreshRequest, {
+    doctype: data.doctype ?? null,
+    title: data.doctype ? null : rootTitle,
+  });
   const viewerNav = useViewerNav(app, {
     title: rootTitle,
     kind: "root",
     origin: "list",
-    key: viewerRootKey("doclist", data.refreshRequest, {
-      doctype: data.doctype ?? null,
-      title: data.doctype ? null : rootTitle,
-    }),
+    key: rootKey,
   }, {
     fixture,
     rootList: data,
@@ -306,13 +313,35 @@ function DoclistContent({
   const { list } = viewerNav;
   const isList = isRoot || current.kind === "list";
   const rootLevelId = nav.stack.levels[0].id;
+  const activeContext = useActiveContext(app, rootKey);
+  const hostCapabilities = fixture ? undefined : app.getHostCapabilities();
+  const context: DocumentContextController = {
+    supported: !fixture && activeContext.supported,
+    activate: activeContext.activate,
+    activateReversible: activeContext.activateReversible,
+    reconcileView: activeContext.reconcileView,
+    reconcileDocument: activeContext.reconcileDocument,
+    isSelected: activeContext.isSelected,
+    canShareResource: (resource) =>
+      canShareActiveContextResource(hostCapabilities, resource),
+  };
+  const activeContextChip = (
+    <ActiveContextChip
+      selections={activeContext.selections}
+      failed={activeContext.failed}
+      evictedLabel={activeContext.evictedLabel}
+      onRemove={activeContext.remove}
+      onClear={activeContext.clear}
+      compact={layout !== "wide"}
+    />
+  );
 
   useLayoutEffect(() => {
     if (rootFreshEvent > rootMutationEvent) nav.clearStale(rootLevelId);
   }, [rootFreshEvent, rootMutationEvent, rootLevelId]);
 
   return (
-    <ViewerShell class="h-[460px]" containerRef={shellRef}>
+    <ViewerShell style={boundsStyle} containerRef={shellRef}>
       <ViewerHeader
         title={isRoot ? rootTitle : current.title}
         count={isList
@@ -320,36 +349,45 @@ function DoclistContent({
           : undefined}
         live={isRoot && refreshAvailable && !error}
         layout={layout}
-        actions={isList && !current.loading && (
+        actions={
           <>
-            <SearchControl
-              value={list.filter}
-              layout={layout}
-              open={list.searchOpen}
-              onOpenChange={list.setSearchOpen}
-              onInput={list.setFilter}
-            />
-            {layout === "wide" && (
+            {activeContextChip}
+            {isList && !current.loading && (
               <>
-                {isRoot && refreshAvailable && (
-                  <ToolButton
-                    disabled={refreshing}
-                    title={t("common.refresh")}
-                    onClick={onRefresh}
-                  >
-                    {refreshing ? "…" : "↻"}
-                  </ToolButton>
+                <SearchControl
+                  value={list.filter}
+                  layout={layout}
+                  open={list.searchOpen}
+                  onOpenChange={list.setSearchOpen}
+                  onInput={list.setFilter}
+                />
+                {layout === "wide" && (
+                  <>
+                    {isRoot && refreshAvailable && (
+                      <ToolButton
+                        disabled={refreshing}
+                        title={t("common.refresh")}
+                        onClick={onRefresh}
+                      >
+                        {refreshing ? "…" : "↻"}
+                      </ToolButton>
+                    )}
+                    <ToolButton
+                      onClick={() =>
+                        exportCsv(
+                          list.columns,
+                          list.sorted,
+                          levelData.doctype,
+                        )}
+                    >
+                      CSV
+                    </ToolButton>
+                  </>
                 )}
-                <ToolButton
-                  onClick={() =>
-                    exportCsv(list.columns, list.sorted, levelData.doctype)}
-                >
-                  CSV
-                </ToolButton>
               </>
             )}
           </>
-        )}
+        }
       />
       <PathBar
         layout={layout}
@@ -358,6 +396,12 @@ function DoclistContent({
         onJump={nav.popTo}
         loading={current.loading}
       />
+      {layout === "panel" &&
+        (activeContext.selections.length > 0 || activeContext.failed) && (
+        <div class="flex shrink-0 justify-end border-b border-line-soft bg-sunken px-3 py-2">
+          {activeContextChip}
+        </div>
+      )}
       <LevelBody
         level={current}
         app={app}
@@ -374,8 +418,15 @@ function DoclistContent({
           : undefined}
         onMutationRefresh={refreshAvailable ? onMutationRefresh : undefined}
         onRefresh={() => void nav.refreshLevel()}
+        context={context}
+        contextView={rootTitle}
       >
+        {
+          /* Une nouvelle racine invalide aussi les gestes encore en attente :
+        aucun double-clic de l'ancienne liste ne peut ouvrir son id ici. */
+        }
         <DoclistBody
+          key={rootKey}
           app={app}
           data={data}
           list={list}
@@ -393,6 +444,9 @@ function DoclistContent({
           onError={onError}
           onJump={jumpsEnabled ? nav.jump : undefined}
           onAsk={ask}
+          context={context}
+          contextView={rootTitle}
+          contextKey={rootKey}
         />
       </LevelBody>
       <ViewerFooter layout={layout} />

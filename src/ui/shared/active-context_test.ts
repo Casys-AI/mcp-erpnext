@@ -10,6 +10,7 @@ import {
   type ActiveContextHost,
   type ActiveContextHostCapabilities,
   type ActiveContextLocalResource,
+  type ActiveContextMutation,
   type ActiveContextSelection,
   activeContextSelectionsForScope,
   activeContextSnapshot,
@@ -18,12 +19,16 @@ import {
   canReplaceActiveContext,
   canShareActiveContextResource,
   clearActiveContext,
+  compactActiveContextMutations,
   type ContextSelectionItem,
   createActiveContextQueue,
+  reconcileActiveContextDocumentSelections,
   reconcileActiveContextItem,
   reconcileActiveContextSelections,
+  reconcileActiveContextViewSelections,
   removeActiveContextSelection,
   replaceActiveContext,
+  replayActiveContextMutations,
   sameActiveContextItem,
 } from "./active-context.ts";
 
@@ -71,10 +76,16 @@ Deno.test("activeContextSnapshot : snapshot stable sans prompt ni instruction", 
 });
 
 Deno.test("activeContextSnapshot : la ressource locale ne fuit jamais dans le snapshot", () => {
-  const snapshot = activeContextSnapshot([{ ...ITEM, resource: RESOURCE }]);
+  const snapshot = activeContextSnapshot([{
+    ...ITEM,
+    reconcileKey: "level:private",
+    resource: RESOURCE,
+  }]);
   assertEquals(snapshot.items, [ITEM]);
   const serialized = JSON.stringify(snapshot);
   assertEquals(serialized.includes("resource"), false);
+  assertEquals(serialized.includes("reconcileKey"), false);
+  assertEquals(serialized.includes("level:private"), false);
   assertEquals(serialized.includes("bytes"), false);
   assertEquals(serialized.includes(btoa("%PDF-1.7")), false);
 });
@@ -260,6 +271,165 @@ Deno.test("panier : retrait individuel respecte la racine", () => {
   );
 });
 
+Deno.test("panier : le journal retire seulement son ajout et garde les suivants", () => {
+  const scopeKey = "root-a";
+  const selected = (id: string, value = id): ActiveContextSelection => ({
+    scopeKey,
+    item: { id, view: "Sales", label: id, value },
+  });
+  let id = 0;
+  const add = (selection: ActiveContextSelection): ActiveContextMutation => ({
+    id: ++id,
+    active: true,
+    reversible: false,
+    apply: (current) =>
+      addActiveContextSelection(current, scopeKey, selection.item),
+  });
+  const addA = add(selected("A"));
+  const addB = add(selected("B"));
+  const addC = add(selected("C"));
+  addB.active = false;
+
+  assertEquals(
+    replayActiveContextMutations([addA, addB, addC]),
+    [selected("A"), selected("C")],
+  );
+});
+
+Deno.test("panier : le journal rejoue exactement les évictions après annulation", () => {
+  const scopeKey = "root-a";
+  const selected = (id: string): ActiveContextSelection => ({
+    scopeKey,
+    item: { id, view: "Sales", label: id },
+  });
+  let id = 0;
+  const add = (itemId: string): ActiveContextMutation => ({
+    id: ++id,
+    active: true,
+    reversible: false,
+    apply: (current) =>
+      addActiveContextSelection(current, scopeKey, selected(itemId).item),
+  });
+  const initial = Array.from(
+    { length: ACTIVE_CONTEXT_MAX_ITEMS },
+    (_, index) => add(`A${index}`),
+  );
+  const addB = add("B");
+  const addC = add("C");
+  addB.active = false;
+
+  assertEquals(
+    replayActiveContextMutations([...initial, addB, addC]),
+    [
+      ...Array.from(
+        { length: ACTIVE_CONTEXT_MAX_ITEMS - 1 },
+        (_, index) => selected(`A${index + 1}`),
+      ),
+      selected("C"),
+    ],
+  );
+});
+
+Deno.test("panier : un refresh inchangé reste canonique après annulation", () => {
+  const scopeKey = "root-a";
+  const selected = (value: string): ActiveContextSelection => ({
+    scopeKey,
+    item: { id: "A", view: "Sales", label: "A", value },
+  });
+  let id = 0;
+  const mutation = (
+    apply: ActiveContextMutation["apply"],
+  ): ActiveContextMutation => ({
+    id: ++id,
+    active: true,
+    reversible: false,
+    apply,
+  });
+  const addOld = mutation((current) =>
+    addActiveContextSelection(current, scopeKey, selected("old").item)
+  );
+  const updateFromClick = mutation((current) =>
+    addActiveContextSelection(current, scopeKey, selected("new").item)
+  );
+  const refresh = mutation((current) =>
+    reconcileActiveContextSelections(current, scopeKey, [
+      selected("new").item,
+    ])
+  );
+  updateFromClick.active = false;
+
+  assertEquals(
+    replayActiveContextMutations([addOld, updateFromClick, refresh]),
+    [selected("new")],
+  );
+});
+
+Deno.test("panier : un retrait postérieur survit à l'annulation", () => {
+  const scopeKey = "root-a";
+  const selected = (id: string): ActiveContextSelection => ({
+    scopeKey,
+    item: { id, view: "Sales", label: id },
+  });
+  let id = 0;
+  const mutation = (
+    apply: ActiveContextMutation["apply"],
+  ): ActiveContextMutation => ({
+    id: ++id,
+    active: true,
+    reversible: false,
+    apply,
+  });
+  const addA = mutation((current) =>
+    addActiveContextSelection(current, scopeKey, selected("A").item)
+  );
+  const addB = mutation((current) =>
+    addActiveContextSelection(current, scopeKey, selected("B").item)
+  );
+  const removeA = mutation((current) =>
+    removeActiveContextSelection(current, selected("A"))
+  );
+  addB.active = false;
+
+  assertEquals(
+    replayActiveContextMutations([addA, addB, removeA]),
+    [],
+  );
+});
+
+Deno.test("panier : la compaction ne garde que le suffixe encore annulable", () => {
+  const scopeKey = "root-a";
+  const selected = (id: string): ActiveContextSelection => ({
+    scopeKey,
+    item: { id, view: "Sales", label: id },
+  });
+  let id = 0;
+  const add = (
+    itemId: string,
+    reversible = false,
+  ): ActiveContextMutation => ({
+    id: ++id,
+    active: true,
+    reversible,
+    apply: (current) =>
+      addActiveContextSelection(current, scopeKey, selected(itemId).item),
+  });
+  const addA = add("A");
+  const addB = add("B", true);
+  const addC = add("C");
+
+  const retained = compactActiveContextMutations([], [addA, addB, addC]);
+  assertEquals(retained.base, [selected("A")]);
+  assertEquals(retained.mutations.map((mutation) => mutation.id), [2, 3]);
+
+  addB.reversible = false;
+  const compacted = compactActiveContextMutations(
+    retained.base,
+    retained.mutations,
+  );
+  assertEquals(compacted.base, [selected("A"), selected("B"), selected("C")]);
+  assertEquals(compacted.mutations, []);
+});
+
 Deno.test("panier : refresh ne réconcilie que sa racine", () => {
   const rootA = { scopeKey: "root-a", item: ITEM };
   const rootB = {
@@ -276,6 +446,205 @@ Deno.test("panier : refresh ne réconcilie que sa racine", () => {
   assertEquals(
     reconcileActiveContextSelections([rootA, rootB], "root-a", []),
     [rootB],
+  );
+});
+
+Deno.test("panier : refresh d'une vue conserve les niveaux imbriqués", () => {
+  const chart = {
+    scopeKey: "sales-root",
+    item: { ...ITEM, view: "Revenue chart", value: "before" },
+  };
+  const nested = {
+    scopeKey: "sales-root",
+    item: {
+      id: "record:Sales Invoice:SINV-1",
+      view: "Overdue invoices",
+      label: "SINV-1",
+      value: "Draft",
+    },
+  };
+
+  assertEquals(
+    reconcileActiveContextViewSelections(
+      [chart, nested],
+      "sales-root",
+      "Revenue chart",
+      [{ ...chart.item, value: "after" }],
+    ),
+    [{ ...chart, item: { ...chart.item, value: "after" } }, nested],
+  );
+  assertEquals(
+    reconcileActiveContextViewSelections(
+      [chart, nested],
+      "sales-root",
+      "Revenue chart",
+      [],
+    ),
+    [nested],
+  );
+});
+
+Deno.test("panier : deux niveaux homonymes gardent des réconciliations séparées", () => {
+  const stockA = {
+    scopeKey: "sales-root",
+    item: {
+      id: "stock:A",
+      view: "Stock",
+      reconcileKey: "level:A",
+      label: "A",
+      value: "before A",
+    },
+  };
+  const stockB = {
+    scopeKey: "sales-root",
+    item: {
+      id: "stock:B",
+      view: "Stock",
+      reconcileKey: "level:B",
+      label: "B",
+      value: "before B",
+    },
+  };
+
+  assertEquals(
+    reconcileActiveContextViewSelections(
+      [stockA, stockB],
+      "sales-root",
+      "level:A",
+      [{ ...stockA.item, value: "after A" }],
+    ),
+    [{ ...stockA, item: { ...stockA.item, value: "after A" } }, stockB],
+  );
+  assertEquals(
+    reconcileActiveContextViewSelections(
+      [stockA, stockB],
+      "sales-root",
+      "level:A",
+      [],
+    ),
+    [stockB],
+  );
+});
+
+Deno.test("panier : le refresh d'une liste conserve les lignes de son détail inline", () => {
+  const invoice = {
+    scopeKey: "sales-root",
+    item: {
+      id: "record:Sales Invoice:SINV-1",
+      view: "Sales Invoices",
+      reconcileKey: "level:invoices",
+      label: "SINV-1",
+    },
+  };
+  const itemRow = {
+    scopeKey: "sales-root",
+    item: {
+      id: `${invoice.item.id}:row:items:ROW-1`,
+      view: "Sales Invoice · SINV-1",
+      reconcileKey: "document-rows:Sales Invoice:SINV-1",
+      label: "ITEM-1",
+    },
+  };
+
+  assertEquals(
+    reconcileActiveContextViewSelections(
+      [invoice, itemRow],
+      "sales-root",
+      "level:invoices",
+      [invoice.item],
+    ),
+    [invoice, itemRow],
+  );
+});
+
+Deno.test("panier : refresh d'une fiche retire ses lignes absentes sans toucher aux autres fiches", () => {
+  const invoiceId = "record:Sales Invoice:SINV-1";
+  const otherInvoiceId = "record:Sales Invoice:SINV-2";
+  const selected: ActiveContextSelection[] = [{
+    scopeKey: "sales-root",
+    item: {
+      id: invoiceId,
+      view: "Sales Invoices",
+      label: "SINV-1",
+      value: "Sales Invoice · Draft",
+    },
+  }, {
+    scopeKey: "sales-root",
+    item: {
+      id: `${invoiceId}:row:items:ROW-1`,
+      view: "Sales Invoice · SINV-1",
+      label: "ITEM-1",
+      value: "Qty 1",
+    },
+  }, {
+    scopeKey: "sales-root",
+    item: {
+      id: `${invoiceId}:row:items:ROW-2`,
+      view: "Sales Invoice · SINV-1",
+      label: "ITEM-2",
+      value: "Qty 2",
+    },
+  }, {
+    scopeKey: "sales-root",
+    item: {
+      id: otherInvoiceId,
+      view: "Sales Invoices",
+      label: "SINV-2",
+      value: "Sales Invoice · Draft",
+    },
+  }, {
+    scopeKey: "sales-root",
+    item: {
+      id: `${otherInvoiceId}:row:items:ROW-9`,
+      view: "Sales Invoice · SINV-2",
+      label: "ITEM-9",
+      value: "Qty 9",
+    },
+  }, {
+    scopeKey: "sales-root",
+    item: {
+      id: "attachment:FILE-1:current",
+      view: "Sales Invoice · SINV-1",
+      label: "invoice.pdf",
+    },
+  }];
+
+  assertEquals(
+    reconcileActiveContextDocumentSelections(
+      selected,
+      "sales-root",
+      invoiceId,
+      [{
+        id: invoiceId,
+        view: "Sales Invoices",
+        label: "SINV-1",
+        value: "Sales Invoice · Submitted",
+      }, {
+        id: `${invoiceId}:row:items:ROW-1`,
+        view: "Sales Invoice · SINV-1",
+        label: "ITEM-1",
+        value: "Qty 3",
+      }, {
+        // Un candidat présent mais non sélectionné ne rejoint pas le panier.
+        id: `${invoiceId}:row:items:ROW-3`,
+        view: "Sales Invoice · SINV-1",
+        label: "ITEM-3",
+        value: "Qty 1",
+      }],
+    ),
+    [
+      {
+        ...selected[0],
+        item: { ...selected[0].item, value: "Sales Invoice · Submitted" },
+      },
+      {
+        ...selected[1],
+        item: { ...selected[1].item, value: "Qty 3" },
+      },
+      selected[3],
+      selected[4],
+      selected[5],
+    ],
   );
 });
 

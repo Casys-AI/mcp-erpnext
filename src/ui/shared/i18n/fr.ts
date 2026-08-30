@@ -127,7 +127,13 @@ export const fr: Record<string, string> = {
   "chart.keyboard.target": "{label} · {series} · {value}",
   "chart.keyboard.target_single": "{label} · {value}",
   "chart.keyboard.help":
-    "Gauche et droite changent le point ; haut et bas changent la série ; Entrée ouvre le détail ; Espace ajoute au contexte.",
+    "Gauche et droite changent le point ; haut et bas changent la série ; Espace l'ajoute au contexte ; Entrée ouvre ou ferme le détail disponible.",
+  "chart.keyboard.help_context":
+    "Gauche et droite changent le point ; haut et bas changent la série ; Espace l'ajoute au contexte.",
+  "chart.keyboard.help_detail":
+    "Gauche et droite changent le point ; haut et bas changent la série ; Entrée ouvre ou ferme le détail disponible.",
+  "chart.keyboard.help_navigation":
+    "Gauche et droite changent le point ; haut et bas changent la série.",
   "chart.keyboard.control": "Explorer le graphique : {target}. {help}",
   // ── /chart-viewer ─────────────────────────────────────────────────────────
 
@@ -233,8 +239,7 @@ export const fr: Record<string, string> = {
   "funnel.autorefresh": "Actualisation auto au focus",
   "funnel.stage.click_to_see": "Cliquer pour voir {label}",
   "funnel.stage.aria_open": "Ouvrir {label}, {count}",
-  "funnel.stage.aria_context":
-    "Sélectionner {label}, {count}, comme contexte actif",
+  "funnel.stage.aria_context": "Ajouter {label}, {count}, au contexte actif",
   "funnel.stage.aria_ask": "Demander le détail de {label}, {count}",
   "funnel.error.parse_failed": "Impossible de lire la réponse du funnel",
   "funnel.drill_down.leads": "Afficher tous les leads",
@@ -271,7 +276,7 @@ export const fr: Record<string, string> = {
   "doclist.detail.action.cancel_ok": "Annulée",
   "doclist.detail.action.cancel_label": "Annuler la pièce",
   "doclist.detail.back_to_list": "Retour à la liste",
-  "doclist.detail.inspector_label": "inspecteur",
+  "doclist.detail.inspector_label": "détail",
   "doclist.detail.close_inspector": "Fermer le détail",
   "doclist.detail.back_list_label": "‹ liste",
   // ── /doclist-viewer ───────────────────────────────────────────────────────
@@ -284,13 +289,34 @@ export const fr: Record<string, string> = {
   "message.send_error": "Envoi à la conversation impossible",
   "context.active.label": "Contexte",
   "context.active.items": "Sélections du contexte actif",
-  "context.active.select": "Sélectionner {label} comme contexte actif",
+  "context.active.select": "Ajouter {label} au contexte actif",
   "context.active.clear": "Retirer {label} du contexte actif",
   "context.active.clear_all": "Tout effacer",
   "context.active.error": "Contexte non mis à jour",
   "context.active.evicted": "8 max · {label} retiré",
-  "chart.tooltip.click": "clic",
-  "chart.tooltip.double_click_context": "double-clic ↔ ajouter au contexte",
+  "interaction.detail.open": "Ouvrir le détail de {label}",
+  "interaction.detail.close": "Fermer le détail de {label}",
+  "interaction.detail.open_hint": "Détail · double-clic",
+  "interaction.detail.close_hint": "Fermer · double-clic",
+  "document.row.open_actions":
+    "Clic ou Espace pour ajouter {label} au contexte · double-clic ou Entrée pour afficher ses actions",
+  "document.row.close_actions":
+    "Clic ou Espace pour ajouter {label} au contexte · double-clic ou Entrée pour fermer ses actions",
+  "document.row.open_actions_only":
+    "Double-clic ou Entrée pour afficher les actions de {label}",
+  "document.row.close_actions_only":
+    "Double-clic ou Entrée pour fermer les actions de {label}",
+  "document.row.open_detail":
+    "Clic ou Espace pour ajouter {label} au contexte · double-clic ou Entrée pour ouvrir son détail",
+  "document.row.close_detail":
+    "Clic ou Espace pour ajouter {label} au contexte · double-clic ou Entrée pour fermer son détail",
+  "document.row.open_detail_only":
+    "Double-clic ou Entrée pour ouvrir le détail de {label}",
+  "document.row.close_detail_only":
+    "Double-clic ou Entrée pour fermer le détail de {label}",
+  "chart.tooltip.click_action_context": "clic + contexte · 2× détail",
+  "chart.tooltip.click_action_context_only": "clic + contexte",
+  "chart.tooltip.click_action_fallback": "2× détail",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Retour",
   "nav.elided": "…{n}",

@@ -53,6 +53,8 @@ export interface ContextSelectionItem {
   id: string;
   /** Titre de la vue qui donne sa provenance au point. */
   view: string;
+  /** Identité interne du niveau qui réconcilie ce point, jamais sérialisée. */
+  reconcileKey?: string;
   /** Libellé visible du point. */
   label: string;
   /** Valeur visible associée, si elle existe. */
@@ -65,6 +67,17 @@ export interface ContextSelectionItem {
 export interface ActiveContextSelection {
   scopeKey: string;
   item: ContextSelectionItem;
+}
+
+/** Mutation locale rejouable du panier, utilisée pour annuler un seul clic. */
+export interface ActiveContextMutation {
+  id: number;
+  active: boolean;
+  /** Vrai tant que l'arbitre de clic peut encore demander son annulation. */
+  reversible: boolean;
+  apply: (
+    current: readonly ActiveContextSelection[],
+  ) => ActiveContextSelection[];
 }
 
 export interface ActiveContextAddResult {
@@ -91,7 +104,10 @@ export const ACTIVE_CONTEXT_LIMITS = {
   resourceMimeType: 160,
 } as const;
 
-export type ActiveContextSnapshotItem = Omit<ContextSelectionItem, "resource">;
+export type ActiveContextSnapshotItem = Pick<
+  ContextSelectionItem,
+  "id" | "view" | "label" | "value"
+>;
 
 export interface ActiveContextSnapshot extends Record<string, unknown> {
   schema: typeof ACTIVE_CONTEXT_SCHEMA;
@@ -194,6 +210,7 @@ export function sameActiveContextItem(
   right: ContextSelectionItem,
 ): boolean {
   return left.id === right.id && left.view === right.view &&
+    left.reconcileKey === right.reconcileKey &&
     left.label === right.label && left.value === right.value &&
     sameLocalResource(left.resource, right.resource);
 }
@@ -217,7 +234,7 @@ function sameLocalResource(
 
 function withoutLocalResource(
   item: ContextSelectionItem,
-): ActiveContextSnapshotItem {
+): ContextSelectionItem {
   const { resource: _resource, ...snapshotItem } = item;
   return snapshotItem;
 }
@@ -332,6 +349,54 @@ export function removeActiveContextSelection(
 }
 
 /**
+ * Rejoue les mutations confirmées dans leur ordre. Désactiver une entrée puis
+ * rejouer le journal annule cette opération précise sans restaurer un ancien
+ * snapshot qui écraserait les clics plus récents.
+ */
+export function replayActiveContextMutations(
+  mutations: readonly ActiveContextMutation[],
+  base: readonly ActiveContextSelection[] = [],
+): ActiveContextSelection[] {
+  let current: ActiveContextSelection[] = base.slice();
+  for (const mutation of mutations) {
+    if (mutation.active) current = mutation.apply(current);
+  }
+  return current;
+}
+
+export interface ActiveContextMutationCompaction {
+  base: ActiveContextSelection[];
+  mutations: ActiveContextMutation[];
+}
+
+/**
+ * Plie le préfixe qui ne peut plus être annulé dans un snapshot borné. Les
+ * closures — et leurs éventuelles ressources binaires — sortent ainsi du
+ * journal dès la fin de la fenêtre de double-clic.
+ */
+export function compactActiveContextMutations(
+  base: readonly ActiveContextSelection[],
+  mutations: readonly ActiveContextMutation[],
+): ActiveContextMutationCompaction {
+  const firstReversible = mutations.findIndex((mutation) =>
+    mutation.reversible
+  );
+  const compactCount = firstReversible === -1
+    ? mutations.length
+    : firstReversible;
+  if (compactCount === 0) {
+    return { base: base.slice(), mutations: mutations.slice() };
+  }
+  return {
+    base: replayActiveContextMutations(
+      mutations.slice(0, compactCount),
+      base,
+    ),
+    mutations: mutations.slice(compactCount),
+  };
+}
+
+/**
  * Actualise uniquement les points de `scopeKey`. Les autres racines restent
  * intactes ; dans la racine rafraîchie, un id absent est retiré.
  */
@@ -340,6 +405,73 @@ export function reconcileActiveContextSelections(
   scopeKey: string,
   candidates: readonly ContextSelectionItem[],
 ): ActiveContextSelection[] {
+  return reconcileActiveContextSelectionSubset(
+    current,
+    scopeKey,
+    candidates,
+    () => true,
+  );
+}
+
+/**
+ * Réconcilie uniquement les points produits par une vue nommée.
+ *
+ * Une racine et ses niveaux imbriqués partagent le même `scopeKey`, mais pas
+ * nécessairement le même jeu de données. Un refresh du chart racine ne doit
+ * donc jamais supprimer les sélections d'une liste ou d'une fiche ouverte.
+ */
+export function reconcileActiveContextViewSelections(
+  current: readonly ActiveContextSelection[],
+  scopeKey: string,
+  reconcileKey: string,
+  candidates: readonly ContextSelectionItem[],
+): ActiveContextSelection[] {
+  const itemReconcileKey = (item: ContextSelectionItem) =>
+    item.reconcileKey ?? item.view;
+  return reconcileActiveContextSelectionSubset(
+    current,
+    scopeKey,
+    candidates.filter((candidate) =>
+      itemReconcileKey(candidate) === reconcileKey
+    ),
+    (id) =>
+      current.some((selection) =>
+        selection.scopeKey === scopeKey && selection.item.id === id &&
+        itemReconcileKey(selection.item) === reconcileKey
+      ),
+  );
+}
+
+/**
+ * Réconcilie une seule fiche dans une racine de liste.
+ *
+ * L'id de la fiche et ses ids `:row:` forment un sous-ensemble fermé : les
+ * lignes disparues en sortent, tandis que les autres fiches et pièces jointes
+ * déjà sélectionnées dans la même racine restent intactes.
+ */
+export function reconcileActiveContextDocumentSelections(
+  current: readonly ActiveContextSelection[],
+  scopeKey: string,
+  documentId: string,
+  candidates: readonly ContextSelectionItem[],
+): ActiveContextSelection[] {
+  const rowPrefix = `${documentId}:row:`;
+  const belongsToDocument = (id: string) =>
+    id === documentId || id.startsWith(rowPrefix);
+  return reconcileActiveContextSelectionSubset(
+    current,
+    scopeKey,
+    candidates.filter((candidate) => belongsToDocument(candidate.id)),
+    belongsToDocument,
+  );
+}
+
+function reconcileActiveContextSelectionSubset(
+  current: readonly ActiveContextSelection[],
+  scopeKey: string,
+  candidates: readonly ContextSelectionItem[],
+  belongsToSubset: (id: string) => boolean,
+): ActiveContextSelection[] {
   const byId = new Map(
     candidates.map((candidate) => [candidate.id, candidate]),
   );
@@ -347,7 +479,10 @@ export function reconcileActiveContextSelections(
   let changed = false;
 
   for (const selection of current) {
-    if (selection.scopeKey !== scopeKey) {
+    if (
+      selection.scopeKey !== scopeKey ||
+      !belongsToSubset(selection.item.id)
+    ) {
       next.push(selection);
       continue;
     }

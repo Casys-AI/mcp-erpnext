@@ -16,10 +16,11 @@ import { cx } from "~/shared/ui";
 import type { StockEntry } from "../types.ts";
 
 export function StockInlineExpand(
-  { row, isDanger, onAsk }: {
+  { row, isDanger, onAsk, touch = false }: {
     row: StockEntry;
     isDanger: boolean;
     onAsk?: (message: string) => unknown;
+    touch?: boolean;
   },
 ) {
   const t = useT();
@@ -81,7 +82,10 @@ export function StockInlineExpand(
             <button
               key={action.label}
               type="button"
-              class="rounded-[3px] border border-line px-2 py-1 font-mono text-chip text-accent-text transition-colors hover:border-accent-edge hover:bg-accent/8 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+              class={cx(
+                "rounded-[3px] border border-line px-2 font-mono text-chip text-accent-text transition-colors hover:border-accent-edge hover:bg-accent/8 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
+                touch ? "min-h-10 py-2" : "py-1",
+              )}
               onClick={() => void onAsk(action.message)}
             >
               {action.label}

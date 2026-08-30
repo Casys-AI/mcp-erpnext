@@ -8,6 +8,12 @@ import type { App } from "@modelcontextprotocol/ext-apps";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { DocumentChangeEvent } from "../document-events.ts";
 import type { DocumentEnvelope } from "../document/types.ts";
+import type {
+  ContextInteractionTarget,
+  DocumentContextController,
+} from "../document/context-interaction.ts";
+import { documentContextItem } from "../document/context-items.ts";
+import { documentModelOf } from "../document/model.ts";
 import { useT } from "../i18n-hook";
 import type { Jump } from "../jumps";
 import { documentChangeForTool, recordOf } from "../levels/bodies.ts";
@@ -22,6 +28,7 @@ import { SearchRow } from "./SearchControl";
 import type { DoclistData } from "./types";
 import type { DoclistState, Row } from "./useDoclist";
 import { canCallViewerTool } from "../viewer-tools";
+import { doclistDetailPanelId } from "./detail-panel.ts";
 
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 const CANONICAL_READBACK_DELAY_MS = 1_500;
@@ -55,6 +62,9 @@ export function DoclistBody(
     onMutationRefresh,
     onMutated,
     onDocumentChanged,
+    context,
+    contextView,
+    contextKey,
   }: {
     app: App;
     data: DoclistData;
@@ -79,6 +89,10 @@ export function DoclistBody(
     onMutated?: (subject: string) => void;
     /** Changement canonique structuré, indépendant de son transport futur. */
     onDocumentChanged?: (event: DocumentChangeEvent) => void;
+    context?: DocumentContextController;
+    contextView?: string;
+    /** Identité stable du niveau, distincte de son titre visible. */
+    contextKey?: string;
   },
 ) {
   const t = useT();
@@ -111,7 +125,43 @@ export function DoclistBody(
     pendingRowIdRef.current = null;
   }, []);
   const hasLocalDetail = fixture && rows.some((row) => row._detail != null);
-  const isClickable = !!rowAction || hasLocalDetail;
+  const isInspectable = !!rowAction || hasLocalDetail;
+  const listContextView = contextView ?? data._title ?? data.doctype ??
+    "Document";
+  const listContextKey = contextKey ?? listContextView;
+
+  function contextItemForRow(
+    row: Row,
+    rowIndex: number,
+  ) {
+    if (!context?.supported || !data.doctype) return null;
+    const rowId = resolveRowId(row, rowAction, String(rowIndex));
+    const envelope = recordOf(row, { doctype: data.doctype, name: rowId });
+    return envelope
+      ? documentContextItem(
+        documentModelOf(envelope),
+        listContextView,
+        listContextKey,
+      )
+      : null;
+  }
+
+  const reconcileView = context?.supported ? context.reconcileView : undefined;
+  useEffect(() => {
+    if (!reconcileView) return;
+    const candidates = rows.flatMap((row, rowIndex) => {
+      const item = contextItemForRow(row, rowIndex);
+      return item ? [item] : [];
+    });
+    void reconcileView(listContextKey, candidates);
+  }, [
+    data.doctype,
+    listContextKey,
+    listContextView,
+    reconcileView,
+    rowAction,
+    rows,
+  ]);
 
   // La ligne active vit dans la pile ; son détail chargé reste local.
   useEffect(() => {
@@ -199,10 +249,41 @@ export function DoclistBody(
     })();
   }, [expandedId, rows, rowAction, fixture, data.doctype]);
 
-  function onRowClick(row: Row) {
-    const rowId = resolveRowId(row, rowAction, "");
-    if (!rowId) return;
-    list.setExpandedId(expandedId === rowId ? null : rowId);
+  function rowInteractionTarget(
+    row: Row,
+    rowIndex: number,
+  ): ContextInteractionTarget | undefined {
+    const rowId = resolveRowId(row, rowAction, String(rowIndex));
+    const item = contextItemForRow(row, rowIndex);
+    if (!item && !isInspectable) return undefined;
+    const label = item?.label ?? rowId;
+    const selected = item ? context?.isSelected(item) ?? false : undefined;
+    return {
+      label: isInspectable
+        ? t(
+          item
+            ? (expandedId === rowId
+              ? "document.row.close_detail"
+              : "document.row.open_detail")
+            : (expandedId === rowId
+              ? "document.row.close_detail_only"
+              : "document.row.open_detail_only"),
+          { label },
+        )
+        : t("context.active.select", { label }),
+      selected,
+      expanded: isInspectable ? expandedId === rowId : undefined,
+      detailLabel: label,
+      controls: isInspectable ? doclistDetailPanelId(rowId) : undefined,
+      onActivate: () => {
+        if (!item) return;
+        if (isInspectable) return context?.activateReversible(item);
+        void context?.activate(item);
+      },
+      onDoubleActivate: isInspectable
+        ? () => list.setExpandedId(expandedId === rowId ? null : rowId)
+        : undefined,
+    };
   }
 
   function notifyDocumentChanged(event: DocumentChangeEvent) {
@@ -300,19 +381,24 @@ export function DoclistBody(
   const inspecting = expandedId !== null;
   const inlineDetail = inspecting
     ? (
-      <InlineDetailPanel
-        app={app}
-        envelope={expanded.data}
-        loading={expanded.loading}
-        fixture={fixture}
-        layout={layout}
-        embedded
-        onClose={() => list.setExpandedId(null)}
-        onAction={handleDetailAction}
-        onJump={onJump}
-        onAsk={onAsk}
-        onDocumentChanged={handleAttachmentDocumentChanged}
-      />
+      <div id={doclistDetailPanelId(expandedId)}>
+        <InlineDetailPanel
+          app={app}
+          envelope={expanded.data}
+          loading={expanded.loading}
+          fixture={fixture}
+          layout={layout}
+          embedded
+          onClose={() => list.setExpandedId(null)}
+          onAction={handleDetailAction}
+          onJump={onJump}
+          onAsk={onAsk}
+          onDocumentChanged={handleAttachmentDocumentChanged}
+          context={context}
+          contextView={listContextView}
+          contextKey={listContextKey}
+        />
+      </div>
     )
     : undefined;
   return (
@@ -365,7 +451,7 @@ export function DoclistBody(
             sortKey={list.sortKey}
             sortDir={list.sortDir}
             onSort={list.handleSort}
-            onSelect={isClickable ? onRowClick : undefined}
+            interactionTarget={rowInteractionTarget}
             layout={layout}
             amountKey={list.amountKey}
             detail={inlineDetail}

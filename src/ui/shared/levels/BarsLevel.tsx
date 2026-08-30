@@ -3,8 +3,12 @@
  * viewers. Il conserve les séries composées, leurs axes et leurs stacks.
  */
 
+import type { JSX } from "preact";
 import { useState } from "preact/hooks";
+import type { ClickIntentSingleResult } from "../click-intent.ts";
+import { DetailToggleButton } from "../DetailToggleButton.tsx";
 import { formatCurrency, formatNumber, formatPercent } from "../format";
+import { useClickIntent } from "../useClickIntent.ts";
 import { type BarsBody, type BarsSeries, chartSeriesFormat } from "./bodies";
 import { nestedChartModel, type NestedPoint } from "./nested-chart-model.ts";
 
@@ -40,22 +44,43 @@ export function BarsLevel(
   {
     chart,
     activeIndex,
-    isPointInteractive,
-    onPointClick,
+    contextEnabled,
+    pointKey,
+    isPointSelected,
+    isPointDetailEnabled,
+    onPointContext,
+    onPointDetail,
     caption,
     narrow,
   }: {
     chart: BarsBody;
     activeIndex?: number;
-    isPointInteractive?: (labelIndex: number, seriesIndex: number) => boolean;
-    onPointClick?: (labelIndex: number, seriesIndex: number) => void;
+    contextEnabled?: boolean;
+    pointKey?: (labelIndex: number, seriesIndex: number) => string;
+    isPointSelected?: (labelIndex: number, seriesIndex: number) => boolean;
+    isPointDetailEnabled?: (
+      labelIndex: number,
+      seriesIndex: number,
+    ) => boolean;
+    onPointContext?: (
+      labelIndex: number,
+      seriesIndex: number,
+    ) => ClickIntentSingleResult;
+    onPointDetail?: (labelIndex: number, seriesIndex: number) => void;
     caption?: string;
     narrow?: boolean;
   },
 ) {
+  const clickIntent = useClickIntent();
   const { labels, datasets } = chart;
   const model = nestedChartModel(chart);
   const [preview, setPreview] = useState<
+    {
+      labelIndex: number;
+      seriesIndex: number;
+    } | null
+  >(null);
+  const [currentPoint, setCurrentPoint] = useState<
     {
       labelIndex: number;
       seriesIndex: number;
@@ -73,7 +98,11 @@ export function BarsLevel(
     Math.max(0, requestedActive),
     Math.max(0, labels.length - 1),
   );
-  const active = preview?.labelIndex ?? defaultActive;
+  const activePoint = preview ?? currentPoint ?? {
+    labelIndex: defaultActive,
+    seriesIndex: 0,
+  };
+  const active = activePoint.labelIndex;
   const multiSeries = datasets.length > 1;
   const chartWidth = Math.max(
     100,
@@ -99,13 +128,90 @@ export function BarsLevel(
     } · ${value}`;
   };
 
-  const activate = (labelIndex: number, seriesIndex: number) => {
-    if (!isPointInteractive?.(labelIndex, seriesIndex)) return;
-    onPointClick?.(labelIndex, seriesIndex);
+  const canSharePoint = (labelIndex: number, seriesIndex: number) =>
+    Boolean(contextEnabled && onPointContext) &&
+    labels[labelIndex] !== undefined && datasets[seriesIndex] !== undefined;
+  const canOpenPoint = (labelIndex: number, seriesIndex: number) =>
+    Boolean(
+      onPointDetail &&
+        isPointDetailEnabled?.(labelIndex, seriesIndex),
+    );
+  const canUsePoint = (labelIndex: number, seriesIndex: number) =>
+    canSharePoint(labelIndex, seriesIndex) ||
+    canOpenPoint(labelIndex, seriesIndex);
+
+  const pointIntent = (labelIndex: number, seriesIndex: number) => ({
+    key: pointKey?.(labelIndex, seriesIndex) ??
+      `nested-chart:${labelIndex}:${seriesIndex}`,
+    onSingle: () => onPointContext?.(labelIndex, seriesIndex),
+    onDouble: () => onPointDetail?.(labelIndex, seriesIndex),
+  });
+
+  const previewPoint = (labelIndex: number, seriesIndex: number) => {
+    const point = { labelIndex, seriesIndex };
+    // Le footer vit hors de la zone du graphe. Il doit conserver la dernière
+    // cible explorée quand le pointeur ou le focus rejoint sa flèche détail.
+    setCurrentPoint(point);
+    setPreview(point);
   };
 
-  const previewPoint = (labelIndex: number, seriesIndex: number) =>
-    setPreview({ labelIndex, seriesIndex });
+  const focusPoint = (labelIndex: number, seriesIndex: number) => {
+    previewPoint(labelIndex, seriesIndex);
+  };
+
+  const clickPoint = (
+    labelIndex: number,
+    seriesIndex: number,
+    clickCount: number,
+  ) => {
+    if (!canUsePoint(labelIndex, seriesIndex)) return;
+    focusPoint(labelIndex, seriesIndex);
+    if (
+      canSharePoint(labelIndex, seriesIndex) &&
+      canOpenPoint(labelIndex, seriesIndex)
+    ) {
+      clickIntent.click(pointIntent(labelIndex, seriesIndex), clickCount);
+      return;
+    }
+    if (clickCount < 2 && canSharePoint(labelIndex, seriesIndex)) {
+      void onPointContext?.(labelIndex, seriesIndex);
+    }
+  };
+
+  const doubleClickPoint = (labelIndex: number, seriesIndex: number) => {
+    if (!canOpenPoint(labelIndex, seriesIndex)) return;
+    focusPoint(labelIndex, seriesIndex);
+    if (canSharePoint(labelIndex, seriesIndex)) {
+      clickIntent.doubleClick(pointIntent(labelIndex, seriesIndex));
+    } else {
+      onPointDetail?.(labelIndex, seriesIndex);
+    }
+  };
+
+  const keyDownPoint = (
+    labelIndex: number,
+    seriesIndex: number,
+    event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
+  ) => {
+    if (event.repeat) return;
+    focusPoint(labelIndex, seriesIndex);
+    if (
+      canSharePoint(labelIndex, seriesIndex) &&
+      canOpenPoint(labelIndex, seriesIndex)
+    ) {
+      clickIntent.keyDown(pointIntent(labelIndex, seriesIndex), event);
+      return;
+    }
+    if (event.key === " " && canSharePoint(labelIndex, seriesIndex)) {
+      event.preventDefault();
+      void onPointContext?.(labelIndex, seriesIndex);
+      return;
+    }
+    if (event.key === "Enter" && canOpenPoint(labelIndex, seriesIndex)) {
+      event.preventDefault();
+      onPointDetail?.(labelIndex, seriesIndex);
+    }
+  };
 
   const pointStyle = (point: NestedPoint) => ({
     left: `${point.x}%`,
@@ -174,8 +280,12 @@ export function BarsLevel(
                 );
                 if (seriesModel.kind === "bar") {
                   return seriesModel.points.map((point) => {
-                    const interactive = Boolean(
-                      isPointInteractive?.(
+                    const interactive = canUsePoint(
+                      point.labelIndex,
+                      point.seriesIndex,
+                    );
+                    const selected = Boolean(
+                      isPointSelected?.(
                         point.labelIndex,
                         point.seriesIndex,
                       ),
@@ -187,12 +297,51 @@ export function BarsLevel(
                         key={`${point.seriesIndex}-${point.labelIndex}`}
                         type="button"
                         disabled={!interactive}
+                        aria-pressed={contextEnabled ? selected : undefined}
+                        aria-keyshortcuts={canSharePoint(
+                            point.labelIndex,
+                            point.seriesIndex,
+                          ) && canOpenPoint(
+                            point.labelIndex,
+                            point.seriesIndex,
+                          )
+                          ? "Space Enter"
+                          : canSharePoint(
+                              point.labelIndex,
+                              point.seriesIndex,
+                            )
+                          ? "Space"
+                          : canOpenPoint(
+                              point.labelIndex,
+                              point.seriesIndex,
+                            )
+                          ? "Enter"
+                          : undefined}
                         aria-label={pointLabel(
                           point.labelIndex,
                           point.seriesIndex,
                         )}
-                        onClick={() =>
-                          activate(point.labelIndex, point.seriesIndex)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          clickPoint(
+                            point.labelIndex,
+                            point.seriesIndex,
+                            event.detail,
+                          );
+                        }}
+                        onDblClick={(event) => {
+                          event.stopPropagation();
+                          doubleClickPoint(
+                            point.labelIndex,
+                            point.seriesIndex,
+                          );
+                        }}
+                        onKeyDown={(event) =>
+                          keyDownPoint(
+                            point.labelIndex,
+                            point.seriesIndex,
+                            event,
+                          )}
                         onMouseEnter={() =>
                           previewPoint(point.labelIndex, point.seriesIndex)}
                         onFocus={() =>
@@ -200,6 +349,10 @@ export function BarsLevel(
                         onBlur={() => setPreview(null)}
                         class={`absolute min-h-px rounded-[2px] border-0 p-0 transition-opacity focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
                           interactive ? "cursor-pointer" : "cursor-default"
+                        } ${
+                          narrow && interactive
+                            ? "after:absolute after:left-1/2 after:top-1/2 after:size-10 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']"
+                            : ""
                         }`}
                         style={{
                           background: color,
@@ -207,7 +360,14 @@ export function BarsLevel(
                           height: `${height}%`,
                           left: `${point.barLeft}%`,
                           width: `${point.barWidth}%`,
-                          opacity: point.labelIndex === active ? 1 : 0.72,
+                          opacity: selected
+                            ? 1
+                            : point.labelIndex === active
+                            ? 0.9
+                            : 0.65,
+                          boxShadow: selected
+                            ? "0 0 0 1px var(--color-accent)"
+                            : undefined,
                         }}
                       />
                     );
@@ -215,7 +375,7 @@ export function BarsLevel(
                 }
 
                 const hasInteractivePoint = seriesModel.points.some((point) =>
-                  isPointInteractive?.(point.labelIndex, point.seriesIndex)
+                  canUsePoint(point.labelIndex, point.seriesIndex)
                 );
                 const activateFromPath = (
                   event: MouseEvent & { currentTarget: SVGPathElement },
@@ -230,8 +390,26 @@ export function BarsLevel(
                     rect.width,
                     labels.length,
                   );
-                  previewPoint(labelIndex, seriesModel.seriesIndex);
-                  activate(labelIndex, seriesModel.seriesIndex);
+                  clickPoint(
+                    labelIndex,
+                    seriesModel.seriesIndex,
+                    event.detail,
+                  );
+                };
+                const doubleActivateFromPath = (
+                  event: MouseEvent & { currentTarget: SVGPathElement },
+                ) => {
+                  event.stopPropagation();
+                  const svg = event.currentTarget.ownerSVGElement;
+                  if (!svg) return;
+                  const rect = svg.getBoundingClientRect();
+                  const labelIndex = nearestLabelIndex(
+                    event.clientX,
+                    rect.left,
+                    rect.width,
+                    labels.length,
+                  );
+                  doubleClickPoint(labelIndex, seriesModel.seriesIndex);
                 };
                 return (
                   <svg
@@ -253,6 +431,9 @@ export function BarsLevel(
                         onClick={hasInteractivePoint
                           ? activateFromPath
                           : undefined}
+                        onDblClick={hasInteractivePoint
+                          ? doubleActivateFromPath
+                          : undefined}
                       />
                     )}
                     <path
@@ -270,6 +451,9 @@ export function BarsLevel(
                       onClick={hasInteractivePoint
                         ? activateFromPath
                         : undefined}
+                      onDblClick={hasInteractivePoint
+                        ? doubleActivateFromPath
+                        : undefined}
                     />
                   </svg>
                 );
@@ -284,36 +468,82 @@ export function BarsLevel(
                   datasets.length,
                 );
                 return seriesModel.points.map((point) => {
-                  const interactive = Boolean(
-                    isPointInteractive?.(point.labelIndex, point.seriesIndex),
+                  const interactive = canUsePoint(
+                    point.labelIndex,
+                    point.seriesIndex,
+                  );
+                  const selected = Boolean(
+                    isPointSelected?.(
+                      point.labelIndex,
+                      point.seriesIndex,
+                    ),
                   );
                   return (
                     <button
                       key={`point-${point.seriesIndex}-${point.labelIndex}`}
                       type="button"
                       disabled={!interactive}
+                      aria-pressed={contextEnabled ? selected : undefined}
+                      aria-keyshortcuts={canSharePoint(
+                          point.labelIndex,
+                          point.seriesIndex,
+                        ) && canOpenPoint(
+                          point.labelIndex,
+                          point.seriesIndex,
+                        )
+                        ? "Space Enter"
+                        : canSharePoint(
+                            point.labelIndex,
+                            point.seriesIndex,
+                          )
+                        ? "Space"
+                        : canOpenPoint(
+                            point.labelIndex,
+                            point.seriesIndex,
+                          )
+                        ? "Enter"
+                        : undefined}
                       aria-label={pointLabel(
                         point.labelIndex,
                         point.seriesIndex,
                       )}
                       onClick={(event) => {
                         event.stopPropagation();
-                        activate(point.labelIndex, point.seriesIndex);
+                        clickPoint(
+                          point.labelIndex,
+                          point.seriesIndex,
+                          event.detail,
+                        );
                       }}
+                      onDblClick={(event) => {
+                        event.stopPropagation();
+                        doubleClickPoint(
+                          point.labelIndex,
+                          point.seriesIndex,
+                        );
+                      }}
+                      onKeyDown={(event) =>
+                        keyDownPoint(
+                          point.labelIndex,
+                          point.seriesIndex,
+                          event,
+                        )}
                       onMouseEnter={() =>
                         previewPoint(point.labelIndex, point.seriesIndex)}
                       onFocus={() =>
                         previewPoint(point.labelIndex, point.seriesIndex)}
                       onBlur={() => setPreview(null)}
-                      class={`absolute grid size-6 -translate-x-1/2 translate-y-1/2 place-items-center rounded-full border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-accent ${
-                        interactive ? "cursor-pointer" : "cursor-default"
-                      }`}
+                      class={`absolute grid -translate-x-1/2 translate-y-1/2 place-items-center rounded-full border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-accent ${
+                        narrow ? "size-10" : "size-6"
+                      } ${interactive ? "cursor-pointer" : "cursor-default"}`}
                       style={pointStyle(point)}
                     >
                       <span
                         aria-hidden="true"
                         class={dataset.showDots === false
                           ? "size-1.5 rounded-full opacity-0"
+                          : selected
+                          ? "size-2 rounded-full ring-1 ring-accent ring-offset-1 ring-offset-surface"
                           : "size-1.5 rounded-full"}
                         style={{ background: color }}
                       />
@@ -343,7 +573,9 @@ export function BarsLevel(
           </div>
         </div>
       </div>
-      {(caption || multiSeries) && labels.length > 0 && (
+      {(caption || multiSeries ||
+        canOpenPoint(activePoint.labelIndex, activePoint.seriesIndex)) &&
+        labels.length > 0 && datasets.length > 0 && (
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line bg-sunken px-4 py-2.5">
           <span class="font-mono text-[11px] font-medium text-accent">
             {labels[active]}
@@ -363,6 +595,21 @@ export function BarsLevel(
           ))}
           {caption && (
             <span class="font-sans text-note text-ink-dim">{caption}</span>
+          )}
+          {canOpenPoint(activePoint.labelIndex, activePoint.seriesIndex) && (
+            <DetailToggleButton
+              label={pointLabel(
+                activePoint.labelIndex,
+                activePoint.seriesIndex,
+              )}
+              touch={narrow}
+              class="ml-auto"
+              onToggle={() =>
+                onPointDetail?.(
+                  activePoint.labelIndex,
+                  activePoint.seriesIndex,
+                )}
+            />
           )}
         </div>
       )}

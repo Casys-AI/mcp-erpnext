@@ -8,6 +8,18 @@ import { ConfirmSheet, useConfirm } from "~/shared/confirm.tsx";
 import type { DocumentChangeEvent } from "~/shared/document-events.ts";
 import { AttachmentsSection } from "~/shared/document/AttachmentsSection.tsx";
 import { documentCapabilities } from "~/shared/document/capabilities.ts";
+import {
+  childRowNavigationAsks,
+  childRowNavigationJumps,
+} from "~/shared/document/child-row-navigation.ts";
+import type {
+  ContextInteractionTarget,
+  DocumentContextController,
+} from "~/shared/document/context-interaction.ts";
+import {
+  childRowContextItem,
+  documentContextItem,
+} from "~/shared/document/context-items.ts";
 import { DocumentSurface } from "~/shared/document/DocumentSurface.tsx";
 import {
   documentEnvelopeOf,
@@ -53,6 +65,21 @@ const app = new App({
 const REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 const CANONICAL_READBACK_DELAY_MS = 1_500;
+
+type DocumentActiveContext = ReturnType<typeof useActiveContext>;
+
+interface DocumentContentProps {
+  envelope: DocumentEnvelope;
+  fixture: boolean;
+  error: string | null;
+  refreshing: boolean;
+  rootFreshEvent: number;
+  rootKey: string;
+  activeContext: DocumentActiveContext;
+  onError: (message: string | null) => void;
+  onInvalidateRefresh: () => void;
+  onRefresh: (force?: boolean) => Promise<boolean>;
+}
 
 export function DocViewer() {
   const t = useT();
@@ -230,8 +257,7 @@ export function DocViewer() {
   }
 
   return (
-    <DocumentContent
-      key={`${envelope.doctype}:${envelope.name}`}
+    <DocumentContextBoundary
       envelope={envelope}
       fixture={fixture}
       error={error}
@@ -245,25 +271,43 @@ export function DocViewer() {
   );
 }
 
+type DocumentContextBoundaryProps = Omit<
+  DocumentContentProps,
+  "rootKey" | "activeContext"
+>;
+
+function DocumentContextBoundary(props: DocumentContextBoundaryProps) {
+  const rootKey = viewerRootKey(
+    "document",
+    props.envelope.refreshRequest,
+    {
+      doctype: props.envelope.doctype,
+      name: props.envelope.name,
+    },
+  );
+  const activeContext = useActiveContext(app, rootKey);
+  return (
+    <DocumentContent
+      {...props}
+      key={`${props.envelope.doctype}:${props.envelope.name}`}
+      rootKey={rootKey}
+      activeContext={activeContext}
+    />
+  );
+}
+
 function DocumentContent({
   envelope,
   fixture,
   error,
   refreshing,
   rootFreshEvent,
+  rootKey,
+  activeContext,
   onError,
   onInvalidateRefresh,
   onRefresh,
-}: {
-  envelope: DocumentEnvelope;
-  fixture: boolean;
-  error: string | null;
-  refreshing: boolean;
-  rootFreshEvent: number;
-  onError: (message: string | null) => void;
-  onInvalidateRefresh: () => void;
-  onRefresh: (force?: boolean) => Promise<boolean>;
-}) {
+}: DocumentContentProps) {
   const t = useT();
   const { ref, layout } = useViewerLayout<HTMLDivElement>();
   const confirm = useConfirm();
@@ -275,15 +319,43 @@ function DocumentContent({
   const delayedRefreshRef = useRef<number | null>(null);
   const model = documentModelOf(envelope);
   const hostCapabilities = fixture ? undefined : app.getHostCapabilities();
+  const context: DocumentContextController = {
+    supported: !fixture && activeContext.supported,
+    activate: activeContext.activate,
+    activateReversible: activeContext.activateReversible,
+    reconcileView: activeContext.reconcileView,
+    reconcileDocument: activeContext.reconcileDocument,
+    isSelected: activeContext.isSelected,
+    canShareResource: (resource) =>
+      canShareActiveContextResource(hostCapabilities, resource),
+  };
+  const contextView = `${envelope.doctype} · ${envelope.name}`;
+  const contextDocumentItem = model
+    ? documentContextItem(model, contextView)
+    : null;
+  const contextCandidates = model
+    ? [
+      contextDocumentItem!,
+      ...model.childTables.flatMap((table) =>
+        table.rows.flatMap((row, rowIndex) => {
+          const item = childRowContextItem(envelope, table, row, rowIndex);
+          return item ? [item] : [];
+        })
+      ),
+    ]
+    : [];
+  const reconcileDocument = context.supported
+    ? context.reconcileDocument
+    : undefined;
+  useEffect(() => {
+    if (!reconcileDocument || !contextDocumentItem) return;
+    void reconcileDocument(contextDocumentItem.id, contextCandidates);
+  }, [contextView, envelope, reconcileDocument]);
   const capabilities = documentCapabilities(
     hostCapabilities,
     envelope.availableTools,
     envelope.refreshRequest,
   );
-  const rootKey = viewerRootKey("document", envelope.refreshRequest, {
-    doctype: envelope.doctype,
-    name: envelope.name,
-  });
   const viewerNav = useViewerNav(app, {
     title: envelope.name,
     kind: "root",
@@ -291,7 +363,6 @@ function DocumentContent({
     body: envelope,
     key: rootKey,
   }, { fixture });
-  const activeContext = useActiveContext(app, rootKey);
   const nav = viewerNav.nav;
   const rootId = nav.stack.levels[0].id;
 
@@ -376,6 +447,83 @@ function DocumentContent({
         : []
     )
     : [];
+  const rootVars = {
+    id: envelope.name,
+    name: envelope.name,
+    doctype: envelope.doctype,
+  };
+  const renderChildRowActions = (
+    _table: (typeof model.childTables)[number],
+    row: (typeof model.childTables)[number]["rows"][number],
+  ) => {
+    const rowJumps = viewerNav.jumpsEnabled
+      ? childRowNavigationJumps({
+        hints,
+        rootVars,
+        row,
+        availableTools: envelope.availableTools,
+        subtitle: t("nav.linked_to", { id: envelope.name }),
+      })
+      : [];
+    const rowAsks = viewerNav.ask
+      ? childRowNavigationAsks({ hints, rootVars, row }).filter(
+        (ask) => !rowJumps.some((jump) => jump.label === ask.label),
+      )
+      : [];
+    if (rowJumps.length === 0 && rowAsks.length === 0) return undefined;
+    return (
+      <>
+        {rowJumps.map((jump) => (
+          <Button
+            key={`${jump.tool.name}:${jump.label}`}
+            variant="quiet"
+            class="min-h-8 px-2.5 py-1 text-chip"
+            onClick={() => nav.jump(jump)}
+          >
+            {jump.label}
+            <span aria-hidden="true">›</span>
+          </Button>
+        ))}
+        {rowAsks.map((ask) => (
+          <Button
+            key={`ask:${ask.label}`}
+            variant="quiet"
+            class="min-h-8 px-2.5 py-1 text-chip"
+            onClick={() => viewerNav.ask?.(ask.message)}
+          >
+            {ask.label}
+            <span aria-hidden="true">~</span>
+          </Button>
+        ))}
+      </>
+    );
+  };
+  const rootContextTarget: ContextInteractionTarget | undefined =
+    context.supported && contextDocumentItem
+      ? {
+        label: t("context.active.select", {
+          label: contextDocumentItem.label,
+        }),
+        selected: context.isSelected(contextDocumentItem),
+        onActivate: () => void context.activate(contextDocumentItem),
+      }
+      : undefined;
+  const renderChildRowContextTarget = (
+    table: (typeof model.childTables)[number],
+    row: (typeof model.childTables)[number]["rows"][number],
+    rowIndex: number,
+  ): ContextInteractionTarget | undefined => {
+    if (!context.supported) return undefined;
+    const item = childRowContextItem(envelope, table, row, rowIndex);
+    return item
+      ? {
+        label: t("context.active.select", { label: item.label }),
+        detailLabel: item.label,
+        selected: context.isSelected(item),
+        onActivate: () => context.activateReversible(item),
+      }
+      : undefined;
+  };
 
   async function mutate(mutation: "submit" | "cancel") {
     if (fixture || actionLoading) return;
@@ -574,6 +722,9 @@ function DocumentContent({
               attachments={attachmentSurface}
               actions={mutationActions}
               footer={footer}
+              contextTarget={rootContextTarget}
+              renderChildRowActions={renderChildRowActions}
+              renderChildRowContextTarget={renderChildRowContextTarget}
             />
             {showJson && (
               <div class="absolute inset-0 z-20 flex min-h-0 flex-col bg-surface/98">
@@ -607,6 +758,8 @@ function DocumentContent({
             onMutationInvalidate={beginCanonicalReadback}
             onMutationRefresh={scheduleCanonicalRefresh}
             onRefresh={() => void nav.refreshLevel()}
+            context={context}
+            contextView={contextView}
           />
         )}
       <ConfirmSheet confirm={confirm} />

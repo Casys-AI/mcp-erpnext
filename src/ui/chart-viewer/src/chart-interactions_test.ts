@@ -1,10 +1,15 @@
 import { assertEquals, assertStrictEquals } from "@std/assert";
 import {
+  chartCursorCounts,
+  chartDetailHintPlacement,
   chartJumpHint,
+  chartNavigationGroups,
+  chartPointActionPlan,
+  chartPointExpansionState,
   chartPointLabel,
+  chartScatterPointLabel,
   chartSelectionAt,
   chartSeriesFromTarget,
-  contextFallbackForJump,
   moveChartCursor,
   resolveChartStageHeight,
 } from "./chart-interactions.ts";
@@ -65,12 +70,88 @@ Deno.test("chart keyboard cursor - exposes the exact series value", () => {
     value: 7,
   });
   assertEquals(
-    chartSelectionAt({ labels: [], datasets: DATA.datasets }, {
+    chartSelectionAt({ title: "Empty", labels: [], datasets: DATA.datasets }, {
       labelIndex: 0,
       seriesIndex: 0,
     }),
     null,
   );
+});
+
+Deno.test("chart keyboard cursor - uses named scatter points without inventing labels", () => {
+  const data: ChartData = {
+    title: "Price vs quantity",
+    type: "scatter",
+    labels: [],
+    datasets: [],
+    scatterData: [
+      {
+        label: "Items",
+        points: [
+          { x: 12.5, y: 420, label: "BOLT-M6" },
+          { x: 44, y: 96 },
+          { x: 18, y: 210, label: "GADGET-1" },
+          { x: Number.NaN, y: 12, label: "NOT-RENDERED" },
+        ],
+      },
+    ],
+  };
+
+  assertEquals(chartNavigationGroups(data), [[
+    {
+      label: "BOLT-M6",
+      series: "Items",
+      value: 420,
+      x: 12.5,
+      y: 420,
+    },
+    {
+      label: "GADGET-1",
+      series: "Items",
+      value: 210,
+      x: 18,
+      y: 210,
+    },
+  ]]);
+  assertEquals(chartSelectionAt(data, { labelIndex: 1, seriesIndex: 0 }), {
+    label: "GADGET-1",
+    series: "Items",
+    value: 210,
+    x: 18,
+    y: 210,
+  });
+  assertEquals(chartCursorCounts(data, { labelIndex: 0, seriesIndex: 0 }), {
+    labelCount: 2,
+    seriesCount: 1,
+  });
+});
+
+Deno.test("chart keyboard cursor - traverses treemap leaves only", () => {
+  const data: ChartData = {
+    title: "Stock",
+    type: "treemap",
+    labels: [],
+    datasets: [],
+    treeData: [
+      {
+        name: "Mechanical",
+        children: [
+          { name: "Bearings", value: 48_200 },
+          { name: "Belts", value: 31_700 },
+          { name: "No value" },
+        ],
+      },
+    ],
+  };
+
+  assertEquals(chartNavigationGroups(data), [[
+    { label: "Bearings", value: 48_200 },
+    { label: "Belts", value: 31_700 },
+  ]]);
+  assertEquals(chartSelectionAt(data, { labelIndex: 1, seriesIndex: 0 }), {
+    label: "Belts",
+    value: 31_700,
+  });
 });
 
 Deno.test("chart jump - exact series takes priority over the category fallback", () => {
@@ -123,15 +204,48 @@ Deno.test("chart mouse target - preserves point and exact marked series", () => 
   assertEquals(chartSeriesFromTarget(null, ["Expenses"]), undefined);
 });
 
-Deno.test("chart activation - inline jump suppresses only the prompt fallback", () => {
+Deno.test("chart activation - single click updates context only", () => {
+  assertEquals(chartPointActionPlan("context", true, true, true), {
+    toggleLevel: false,
+    updateContext: true,
+    sendMessage: false,
+  });
+  assertEquals(chartPointActionPlan("context", true, false, true), {
+    toggleLevel: false,
+    updateContext: false,
+    sendMessage: false,
+  });
+});
+
+Deno.test("chart activation - double click toggles detail or uses its explicit fallback", () => {
+  assertEquals(chartPointActionPlan("drilldown", true, true, true), {
+    toggleLevel: true,
+    updateContext: false,
+    sendMessage: false,
+  });
+  assertEquals(chartPointActionPlan("drilldown", false, true, true), {
+    toggleLevel: false,
+    updateContext: false,
+    sendMessage: true,
+  });
+  assertEquals(chartPointActionPlan("drilldown", false, true, false), {
+    toggleLevel: false,
+    updateContext: false,
+    sendMessage: false,
+  });
+  assertEquals(chartPointExpansionState(true, false), false);
+  assertEquals(chartPointExpansionState(true, true), true);
+  assertEquals(chartPointExpansionState(false, false), undefined);
+});
+
+Deno.test("chart scatter target - accepts only an explicit point label", () => {
+  assertEquals(chartScatterPointLabel({ label: " BOLT-M6 " }), "BOLT-M6");
   assertEquals(
-    contextFallbackForJump(true, "Show submitted purchase orders"),
-    undefined,
+    chartScatterPointLabel({ payload: { label: "GADGET-1" } }),
+    "GADGET-1",
   );
-  assertEquals(
-    contextFallbackForJump(false, "Show submitted purchase orders"),
-    "Show submitted purchase orders",
-  );
+  assertEquals(chartScatterPointLabel({ payload: { label: " " } }), undefined);
+  assertEquals(chartScatterPointLabel({ x: 12, y: 4 }), undefined);
 });
 
 Deno.test("chart stage height - uses an intrinsic default and clamps payloads", () => {
@@ -141,4 +255,19 @@ Deno.test("chart stage height - uses an intrinsic default and clamps payloads", 
   assertEquals(resolveChartStageHeight(180, false), 240);
   assertEquals(resolveChartStageHeight(360.4, false), 360);
   assertEquals(resolveChartStageHeight(900, false), 520);
+});
+
+Deno.test("chart detail helper - uses the side with the actual available space", () => {
+  assertEquals(chartDetailHintPlacement(320, 30, 28), {
+    side: "right",
+    maxWidth: 248,
+  });
+  assertEquals(chartDetailHintPlacement(320, 180, 28), {
+    side: "left",
+    maxWidth: 166,
+  });
+  assertEquals(chartDetailHintPlacement(180, 80, 40), {
+    side: "left",
+    maxWidth: 66,
+  });
 });

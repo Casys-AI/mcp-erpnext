@@ -17,12 +17,47 @@ export interface ChartSelection {
   label: string;
   series?: string;
   value?: number;
+  x?: number;
+  y?: number;
+}
+
+export type ChartPointActivation = "context" | "drilldown";
+
+export interface ChartPointActionPlan {
+  toggleLevel: boolean;
+  updateContext: boolean;
+  sendMessage: boolean;
+}
+
+export type ChartPointExpansionState = boolean | undefined;
+
+export interface ChartDetailHintPlacement {
+  side: "left" | "right";
+  maxWidth: number;
 }
 
 const DEFAULT_CHART_STAGE_HEIGHT = 300;
 const NARROW_CHART_STAGE_HEIGHT = 260;
 const MIN_CHART_STAGE_HEIGHT = 240;
 const MAX_CHART_STAGE_HEIGHT = 520;
+
+/** Choisit le côté qui garde le helper dans la largeur réelle du graphe. */
+export function chartDetailHintPlacement(
+  surfaceWidth: number,
+  actionLeft: number,
+  actionSize: number,
+): ChartDetailHintPlacement {
+  const width = Number.isFinite(surfaceWidth) ? Math.max(0, surfaceWidth) : 0;
+  const left = Number.isFinite(actionLeft) ? Math.max(0, actionLeft) : 0;
+  const size = Number.isFinite(actionSize) ? Math.max(0, actionSize) : 0;
+  const gap = 6;
+  const edge = 8;
+  const leftSpace = Math.max(0, left - gap - edge);
+  const rightSpace = Math.max(0, width - left - size - gap - edge);
+  return rightSpace >= leftSpace
+    ? { side: "right", maxWidth: Math.floor(rightSpace) }
+    : { side: "left", maxWidth: Math.floor(leftSpace) };
+}
 
 /**
  * La hauteur du tracé est intrinsèque : une valeur liée à `100vh` figeait la
@@ -80,20 +115,103 @@ export function moveChartCursor(
 
 /** Le point et sa valeur à annoncer / activer pour le curseur clavier. */
 export function chartSelectionAt(
-  data: Pick<ChartData, "labels" | "datasets">,
+  data: ChartData,
   cursor: ChartCursor,
 ): ChartSelection | null {
-  if (data.labels.length === 0 || data.datasets.length === 0) return null;
-  const labelIndex = wrap(cursor.labelIndex, data.labels.length);
-  const seriesIndex = wrap(cursor.seriesIndex, data.datasets.length);
-  const dataset = data.datasets[seriesIndex];
-  const rawValue = dataset.values[labelIndex];
+  const groups = chartNavigationGroups(data);
+  if (groups.length === 0) return null;
+  const group = groups[wrap(cursor.seriesIndex, groups.length)];
+  if (group.length === 0) return null;
+  return group[wrap(cursor.labelIndex, group.length)];
+}
+
+function treeSelections(
+  nodes: NonNullable<ChartData["treeData"]>,
+): ChartSelection[] {
+  const result: ChartSelection[] = [];
+  for (const node of nodes) {
+    if (node.children?.length) {
+      result.push(...treeSelections(node.children));
+    } else if (
+      typeof node.name === "string" && node.name.trim() &&
+      typeof node.value === "number" && Number.isFinite(node.value)
+    ) {
+      result.push({
+        label: node.name,
+        value: node.value,
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * Grille reelle du controle clavier. Scatter utilise uniquement ses points
+ * nommes ; treemap ses feuilles. Aucun label artificiel n'est donc cree pour
+ * fabriquer une cible ou un saut qui n'existe pas dans le payload.
+ */
+export function chartNavigationGroups(data: ChartData): ChartSelection[][] {
+  if (data.type === "scatter") {
+    return (data.scatterData ?? []).flatMap((series) => {
+      const points = series.points.flatMap((point): ChartSelection[] => {
+        const label = typeof point.label === "string" ? point.label.trim() : "";
+        if (!label || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+          return [];
+        }
+        return [{
+          label,
+          series: series.label || undefined,
+          x: Number.isFinite(point.x) ? point.x : undefined,
+          y: Number.isFinite(point.y) ? point.y : undefined,
+          value: Number.isFinite(point.y) ? point.y : undefined,
+        }];
+      });
+      return points.length > 0 ? [points] : [];
+    });
+  }
+
+  if (data.type === "treemap") {
+    if (data.treeData?.length) {
+      const points = treeSelections(data.treeData);
+      return points.length > 0 ? [points] : [];
+    }
+    const dataset = data.datasets[0];
+    if (!dataset) return [];
+    const points = data.labels.map((label, index) => ({
+      label,
+      value: typeof dataset.values[index] === "number" &&
+          Number.isFinite(dataset.values[index])
+        ? dataset.values[index]
+        : undefined,
+    }));
+    return points.length > 0 ? [points] : [];
+  }
+
+  return data.datasets.flatMap((dataset) => {
+    const points = data.labels.map((label, index) => {
+      const rawValue = dataset.values[index];
+      return {
+        label,
+        series: dataset.label || undefined,
+        value: typeof rawValue === "number" && Number.isFinite(rawValue)
+          ? rawValue
+          : undefined,
+      };
+    });
+    return points.length > 0 ? [points] : [];
+  });
+}
+
+/** Nombre de cibles sur l'axe courant et nombre de series navigables. */
+export function chartCursorCounts(
+  data: ChartData,
+  cursor: ChartCursor,
+): { labelCount: number; seriesCount: number } {
+  const groups = chartNavigationGroups(data);
+  if (groups.length === 0) return { labelCount: 0, seriesCount: 0 };
   return {
-    label: data.labels[labelIndex],
-    series: dataset.label || undefined,
-    value: typeof rawValue === "number" && Number.isFinite(rawValue)
-      ? rawValue
-      : undefined,
+    labelCount: groups[wrap(cursor.seriesIndex, groups.length)].length,
+    seriesCount: groups.length,
   };
 }
 
@@ -108,6 +226,38 @@ export function chartJumpHint(
 ): NavHint | undefined {
   return (series ? data._seriesPointJumps?.[label]?.[series] : undefined) ??
     data._pointJumps?.[label];
+}
+
+/**
+ * Les deux gestes restent exclusifs. Le contexte ne parle jamais à la place de
+ * l'utilisateur ; le message n'est qu'un repli explicite du drill-down.
+ */
+export function chartPointActionPlan(
+  activation: ChartPointActivation,
+  hasJump: boolean,
+  contextSupported: boolean,
+  messageSupported: boolean,
+): ChartPointActionPlan {
+  if (activation === "context") {
+    return {
+      toggleLevel: false,
+      updateContext: contextSupported,
+      sendMessage: false,
+    };
+  }
+  return {
+    toggleLevel: hasJump,
+    updateContext: false,
+    sendMessage: !hasJump && messageSupported,
+  };
+}
+
+/** Un fallback conversationnel est une action, jamais un disclosure ARIA. */
+export function chartPointExpansionState(
+  hasInlineJump: boolean,
+  expanded: boolean,
+): ChartPointExpansionState {
+  return hasInlineJump ? expanded : undefined;
 }
 
 /** Le libellé actif d'un événement Recharts v3, borné aux labels reçus. */
@@ -159,10 +309,15 @@ export function chartSeriesFromTarget(
   return series && allowedSeries.includes(series) ? series : undefined;
 }
 
-/** Un saut inline interdit seulement le fallback conversationnel du contexte. */
-export function contextFallbackForJump(
-  jumped: boolean,
-  fallback: string | undefined,
-): string | undefined {
-  return jumped ? undefined : fallback;
+/** Libelle utilisable d'un point Scatter Recharts, direct ou sous payload. */
+export function chartScatterPointLabel(point: unknown): string | undefined {
+  if (!point || typeof point !== "object") return undefined;
+  const direct = (point as { label?: unknown }).label;
+  const nested = (point as { payload?: { label?: unknown } }).payload?.label;
+  const value = typeof direct === "string"
+    ? direct.trim()
+    : typeof nested === "string"
+    ? nested.trim()
+    : "";
+  return value || undefined;
 }

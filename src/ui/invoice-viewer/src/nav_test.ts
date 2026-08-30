@@ -3,7 +3,7 @@
  * Cas limites en premier : hints null/vides, clé inconnue, tool absent,
  * champ manquant dans les vars.
  */
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import { setLangSource } from "../../shared/i18n.ts";
 import {
   canOfferNavigation,
@@ -417,6 +417,22 @@ Deno.test("invoice fixture : pièces jointes visuelles sans action hôte", () =>
   );
 });
 
+Deno.test("invoice fixture : les hints de ligne restent frères du hint paiements", () => {
+  const envelope = invoiceDocumentEnvelope(INVOICE_FIXTURE);
+  assertEquals(envelope?.sendMessageHints?.map((hint) => hint.key), [
+    "payments",
+    "customer",
+    "item",
+    "stock",
+  ]);
+  const fields = envelope?.sendMessageHints?.[0].args?.fields;
+  assertEquals(
+    Array.isArray(fields) && fields.every((field) => typeof field === "string"),
+    true,
+  );
+  assertEquals(envelope?.sendMessageHints?.[1].args, { name: "CUST-ACME" });
+});
+
 Deno.test("invoice actions : plein serveur préfère les outils dédiés exacts", () => {
   assertEquals(
     invoiceMutationActions("Sales Invoice", "SINV-1", [
@@ -550,5 +566,24 @@ Deno.test("invoice actions : une mutation committed reste verrouillée jusqu'à 
       committed,
     ).submit?.toolName,
     "erpnext_sales_order_submit",
+  );
+});
+
+Deno.test("invoice root : contexte persistant, contenu et gestes remountés", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./InvoiceViewer.tsx", import.meta.url),
+  );
+  assertStringIncludes(source, "function InvoiceContextBoundary");
+  assertStringIncludes(
+    source,
+    "const activeContext = useActiveContext(app, rootKey)",
+  );
+  assertStringIncludes(
+    source,
+    "key={`${props.data.doctype}:${props.data.name}`}",
+  );
+  assertEquals(
+    [...source.matchAll(/useActiveContext\(app, rootKey\)/g)].length,
+    1,
   );
 });

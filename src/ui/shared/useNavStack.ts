@@ -9,7 +9,12 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from "preact/hooks";
 import type { DocumentChangeEvent } from "./document-events.ts";
 import type { Jump, ToolHost } from "./jumps.ts";
-import { jumpInto, refreshCurrent, type StackStore } from "./nav-jump.ts";
+import {
+  jumpInto,
+  refreshCurrent,
+  type StackStore,
+  toggleRootJump,
+} from "./nav-jump.ts";
 import {
   clearStale,
   createStack,
@@ -47,6 +52,11 @@ export function useNavStack(host: ToolHost, root: LevelInit) {
     store,
     host,
   ]);
+  const toggleRootChild = useCallback(
+    (jump: Jump, triggerKey?: string) =>
+      toggleRootJump(store, host, jump, triggerKey),
+    [store, host],
+  );
 
   const pop = useCallback(() => setStack((s) => popLevel(s)), []);
   const popTo = useCallback(
@@ -92,6 +102,7 @@ export function useNavStack(host: ToolHost, root: LevelInit) {
     depth: stack.levels.length,
     isRoot: stack.levels.length === 1,
     jump,
+    toggleRootChild,
     pop,
     popTo,
     patchUi,

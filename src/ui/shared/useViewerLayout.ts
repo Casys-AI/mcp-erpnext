@@ -18,6 +18,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { isNarrow, useContainerWidth } from "./useContainerWidth";
 import { useHostContext } from "./host-context-hook";
+import { viewerBoundsStyle } from "./viewer-bounds.ts";
 
 export type ViewerLayout = "wide" | "panel" | "mobile";
 
@@ -102,6 +103,7 @@ export function useViewerLayout<T extends HTMLElement>() {
     : "panel";
 
   const layout = forced ?? detected;
+  const boundsStyle = viewerBoundsStyle(host.containerDimensions);
 
-  return { ref, width, layout } as const;
+  return { ref, width, layout, boundsStyle } as const;
 }

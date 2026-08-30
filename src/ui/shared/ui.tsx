@@ -33,16 +33,19 @@ export function cx(...parts: (string | false | null | undefined)[]): string {
  * 2 px épouse le rayon de 8 px au lieu de dépasser aux angles.
  */
 export function ViewerShell(
-  { children, class: klass, containerRef }: {
+  { children, class: klass, containerRef, style }: {
     children: ComponentChildren;
     class?: string;
     /** Cible de mesure pour useContainerWidth — la coquille EST le conteneur. */
     containerRef?: Ref<HTMLDivElement>;
+    /** Bornes dynamiques annoncées par l'hôte MCP. */
+    style?: JSX.CSSProperties;
   },
 ) {
   return (
     <div
       ref={containerRef}
+      style={style}
       class={cx(
         "flex min-h-0 flex-col overflow-hidden rounded-card",
         "border border-line bg-surface",

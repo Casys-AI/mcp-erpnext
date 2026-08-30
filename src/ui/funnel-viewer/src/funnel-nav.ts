@@ -10,6 +10,35 @@
 
 import type { NavHint } from "../../shared/jumps.ts";
 
+export type FunnelStageActivation = "context" | "detail";
+
+export interface FunnelStageInteractionPlan {
+  updateContext: boolean;
+  toggleLevel: boolean;
+  sendMessage: boolean;
+}
+
+/** Un geste ne produit jamais a la fois du contexte et un niveau de detail. */
+export function funnelStageInteractionPlan(
+  activation: FunnelStageActivation,
+  hasJump: boolean,
+  contextSupported: boolean,
+  messageSupported: boolean,
+): FunnelStageInteractionPlan {
+  if (activation === "context") {
+    return {
+      updateContext: contextSupported,
+      toggleLevel: false,
+      sendMessage: false,
+    };
+  }
+  return {
+    updateContext: false,
+    toggleLevel: hasJump,
+    sendMessage: !hasJump && messageSupported,
+  };
+}
+
 /**
  * Retourne le hint de saut serveur pour une étape du funnel, ou null.
  *

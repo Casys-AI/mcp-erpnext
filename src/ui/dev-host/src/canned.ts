@@ -81,12 +81,43 @@ const DEV_AVAILABLE_TOOLS: Partial<Record<ViewerKey, readonly string[]>> = {
   ],
 };
 
+/** Surface exacte d'un `_get` facture rendu à l'intérieur du doclist. */
+const DOCLIST_SALES_INVOICE_CHILD_TOOLS = [
+  "erpnext_customer_get",
+  "erpnext_doc_cancel",
+  "erpnext_doc_list",
+  "erpnext_doc_submit",
+  "erpnext_item_get",
+  "erpnext_sales_invoice_get",
+  "erpnext_sales_invoice_submit",
+  "erpnext_stock_balance",
+] as const;
+
+function refreshToolName(payload: unknown): string | null {
+  if (
+    typeof payload !== "object" || payload === null || Array.isArray(payload)
+  ) {
+    return null;
+  }
+  const refresh = (payload as Record<string, unknown>).refreshRequest;
+  if (
+    typeof refresh !== "object" || refresh === null || Array.isArray(refresh)
+  ) {
+    return null;
+  }
+  const toolName = (refresh as Record<string, unknown>).toolName;
+  return typeof toolName === "string" ? toolName : null;
+}
+
 /** Décore les payloads canned comme le registre complet du serveur. */
 export function withDevViewerTools(
   viewer: ViewerKey,
   payload: unknown,
 ): unknown {
-  const tools = DEV_AVAILABLE_TOOLS[viewer];
+  const tools = viewer === "doclist" &&
+      refreshToolName(payload) === "erpnext_sales_invoice_get"
+    ? DOCLIST_SALES_INVOICE_CHILD_TOOLS
+    : DEV_AVAILABLE_TOOLS[viewer];
   if (!tools || typeof payload !== "object" || payload === null) return payload;
   return { ...payload, _availableTools: [...tools] };
 }
@@ -550,46 +581,51 @@ const PAYMENT_ENTRY_FIELDS = [
   "docstatus",
 ];
 
-/** Copie de INVOICE_HINTS["Sales Invoice"] (src/tools/ui-refresh.ts). */
-const INVOICE_HINTS = [
-  {
-    key: "payments",
-    label: "Payments",
-    message: "Show payment entries for invoice {id}",
-    tool: "erpnext_doc_list",
-    args: {
-      doctype: "Payment Entry",
-      fields: PAYMENT_ENTRY_FIELDS,
-      filters: [["Payment Entry Reference", "reference_name", "=", "{id}"]],
-      limit: 20,
+/** Même composition que `invoiceNavigationHints` pour une Sales Invoice. */
+const invoiceHints = (customer: unknown) => {
+  const party = typeof customer === "string" ? customer.trim() : "";
+  return [
+    {
+      key: "payments",
+      label: "Payments",
+      message: "Show payment entries for invoice {id}",
+      tool: "erpnext_doc_list",
+      args: {
+        doctype: "Payment Entry",
+        fields: PAYMENT_ENTRY_FIELDS,
+        filters: [["Payment Entry Reference", "reference_name", "=", "{id}"]],
+        limit: 20,
+      },
+      kind: "list",
     },
-    kind: "list",
-  },
-  {
-    key: "customer",
-    label: "Customer",
-    message: "Show customer {party}",
-    tool: "erpnext_customer_get",
-    args: { name: "{party}" },
-    kind: "record",
-  },
-  {
-    key: "item",
-    label: "Item",
-    message: "Show item {item}",
-    tool: "erpnext_item_get",
-    args: { name: "{item}" },
-    kind: "record",
-  },
-  {
-    key: "stock",
-    label: "Stock",
-    message: "Show stock balance for item {item}",
-    tool: "erpnext_stock_balance",
-    args: { item_code: "{item}", limit: 50 },
-    kind: "list",
-  },
-];
+    ...(party
+      ? [{
+        key: "customer",
+        label: "Customer",
+        message: `Show customer ${party}`,
+        tool: "erpnext_customer_get",
+        args: { name: party },
+        kind: "record",
+      }]
+      : []),
+    {
+      key: "item",
+      label: "Item",
+      message: "Show item {item}",
+      tool: "erpnext_item_get",
+      args: { name: "{item}" },
+      kind: "record",
+    },
+    {
+      key: "stock",
+      label: "Stock",
+      message: "Show stock balance for item {item}",
+      tool: "erpnext_stock_balance",
+      args: { item_code: "{item}", limit: 50 },
+      kind: "list",
+    },
+  ];
+};
 
 /** Copie de STOCK_HINTS. */
 const STOCK_HINTS = [
@@ -885,7 +921,10 @@ const CHART_FIXTURE = {
 export function initialResult(viewer: ViewerKey): unknown {
   switch (viewer) {
     case "invoice":
-      return { ...INVOICE_FIXTURE, _sendMessageHints: INVOICE_HINTS };
+      return {
+        ...INVOICE_FIXTURE,
+        _sendMessageHints: invoiceHints(INVOICE_FIXTURE.data?.customer),
+      };
     case "doclist":
       return {
         ...DOCLIST_FIXTURE,
@@ -1075,24 +1114,44 @@ export function cannedResult(
       );
     case "erpnext_stock_entry_list":
       return list("Stock Entry", STOCK_ENTRIES);
-    case "erpnext_stock_balance":
-      return { count: STOCK_BALANCE.length, data: STOCK_BALANCE };
+    case "erpnext_stock_balance": {
+      const itemCode = typeof args.item_code === "string"
+        ? args.item_code.trim()
+        : "";
+      const fixtureStock = itemCode
+        ? ITEM_FIXTURES[itemCode]?.stock
+        : undefined;
+      const data = fixtureStock
+        ? fixtureStock.map((row, index) => ({
+          name: `${itemCode}:${index + 1}`,
+          item_code: itemCode,
+          ...row,
+          reserved_qty: 0,
+          projected_qty: row.actual_qty,
+        }))
+        : itemCode
+        ? STOCK_BALANCE.filter((row) => row.item_code === itemCode)
+        : STOCK_BALANCE;
+      return { doctype: "Bin", count: data.length, data };
+    }
     case "erpnext_item_get": {
       // La fixture de la facture est imbriquée ({ item, stock }) ; un vrai
       // `_get` renvoie le document plat.
-      const fixture = ITEM_FIXTURES[String(args.name)] as
+      const itemName = typeof args.name === "string" ? args.name.trim() : "";
+      if (!itemName) return null;
+      const fixture = ITEM_FIXTURES[itemName] as
         | { item?: Record<string, unknown> }
         | undefined;
+      const item = fixture?.item ?? fixture ?? {
+        item_code: itemName,
+        item_name: "Article inconnu",
+        item_group: "—",
+        stock_uom: "Nos",
+        standard_rate: 0,
+        is_stock_item: true,
+      };
       return {
-        data: fixture?.item ?? fixture ??
-          {
-            item_code: args.name,
-            item_name: "Article inconnu",
-            item_group: "—",
-            stock_uom: "Nos",
-            standard_rate: 0,
-            is_stock_item: true,
-          },
+        data: { ...item, doctype: "Item", name: itemName },
       };
     }
     case "erpnext_sales_invoice_get": {
@@ -1102,18 +1161,26 @@ export function cannedResult(
       const row = rows.find((r) => r.name === args.name);
       if (!row) return null;
       const { _detail, ...fields } = row as Row & { _detail?: Row };
+      const canonical = row.name === INVOICE_FIXTURE.data?.name
+        ? INVOICE_FIXTURE.data
+        : undefined;
+      const data = {
+        doctype: "Sales Invoice",
+        ...fields,
+        ...(_detail ?? {}),
+        ...(canonical ?? {}),
+        currency: "EUR",
+        items: (canonical?.items ?? INVOICE_FIXTURE.data?.items ?? []).map((
+          item,
+        ) => ({ ...item })),
+      };
       return {
-        data: {
-          doctype: "Sales Invoice",
-          ...fields,
-          ...(_detail ?? {}),
-          currency: "EUR",
-          items: [{ item_code: "SKU-001", qty: 2, rate: 450 }, {
-            item_code: "SKU-002",
-            qty: 1,
-            rate: 300,
-          }],
+        data,
+        refreshRequest: {
+          toolName: "erpnext_sales_invoice_get",
+          arguments: { name: String(args.name) },
         },
+        _sendMessageHints: invoiceHints((data as Row).customer),
       };
     }
     case "erpnext_lead_list":
@@ -1130,8 +1197,22 @@ export function cannedResult(
       }]);
     case "erpnext_sales_order_list":
       return list("Sales Order", SALES_ORDERS);
-    case "erpnext_customer_get":
-      return { data: { ...CUSTOMER, name: args.name ?? CUSTOMER.name } };
+    case "erpnext_customer_get": {
+      const customerName = typeof args.name === "string"
+        ? args.name.trim()
+        : "";
+      if (!customerName) return null;
+      return {
+        data: {
+          ...CUSTOMER,
+          doctype: "Customer",
+          name: customerName,
+          customer_name: customerName === "CUST-ACME"
+            ? CUSTOMER.customer_name
+            : customerName,
+        },
+      };
+    }
     case "erpnext_revenue_trend":
       return {
         ...chart("Revenue trend", MONTH_LABELS, REVENUE_VALUES),

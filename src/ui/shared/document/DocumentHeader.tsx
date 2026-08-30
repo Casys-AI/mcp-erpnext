@@ -5,6 +5,10 @@ import { useT } from "../i18n-hook";
 import { TONE_BADGE, toneForStatus } from "../status";
 import type { ViewerLayout } from "../useViewerLayout";
 import { cx, Label, LiveDot } from "../ui";
+import {
+  contextInteractionProps,
+  type ContextInteractionTarget,
+} from "./context-interaction.ts";
 
 export interface DocumentHeaderProps {
   doctype: string;
@@ -18,6 +22,8 @@ export interface DocumentHeaderProps {
   /** Refresh, JSON ou toute autre action propre à la coque. */
   trailing?: ComponentChildren;
   live?: boolean;
+  /** La fiche elle-même rejoint le contexte au clic, comme un point de chart. */
+  contextTarget?: ContextInteractionTarget;
 }
 
 function StatusBadge(
@@ -36,6 +42,25 @@ function StatusBadge(
   );
 }
 
+function DocumentContextButton(
+  { target, class: klass }: {
+    target?: ContextInteractionTarget;
+    class?: string;
+  },
+) {
+  if (!target) return null;
+  return (
+    <button
+      type="button"
+      {...contextInteractionProps(target)}
+      class={cx(
+        "absolute inset-0 z-0 transition-colors hover:bg-row-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
+        klass,
+      )}
+    />
+  );
+}
+
 export function DocumentHeader({
   doctype,
   name,
@@ -46,6 +71,7 @@ export function DocumentHeader({
   navigation,
   trailing,
   live,
+  contextTarget,
 }: DocumentHeaderProps) {
   const t = useT();
   const narrow = layout !== "wide";
@@ -64,23 +90,31 @@ export function DocumentHeader({
           </div>
         </div>
 
-        <div class="flex flex-col gap-1.5 border-b border-line px-3 pb-3 pt-1">
-          <span class="truncate font-mono text-nano uppercase tracking-label text-ink-faint">
-            {name}
-          </span>
-          <h2 class="text-pretty font-display text-card-title font-semibold text-ink">
-            {title}
-          </h2>
-          {(status || docstatus !== undefined) && (
-            <div class="flex flex-wrap items-center gap-[7px]">
-              {status && <StatusBadge status={status} pill />}
-              {docstatus !== undefined && (
-                <span class="font-mono text-chip text-ink-faint">
-                  {t("document.docstatus", { value: docstatus })}
-                </span>
-              )}
-            </div>
+        <div
+          class={cx(
+            "relative border-b border-line transition-colors",
+            contextTarget?.selected && "bg-row-selected",
           )}
+        >
+          <DocumentContextButton target={contextTarget} />
+          <div class="pointer-events-none relative z-[1] flex flex-col gap-1.5 px-3 pb-3 pt-1">
+            <span class="truncate font-mono text-nano uppercase tracking-label text-ink-faint">
+              {name}
+            </span>
+            <h2 class="text-pretty font-display text-card-title font-semibold text-ink">
+              {title}
+            </h2>
+            {(status || docstatus !== undefined) && (
+              <div class="flex flex-wrap items-center gap-[7px]">
+                {status && <StatusBadge status={status} pill />}
+                {docstatus !== undefined && (
+                  <span class="font-mono text-chip text-ink-faint">
+                    {t("document.docstatus", { value: docstatus })}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
     );
@@ -93,24 +127,33 @@ export function DocumentHeader({
     >
       <div class="flex min-w-0 items-start gap-3">
         {navigation && <div class="shrink-0 pt-0.5">{navigation}</div>}
-        <div class="flex min-w-0 flex-col gap-1">
-          <span class="truncate font-mono text-micro uppercase tracking-label text-ink-faint">
-            {doctype} · {name}
-          </span>
-          <h2 class="truncate font-display text-title font-semibold tracking-title text-ink">
-            {title}
-          </h2>
-          {(status || docstatus !== undefined || live) && (
-            <div class="flex flex-wrap items-center gap-[7px]">
-              {status && <StatusBadge status={status} />}
-              {docstatus !== undefined && (
-                <span class="font-mono text-chip text-ink-faint">
-                  {t("document.docstatus", { value: docstatus })}
-                </span>
-              )}
-              {live && <LiveDot />}
-            </div>
+        <div
+          class={cx(
+            "relative min-w-0 rounded-[4px] transition-colors",
+            contextTarget && "px-1.5 py-1 -ml-1.5 -my-1",
+            contextTarget?.selected && "bg-row-selected",
           )}
+        >
+          <DocumentContextButton target={contextTarget} class="rounded-[4px]" />
+          <div class="pointer-events-none relative z-[1] flex min-w-0 flex-col gap-1">
+            <span class="truncate font-mono text-micro uppercase tracking-label text-ink-faint">
+              {doctype} · {name}
+            </span>
+            <h2 class="truncate font-display text-title font-semibold tracking-title text-ink">
+              {title}
+            </h2>
+            {(status || docstatus !== undefined || live) && (
+              <div class="flex flex-wrap items-center gap-[7px]">
+                {status && <StatusBadge status={status} />}
+                {docstatus !== undefined && (
+                  <span class="font-mono text-chip text-ink-faint">
+                    {t("document.docstatus", { value: docstatus })}
+                  </span>
+                )}
+                {live && <LiveDot />}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {trailing && (

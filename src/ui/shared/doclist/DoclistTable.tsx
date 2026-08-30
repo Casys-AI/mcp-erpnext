@@ -22,7 +22,14 @@ import {
   toneForStatus,
 } from "~/shared/status";
 import { type ComponentChildren, Fragment } from "preact";
+import type { ClickIntentArbiter } from "~/shared/click-intent";
+import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
+import {
+  contextInteractionProps,
+  type ContextInteractionTarget,
+} from "~/shared/document/context-interaction";
 import type { ViewerLayout } from "~/shared/useViewerLayout";
+import { useClickIntent } from "~/shared/useClickIntent";
 import { useT } from "~/shared/i18n-hook";
 import { formatCell, isStatusField } from "./helpers";
 import { pickNarrowColumns, shortenId } from "./columns";
@@ -39,6 +46,7 @@ interface RowShape {
   id: string;
   row: Record<string, unknown>;
   selected: boolean;
+  interactionTarget?: ContextInteractionTarget;
   tone: Tone;
   struck: boolean;
 }
@@ -50,7 +58,10 @@ interface CommonProps {
   selectedId: string | null;
   /** La ligne qu'une action vient de changer : barrée sur place, pas rechargée. */
   struckId?: string | null;
-  onSelect?: (row: Record<string, unknown>) => void;
+  interactionTarget?: (
+    row: Record<string, unknown>,
+    index: number,
+  ) => ContextInteractionTarget | undefined;
   /** Détail accordéon inséré immédiatement sous la ligne sélectionnée. */
   detail?: ComponentChildren;
 }
@@ -58,6 +69,8 @@ interface CommonProps {
 type ModeProps = CommonProps & {
   shape: (row: Record<string, unknown>, index: number) => RowShape;
   amountKey?: string;
+  clickIntent: ClickIntentArbiter;
+  hasDetailControls: boolean;
 };
 
 export function DoclistTable(
@@ -72,6 +85,7 @@ export function DoclistTable(
     },
 ) {
   const t = useT();
+  const clickIntent = useClickIntent();
   if (common.rows.length === 0) {
     return (
       <p class="px-4 py-10 text-center text-data text-ink-muted">
@@ -82,6 +96,9 @@ export function DoclistTable(
 
   /** Le statut ne s'affiche qu'en large, mais il colore la ligne partout. */
   const statusKey = common.columns.find((c) => isStatusField(c.id))?.id;
+  const hasDetailControls = common.rows.some((row, index) =>
+    Boolean(common.interactionTarget?.(row, index)?.onDoubleActivate)
+  );
 
   const shape = (row: Record<string, unknown>, index: number): RowShape => {
     const id = common.rowId(row, index);
@@ -89,16 +106,33 @@ export function DoclistTable(
       id,
       row,
       selected: common.selectedId === id,
+      interactionTarget: common.interactionTarget?.(row, index),
       struck: common.struckId === id,
       tone: statusKey ? toneForStatus(String(row[statusKey] ?? "")) : "neutral",
     };
   };
 
   if (layout === "mobile") {
-    return <CompactTable {...common} shape={shape} amountKey={amountKey} />;
+    return (
+      <CompactTable
+        {...common}
+        shape={shape}
+        amountKey={amountKey}
+        clickIntent={clickIntent}
+        hasDetailControls={hasDetailControls}
+      />
+    );
   }
   if (layout === "panel") {
-    return <StackedList {...common} shape={shape} amountKey={amountKey} />;
+    return (
+      <StackedList
+        {...common}
+        shape={shape}
+        amountKey={amountKey}
+        clickIntent={clickIntent}
+        hasDetailControls={hasDetailControls}
+      />
+    );
   }
   return (
     <WideTable
@@ -108,6 +142,28 @@ export function DoclistTable(
       sortKey={sortKey}
       sortDir={sortDir}
       onSort={onSort}
+      clickIntent={clickIntent}
+      hasDetailControls={hasDetailControls}
+    />
+  );
+}
+
+function RowDetailToggle({
+  target,
+  touch = false,
+}: {
+  target?: ContextInteractionTarget;
+  touch?: boolean;
+}) {
+  const onToggle = target?.onDoubleActivate;
+  if (!onToggle) return null;
+  return (
+    <DetailToggleButton
+      expanded={Boolean(target.expanded)}
+      label={target.detailLabel ?? target.label}
+      controls={target.controls}
+      onToggle={onToggle}
+      touch={touch}
     />
   );
 }
@@ -169,20 +225,6 @@ function selectionEdge(selected: boolean, interactive: boolean): string {
   ].filter(Boolean).join(" ");
 }
 
-/** Active une ligne au clavier comme au clic, sans avaler les autres touches. */
-function activationHandlers(onActivate?: () => void) {
-  if (!onActivate) return {};
-  return {
-    tabIndex: 0,
-    onClick: onActivate,
-    onKeyDown: (event: KeyboardEvent) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      onActivate();
-    },
-  };
-}
-
 /* ── Large ────────────────────────────────────────────────────────── */
 
 function WideTable(
@@ -194,8 +236,9 @@ function WideTable(
     sortKey,
     sortDir,
     onSort,
-    onSelect,
     detail,
+    clickIntent,
+    hasDetailControls,
   }:
     & ModeProps
     & {
@@ -205,6 +248,7 @@ function WideTable(
       onSort: (key: string) => void;
     },
 ) {
+  const t = useT();
   return (
     <table class="w-full table-fixed border-collapse">
       <thead>
@@ -263,19 +307,36 @@ function WideTable(
               </button>
             </th>
           ))}
+          {hasDetailControls && (
+            <th scope="col" class="w-10 border-b border-line bg-sunken">
+              <span class="sr-only">
+                {t("doclist.detail.inspector_label")}
+              </span>
+            </th>
+          )}
         </tr>
       </thead>
       <tbody>
         {rows.map((raw, index) => {
-          const { id, row, selected, tone, struck } = shape(raw, index);
+          const { id, row, selected, interactionTarget, tone, struck } = shape(
+            raw,
+            index,
+          );
+          const active = selected || Boolean(interactionTarget?.selected);
+          const interactive = Boolean(interactionTarget);
           return (
             <Fragment key={id}>
               <tr
-                aria-selected={onSelect ? selected : undefined}
                 class={`border-b border-line-soft ${
-                  rowClasses(selected, !!onSelect, struck)
+                  rowClasses(active, interactive, struck)
                 }`}
-                {...activationHandlers(onSelect && (() => onSelect(row)))}
+                {...contextInteractionProps(interactionTarget, {
+                  arbiter: clickIntent,
+                  key: `doclist-row:${id}`,
+                })}
+                role="row"
+                aria-pressed={undefined}
+                aria-selected={interactionTarget?.selected}
               >
                 {columns.map((column, columnIndex) => {
                   const value = row[column.id];
@@ -292,7 +353,11 @@ function WideTable(
                           : "px-3.5",
                         // Et le bord de sélection 2 px de la dernière : sur <tr>
                         // il ne se peindrait pas en border-collapse.
-                        isLast && selectionEdge(selected, !!onSelect),
+                        isLast && !hasDetailControls &&
+                        selectionEdge(
+                          Boolean(interactionTarget?.selected),
+                          interactive,
+                        ),
                         column.numeric
                           ? "text-right font-mono text-cell tabular-nums"
                           : isFirst
@@ -301,9 +366,9 @@ function WideTable(
                         // La première cellule (ID) est en accent-text quand la ligne
                         // est sélectionnée : elle sert d'ancre visuelle. Les autres
                         // cellules restent en text-ink (légèrement plus clair).
-                        isFirst && selected
+                        isFirst && active
                           ? "text-accent-text"
-                          : selected
+                          : active
                           ? "text-ink"
                           : "text-ink-2",
                       ].filter(Boolean).join(" ")}
@@ -320,10 +385,25 @@ function WideTable(
                     </td>
                   );
                 })}
+                {hasDetailControls && (
+                  <td
+                    class={`w-10 p-0 text-center ${
+                      selectionEdge(
+                        Boolean(interactionTarget?.selected),
+                        interactive,
+                      )
+                    }`}
+                  >
+                    <RowDetailToggle target={interactionTarget} />
+                  </td>
+                )}
               </tr>
               {selected && detail && (
                 <tr>
-                  <td class="p-0" colSpan={columns.length}>
+                  <td
+                    class="p-0"
+                    colSpan={columns.length + (hasDetailControls ? 1 : 0)}
+                  >
                     {detail}
                   </td>
                 </tr>
@@ -356,7 +436,15 @@ const MOBILE_HEAD =
  * il n'y a pas la place pour l'exercice, et c'est le numéro qui distingue.
  */
 function CompactTable(
-  { columns, rows, shape, amountKey, onSelect, detail }: ModeProps,
+  {
+    columns,
+    rows,
+    shape,
+    amountKey,
+    detail,
+    clickIntent,
+    hasDetailControls,
+  }: ModeProps,
 ) {
   const t = useT();
   const { idKey, labelKey } = pickNarrowColumns(
@@ -367,54 +455,73 @@ function CompactTable(
 
   return (
     <div>
-      <div
-        class={`grid ${MOBILE_GRID} border-y border-line bg-sunken px-3 py-1.5`}
-      >
-        <span class={MOBILE_HEAD}>{t("doclist.table.header.id")}</span>
-        <span class={MOBILE_HEAD}>{t("doclist.table.header.party")}</span>
-        <span class={`${MOBILE_HEAD} text-right`}>
-          {t("doclist.table.header.due")}
-        </span>
+      <div class="flex border-y border-line bg-sunken">
+        <div class={`grid ${MOBILE_GRID} min-w-0 flex-1 px-3 py-1.5`}>
+          <span class={MOBILE_HEAD}>{t("doclist.table.header.id")}</span>
+          <span class={MOBILE_HEAD}>{t("doclist.table.header.party")}</span>
+          <span class={`${MOBILE_HEAD} text-right`}>
+            {t("doclist.table.header.due")}
+          </span>
+        </div>
+        {hasDetailControls && <span aria-hidden="true" class="w-10" />}
       </div>
 
       <ul>
         {rows.map((raw, index) => {
-          const { id, row, selected, tone, struck } = shape(raw, index);
+          const { id, row, selected, interactionTarget, tone, struck } = shape(
+            raw,
+            index,
+          );
+          const active = selected || Boolean(interactionTarget?.selected);
+          const interactive = Boolean(interactionTarget);
           const due = dueValue(row, amountKey);
 
           return (
             <li key={id}>
               <div
-                role={onSelect ? "button" : undefined}
-                aria-pressed={onSelect ? selected : undefined}
                 class={[
-                  `grid ${MOBILE_GRID} min-h-10 items-center px-3`,
+                  "flex min-h-10 items-stretch",
                   `border-b border-line-soft border-l-2 ${TONE_RULE[tone]}`,
                   // Ici la ligne est une div : le bord droit tient dessus.
-                  selectionEdge(selected, !!onSelect),
-                  rowClasses(selected, !!onSelect, struck),
+                  selectionEdge(
+                    Boolean(interactionTarget?.selected),
+                    interactive,
+                  ),
+                  active ? "bg-row-selected" : "hover:bg-row-hover",
                 ].join(" ")}
-                {...activationHandlers(onSelect && (() => onSelect(row)))}
               >
-                <span
-                  class={`font-mono text-data ${
-                    selected ? "text-accent-text" : "text-ink-2"
+                <div
+                  class={`grid ${MOBILE_GRID} min-w-0 flex-1 items-center px-3 ${
+                    rowClasses(active, interactive, struck)
                   }`}
+                  {...contextInteractionProps(interactionTarget, {
+                    arbiter: clickIntent,
+                    key: `doclist-row:${id}`,
+                  })}
                 >
-                  {idKey ? shortenId(formatCell(row[idKey]), 10, 1) : ""}
-                </span>
-                <span class="truncate pr-2 text-data text-ink-muted">
-                  {labelKey ? formatCell(row[labelKey]) : ""}
-                </span>
-                <span
-                  class={`text-right font-mono text-data tabular-nums ${
-                    due == null
-                      ? "text-ink-dim"
-                      : `font-medium ${TONE_AMOUNT[tone]}`
-                  }`}
-                >
-                  {due == null ? "—" : formatCell(due)}
-                </span>
+                  <span
+                    class={`font-mono text-data ${
+                      active ? "text-accent-text" : "text-ink-2"
+                    }`}
+                  >
+                    {idKey ? shortenId(formatCell(row[idKey]), 10, 1) : ""}
+                  </span>
+                  <span class="truncate pr-2 text-data text-ink-muted">
+                    {labelKey ? formatCell(row[labelKey]) : ""}
+                  </span>
+                  <span
+                    class={`text-right font-mono text-data tabular-nums ${
+                      due == null
+                        ? "text-ink-dim"
+                        : `font-medium ${TONE_AMOUNT[tone]}`
+                    }`}
+                  >
+                    {due == null ? "—" : formatCell(due)}
+                  </span>
+                </div>
+                {hasDetailControls && (
+                  <RowDetailToggle target={interactionTarget} touch />
+                )}
               </div>
               {selected && detail}
             </li>
@@ -435,7 +542,15 @@ function CompactTable(
  * lisibles y valent mieux que trois colonnes serrées.
  */
 function StackedList(
-  { columns, rows, shape, amountKey, onSelect, detail }: ModeProps,
+  {
+    columns,
+    rows,
+    shape,
+    amountKey,
+    detail,
+    clickIntent,
+    hasDetailControls,
+  }: ModeProps,
 ) {
   const { idKey, labelKey } = pickNarrowColumns(
     columns,
@@ -446,45 +561,63 @@ function StackedList(
   return (
     <ul class="flex flex-col">
       {rows.map((raw, index) => {
-        const { id, row, selected, tone, struck } = shape(raw, index);
+        const { id, row, selected, interactionTarget, tone, struck } = shape(
+          raw,
+          index,
+        );
+        const active = selected || Boolean(interactionTarget?.selected);
+        const interactive = Boolean(interactionTarget);
         const due = dueValue(row, amountKey);
 
         return (
           <li key={id}>
             <div
-              role={onSelect ? "button" : undefined}
-              aria-pressed={onSelect ? selected : undefined}
               class={[
-                "flex items-center justify-between gap-2.5 px-3 py-[9px]",
+                "flex min-h-10 items-stretch",
                 `border-b border-line-soft border-l-2 ${TONE_RULE[tone]}`,
-                selectionEdge(selected, !!onSelect),
-                rowClasses(selected, !!onSelect, struck),
+                selectionEdge(
+                  Boolean(interactionTarget?.selected),
+                  interactive,
+                ),
+                active ? "bg-row-selected" : "hover:bg-row-hover",
               ].join(" ")}
-              {...activationHandlers(onSelect && (() => onSelect(row)))}
             >
-              <div class="flex min-w-0 flex-col gap-px">
+              <div
+                class={`flex min-w-0 flex-1 items-center justify-between gap-2.5 px-3 py-[9px] ${
+                  rowClasses(active, interactive, struck)
+                }`}
+                {...contextInteractionProps(interactionTarget, {
+                  arbiter: clickIntent,
+                  key: `doclist-row:${id}`,
+                })}
+              >
+                <div class="flex min-w-0 flex-col gap-px">
+                  <span
+                    class={`truncate font-mono text-note ${
+                      active ? "text-accent-text" : "text-ink-2"
+                    }`}
+                  >
+                    {idKey ? shortenId(formatCell(row[idKey])) : ""}
+                  </span>
+                  {labelKey && (
+                    <span class="truncate text-note text-ink-muted">
+                      {formatCell(row[labelKey])}
+                    </span>
+                  )}
+                </div>
                 <span
-                  class={`truncate font-mono text-note ${
-                    selected ? "text-accent-text" : "text-ink-2"
+                  class={`shrink-0 font-mono text-cell tabular-nums ${
+                    due == null
+                      ? "text-ink-ghost"
+                      : `font-medium ${TONE_AMOUNT[tone]}`
                   }`}
                 >
-                  {idKey ? shortenId(formatCell(row[idKey])) : ""}
+                  {due == null ? "—" : formatCell(due)}
                 </span>
-                {labelKey && (
-                  <span class="truncate text-note text-ink-muted">
-                    {formatCell(row[labelKey])}
-                  </span>
-                )}
               </div>
-              <span
-                class={`shrink-0 font-mono text-cell tabular-nums ${
-                  due == null
-                    ? "text-ink-ghost"
-                    : `font-medium ${TONE_AMOUNT[tone]}`
-                }`}
-              >
-                {due == null ? "—" : formatCell(due)}
-              </span>
+              {hasDetailControls && (
+                <RowDetailToggle target={interactionTarget} touch />
+              )}
             </div>
             {selected && detail}
           </li>

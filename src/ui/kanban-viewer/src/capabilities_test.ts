@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertFalse, assertStringIncludes } from "@std/assert";
 import type { KanbanBoardData } from "../../shared/kanban/types.ts";
 import { kanbanViewerCapabilities } from "./capabilities.ts";
 
@@ -91,4 +91,23 @@ Deno.test("kanban capabilities : message-only refuse tous les outils", () => {
       canMove: false,
     },
   );
+});
+
+Deno.test("kanban : le contexte suit les niveaux sans remplacer le bouton de détail", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./KanbanViewer.tsx", import.meta.url),
+  );
+
+  assertStringIncludes(
+    source,
+    "const activeContext = useActiveContext(app, rootKey)",
+  );
+  assertStringIncludes(source, "context={context}");
+  assertStringIncludes(source, "contextView={board.title}");
+  assertStringIncludes(source, 'aria-haspopup="dialog"');
+  assertStringIncludes(source, 't("interaction.detail.open"');
+  assertFalse(source.includes("aria-expanded={expanded}"));
+  assertFalse(source.includes("kanbanCardDetailAction"));
+  assertStringIncludes(source, '"min-h-10"');
+  assertStringIncludes(source, "style={{ width: 40, height: 40 }}");
 });

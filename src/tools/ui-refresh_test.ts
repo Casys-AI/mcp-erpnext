@@ -755,6 +755,69 @@ Deno.test("ui refresh - doc viewer exposes only registered document actions", ()
   ]);
 });
 
+Deno.test("ui refresh - Purchase Invoice doc viewer exposes exact line navigation capabilities", () => {
+  type HintResult = {
+    _availableTools?: string[];
+    _sendMessageHints?: { key?: string; tool?: string; message: string }[];
+  };
+  const payload = {
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doc-viewer" } },
+    data: {
+      doctype: "Purchase Invoice",
+      name: "PINV-1",
+      supplier: "SUPP-1",
+    },
+  };
+  const tools = [
+    "erpnext_doc_list",
+    "erpnext_item_get",
+    "erpnext_purchase_invoice_get",
+    "erpnext_stock_balance",
+    "erpnext_supplier_get",
+  ];
+  const result = withUiRefreshRequest(
+    payload,
+    "erpnext_purchase_invoice_get",
+    { name: "PINV-1" },
+    new Date(2026, 7, 28),
+    new Set(tools),
+  ) as HintResult;
+
+  assertEquals(result._sendMessageHints?.map((hint) => hint.key), [
+    "payments",
+    "supplier",
+    "item",
+    "stock",
+  ]);
+  assertEquals(result._sendMessageHints?.map((hint) => hint.tool), [
+    "erpnext_doc_list",
+    "erpnext_supplier_get",
+    "erpnext_item_get",
+    "erpnext_stock_balance",
+  ]);
+  assertEquals(result._availableTools, tools);
+
+  const withoutStock = withUiRefreshRequest(
+    payload,
+    "erpnext_purchase_invoice_get",
+    { name: "PINV-1" },
+    new Date(2026, 7, 28),
+    new Set(tools.filter((tool) => tool !== "erpnext_stock_balance")),
+  ) as HintResult;
+  assertEquals(withoutStock._sendMessageHints?.map((hint) => hint.tool), [
+    "erpnext_doc_list",
+    "erpnext_supplier_get",
+    "erpnext_item_get",
+    undefined,
+  ]);
+  assertEquals(withoutStock._availableTools, [
+    "erpnext_doc_list",
+    "erpnext_item_get",
+    "erpnext_purchase_invoice_get",
+    "erpnext_supplier_get",
+  ]);
+});
+
 Deno.test("ui refresh - mutation capabilities are bounded by the explicit doctype", () => {
   const available = new Set([
     "erpnext_doc_submit",
@@ -932,6 +995,8 @@ Deno.test("ui refresh - every commercial document keeps its canonical related hi
   assertEquals(purchaseInvoice._sendMessageHints?.map((hint) => hint.key), [
     "payments",
     "supplier",
+    "item",
+    "stock",
   ]);
   assertEquals(
     purchaseInvoice._sendMessageHints?.[0].args?.doctype,

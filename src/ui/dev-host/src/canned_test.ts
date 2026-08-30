@@ -1,4 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
+import { documentEnvelopeOf } from "../../shared/document/model.ts";
+import { jumpFromHint } from "../../shared/jumps.ts";
 import {
   approximateBase64Bytes,
   cannedResult,
@@ -64,6 +66,102 @@ Deno.test("dev-host canned - keeps eight viewers and exposes exact generic docum
   assertEquals(
     (invoice._availableTools as string[]).slice(-3),
     ["erpnext_file_download", "erpnext_file_list", "erpnext_file_upload"],
+  );
+});
+
+Deno.test("dev-host canned - doclist invoice child exposes typed navigation end to end", () => {
+  const root = object(initialResult("doclist"));
+  const firstRow = object((root.data as unknown[])[0]);
+  const invoiceName = String(firstRow.name);
+  const detail = object(withDevViewerTools(
+    "doclist",
+    cannedResult("doclist", "erpnext_sales_invoice_get", {
+      name: invoiceName,
+    }),
+  ));
+  const envelope = documentEnvelopeOf(detail);
+  assert(envelope);
+  assertEquals(envelope.doctype, DEV_INVOICE_DOCTYPE);
+  assertEquals(envelope.name, invoiceName);
+  assertEquals(envelope.refreshRequest, {
+    toolName: "erpnext_sales_invoice_get",
+    arguments: { name: invoiceName },
+  });
+  assertEquals(envelope.availableTools, [
+    "erpnext_customer_get",
+    "erpnext_doc_cancel",
+    "erpnext_doc_list",
+    "erpnext_doc_submit",
+    "erpnext_item_get",
+    "erpnext_sales_invoice_get",
+    "erpnext_sales_invoice_submit",
+    "erpnext_stock_balance",
+  ]);
+
+  const hints = envelope.sendMessageHints ?? [];
+  assertEquals(hints.map((hint) => hint.key), [
+    "payments",
+    "customer",
+    "item",
+    "stock",
+  ]);
+  const paymentFields = hints[0].args?.fields;
+  assert(
+    Array.isArray(paymentFields) &&
+      paymentFields.every((field) => typeof field === "string"),
+  );
+  const customerJump = jumpFromHint(hints[1], {
+    id: envelope.name,
+    name: envelope.name,
+    doctype: envelope.doctype,
+  });
+  assert(customerJump);
+  assertEquals(customerJump.tool, {
+    name: "erpnext_customer_get",
+    args: { name: "Acme Corp" },
+  });
+  const customer = object(cannedResult(
+    "doclist",
+    customerJump.tool.name,
+    customerJump.tool.args,
+  ));
+  assertEquals(object(customer.data).doctype, "Customer");
+  assertEquals(object(customer.data).name, "Acme Corp");
+
+  const firstItem = object((envelope.document.items as unknown[])[0]);
+  const itemCode = String(firstItem.item_code);
+  assertEquals(itemCode, "ITEM-LAPTOP");
+  const itemJump = jumpFromHint(hints[2], { item: itemCode });
+  assert(itemJump);
+  assertEquals(itemJump.tool, {
+    name: "erpnext_item_get",
+    args: { name: itemCode },
+  });
+  const item = object(cannedResult(
+    "doclist",
+    itemJump.tool.name,
+    itemJump.tool.args,
+  ));
+  assertEquals(object(item.data).doctype, "Item");
+  assertEquals(object(item.data).name, itemCode);
+
+  const stockJump = jumpFromHint(hints[3], { item: itemCode });
+  assert(stockJump);
+  assertEquals(stockJump.tool, {
+    name: "erpnext_stock_balance",
+    args: { item_code: itemCode, limit: 50 },
+  });
+  const stock = object(cannedResult(
+    "doclist",
+    stockJump.tool.name,
+    stockJump.tool.args,
+  ));
+  assertEquals(stock.doctype, "Bin");
+  assertEquals(
+    (stock.data as Array<Record<string, unknown>>).every((row) =>
+      row.item_code === itemCode
+    ),
+    true,
   );
 });
 

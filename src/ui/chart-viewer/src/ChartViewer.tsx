@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { Ref } from "preact";
+import type { JSX, Ref } from "preact";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
 import {
@@ -39,12 +39,7 @@ import type { BarShapeProps } from "recharts";
 
 import { formatCurrency, formatNumber, formatPercent } from "~/shared/format";
 import { useT } from "~/shared/i18n-hook";
-import {
-  type DrillDownChannel,
-  drillDownChannel,
-  sharedLabel,
-  shareSelection,
-} from "~/shared/drill-down";
+import { type DrillDownChannel, sharedLabel } from "~/shared/drill-down";
 import {
   cx,
   LiveDot,
@@ -54,6 +49,7 @@ import {
 } from "~/shared/ui";
 import { useViewerLayout, type ViewerLayout } from "~/shared/useViewerLayout";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { useClickIntent } from "~/shared/useClickIntent.ts";
 import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
@@ -75,13 +71,25 @@ import {
 import { fixtureFromSearch, isFixtureMode } from "./fixture.ts";
 import type { ChartData, Dataset, ScatterSeries, TreeNode } from "./types.ts";
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
+import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
-import type { ContextSelectionItem } from "~/shared/active-context.ts";
+import {
+  canShareActiveContextResource,
+  type ContextSelectionItem,
+} from "~/shared/active-context.ts";
+import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
 import {
   type ChartCursor,
+  chartCursorCounts,
   type ChartCursorMove,
+  chartDetailHintPlacement,
   chartJumpHint,
+  chartNavigationGroups,
+  chartPointActionPlan,
+  type ChartPointActivation,
+  chartPointExpansionState,
   chartPointLabel,
+  chartScatterPointLabel,
   chartSelectionAt,
   chartSeriesFromTarget,
   moveChartCursor,
@@ -102,13 +110,30 @@ const MONO_FONT = "var(--font-mono)";
 const fonts = { mono: MONO_FONT } as const;
 const CHART_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
-const CHART_PRIMARY_CLICK_DELAY_MS = 320;
+const CHART_DETAIL_PANEL_ID = "chart-detail-panel";
 
-type ChartActivationMode = "navigate" | "context";
+interface ChartPointerAnchor {
+  clientX: number;
+  clientY: number;
+}
+
+interface ActiveChartPoint {
+  label: string;
+  series?: string;
+  anchor?: {
+    left: number;
+    top: number;
+    hintSide: "left" | "right";
+    hintMaxWidth: number;
+  };
+}
+
 type ChartDataClick = (
   label: string,
-  series?: string,
-  mode?: ChartActivationMode,
+  series: string | undefined,
+  activation: ChartPointActivation,
+  clickCount?: number,
+  anchor?: ChartPointerAnchor,
 ) => void;
 type ChartSelectionPredicate = (label: string, series?: string) => boolean;
 
@@ -121,7 +146,9 @@ function activateCategoricalPoint(
   onDataClick: ChartDataClick,
   state: Record<string, unknown> | null | undefined,
   target: unknown,
-  mode: ChartActivationMode,
+  activation: ChartPointActivation,
+  clickCount: number,
+  anchor: ChartPointerAnchor,
 ) {
   const label = chartPointLabel(data.labels, state);
   if (!label) return;
@@ -129,7 +156,7 @@ function activateCategoricalPoint(
     target,
     data.datasets.flatMap((dataset) => dataset.label ? [dataset.label] : []),
   );
-  onDataClick(label, series, mode);
+  onDataClick(label, series, activation, clickCount, anchor);
 }
 
 /**
@@ -400,18 +427,31 @@ function ChartTooltip({
   payload,
   label,
   data,
-  drillDown,
   contextEnabled,
+  canDrillDown,
 }: {
   active?: boolean;
-  payload?: Array<{ name: string; value: number; color: string }>;
+  payload?: Array<{
+    name: string;
+    value: number;
+    color: string;
+    payload?: { label?: unknown };
+  }>;
   label?: string;
   data: ChartData;
-  drillDown?: string;
   contextEnabled?: boolean;
+  canDrillDown?: ChartSelectionPredicate;
 }) {
   const t = useT();
   if (!active || !payload?.length) return null;
+  const pointLabel = label ?? chartScatterPointLabel(payload[0]);
+  const drilldownEnabled = Boolean(
+    pointLabel &&
+      (canDrillDown?.(pointLabel) ||
+        payload.some((point) =>
+          canDrillDown?.(pointLabel, point.name) === true
+        )),
+  );
   return (
     <div
       style={{
@@ -427,14 +467,14 @@ function ChartTooltip({
         boxShadow: "var(--shadow-tooltip)",
       }}
     >
-      {label && (
+      {pointLabel && (
         <div
           style={{
             color: "var(--color-ink-faint)",
             fontSize: 11,
           }}
         >
-          {label}
+          {pointLabel}
         </div>
       )}
       {payload.map((p, i) => (
@@ -472,7 +512,7 @@ function ChartTooltip({
           </span>
         </div>
       ))}
-      {(drillDown || contextEnabled) && (
+      {(contextEnabled || drilldownEnabled) && (
         <div
           style={{
             borderTop: "1px solid var(--color-line)",
@@ -485,15 +525,15 @@ function ChartTooltip({
             gap: 2,
           }}
         >
-          {drillDown && (
-            <span>
-              {t("chart.tooltip.click")} → «{" "}
-              {drillDown.replace(/\{label\}/g, label ?? "…")} »
-            </span>
-          )}
-          {contextEnabled && (
-            <span>{t("chart.tooltip.double_click_context")}</span>
-          )}
+          <span>
+            {t(
+              contextEnabled && drilldownEnabled
+                ? "chart.tooltip.click_action_context"
+                : contextEnabled
+                ? "chart.tooltip.click_action_context_only"
+                : "chart.tooltip.click_action_fallback",
+            )}
+          </span>
         </div>
       )}
     </div>
@@ -557,10 +597,11 @@ function SharedYAxis(
 }
 
 function VerticalBarChart(
-  { data, onDataClick, isSelected }: {
+  { data, onDataClick, isSelected, canDrillDown }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
     isSelected?: ChartSelectionPredicate;
+    canDrillDown?: ChartSelectionPredicate;
   },
 ) {
   const rows = toRows(data);
@@ -583,8 +624,8 @@ function VerticalBarChart(
           content={
             <ChartTooltip
               data={data}
-              drillDown={data._drillDown}
               contextEnabled={isSelected !== undefined}
+              canDrillDown={canDrillDown}
             />
           }
           cursor={CURSOR}
@@ -604,19 +645,23 @@ function VerticalBarChart(
             isAnimationActive={false}
             cursor={onDataClick ? "pointer" : undefined}
             onClick={onDataClick
-              ? (entry: { payload?: { name?: unknown } }) =>
-                onDataClick(
-                  String(entry.payload?.name ?? ""),
-                  ds.label || undefined,
-                  "navigate",
-                )
-              : undefined}
-            onDoubleClick={onDataClick
-              ? (entry: { payload?: { name?: unknown } }) =>
+              ? (entry, _index, event) =>
                 onDataClick(
                   String(entry.payload?.name ?? ""),
                   ds.label || undefined,
                   "context",
+                  event.detail,
+                  event,
+                )
+              : undefined}
+            onDoubleClick={onDataClick
+              ? (entry, _index, event) =>
+                onDataClick(
+                  String(entry.payload?.name ?? ""),
+                  ds.label || undefined,
+                  "drilldown",
+                  event.detail,
+                  event,
                 )
               : undefined}
             shape={selectedBarShape(
@@ -633,10 +678,11 @@ function VerticalBarChart(
 }
 
 function HorizontalBarChart(
-  { data, onDataClick, isSelected }: {
+  { data, onDataClick, isSelected, canDrillDown }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
     isSelected?: ChartSelectionPredicate;
+    canDrillDown?: ChartSelectionPredicate;
   },
 ) {
   const rows = toRows(data);
@@ -662,8 +708,8 @@ function HorizontalBarChart(
           content={
             <ChartTooltip
               data={data}
-              drillDown={data._drillDown}
               contextEnabled={isSelected !== undefined}
+              canDrillDown={canDrillDown}
             />
           }
           cursor={CURSOR}
@@ -680,19 +726,23 @@ function HorizontalBarChart(
             isAnimationActive={false}
             cursor={onDataClick ? "pointer" : undefined}
             onClick={onDataClick
-              ? (entry: { payload?: { name?: unknown } }) =>
-                onDataClick(
-                  String(entry.payload?.name ?? ""),
-                  ds.label || undefined,
-                  "navigate",
-                )
-              : undefined}
-            onDoubleClick={onDataClick
-              ? (entry: { payload?: { name?: unknown } }) =>
+              ? (entry, _index, event) =>
                 onDataClick(
                   String(entry.payload?.name ?? ""),
                   ds.label || undefined,
                   "context",
+                  event.detail,
+                  event,
+                )
+              : undefined}
+            onDoubleClick={onDataClick
+              ? (entry, _index, event) =>
+                onDataClick(
+                  String(entry.payload?.name ?? ""),
+                  ds.label || undefined,
+                  "drilldown",
+                  event.detail,
+                  event,
                 )
               : undefined}
             shape={selectedBarShape(
@@ -709,10 +759,11 @@ function HorizontalBarChart(
 }
 
 function LineChartView(
-  { data, onDataClick, isSelected }: {
+  { data, onDataClick, isSelected, canDrillDown }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
     isSelected?: ChartSelectionPredicate;
+    canDrillDown?: ChartSelectionPredicate;
   },
 ) {
   const rows = toRows(data);
@@ -729,7 +780,9 @@ function LineChartView(
               onDataClick,
               state as unknown as Record<string, unknown>,
               event.target,
-              "navigate",
+              "context",
+              event.detail,
+              event,
             )
           : undefined}
         onDoubleClick={onDataClick
@@ -739,7 +792,9 @@ function LineChartView(
               onDataClick,
               state as unknown as Record<string, unknown>,
               event.target,
-              "context",
+              "drilldown",
+              event.detail,
+              event,
             )
           : undefined}
       >
@@ -753,8 +808,8 @@ function LineChartView(
           content={
             <ChartTooltip
               data={data}
-              drillDown={data._drillDown}
               contextEnabled={isSelected !== undefined}
+              canDrillDown={canDrillDown}
             />
           }
           cursor={<BandCursor count={rows.length} />}
@@ -796,10 +851,11 @@ function LineChartView(
 }
 
 function AreaChartView(
-  { data, onDataClick, isSelected }: {
+  { data, onDataClick, isSelected, canDrillDown }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
     isSelected?: ChartSelectionPredicate;
+    canDrillDown?: ChartSelectionPredicate;
   },
 ) {
   const rows = toRows(data);
@@ -817,7 +873,9 @@ function AreaChartView(
               onDataClick,
               state as unknown as Record<string, unknown>,
               event.target,
-              "navigate",
+              "context",
+              event.detail,
+              event,
             )
           : undefined}
         onDoubleClick={onDataClick
@@ -827,7 +885,9 @@ function AreaChartView(
               onDataClick,
               state as unknown as Record<string, unknown>,
               event.target,
-              "context",
+              "drilldown",
+              event.detail,
+              event,
             )
           : undefined}
       >
@@ -861,8 +921,8 @@ function AreaChartView(
           content={
             <ChartTooltip
               data={data}
-              drillDown={data._drillDown}
               contextEnabled={isSelected !== undefined}
+              canDrillDown={canDrillDown}
             />
           }
           cursor={<BandCursor count={rows.length} />}
@@ -911,10 +971,11 @@ function AreaChartView(
 }
 
 function ComposedChartView(
-  { data, onDataClick, isSelected }: {
+  { data, onDataClick, isSelected, canDrillDown }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
     isSelected?: ChartSelectionPredicate;
+    canDrillDown?: ChartSelectionPredicate;
   },
 ) {
   const rows = toRows(data);
@@ -931,7 +992,9 @@ function ComposedChartView(
               onDataClick,
               state as unknown as Record<string, unknown>,
               event.target,
-              "navigate",
+              "context",
+              event.detail,
+              event,
             )
           : undefined}
         onDoubleClick={onDataClick
@@ -941,7 +1004,9 @@ function ComposedChartView(
               onDataClick,
               state as unknown as Record<string, unknown>,
               event.target,
-              "context",
+              "drilldown",
+              event.detail,
+              event,
             )
           : undefined}
       >
@@ -955,8 +1020,8 @@ function ComposedChartView(
           content={
             <ChartTooltip
               data={data}
-              drillDown={data._drillDown}
               contextEnabled={isSelected !== undefined}
+              canDrillDown={canDrillDown}
             />
           }
           cursor={<BandCursor count={rows.length} />}
@@ -1044,7 +1109,9 @@ function ComposedChartView(
                   onDataClick(
                     String(entry.payload?.name ?? ""),
                     ds.label || undefined,
-                    "navigate",
+                    "context",
+                    event.detail,
+                    event,
                   );
                 }
                 : undefined}
@@ -1054,7 +1121,9 @@ function ComposedChartView(
                   onDataClick(
                     String(entry.payload?.name ?? ""),
                     ds.label || undefined,
-                    "context",
+                    "drilldown",
+                    event.detail,
+                    event,
                   );
                 }
                 : undefined}
@@ -1073,11 +1142,12 @@ function ComposedChartView(
 }
 
 function PieDonutChart(
-  { data, isDonut, onDataClick, isSelected }: {
+  { data, isDonut, onDataClick, isSelected, canDrillDown }: {
     data: ChartData;
     isDonut: boolean;
     onDataClick?: ChartDataClick;
     isSelected?: ChartSelectionPredicate;
+    canDrillDown?: ChartSelectionPredicate;
   },
 ) {
   const t = useT();
@@ -1120,19 +1190,23 @@ function PieDonutChart(
               isAnimationActive={false}
               cursor={onDataClick ? "pointer" : undefined}
               onClick={onDataClick
-                ? (entry: { name?: unknown }) =>
-                  onDataClick(
-                    String(entry.name ?? ""),
-                    ds.label || undefined,
-                    "navigate",
-                  )
-                : undefined}
-              onDoubleClick={onDataClick
-                ? (entry: { name?: unknown }) =>
+                ? (entry, _index, event) =>
                   onDataClick(
                     String(entry.name ?? ""),
                     ds.label || undefined,
                     "context",
+                    event.detail,
+                    event,
+                  )
+                : undefined}
+              onDoubleClick={onDataClick
+                ? (entry, _index, event) =>
+                  onDataClick(
+                    String(entry.name ?? ""),
+                    ds.label || undefined,
+                    "drilldown",
+                    event.detail,
+                    event,
                   )
                 : undefined}
             >
@@ -1160,8 +1234,8 @@ function PieDonutChart(
               content={
                 <ChartTooltip
                   data={data}
-                  drillDown={data._drillDown}
                   contextEnabled={isSelected !== undefined}
+                  canDrillDown={canDrillDown}
                 />
               }
               isAnimationActive={false}
@@ -1218,12 +1292,48 @@ function PieDonutChart(
   );
 }
 
-function RadarChartView({ data }: { data: ChartData }) {
+function RadarChartView(
+  { data, onDataClick, isSelected, canDrillDown }: {
+    data: ChartData;
+    onDataClick?: ChartDataClick;
+    isSelected?: ChartSelectionPredicate;
+    canDrillDown?: ChartSelectionPredicate;
+  },
+) {
   const rows = toRows(data);
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <RadarChart data={rows} cx="50%" cy="50%" outerRadius="70%">
+      <RadarChart
+        data={rows}
+        cx="50%"
+        cy="50%"
+        outerRadius="70%"
+        onClick={onDataClick
+          ? (state, event) =>
+            activateCategoricalPoint(
+              data,
+              onDataClick,
+              state as unknown as Record<string, unknown>,
+              event.target,
+              "context",
+              event.detail,
+              event,
+            )
+          : undefined}
+        onDoubleClick={onDataClick
+          ? (state, event) =>
+            activateCategoricalPoint(
+              data,
+              onDataClick,
+              state as unknown as Record<string, unknown>,
+              event.target,
+              "drilldown",
+              event.detail,
+              event,
+            )
+          : undefined}
+      >
         <PolarGrid stroke="var(--color-line-soft)" gridType="polygon" />
         <PolarAngleAxis
           dataKey="name"
@@ -1244,26 +1354,98 @@ function RadarChartView({ data }: { data: ChartData }) {
         }
         <PolarRadiusAxis tick={false} axisLine={false} tickCount={4} />
         <Tooltip
-          content={<ChartTooltip data={data} drillDown={data._drillDown} />}
+          content={
+            <ChartTooltip
+              data={data}
+              contextEnabled={isSelected !== undefined}
+              canDrillDown={canDrillDown}
+            />
+          }
           isAnimationActive={false}
         />
-        {data.datasets.map((ds, i) => (
-          <Radar
-            key={ds.label}
-            dataKey={ds.label}
-            stroke={dsColor(ds, i, data.datasets.length)}
-            fill={dsColor(ds, i, data.datasets.length)}
-            fillOpacity={0.2}
-            strokeWidth={2}
-            isAnimationActive={false}
-          />
-        ))}
+        {data.datasets.map((ds, i) => {
+          const color = dsColor(ds, i, data.datasets.length);
+          const marker = onDataClick && ds.label
+            ? { "data-chart-series": ds.label }
+            : {};
+          return (
+            <Radar
+              key={ds.label}
+              dataKey={ds.label}
+              stroke={color}
+              fill={color}
+              fillOpacity={0.2}
+              strokeWidth={2}
+              dot={selectedPointShape(
+                rows,
+                ds.label || undefined,
+                color,
+                true,
+                isSelected,
+              )}
+              style={onDataClick ? { cursor: "pointer" } : undefined}
+              isAnimationActive={false}
+              {...marker}
+            />
+          );
+        })}
       </RadarChart>
     </ResponsiveContainer>
   );
 }
 
-function ScatterChartView({ data }: { data: ChartData }) {
+interface ScatterShapeProps {
+  cx?: number;
+  cy?: number;
+  payload?: { label?: unknown };
+}
+
+function scatterPointShape(
+  series: string,
+  color: string,
+  interactive: boolean,
+  isSelected?: ChartSelectionPredicate,
+) {
+  return (props: ScatterShapeProps) => {
+    if (props.cx === undefined || props.cy === undefined) return <g />;
+    const label = chartScatterPointLabel(props.payload);
+    const selected = label !== undefined &&
+      isSelected?.(label, series) === true;
+    const cx = props.cx ?? 0;
+    const cy = props.cy ?? 0;
+    return (
+      <g data-chart-series={series}>
+        {selected && (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={7.5}
+            fill="var(--color-surface)"
+            stroke="var(--color-accent)"
+            strokeWidth={3}
+          />
+        )}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={4}
+          fill={color}
+          opacity={0.75}
+          style={{ cursor: interactive && label ? "pointer" : "default" }}
+        />
+      </g>
+    );
+  };
+}
+
+function ScatterChartView(
+  { data, onDataClick, isSelected, canDrillDown }: {
+    data: ChartData;
+    onDataClick?: ChartDataClick;
+    isSelected?: ChartSelectionPredicate;
+    canDrillDown?: ChartSelectionPredicate;
+  },
+) {
   const t = useT();
   const series = data.scatterData ?? [];
   if (!series.length) {
@@ -1300,20 +1482,70 @@ function ScatterChartView({ data }: { data: ChartData }) {
         {/* Aire 50 → rayon 4, le point de la maquette. */}
         <ZAxis range={[50, 50]} />
         <Tooltip
-          content={<ChartTooltip data={data} />}
+          content={
+            <ChartTooltip
+              data={data}
+              contextEnabled={isSelected !== undefined}
+              canDrillDown={canDrillDown}
+            />
+          }
           cursor={false}
           isAnimationActive={false}
         />
-        {series.map((s, i) => (
-          <Scatter
-            key={s.label}
-            name={s.label}
-            data={s.points}
-            fill={s.color ?? CATEGORICAL[Math.min(i, CATEGORICAL.length - 1)]}
-            opacity={0.75}
-            isAnimationActive={false}
-          />
-        ))}
+        {series.map((s, i) => {
+          const color = s.color ??
+            CATEGORICAL[Math.min(i, CATEGORICAL.length - 1)];
+          const interactive = Boolean(
+            onDataClick && s.points.some((point) =>
+              point.label?.trim() && Number.isFinite(point.x) &&
+              Number.isFinite(point.y)
+            ),
+          );
+          return (
+            <Scatter
+              key={s.label}
+              name={s.label}
+              data={s.points}
+              fill={color}
+              opacity={1}
+              shape={scatterPointShape(
+                s.label,
+                color,
+                interactive,
+                isSelected,
+              )}
+              onClick={interactive
+                ? (entry, _index, event) => {
+                  const label = chartScatterPointLabel(entry);
+                  if (!label) return;
+                  onDataClick?.(
+                    label,
+                    s.label || undefined,
+                    "context",
+                    event.detail,
+                    event,
+                  );
+                }
+                : undefined}
+              onDoubleClick={interactive
+                ? (entry, _index, event) => {
+                  const label = chartScatterPointLabel(entry);
+                  if (!label) {
+                    return;
+                  }
+                  onDataClick?.(
+                    label,
+                    s.label || undefined,
+                    "drilldown",
+                    event.detail,
+                    event,
+                  );
+                }
+                : undefined}
+              isAnimationActive={false}
+            />
+          );
+        })}
       </ScatterChart>
     </ResponsiveContainer>
   );
@@ -1329,15 +1561,43 @@ interface TreemapContentProps {
   index: number;
   depth?: number;
   colors: readonly string[];
+  onDataClick?: ChartDataClick;
+  isSelected?: ChartSelectionPredicate;
 }
 
 function TreemapContent(props: TreemapContentProps) {
-  const { x, y, width, height, name, index, depth, colors: treeColors } = props;
+  const {
+    x,
+    y,
+    width,
+    height,
+    name,
+    index,
+    depth,
+    colors: treeColors,
+    onDataClick,
+    isSelected,
+  } = props;
   // Recharts passe aussi le nœud racine (profondeur 0) : une tuile de la
   // taille du tracé, le total dessus. On ne dessine que les feuilles.
   if (depth === 0) return null;
+  const selected = isSelected?.(name) === true;
   return (
-    <g>
+    <g
+      style={{ cursor: onDataClick ? "pointer" : "default" }}
+      onClick={onDataClick
+        ? (event) => {
+          event.stopPropagation();
+          onDataClick(name, undefined, "context", event.detail, event);
+        }
+        : undefined}
+      onDblClick={onDataClick
+        ? (event) => {
+          event.stopPropagation();
+          onDataClick(name, undefined, "drilldown", event.detail, event);
+        }
+        : undefined}
+    >
       <rect
         x={x}
         y={y}
@@ -1346,8 +1606,11 @@ function TreemapContent(props: TreemapContentProps) {
         fill={treeColors[Math.min(index, treeColors.length - 1)]}
         opacity={0.8}
         rx={3}
-        stroke="var(--color-surface)"
-        strokeWidth={2}
+        stroke={selected ? "var(--color-accent)" : "var(--color-surface)"}
+        strokeWidth={selected ? 5 : 2}
+        style={selected
+          ? { filter: "drop-shadow(0 0 2.5px var(--color-accent))" }
+          : undefined}
       />
       {/* La tuile est toujours peinte ; le libellé attend 50 px. */}
       {width >= 50 && height >= 24 && (
@@ -1394,7 +1657,13 @@ function flattenTree(
   return result;
 }
 
-function TreemapView({ data }: { data: ChartData }) {
+function TreemapView(
+  { data, onDataClick, isSelected }: {
+    data: ChartData;
+    onDataClick?: ChartDataClick;
+    isSelected?: ChartSelectionPredicate;
+  },
+) {
   const t = useT();
   let treeNodes: Array<{ name: string; value: number }>;
   if (data.treeData) {
@@ -1427,6 +1696,8 @@ function TreemapView({ data }: { data: ChartData }) {
             value={0}
             index={0}
             colors={CATEGORICAL}
+            onDataClick={onDataClick}
+            isSelected={isSelected}
           />
         }
       />
@@ -1448,10 +1719,28 @@ const KEYBOARD_CURSOR_MOVES: Partial<Record<string, ChartCursorMove>> = {
  * donc de traverser vers Recharts et l'UI ne gagne aucun bouton permanent.
  */
 function ChartKeyboardNavigator(
-  { data, onActivate, isSelected }: {
+  {
+    data,
+    onActivate,
+    onKeyActivate,
+    contextEnabled,
+    canDrillDown,
+    isSelected,
+    isExpanded,
+    onActiveChange,
+  }: {
     data: ChartData;
     onActivate?: ChartDataClick;
+    onKeyActivate?: (
+      label: string,
+      series: string | undefined,
+      event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
+    ) => void;
+    contextEnabled: boolean;
+    canDrillDown?: ChartSelectionPredicate;
     isSelected?: (label: string, series?: string) => boolean;
+    isExpanded?: (label: string, series?: string) => boolean | undefined;
+    onActiveChange?: (label: string, series?: string) => void;
   },
 ) {
   const t = useT();
@@ -1461,26 +1750,35 @@ function ChartKeyboardNavigator(
   });
 
   useEffect(() => {
-    setCursor((current) => ({
-      labelIndex: Math.min(
-        current.labelIndex,
-        Math.max(0, data.labels.length - 1),
-      ),
-      seriesIndex: Math.min(
-        current.seriesIndex,
-        Math.max(0, data.datasets.length - 1),
-      ),
-    }));
-  }, [data.labels.length, data.datasets.length]);
+    setCursor((current) => {
+      const counts = chartCursorCounts(data, current);
+      return {
+        labelIndex: Math.min(
+          current.labelIndex,
+          Math.max(0, counts.labelCount - 1),
+        ),
+        seriesIndex: Math.min(
+          current.seriesIndex,
+          Math.max(0, counts.seriesCount - 1),
+        ),
+      };
+    });
+  }, [data]);
 
   const selection = chartSelectionAt(data, cursor);
-  if (!onActivate || !selection) return null;
+  if (!onActivate || !onKeyActivate || !selection) return null;
 
-  const value = selection.value === undefined ? "—" : fmtValue(
-    selection.value,
-    data,
-    data.datasets.find((dataset) => dataset.label === selection.series),
-  );
+  const value = selection.x !== undefined && selection.y !== undefined
+    ? `${data.xAxisLabel ?? "x"}: ${formatNumber(selection.x, 2)} · ${
+      data.yAxisLabel ?? "y"
+    }: ${formatNumber(selection.y, 2)}`
+    : selection.value === undefined
+    ? "—"
+    : fmtValue(
+      selection.value,
+      data,
+      data.datasets.find((dataset) => dataset.label === selection.series),
+    );
   const target = selection.series
     ? t("chart.keyboard.target", {
       label: selection.label,
@@ -1488,36 +1786,100 @@ function ChartKeyboardNavigator(
       value,
     })
     : t("chart.keyboard.target_single", { label: selection.label, value });
-  const help = t("chart.keyboard.help");
+  const drilldownEnabled = canDrillDown?.(
+    selection.label,
+    selection.series,
+  ) === true;
+  const expandedState = drilldownEnabled
+    ? isExpanded?.(selection.label, selection.series)
+    : undefined;
+  const help = t(
+    contextEnabled && drilldownEnabled
+      ? "chart.keyboard.help"
+      : contextEnabled
+      ? "chart.keyboard.help_context"
+      : drilldownEnabled
+      ? "chart.keyboard.help_detail"
+      : "chart.keyboard.help_navigation",
+  );
+  const shortcuts = [
+    "ArrowLeft",
+    "ArrowRight",
+    "ArrowUp",
+    "ArrowDown",
+    ...(drilldownEnabled ? ["Enter"] : []),
+    ...(contextEnabled ? ["Space"] : []),
+  ].join(" ");
 
   return (
     <button
       type="button"
-      aria-pressed={isSelected?.(selection.label, selection.series) ?? false}
+      aria-pressed={contextEnabled
+        ? isSelected?.(selection.label, selection.series) ?? false
+        : undefined}
+      aria-expanded={expandedState}
+      aria-controls={expandedState === undefined
+        ? undefined
+        : CHART_DETAIL_PANEL_ID}
       aria-label={t("chart.keyboard.control", { target, help })}
-      aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Enter Space"
+      aria-keyshortcuts={shortcuts}
       aria-live="polite"
       aria-atomic="true"
       title={help}
+      onFocus={() => onActiveChange?.(selection.label, selection.series)}
       onKeyDown={(event) => {
         if (event.key === " ") {
-          event.preventDefault();
-          onActivate(selection.label, selection.series, "context");
+          if (contextEnabled) {
+            onKeyActivate(selection.label, selection.series, event);
+          } else event.preventDefault();
+          return;
+        }
+        if (event.key === "Enter") {
+          if (drilldownEnabled) {
+            onKeyActivate(selection.label, selection.series, event);
+          } else event.preventDefault();
           return;
         }
         const move = KEYBOARD_CURSOR_MOVES[event.key];
         if (!move) return;
         event.preventDefault();
-        setCursor((current) =>
-          moveChartCursor(
-            current,
-            move,
-            data.labels.length,
-            data.datasets.length,
-          )
+        const counts = chartCursorCounts(data, cursor);
+        const next = moveChartCursor(
+          cursor,
+          move,
+          counts.labelCount,
+          counts.seriesCount,
         );
+        const nextSelection = chartSelectionAt(data, next);
+        if (nextSelection) {
+          onActiveChange?.(nextSelection.label, nextSelection.series);
+        }
+        setCursor(next);
       }}
-      onClick={() => onActivate(selection.label, selection.series, "navigate")}
+      onClick={contextEnabled
+        ? (event) => {
+          // Enter et Espace emettent aussi un click natif detail=0 sur un
+          // bouton : leur commande a deja ete traitee dans onKeyDown.
+          if (event.detail === 0) return;
+          onActivate(
+            selection.label,
+            selection.series,
+            "context",
+            event.detail,
+            event,
+          );
+        }
+        : undefined}
+      onDblClick={drilldownEnabled
+        ? (event) =>
+          onActivate(
+            selection.label,
+            selection.series,
+            "drilldown",
+            event.detail,
+            event,
+          )
+        : undefined}
       class={cx(
         "pointer-events-none absolute bottom-1.5 left-1.5 z-20 h-px w-px overflow-hidden whitespace-nowrap border-0 p-0 opacity-0",
         "focus:pointer-events-auto focus:flex focus:h-auto focus:w-auto focus:max-w-[calc(100%-0.75rem)] focus:items-center focus:gap-2 focus:overflow-visible focus:rounded-[4px] focus:border focus:border-accent/50 focus:bg-control focus:px-2.5 focus:py-1.5 focus:opacity-100 focus:shadow-modal",
@@ -1536,11 +1898,54 @@ function ChartKeyboardNavigator(
   );
 }
 
+function ChartDetailAffordance(
+  {
+    point,
+    mode,
+    expanded,
+    touch,
+    onToggle,
+  }: {
+    point: ActiveChartPoint;
+    mode: "inline" | "message";
+    expanded: boolean;
+    touch: boolean;
+    onToggle: () => void;
+  },
+) {
+  const label = point.series ? `${point.label} · ${point.series}` : point.label;
+  const position: JSX.CSSProperties = point.anchor
+    ? { left: point.anchor.left, top: point.anchor.top }
+    : { right: 6, top: 6 };
+  const hintSide = point.anchor?.hintSide ?? "left";
+  const hintBounds = point.anchor
+    ? {
+      "--detail-hint-max-width": `${point.anchor.hintMaxWidth}px`,
+    } as JSX.CSSProperties
+    : undefined;
+  const surfaceClass = "border border-line bg-surface shadow-tooltip";
+
+  return (
+    <div class="absolute z-30" style={{ ...position, ...hintBounds }}>
+      <DetailToggleButton
+        expanded={mode === "inline" ? expanded : undefined}
+        label={label}
+        controls={mode === "inline" ? CHART_DETAIL_PANEL_ID : undefined}
+        touch={touch}
+        hintSide={hintSide}
+        onToggle={onToggle}
+        class={surfaceClass}
+      />
+    </div>
+  );
+}
+
 function ChartRouter(
-  { data, onDataClick, isSelected }: {
+  { data, onDataClick, isSelected, canDrillDown }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
     isSelected?: ChartSelectionPredicate;
+    canDrillDown?: ChartSelectionPredicate;
   },
 ) {
   const type = data.type ?? "bar";
@@ -1552,6 +1957,7 @@ function ChartRouter(
           data={data}
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
         />
       );
     case "stacked-bar":
@@ -1560,6 +1966,7 @@ function ChartRouter(
           data={data}
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
         />
       );
     case "horizontal-bar":
@@ -1568,6 +1975,7 @@ function ChartRouter(
           data={data}
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
         />
       );
     case "line":
@@ -1576,6 +1984,7 @@ function ChartRouter(
           data={data}
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
         />
       );
     case "area":
@@ -1584,6 +1993,7 @@ function ChartRouter(
           data={data}
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
         />
       );
     case "stacked-area":
@@ -1592,6 +2002,7 @@ function ChartRouter(
           data={data}
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
         />
       );
     case "composed":
@@ -1600,6 +2011,7 @@ function ChartRouter(
           data={data}
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
         />
       );
     case "pie":
@@ -1609,6 +2021,7 @@ function ChartRouter(
           isDonut={false}
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
         />
       );
     case "donut":
@@ -1618,20 +2031,42 @@ function ChartRouter(
           isDonut
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
         />
       );
     case "radar":
-      return <RadarChartView data={data} />;
+      return (
+        <RadarChartView
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+          canDrillDown={canDrillDown}
+        />
+      );
     case "scatter":
-      return <ScatterChartView data={data} />;
+      return (
+        <ScatterChartView
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+          canDrillDown={canDrillDown}
+        />
+      );
     case "treemap":
-      return <TreemapView data={data} />;
+      return (
+        <TreemapView
+          data={data}
+          onDataClick={onDataClick}
+          isSelected={isSelected}
+        />
+      );
     default:
       return (
         <VerticalBarChart
           data={data}
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
         />
       );
   }
@@ -1648,6 +2083,7 @@ function ChartContent(
     error,
     layout,
     containerRef,
+    boundsStyle,
     refreshing,
     rootRefreshRequest,
     rootFreshEvent,
@@ -1661,6 +2097,7 @@ function ChartContent(
     error: string | null;
     layout: ViewerLayout;
     containerRef: Ref<HTMLDivElement>;
+    boundsStyle?: JSX.CSSProperties;
     refreshing: boolean;
     rootRefreshRequest: UiRefreshRequestData | null;
     rootFreshEvent: number;
@@ -1672,10 +2109,9 @@ function ChartContent(
   },
 ) {
   const [shared, setShared] = useState<DrillDownChannel | null>(null);
-  const pendingNavigationRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-  const legacyChannel = drillDownChannel(app.getHostCapabilities());
+  const [activePoint, setActivePoint] = useState<ActiveChartPoint | null>(null);
+  const chartSurfaceRef = useRef<HTMLDivElement>(null);
+  const clickIntent = useClickIntent();
   function flashShared(channel: DrillDownChannel) {
     if (channel === "none") return;
     setShared(channel);
@@ -1688,6 +2124,17 @@ function ChartContent(
     title: data.title,
   });
   const activeContext = useActiveContext(app, rootKey);
+  const hostCapabilities = fixture ? undefined : app.getHostCapabilities();
+  const documentContext: DocumentContextController = {
+    supported: !fixture && activeContext.supported,
+    activate: activeContext.activate,
+    activateReversible: activeContext.activateReversible,
+    reconcileView: activeContext.reconcileView,
+    reconcileDocument: activeContext.reconcileDocument,
+    isSelected: activeContext.isSelected,
+    canShareResource: (resource) =>
+      canShareActiveContextResource(hostCapabilities, resource),
+  };
   const viewerNav = useViewerNav(app, {
     title: data.title,
     kind: "root",
@@ -1696,54 +2143,56 @@ function ChartContent(
   }, { fixture });
   const nav = viewerNav.nav;
   const { current, isRoot } = nav;
+  const root = nav.stack.levels[0];
   const { jumpsEnabled } = viewerNav;
+  const { messagesEnabled } = viewerNav;
   const { list } = viewerNav;
   const [levelError, setLevelError] = useState<string | null>(null);
   const { ask } = viewerNav;
-  useEffect(() => {
-    return () => {
-      if (pendingNavigationRef.current !== null) {
-        clearTimeout(pendingNavigationRef.current);
-      }
-    };
-  }, []);
+  useLayoutEffect(() => () => clickIntent.cancelAll(), [clickIntent, rootKey]);
+  useEffect(() => setActivePoint(null), [rootKey]);
   useLayoutEffect(() => {
-    const root = nav.stack.levels[0];
     if (rootFreshEvent > rootMutationEvent && root?.stale) {
       nav.clearStale(root.id);
     }
   }, [rootFreshEvent, rootMutationEvent]);
   // Un point, une barre, une part : le segment exact prime sur le saut plus
   // général de sa catégorie. Sans saut typé, la sélection reste du contexte.
-  const tryJump = jumpsEnabled &&
+  const pointJump = jumpsEnabled &&
       (data._pointJumps || data._seriesPointJumps)
-    ? (label: string, series?: string): boolean => {
+    ? (label: string, series?: string): Jump | null => {
       const hint = chartJumpHint(data, label, series);
       const target = series ? `${label} · ${series}` : label;
-      const jump: Jump | null = hint
+      return hint
         ? jumpFromHint(hint, {}, t("nav.linked_to", { id: target }))
         : null;
-      if (!jump) return false;
-      void nav.jump(jump);
-      return true;
     }
     : undefined;
+  const navigationSelections = chartNavigationGroups(data).flat();
 
   function pointContext(
     label: string,
     series?: string,
   ): ContextSelectionItem {
-    const index = data.labels.indexOf(label);
-    const datasets = series
-      ? data.datasets.filter((dataset) => dataset.label === series)
-      : data.datasets;
-    const values = index < 0 ? [] : datasets.map((dataset) => {
-      const raw = dataset.values[index];
-      if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
-      const formatted = fmtValue(raw, data, dataset);
-      return series || !dataset.label
+    const values = navigationSelections.filter((selection) =>
+      selection.label === label &&
+      (series === undefined || selection.series === series)
+    ).map((selection) => {
+      const formatted = selection.x !== undefined && selection.y !== undefined
+        ? `${data.xAxisLabel ?? "x"}: ${formatNumber(selection.x, 2)} · ${
+          data.yAxisLabel ?? "y"
+        }: ${formatNumber(selection.y, 2)}`
+        : selection.value === undefined
+        ? null
+        : fmtValue(
+          selection.value,
+          data,
+          data.datasets.find((dataset) => dataset.label === selection.series),
+        );
+      if (!formatted) return null;
+      return series || !selection.series
         ? formatted
-        : `${dataset.label}: ${formatted}`;
+        : `${selection.series}: ${formatted}`;
     }).filter((value): value is string => value !== null);
     const contextLabel = series ? `${label} · ${series}` : label;
     return {
@@ -1757,19 +2206,23 @@ function ChartContent(
   }
 
   useEffect(() => {
-    const candidates = data.labels.flatMap((label) => [
-      pointContext(label),
-      ...data.datasets.flatMap((dataset) =>
-        dataset.label ? [pointContext(label, dataset.label)] : []
-      ),
-    ]);
-    void activeContext.reconcile(candidates);
-  }, [data, activeContext.selections]);
+    const candidates = new Map<string, ContextSelectionItem>();
+    for (const selection of chartNavigationGroups(data).flat()) {
+      const generic = pointContext(selection.label);
+      candidates.set(generic.id, generic);
+      if (selection.series) {
+        const exact = pointContext(selection.label, selection.series);
+        candidates.set(exact.id, exact);
+      }
+    }
+    void activeContext.reconcileView(data.title, [...candidates.values()]);
+  }, [data, activeContext.reconcileView]);
 
   function pointFallback(label: string, series?: string): string | undefined {
-    return data._drillDown
+    const fallback = data._drillDown
       ?.replace(/\{label\}/g, label)
       .replace(/\{series\}/g, series ?? "");
+    return fallback?.trim() || undefined;
   }
 
   function isPointSelected(label: string, series?: string): boolean {
@@ -1778,68 +2231,150 @@ function ChartContent(
         activeContext.isSelected(pointContext(label)));
   }
 
-  const legacyMessageEnabled = legacyChannel === "message" &&
+  function pointExpansionState(
+    label: string,
+    series?: string,
+  ): boolean | undefined {
+    const jump = pointJump?.(label, series) ?? null;
+    return chartPointExpansionState(
+      jump !== null,
+      nav.stack.levels[1]?.rootTriggerKey === pointContext(label, series).id,
+    );
+  }
+
+  const fallbackMessageEnabled = messagesEnabled &&
     data._drillDown !== undefined;
-  const contextEnabled = activeContext.supported || legacyMessageEnabled;
-
-  function cancelPendingNavigation() {
-    if (pendingNavigationRef.current === null) return;
-    clearTimeout(pendingNavigationRef.current);
-    pendingNavigationRef.current = null;
+  function pointDetailMode(
+    label: string,
+    series?: string,
+  ): "inline" | "message" | null {
+    if (pointJump?.(label, series)) return "inline";
+    return fallbackMessageEnabled && pointFallback(label, series)
+      ? "message"
+      : null;
   }
-
-  function navigatePoint(label: string, series?: string) {
-    if (tryJump?.(label, series)) return;
-    if (!legacyMessageEnabled || activeContext.supported) return;
-    const suggested = pointFallback(label, series);
-    if (!suggested) return;
-    const context = pointContext(label, series);
-    void shareSelection(app, {
-      view: data.title,
-      label: context.label,
-      suggested,
-    }).then(flashShared);
+  function canDrillDownPoint(label: string, series?: string): boolean {
+    return pointDetailMode(label, series) !== null;
   }
+  const interactionEnabled = Boolean(
+    pointJump || activeContext.supported || fallbackMessageEnabled,
+  );
 
-  function addPointContext(label: string, series?: string) {
+  function activatePoint(
+    label: string,
+    series: string | undefined,
+    activation: ChartPointActivation,
+  ) {
+    const jump = pointJump?.(label, series) ?? null;
     const context = pointContext(label, series);
     const fallback = pointFallback(label, series);
-    if (activeContext.supported) {
-      void activeContext.activate(context, fallback).then((result) => {
-        if (result === "message") flashShared("message");
-      });
-      return;
+    const plan = chartPointActionPlan(
+      activation,
+      jump !== null,
+      activeContext.supported,
+      messagesEnabled,
+    );
+
+    if (plan.updateContext) {
+      void activeContext.activate(context);
     }
-    if (!legacyMessageEnabled || !fallback) return;
-    void shareSelection(app, {
-      view: data.title,
-      label: context.label,
-      suggested: fallback,
-    }).then(flashShared);
+    if (plan.toggleLevel && jump) {
+      void nav.toggleRootChild(jump, context.id);
+    }
+    if (plan.sendMessage && fallback && ask) {
+      void ask(fallback).then((sent) => {
+        if (sent) flashShared("message");
+      });
+    }
   }
 
-  const onDataClick = (tryJump || contextEnabled)
+  function pointIntent(label: string, series?: string) {
+    const context = pointContext(label, series);
+    return {
+      key: context.id,
+      onSingle: () =>
+        activeContext.supported
+          ? activeContext.activateReversible(context)
+          : undefined,
+      onDouble: () => activatePoint(label, series, "drilldown"),
+    };
+  }
+
+  function activateVisualPoint(
+    label: string,
+    series?: string,
+    pointer?: ChartPointerAnchor,
+  ) {
+    const rect = chartSurfaceRef.current?.getBoundingClientRect();
+    const actionSize = layout === "mobile" ? 40 : 28;
+    const anchor = pointer && rect && Number.isFinite(pointer.clientX) &&
+        Number.isFinite(pointer.clientY)
+      ? (() => {
+        const left = Math.max(
+          4,
+          Math.min(
+            rect.width - actionSize - 4,
+            pointer.clientX - rect.left + 8,
+          ),
+        );
+        const placement = chartDetailHintPlacement(
+          rect.width,
+          left,
+          actionSize,
+        );
+        return {
+          left,
+          top: Math.max(
+            4,
+            Math.min(
+              rect.height - actionSize - 4,
+              pointer.clientY - rect.top + 8,
+            ),
+          ),
+          hintSide: placement.side,
+          hintMaxWidth: placement.maxWidth,
+        };
+      })()
+      : undefined;
+    setActivePoint({ label, series, anchor });
+  }
+
+  const onDataClick = interactionEnabled
     ? (
       label: string,
-      series?: string,
-      mode: ChartActivationMode = "navigate",
+      series: string | undefined,
+      activation: ChartPointActivation,
+      clickCount = activation === "context" ? 1 : 2,
+      anchor?: ChartPointerAnchor,
     ) => {
       if (!label) return;
-      if (mode === "context") {
-        cancelPendingNavigation();
-        addPointContext(label, series);
-        return;
-      }
-      cancelPendingNavigation();
-      pendingNavigationRef.current = setTimeout(() => {
-        pendingNavigationRef.current = null;
-        navigatePoint(label, series);
-      }, CHART_PRIMARY_CLICK_DELAY_MS);
+      activateVisualPoint(label, series, anchor);
+      const intent = pointIntent(label, series);
+      if (activation === "context") clickIntent.click(intent, clickCount);
+      else clickIntent.doubleClick(intent);
     }
     : undefined;
 
+  const onDataKeyDown = interactionEnabled
+    ? (
+      label: string,
+      series: string | undefined,
+      event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
+    ) => {
+      activateVisualPoint(label, series);
+      clickIntent.keyDown(pointIntent(label, series), event);
+    }
+    : undefined;
+
+  const activeDetailMode = activePoint
+    ? pointDetailMode(activePoint.label, activePoint.series)
+    : null;
+  const activeExpandedState = activePoint
+    ? pointExpansionState(activePoint.label, activePoint.series)
+    : undefined;
+
   return (
-    <ViewerShell containerRef={containerRef}>
+    <ViewerShell containerRef={containerRef} style={boundsStyle}>
       {/* En-tête */}
       <header
         class={cx(
@@ -1856,15 +2391,15 @@ function ChartContent(
           {narrow
             ? (
               <h3 class="truncate font-display font-semibold text-ink text-[--text-card-title]">
-                {isRoot ? data.title : current.title}
+                {data.title}
               </h3>
             )
             : (
               <h2 class="truncate font-display font-semibold text-ink text-[--text-title] tracking-title">
-                {isRoot ? data.title : current.title}
+                {data.title}
               </h2>
             )}
-          {isRoot && data.subtitle && (
+          {data.subtitle && (
             <span
               class={cx(
                 "font-mono text-ink-faint tracking-[0.04em]",
@@ -1876,7 +2411,7 @@ function ChartContent(
           )}
         </div>
         <div class="flex min-w-0 shrink-0 items-center gap-2">
-          {isRoot && current.stale && (
+          {root?.stale && (
             <div
               role="status"
               title={t("nav.stale_title")}
@@ -1887,7 +2422,7 @@ function ChartContent(
                 class="size-[5px] rounded-full bg-warn"
               />
               {!narrow && (
-                <span>{t("nav.stale_values", { at: current.stale.at })}</span>
+                <span>{t("nav.stale_values", { at: root.stale.at })}</span>
               )}
               {canRefreshRoot && (
                 <button
@@ -1918,37 +2453,15 @@ function ChartContent(
         </div>
       </header>
 
-      <PathBar
-        stack={nav.stack}
-        onBack={nav.pop}
-        onJump={nav.popTo}
-        loading={current.loading}
-        layout={layout}
-      />
-
       {/* Erreur éventuelle */}
       {error && <StateMessage tone="bad">{error}</StateMessage>}
       {levelError && <StateMessage tone="bad">{levelError}</StateMessage>}
 
-      <LevelBody
-        level={current}
-        app={app}
-        list={list}
-        layout={layout}
-        fixture={fixture}
-        onJump={jumpsEnabled ? nav.jump : undefined}
-        onAsk={ask}
-        onError={setLevelError}
-        onMutated={nav.markStale}
-        onDocumentChanged={nav.reportDocumentChange}
-        onMutationInvalidate={onMutationInvalidate}
-        onMutationRefresh={onMutationRefresh}
-        onRefresh={() => void nav.refreshLevel()}
-      >
+      <div class="scroll-slim min-h-0 flex-1 overflow-y-auto">
         {/* Zone de rendu du chart */}
         <div
           class={cx(
-            "flex flex-col gap-[10px]",
+            "flex shrink-0 flex-col gap-[10px]",
             narrow ? "px-3 py-[10px]" : "px-4 py-[18px]",
           )}
           style={{
@@ -1965,17 +2478,38 @@ function ChartContent(
               <span>{data.rightAxisLabel}</span>
             </div>
           )}
-          <div class="relative min-h-0 flex-1">
+          <div ref={chartSurfaceRef} class="relative min-h-0 flex-1">
             <ChartRouter
               data={data}
               onDataClick={onDataClick}
-              isSelected={contextEnabled ? isPointSelected : undefined}
+              isSelected={activeContext.supported ? isPointSelected : undefined}
+              canDrillDown={canDrillDownPoint}
             />
             <ChartKeyboardNavigator
               data={data}
               onActivate={onDataClick}
-              isSelected={contextEnabled ? isPointSelected : undefined}
+              onKeyActivate={onDataKeyDown}
+              contextEnabled={activeContext.supported}
+              canDrillDown={canDrillDownPoint}
+              isSelected={activeContext.supported ? isPointSelected : undefined}
+              isExpanded={pointExpansionState}
+              onActiveChange={activateVisualPoint}
             />
+            {activePoint && activeDetailMode && (
+              <ChartDetailAffordance
+                point={activePoint}
+                mode={activeDetailMode}
+                expanded={activeExpandedState ?? false}
+                touch={layout === "mobile"}
+                onToggle={() => {
+                  activatePoint(
+                    activePoint.label,
+                    activePoint.series,
+                    "drilldown",
+                  );
+                }}
+              />
+            )}
           </div>
           {data.xAxisLabel && (
             <div class="text-right font-mono text-nano text-ink-faint">
@@ -1989,7 +2523,39 @@ function ChartContent(
             </span>
           )}
         </div>
-      </LevelBody>
+
+        {!isRoot && (
+          <section
+            id={CHART_DETAIL_PANEL_ID}
+            class="flex min-h-[280px] flex-col border-t border-line bg-surface"
+          >
+            <PathBar
+              stack={nav.stack}
+              onBack={nav.pop}
+              onJump={nav.popTo}
+              loading={current.loading}
+              layout={layout}
+            />
+            <LevelBody
+              level={current}
+              app={app}
+              list={list}
+              layout={layout}
+              fixture={fixture}
+              onJump={jumpsEnabled ? nav.jump : undefined}
+              onAsk={ask}
+              onError={setLevelError}
+              onMutated={nav.markStale}
+              onDocumentChanged={nav.reportDocumentChange}
+              onMutationInvalidate={onMutationInvalidate}
+              onMutationRefresh={onMutationRefresh}
+              onRefresh={() => void nav.refreshLevel()}
+              context={documentContext}
+              contextView={current.title}
+            />
+          </section>
+        )}
+      </div>
 
       {/* Pied de vue */}
       <ViewerFooter layout={layout} />
@@ -2016,7 +2582,9 @@ export function ChartViewer() {
   const rootEventRef = useRef(0);
   const lastRefreshStartedAtRef = useRef(0);
 
-  const { ref: containerRef, layout } = useViewerLayout<HTMLDivElement>();
+  const { ref: containerRef, layout, boundsStyle } = useViewerLayout<
+    HTMLDivElement
+  >();
 
   function hydrateData(nextData: ChartData) {
     dataRef.current = nextData;
@@ -2174,7 +2742,7 @@ export function ChartViewer() {
 
   if (loading) {
     return (
-      <ViewerShell containerRef={containerRef}>
+      <ViewerShell containerRef={containerRef} style={boundsStyle}>
         <StateMessage>{t("chart.loading")}</StateMessage>
       </ViewerShell>
     );
@@ -2182,7 +2750,7 @@ export function ChartViewer() {
 
   if (!data) {
     return (
-      <ViewerShell containerRef={containerRef}>
+      <ViewerShell containerRef={containerRef} style={boundsStyle}>
         <StateMessage>{t("chart.empty.message")}</StateMessage>
       </ViewerShell>
     );
@@ -2205,6 +2773,7 @@ export function ChartViewer() {
       error={error}
       layout={layout}
       containerRef={containerRef}
+      boundsStyle={boundsStyle}
       refreshing={refreshing}
       rootRefreshRequest={rootRefreshRequest}
       rootFreshEvent={rootFreshEvent}

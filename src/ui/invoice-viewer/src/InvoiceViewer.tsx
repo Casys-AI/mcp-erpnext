@@ -15,10 +15,21 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { ActiveContextChip } from "~/shared/ActiveContextChip";
 import { canShareActiveContextResource } from "~/shared/active-context";
+import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { bindHostContext } from "~/shared/host-context-hook";
 import type { DocumentChangeEvent } from "~/shared/document-events";
 import { AttachmentsSection } from "~/shared/document/AttachmentsSection";
 import { documentCapabilities } from "~/shared/document/capabilities";
+import type {
+  ContextInteractionTarget,
+  DocumentContextController,
+} from "~/shared/document/context-interaction";
+import { contextInteractionProps } from "~/shared/document/context-interaction";
+import {
+  childRowContextItem,
+  documentContextItem,
+} from "~/shared/document/context-items";
+import { documentModelOf } from "~/shared/document/model";
 import { useAttachments } from "~/shared/document/useAttachments";
 import {
   Button,
@@ -45,6 +56,7 @@ import { useT } from "~/shared/i18n-hook";
 import { ConfirmSheet, type ConfirmState, useConfirm } from "~/shared/confirm";
 import { useViewerNav } from "~/shared/useViewerNav";
 import { useActiveContext } from "~/shared/useActiveContext";
+import { useClickIntent } from "~/shared/useClickIntent";
 import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
@@ -81,12 +93,15 @@ const CANONICAL_READBACK_DELAY_MS = 1_500;
 const ATTACHMENT_SIDEBAR_MIN_WIDTH = 960;
 
 type LineRow = InvoiceItem & { idx: number };
+type InvoiceActiveContext = ReturnType<typeof useActiveContext>;
 
 /* ─── Props de l'inner component ──────────────────────────────────────────── */
 
 interface InvoiceContentProps {
   data: InvoiceData;
   envelope: InvoiceDocumentEnvelope;
+  rootKey: string;
+  activeContext: InvoiceActiveContext;
   mutationCommitted: boolean;
   error: string | null;
   refreshing: boolean;
@@ -458,8 +473,7 @@ export function InvoiceViewer() {
   const data = envelope.document;
 
   return (
-    <InvoiceContent
-      key={`${data.doctype}:${data.name}`}
+    <InvoiceContextBoundary
       data={data}
       envelope={envelope}
       mutationCommitted={mutationCommitted}
@@ -484,12 +498,36 @@ export function InvoiceViewer() {
 /* ══════════════════════════════════════════════════════════════════════════════
    InvoiceContent — rendu, pile de navigation, boutons
    Reçoit `data` toujours défini → useNavStack initialisé avec le bon titre.
-   key={doctype:name} sur l'appelant réinitialise la pile à chaque nouvelle pièce.
+   La boundary conserve la file du contexte ; sa fille keyée réinitialise la
+   pile et les gestes à chaque nouvelle pièce.
 ══════════════════════════════════════════════════════════════════════════════ */
+
+type InvoiceContextBoundaryProps = Omit<
+  InvoiceContentProps,
+  "rootKey" | "activeContext"
+>;
+
+function InvoiceContextBoundary(props: InvoiceContextBoundaryProps) {
+  const rootKey = viewerRootKey("invoice", undefined, {
+    doctype: props.data.doctype,
+    name: props.data.name,
+  });
+  const activeContext = useActiveContext(app, rootKey);
+  return (
+    <InvoiceContent
+      {...props}
+      key={`${props.data.doctype}:${props.data.name}`}
+      rootKey={rootKey}
+      activeContext={activeContext}
+    />
+  );
+}
 
 function InvoiceContent({
   data,
   envelope,
+  rootKey,
+  activeContext,
   mutationCommitted,
   error,
   refreshing,
@@ -512,17 +550,13 @@ function InvoiceContent({
   const t = useT();
 
   // Pile de navigation : titre racine = nom de la pièce.
-  const rootKey = viewerRootKey("invoice", undefined, {
-    doctype: data.doctype,
-    name: data.name,
-  });
   const viewerNav = useViewerNav(app, {
     title: data.name,
     kind: "root",
     origin: "record",
     key: rootKey,
   }, { fixture });
-  const activeContext = useActiveContext(app, rootKey);
+  const clickIntent = useClickIntent();
   const nav = viewerNav.nav;
 
   const rootLevelId = nav.stack.levels[0].id;
@@ -546,6 +580,16 @@ function InvoiceContent({
   }, []);
 
   const hostCapabilities = fixture ? undefined : app.getHostCapabilities();
+  const context: DocumentContextController = {
+    supported: !fixture && activeContext.supported,
+    activate: activeContext.activate,
+    activateReversible: activeContext.activateReversible,
+    reconcileView: activeContext.reconcileView,
+    reconcileDocument: activeContext.reconcileDocument,
+    isSelected: activeContext.isSelected,
+    canShareResource: (resource) =>
+      canShareActiveContextResource(hostCapabilities, resource),
+  };
   const availableTools = envelope.availableTools;
   const hints = envelope.sendMessageHints
     ? [...envelope.sendMessageHints]
@@ -622,6 +666,90 @@ function InvoiceContent({
     canSendTextMessage(app.getHostCapabilities());
   const canExpand = canInspectItem || messagesEnabled || fixture;
   const rows: LineRow[] = items.map((item, idx) => ({ ...item, idx }));
+  const contextDocumentModel = documentModelOf(envelope);
+  const itemContextTable = contextDocumentModel.childTables.find((table) =>
+    table.key === "items"
+  );
+  const contextView = `${doctype} · ${data.name}`;
+  const contextDocumentItem = documentContextItem(
+    contextDocumentModel,
+    contextView,
+  );
+  const rootContextTarget: ContextInteractionTarget | undefined =
+    nav.isRoot && context.supported
+      ? {
+        label: t("context.active.select", {
+          label: contextDocumentItem.label,
+        }),
+        selected: context.isSelected(contextDocumentItem),
+        onActivate: () => context.activateReversible(contextDocumentItem),
+      }
+      : undefined;
+  const contextCandidates = [
+    contextDocumentItem,
+    ...(itemContextTable
+      ? itemContextTable.rows.flatMap((row, rowIndex) => {
+        const item = childRowContextItem(
+          envelope,
+          itemContextTable,
+          row,
+          rowIndex,
+        );
+        return item ? [item] : [];
+      })
+      : []),
+  ];
+  const reconcileInvoiceDocument = context.supported
+    ? context.reconcileDocument
+    : undefined;
+  useEffect(() => {
+    if (!reconcileInvoiceDocument) return;
+    void reconcileInvoiceDocument(contextDocumentItem.id, contextCandidates);
+  }, [contextView, envelope, reconcileInvoiceDocument]);
+  const lineDetailId = (rowIndex: number) => `invoice-line-${rowIndex}-detail`;
+  const lineInteractionTarget = (
+    row: LineRow,
+    rowIndex: number,
+  ): ContextInteractionTarget | undefined => {
+    const contextRow = itemContextTable?.rows[rowIndex];
+    const item = context.supported && itemContextTable && contextRow
+      ? childRowContextItem(
+        envelope,
+        itemContextTable,
+        contextRow,
+        rowIndex,
+      )
+      : null;
+    if (!item && !canExpand) return undefined;
+    const label = item?.label ?? row.item_code;
+    const selected = item ? context.isSelected(item) : undefined;
+    return {
+      label: canExpand
+        ? t(
+          item
+            ? (expandedIdx === row.idx
+              ? "document.row.close_detail"
+              : "document.row.open_detail")
+            : (expandedIdx === row.idx
+              ? "document.row.close_detail_only"
+              : "document.row.open_detail_only"),
+          { label },
+        )
+        : t("context.active.select", { label }),
+      selected,
+      expanded: canExpand ? expandedIdx === row.idx : undefined,
+      detailLabel: label,
+      controls: canExpand ? lineDetailId(rowIndex) : undefined,
+      onActivate: () => {
+        if (!item) return;
+        if (canExpand) return context.activateReversible(item);
+        void context.activate(item);
+      },
+      onDoubleActivate: canExpand
+        ? () => setExpandedIdx(expandedIdx === row.idx ? null : row.idx)
+        : undefined,
+    };
+  };
   const previewTitle = fixture ? t("invoice.preview.title") : undefined;
   const isWide = layout === "wide";
   const isMobile = layout === "mobile";
@@ -889,7 +1017,20 @@ function InvoiceContent({
               class="m-0 font-display font-semibold text-doc text-ink"
               style={{ letterSpacing: "-0.015em" }}
             >
-              {nav.isRoot ? data.name : nav.current.title}
+              {nav.isRoot
+                ? (
+                  <button
+                    type="button"
+                    {...contextInteractionProps(rootContextTarget)}
+                    class={cx(
+                      "rounded-[4px] transition-colors hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-accent",
+                      rootContextTarget?.selected && "bg-row-selected",
+                    )}
+                  >
+                    {data.name}
+                  </button>
+                )
+                : nav.current.title}
             </h2>
             <div class="flex items-center gap-2">
               {nav.isRoot && <StatusBadge status={data.status} />}
@@ -956,6 +1097,8 @@ function InvoiceContent({
           onMutationInvalidate={onBeginCanonicalReadback}
           onMutationRefresh={() => scheduleCanonicalRefresh(false)}
           onRefresh={() => void nav.refreshLevel()}
+          context={context}
+          contextView={contextView}
         >
           {/* ── Contenu racine (niveau 1 seulement) ── */}
           {messages}
@@ -968,96 +1111,114 @@ function InvoiceContent({
           >
             <div class="min-w-0">
               {/* En-tête de tableau */}
-              <div
-                class="grid border-b border-line bg-sunken"
-                style={{
-                  gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
-                  padding: "8px 16px",
-                }}
-              >
-                <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
-                  {t("invoice.table.col.item")}
-                </span>
-                <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
-                  {t("invoice.table.col.qty")}
-                </span>
-                <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
-                  {t("invoice.table.col.rate")}
-                </span>
-                <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
-                  {t("invoice.table.col.amount")}
-                </span>
+              <div class="flex border-b border-line bg-sunken">
+                <div
+                  class="grid min-w-0 flex-1"
+                  style={{
+                    gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
+                    padding: "8px 16px",
+                  }}
+                >
+                  <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+                    {t("invoice.table.col.item")}
+                  </span>
+                  <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+                    {t("invoice.table.col.qty")}
+                  </span>
+                  <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+                    {t("invoice.table.col.rate")}
+                  </span>
+                  <span class="font-mono text-micro uppercase tracking-label text-ink-faint text-right">
+                    {t("invoice.table.col.amount")}
+                  </span>
+                </div>
+                {canExpand && <span aria-hidden="true" class="w-10" />}
               </div>
 
               {/* Lignes article */}
-              {rows.map((row) => {
-                const isSelected = canExpand && expandedIdx === row.idx;
+              {rows.map((row, rowIndex) => {
+                const interactionTarget = lineInteractionTarget(row, rowIndex);
+                const isExpanded = canExpand && expandedIdx === row.idx;
+                const isContextSelected = Boolean(interactionTarget?.selected);
                 return (
                   <div key={`${row.idx}-${row.item_code}`}>
                     <div
                       class={cx(
-                        "grid items-center border-b border-line-soft focus-visible:outline-2 focus-visible:outline-accent",
-                        canExpand ? "cursor-pointer" : "",
-                        isSelected ? "bg-row-selected" : "hover:bg-row-hover",
+                        "flex min-w-0 items-stretch border-b border-line-soft transition-colors",
+                        isExpanded || isContextSelected
+                          ? "bg-row-selected"
+                          : "hover:bg-row-hover",
                       )}
                       style={{
-                        gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
-                        padding: "10px 16px",
                         borderLeft: `2px solid ${
-                          isSelected ? "var(--color-accent)" : "transparent"
+                          isExpanded ? "var(--color-accent)" : "transparent"
+                        }`,
+                        borderRight: `2px solid ${
+                          isContextSelected
+                            ? "var(--color-accent)"
+                            : "transparent"
                         }`,
                       }}
-                      role={canExpand ? "button" : undefined}
-                      tabIndex={canExpand ? 0 : undefined}
-                      aria-expanded={canExpand ? isSelected : undefined}
-                      onClick={canExpand
-                        ? () =>
-                          setExpandedIdx(
-                            expandedIdx === row.idx ? null : row.idx,
-                          )
-                        : undefined}
-                      onKeyDown={canExpand
-                        ? (e: KeyboardEvent) => {
-                          if (e.key !== "Enter" && e.key !== " ") return;
-                          e.preventDefault();
-                          setExpandedIdx(
-                            expandedIdx === row.idx ? null : row.idx,
-                          );
-                        }
-                        : undefined}
                     >
-                      <div class="flex flex-col gap-0.5">
-                        <span class="text-body text-ink">
-                          {row.item_name ?? row.item_code}
+                      <div
+                        class={cx(
+                          "grid min-w-0 flex-1 items-center focus-visible:outline-2 focus-visible:outline-accent",
+                          interactionTarget && "cursor-pointer",
+                        )}
+                        style={{
+                          gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
+                          padding: "10px 16px",
+                        }}
+                        {...contextInteractionProps(interactionTarget, {
+                          arbiter: clickIntent,
+                          key: `invoice-line:${data.name}:${rowIndex}`,
+                        })}
+                      >
+                        <div class="flex flex-col gap-0.5">
+                          <span class="text-body text-ink">
+                            {row.item_name ?? row.item_code}
+                          </span>
+                          <span class="font-mono text-chip text-ink-faint">
+                            {row.item_code}
+                          </span>
+                        </div>
+                        <span class="font-mono text-cell tabular-nums text-ink-2 text-right">
+                          {formatNumber(row.qty)}
                         </span>
-                        <span class="font-mono text-chip text-ink-faint">
-                          {row.item_code}
+                        <span class="font-mono text-cell tabular-nums text-ink-muted text-right">
+                          {formatNumber(row.rate)}
+                        </span>
+                        <span class="font-mono text-cell font-medium tabular-nums text-ink text-right">
+                          {formatNumber(row.amount)}
                         </span>
                       </div>
-                      <span class="font-mono text-cell tabular-nums text-ink-2 text-right">
-                        {formatNumber(row.qty)}
-                      </span>
-                      <span class="font-mono text-cell tabular-nums text-ink-muted text-right">
-                        {formatNumber(row.rate)}
-                      </span>
-                      <span class="font-mono text-cell font-medium tabular-nums text-ink text-right">
-                        {formatNumber(row.amount)}
-                      </span>
+                      {canExpand && (
+                        <DetailToggleButton
+                          expanded={isExpanded}
+                          label={interactionTarget?.detailLabel ??
+                            row.item_code}
+                          controls={lineDetailId(rowIndex)}
+                          onToggle={() =>
+                            interactionTarget?.onDoubleActivate?.()}
+                        />
+                      )}
                     </div>
 
-                    {isSelected && (
-                      <ItemDetailPanel
-                        app={app}
-                        itemCode={row.item_code}
-                        fixture={fixture}
-                        availableTools={availableTools}
-                        hints={hints ?? undefined}
-                        onJump={jumpsEnabled ? nav.jump : undefined}
-                        onClose={() => setExpandedIdx(null)}
-                        lineIndex={row.idx}
-                        lineCount={rows.length}
-                        lineQty={row.qty}
-                      />
+                    {isExpanded && (
+                      <div id={lineDetailId(rowIndex)}>
+                        <ItemDetailPanel
+                          app={app}
+                          itemCode={row.item_code}
+                          fixture={fixture}
+                          availableTools={availableTools}
+                          hints={hints ?? undefined}
+                          onJump={jumpsEnabled ? nav.jump : undefined}
+                          onClose={() => setExpandedIdx(null)}
+                          lineIndex={row.idx}
+                          lineCount={rows.length}
+                          lineQty={row.qty}
+                        />
+                      </div>
                     )}
                   </div>
                 );
@@ -1109,7 +1270,20 @@ function InvoiceContent({
             {doctype}
           </span>
           <h3 class="m-0 font-display font-semibold text-title text-ink tracking-title">
-            {nav.isRoot ? data.name : nav.current.title}
+            {nav.isRoot
+              ? (
+                <button
+                  type="button"
+                  {...contextInteractionProps(rootContextTarget)}
+                  class={cx(
+                    "rounded-[4px] transition-colors hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-accent",
+                    rootContextTarget?.selected && "bg-row-selected",
+                  )}
+                >
+                  {data.name}
+                </button>
+              )
+              : nav.current.title}
           </h3>
           {nav.isRoot && (
             <span class="text-data text-ink-muted">{partyName}</span>
@@ -1169,6 +1343,8 @@ function InvoiceContent({
         onMutationInvalidate={onBeginCanonicalReadback}
         onMutationRefresh={() => scheduleCanonicalRefresh(false)}
         onRefresh={() => void nav.refreshLevel()}
+        context={context}
+        contextView={contextView}
       >
         {/* ── Contenu racine (niveau 1 seulement) ── */}
         {messages}
@@ -1181,40 +1357,91 @@ function InvoiceContent({
               s: rows.length > 1 ? "s" : "",
             })}
           </span>
-          {rows.map((row, i) => (
-            <div
-              key={`${row.idx}-${row.item_code}`}
-              class="flex flex-col gap-[5px] rounded-chip border border-line bg-row-hover"
-              style={{
-                padding: "10px 11px",
-                borderLeft: `2px solid ${
-                  i === 0 ? "var(--color-accent)" : "transparent"
-                }`,
-              }}
-            >
-              <span
-                class={cx(
-                  "text-cell",
-                  i === 0 ? "text-ink" : "text-ink-2",
-                )}
-              >
-                {row.item_name ?? row.item_code}
-              </span>
-              <div class="flex items-baseline justify-between gap-[10px]">
-                <span class="font-mono text-chip text-ink-faint">
-                  {formatNumber(row.qty)} × {formatNumber(row.rate)}
-                </span>
-                <span
+          {rows.map((row, rowIndex) => {
+            const interactionTarget = lineInteractionTarget(row, rowIndex);
+            const isExpanded = canExpand && expandedIdx === row.idx;
+            const isContextSelected = Boolean(interactionTarget?.selected);
+            return (
+              <div key={`${row.idx}-${row.item_code}`}>
+                <div
                   class={cx(
-                    "font-mono text-cell tabular-nums text-ink",
-                    i === 0 ? "font-medium" : "",
+                    "flex min-h-11 items-stretch rounded-chip border border-line transition-colors",
+                    isExpanded || isContextSelected
+                      ? "bg-row-selected"
+                      : "bg-row-hover",
                   )}
+                  style={{
+                    borderLeft: `2px solid ${
+                      isExpanded ? "var(--color-accent)" : "transparent"
+                    }`,
+                    borderRight: `2px solid ${
+                      isContextSelected ? "var(--color-accent)" : "transparent"
+                    }`,
+                  }}
                 >
-                  {formatNumber(row.amount)}
-                </span>
+                  <div
+                    class={cx(
+                      "flex min-w-0 flex-1 flex-col gap-[5px] px-[11px] py-[10px] focus-visible:outline-2 focus-visible:outline-accent",
+                      interactionTarget && "cursor-pointer",
+                    )}
+                    {...contextInteractionProps(interactionTarget, {
+                      arbiter: clickIntent,
+                      key: `invoice-line:${data.name}:${rowIndex}`,
+                    })}
+                  >
+                    <span
+                      class={cx(
+                        "text-cell",
+                        isExpanded || isContextSelected
+                          ? "text-ink"
+                          : "text-ink-2",
+                      )}
+                    >
+                      {row.item_name ?? row.item_code}
+                    </span>
+                    <div class="flex items-baseline justify-between gap-[10px]">
+                      <span class="font-mono text-chip text-ink-faint">
+                        {formatNumber(row.qty)} × {formatNumber(row.rate)}
+                      </span>
+                      <span
+                        class={cx(
+                          "font-mono text-cell tabular-nums text-ink",
+                          isExpanded || isContextSelected ? "font-medium" : "",
+                        )}
+                      >
+                        {formatNumber(row.amount)}
+                      </span>
+                    </div>
+                  </div>
+                  {canExpand && (
+                    <DetailToggleButton
+                      expanded={isExpanded}
+                      label={interactionTarget?.detailLabel ?? row.item_code}
+                      controls={lineDetailId(rowIndex)}
+                      onToggle={() => interactionTarget?.onDoubleActivate?.()}
+                      touch
+                    />
+                  )}
+                </div>
+                {isExpanded && (
+                  <div id={lineDetailId(rowIndex)}>
+                    <ItemDetailPanel
+                      app={app}
+                      itemCode={row.item_code}
+                      fixture={fixture}
+                      availableTools={availableTools}
+                      hints={hints ?? undefined}
+                      onJump={jumpsEnabled ? nav.jump : undefined}
+                      onClose={() => setExpandedIdx(null)}
+                      lineIndex={row.idx}
+                      lineCount={rows.length}
+                      lineQty={row.qty}
+                    />
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Bande grand total */}

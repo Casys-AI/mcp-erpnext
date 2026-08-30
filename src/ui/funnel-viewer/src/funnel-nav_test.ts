@@ -6,8 +6,12 @@
  * - imports avec extension .ts (Deno strict mode)
  */
 
-import { assertEquals } from "@std/assert";
-import { stageIsJumpable, stageNavHint } from "./funnel-nav.ts";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import {
+  funnelStageInteractionPlan,
+  stageIsJumpable,
+  stageNavHint,
+} from "./funnel-nav.ts";
 
 // ── stageNavHint ────────────────────────────────────────────────────────────
 
@@ -87,4 +91,41 @@ Deno.test("stageIsJumpable : true quand jumpsEnabled, étape connue, tool prése
   };
   assertEquals(stageIsJumpable(jumps, "Leads", true), true);
   assertEquals(stageIsJumpable(jumps, "Opportunities", true), true);
+});
+
+Deno.test("funnel interactions : clic simple ou Espace n'active que le contexte", () => {
+  assertEquals(funnelStageInteractionPlan("context", true, true, true), {
+    updateContext: true,
+    toggleLevel: false,
+    sendMessage: false,
+  });
+  assertEquals(funnelStageInteractionPlan("context", true, false, true), {
+    updateContext: false,
+    toggleLevel: false,
+    sendMessage: false,
+  });
+});
+
+Deno.test("funnel interactions : double-clic, Entree ou chevron n'active que le detail", () => {
+  assertEquals(funnelStageInteractionPlan("detail", true, true, true), {
+    updateContext: false,
+    toggleLevel: true,
+    sendMessage: false,
+  });
+  assertEquals(funnelStageInteractionPlan("detail", false, true, true), {
+    updateContext: false,
+    toggleLevel: false,
+    sendMessage: true,
+  });
+});
+
+Deno.test("funnel detail navigation is an action, not a mounted disclosure", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./FunnelViewer.tsx", import.meta.url),
+  );
+
+  assertEquals(source.includes("isDetailExpanded"), false);
+  assertEquals(source.includes("aria-expanded"), false);
+  assertStringIncludes(source, "onOpenDetail");
+  assertStringIncludes(source, "await nav.jump(jump)");
 });

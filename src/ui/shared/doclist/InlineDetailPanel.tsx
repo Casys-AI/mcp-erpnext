@@ -5,10 +5,23 @@
 
 import type { App } from "@modelcontextprotocol/ext-apps";
 import type { ComponentChildren } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { ConfirmSheet, useConfirm } from "~/shared/confirm";
 import { AttachmentsSection } from "~/shared/document/AttachmentsSection.tsx";
 import { documentCapabilities } from "~/shared/document/capabilities.ts";
+import type {
+  ContextInteractionTarget,
+  DocumentContextController,
+} from "~/shared/document/context-interaction.ts";
+import {
+  childRowContextItem,
+  documentChildRowsReconcileKey,
+  documentContextItem,
+} from "~/shared/document/context-items.ts";
+import {
+  childRowNavigationAsks,
+  childRowNavigationJumps,
+} from "~/shared/document/child-row-navigation.ts";
 import {
   documentEnvelopeOf,
   documentModelOf,
@@ -20,6 +33,7 @@ import type { DocumentChangeEvent } from "~/shared/document-events.ts";
 import { useT } from "~/shared/i18n-hook";
 import {
   fillTemplate,
+  hasUnfilledTemplate,
   hintLabel,
   type Jump,
   jumpFromHint,
@@ -56,6 +70,12 @@ interface InlineDetailPanelProps {
   availableTools?: readonly string[];
   /** @deprecated Les hints doivent appartenir à l'enveloppe enfant. */
   sendMessageHints?: SendMessageHint[];
+  /** Panier de contexte conservé par la racine du viewer. */
+  context?: DocumentContextController;
+  /** Provenance visible des références ajoutées au contexte. */
+  contextView?: string;
+  /** Identité stable du niveau qui porte cette provenance. */
+  contextKey?: string;
 }
 
 function legacyEnvelopeOf(
@@ -87,6 +107,9 @@ export function InlineDetailPanel(
     onAsk,
     onAction,
     onDocumentChanged,
+    context,
+    contextView,
+    contextKey,
   }: InlineDetailPanelProps,
 ) {
   const narrow = layout !== "wide";
@@ -135,6 +158,9 @@ export function InlineDetailPanel(
       onAsk={onAsk}
       onAction={onAction}
       onDocumentChanged={onDocumentChanged}
+      context={context}
+      contextView={contextView}
+      contextKey={contextKey}
     />
   );
 }
@@ -150,6 +176,9 @@ function InlineDocument({
   onAsk,
   onAction,
   onDocumentChanged,
+  context,
+  contextView,
+  contextKey,
 }: {
   app: App;
   envelope: DocumentEnvelope;
@@ -164,6 +193,9 @@ function InlineDocument({
     args: Record<string, unknown>,
   ) => Promise<boolean>;
   onDocumentChanged?: (event: DocumentChangeEvent) => void;
+  context?: DocumentContextController;
+  contextView?: string;
+  contextKey?: string;
 }) {
   const t = useT();
   const confirm = useConfirm();
@@ -196,27 +228,64 @@ function InlineDocument({
   };
   const hints = envelope.sendMessageHints ?? [];
   const exactTools = envelope.availableTools;
+  const contextItem = documentContextItem(
+    model,
+    contextView ?? envelope.doctype,
+    contextKey,
+  );
+  const childRowsContextKey = documentChildRowsReconcileKey(envelope);
+  const reconcileDocument = context?.supported
+    ? context.reconcileDocument
+    : undefined;
+  useEffect(() => {
+    if (!reconcileDocument) return;
+    const candidates = [
+      contextItem,
+      ...model.childTables.flatMap((table) =>
+        table.rows.flatMap((row, rowIndex) => {
+          const item = childRowContextItem(
+            envelope,
+            table,
+            row,
+            rowIndex,
+            childRowsContextKey,
+          );
+          return item ? [item] : [];
+        })
+      ),
+    ];
+    void reconcileDocument(contextItem.id, candidates);
+  }, [
+    childRowsContextKey,
+    contextKey,
+    contextView,
+    envelope,
+    reconcileDocument,
+  ]);
   const canRouteHint = (toolName: string) =>
     Boolean(
       onJump && app.getHostCapabilities()?.serverTools && exactTools &&
         exactTools.includes(toolName),
     );
+  const rootJumpForHint = (hint: (typeof hints)[number]): Jump | null => {
+    if (!hint.tool || !canRouteHint(hint.tool)) return null;
+    return jumpFromHint(
+      hint,
+      vars,
+      t("nav.linked_to", { id: envelope.name }),
+    );
+  };
   const jumps = hints
-    .filter((hint) => hint.tool && canRouteHint(hint.tool))
-    .map((hint) =>
-      jumpFromHint(
-        hint,
-        vars,
-        t("nav.linked_to", { id: envelope.name }),
-      )
-    )
+    .map(rootJumpForHint)
     .filter((jump): jump is Jump => jump !== null);
   const asks = onAsk
     ? hints.flatMap((hint) => {
-      if (!hint.message || (onJump && hint.tool)) return [];
+      if (!hint.message || rootJumpForHint(hint)) return [];
+      const message = fillTemplate(hint.message, vars);
+      if (hasUnfilledTemplate(message)) return [];
       return [{
         label: hintLabel(hint),
-        message: fillTemplate(hint.message, vars),
+        message,
       }];
     })
     : [];
@@ -355,6 +424,102 @@ function InlineDocument({
     )
     : undefined;
 
+  function childRowInteraction(
+    table: (typeof model.childTables)[number],
+    row: typeof table.rows[number],
+    rowIndex: number,
+  ) {
+    const item = childRowContextItem(
+      envelope,
+      table,
+      row,
+      rowIndex,
+      childRowsContextKey,
+    );
+    const rowJumps = onJump && app.getHostCapabilities()?.serverTools
+      ? childRowNavigationJumps({
+        hints,
+        rootVars: vars,
+        row,
+        availableTools: exactTools,
+        subtitle: t("nav.linked_to", {
+          id: item?.label ?? envelope.name,
+        }),
+      })
+      : [];
+    const rowAsks = onAsk
+      ? childRowNavigationAsks({ hints, rootVars: vars, row }).filter(
+        (ask) => !rowJumps.some((jump) => jump.label === ask.label),
+      )
+      : [];
+    return { item, rowJumps, rowAsks };
+  }
+
+  const renderChildRowActions = embedded
+    ? (
+      table: (typeof model.childTables)[number],
+      row: typeof table.rows[number],
+      rowIndex: number,
+    ) => {
+      const { rowJumps, rowAsks } = childRowInteraction(
+        table,
+        row,
+        rowIndex,
+      );
+      if (rowJumps.length === 0 && rowAsks.length === 0) return undefined;
+      return (
+        <>
+          {rowJumps.map((jump) => (
+            <Button
+              key={`${jump.tool.name}:${jump.label}`}
+              variant="quiet"
+              class="min-h-8 px-2.5 py-1 text-chip"
+              onClick={() => onJump?.(jump)}
+            >
+              {jump.label}
+              <span aria-hidden="true">›</span>
+            </Button>
+          ))}
+          {rowAsks.map((ask) => (
+            <Button
+              key={`ask:${ask.label}`}
+              variant="quiet"
+              class="min-h-8 px-2.5 py-1 text-chip"
+              onClick={() => onAsk?.(ask.message)}
+            >
+              {ask.label}
+              <span aria-hidden="true">~</span>
+            </Button>
+          ))}
+        </>
+      );
+    }
+    : undefined;
+  const contextTarget: ContextInteractionTarget | undefined = context?.supported
+    ? {
+      label: t("context.active.select", { label: contextItem.label }),
+      selected: context.isSelected(contextItem),
+      onActivate: () => void context.activate(contextItem),
+    }
+    : undefined;
+  const renderChildRowContextTarget = embedded
+    ? (
+      table: (typeof model.childTables)[number],
+      row: typeof table.rows[number],
+      rowIndex: number,
+    ): ContextInteractionTarget | undefined => {
+      const { item } = childRowInteraction(table, row, rowIndex);
+      return item && context?.supported
+        ? {
+          label: t("context.active.select", { label: item.label }),
+          detailLabel: item.label,
+          selected: context.isSelected(item),
+          onActivate: () => context.activateReversible(item),
+        }
+        : undefined;
+    }
+    : undefined;
+
   return (
     <>
       <DocumentSurface
@@ -368,15 +533,18 @@ function InlineDocument({
               controller={attachments}
               capabilities={capabilities}
               layout={surfaceLayout}
+              context={context}
             />
           )
           : undefined}
         actions={actions}
-        class={embedded
-          ? outerLayout === "wide"
-            ? "h-[320px] border-y border-accent/45"
-            : "h-[360px] border-y border-accent/45"
-          : "h-full"}
+        scrollMode={embedded ? "flow" : "contained"}
+        renderChildRowActions={renderChildRowActions}
+        childRowActionsPlacement={embedded ? "visible" : "disclosure"}
+        contextTarget={contextTarget}
+        renderChildRowContextTarget={renderChildRowContextTarget}
+        childRowsExpandable={!embedded}
+        class={embedded ? "border-y border-accent/45" : "h-full"}
       />
       <ConfirmSheet confirm={confirm} />
     </>

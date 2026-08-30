@@ -2,6 +2,45 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.1.0-beta.5] - 2026-08-30
+
+### Added
+
+- **Multi-selection active context across MCP Apps.** Charts, KPIs, funnels,
+  document lists, documents, invoice lines, stock rows, attachments, and nested
+  levels can contribute up to eight compact business references while keeping
+  one bounded local resource available to the host.
+- **Allowlisted Frappe method calls.** This beta includes the
+  `erpnext_method_call` escape hatch introduced in stable 3.0.3, with exact,
+  prefix, or explicit global allowlists and optional cache invalidation after a
+  mutating call.
+
+### Changed
+
+- Interactive data now follows one input grammar: click or Space toggles active
+  context; double-click or Enter opens detail without changing context. A
+  separate compact control keeps detail available to touch and assistive
+  technology users. Kanban card titles remain open-only because their card
+  surface owns drag gestures.
+- Document-list details remain full-width below the selected row. Item, stock,
+  supplier, customer, and related-document actions now continue through the
+  existing breadcrumb navigation instead of creating disclosures inside
+  disclosures.
+- KPI and funnel details are explicit breadcrumb actions, while chart and stock
+  surfaces retain inline progressive disclosure where the root visualization
+  stays visible.
+- Viewer tables and detail surfaces now honour the host-provided frame height
+  instead of relying on fixed internal heights.
+
+### Fixed
+
+- Active-context selections survive canonical refreshes, repeated visible
+  labels, and navigation between homonymous nested levels without retaining
+  deleted rows or stale values.
+- Chart detail helpers choose their side from the available width and remain
+  compact in narrow viewers. Detail controls expose correct disclosure or
+  navigation semantics, preserve headings, and meet coarse-pointer target sizes.
+
 ## [3.0.3] - 2026-08-30
 
 ### Added

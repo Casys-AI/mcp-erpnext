@@ -485,7 +485,7 @@ const INVOICE_LINE_ITEM_DOCTYPES = new Set([
   "Quotation",
 ]);
 
-/** La vue facture ajoute uniquement les deux actions propres à chaque ligne. */
+/** Les pièces de type facture ajoutent les deux actions propres à chaque ligne. */
 export function invoiceNavigationHints(
   doctype: string,
   document?: Record<string, unknown>,
@@ -1448,7 +1448,9 @@ export function withUiRefreshRequest(
     } else if (
       (isKanbanViewer(enriched) || isDocViewer(enriched)) && doctype
     ) {
-      const hints = documentNavigationHints(doctype, resultDocument(enriched));
+      const hints = isDocViewer(enriched)
+        ? invoiceNavigationHints(doctype, resultDocument(enriched))
+        : documentNavigationHints(doctype, resultDocument(enriched));
       if (hints.length > 0) enriched._sendMessageHints = hints;
     }
   }

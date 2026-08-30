@@ -4,9 +4,9 @@
  * Handshake stays on ext-apps (refresh / callServerTool / sendMessage).
  * Presentation: Tailwind classes only, no @casys/mcp-view dependency.
  *
- * Pile de navigation : quand l'hôte relaie les outils (jumpsEnabled), cliquer
- * une ligne empile la fiche article dans la vue. Sans outils, le comportement
- * actuel (expansion inline) reste strictement identique.
+ * Une ligne partage son contexte au clic simple / Espace. Son detail reste une
+ * commande distincte : double-clic / Entree ou chevron explicite. Sans saut
+ * type, le panneau local conserve les actions conversationnelles de repli.
  */
 import {
   useEffect,
@@ -17,6 +17,13 @@ import {
 } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
+import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
+import {
+  canShareActiveContextResource,
+  type ContextSelectionItem,
+} from "~/shared/active-context.ts";
+import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
+import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
 import {
   CasysCredit,
   CountBadge,
@@ -25,6 +32,8 @@ import {
   ViewerShell,
 } from "~/shared/ui";
 import { useViewerLayout } from "~/shared/useViewerLayout";
+import { useActiveContext } from "~/shared/useActiveContext.ts";
+import { useClickIntent } from "~/shared/useClickIntent.ts";
 import { type Tone, TONE_RULE } from "~/shared/status";
 import { formatCurrency, formatInteger, formatNumber } from "~/shared/format";
 import {
@@ -55,6 +64,7 @@ import {
 } from "./capabilities.ts";
 import { isFixtureMode, STOCK_FIXTURE } from "./fixture.ts";
 import { buildStockRowJump } from "./stockJumps.ts";
+import { stockRowContextItem, stockRowDetailId } from "./stock-interactions.ts";
 import type { StockData, StockEntry } from "./types.ts";
 
 const app = new App({ name: "Stock Viewer", version: "2.0.0" });
@@ -369,16 +379,20 @@ function StockContent(
 
   // ── Pile de navigation ─────────────────────────────────────────────
   // Les hooks sont déclarés inconditionnellement (règle des hooks).
+  const rootKey = viewerRootKey("stock", rootRefreshRequest ?? undefined, {
+    doctype: "Bin",
+  });
   const viewerNav = useViewerNav(app, {
     title: t("stock.title"),
     kind: "root",
     origin: "list",
-    key: viewerRootKey("stock", rootRefreshRequest ?? undefined, {
-      doctype: "Bin",
-    }),
+    key: rootKey,
   }, { fixture });
+  const activeContext = useActiveContext(app, rootKey);
+  const clickIntent = useClickIntent();
   const nav = viewerNav.nav;
   const { isRoot, current } = nav;
+  useLayoutEffect(() => () => clickIntent.cancelAll(), [clickIntent, rootKey]);
   useLayoutEffect(() => {
     const root = nav.stack.levels[0];
     if (rootFreshEvent > rootMutationEvent && root?.stale) {
@@ -401,6 +415,17 @@ function StockContent(
   // Avec serverTools la ligne navigue. Sur un hôte message-only elle garde
   // l'inspecteur et ses questions de repli au lieu de devenir silencieuse.
   const hostCapabilities = app.getHostCapabilities();
+  const activeContextHostCapabilities = fixture ? undefined : hostCapabilities;
+  const context: DocumentContextController = {
+    supported: !fixture && activeContext.supported,
+    activate: activeContext.activate,
+    activateReversible: activeContext.activateReversible,
+    reconcileView: activeContext.reconcileView,
+    reconcileDocument: activeContext.reconcileDocument,
+    isSelected: activeContext.isSelected,
+    canShareResource: (resource) =>
+      canShareActiveContextResource(activeContextHostCapabilities, resource),
+  };
   const detailCapabilities = stockDetailCapabilities(
     hostCapabilities?.serverTools,
     data._availableTools,
@@ -424,10 +449,22 @@ function StockContent(
     messagesEnabled,
   });
 
-  // En mode jump, l'expansion inline disparaît.
-  // L'expansion reste le repli : elle ne s'efface que si un saut peut
-  // réellement se construire (un hint avec outil), pas dès que l'hôte a des outils.
-  const canInlineExpand = canDrill && !hasJumpHints;
+  const contextView = t("stock.title");
+  const contextItemFor = (row: StockEntry): ContextSelectionItem =>
+    stockRowContextItem(
+      row,
+      contextView,
+      t("stock.col.actual"),
+      formatInteger(row.actual_qty),
+    );
+
+  useEffect(() => {
+    if (!context.supported) return;
+    void activeContext.reconcileView(
+      contextView,
+      data.data.map(contextItemFor),
+    );
+  }, [data, rootKey, context.supported, activeContext.reconcileView]);
 
   const filtered = useMemo(() => {
     if (!filter) return data.data;
@@ -476,38 +513,36 @@ function StockContent(
     ].filter(Boolean).join(" ");
   }
 
-  /** Gère le clic sur une ligne : saut nav si possible, expansion sinon. */
-  function handleRowClick(row: StockEntry) {
+  function rowJump(row: StockEntry): Jump | null {
+    if (!hasJumpHints) return null;
+    return buildStockRowJump(
+      jumpHints,
+      { id: row.item_code, warehouse: row.warehouse },
+      t("nav.linked_to", { id: row.item_code }),
+    );
+  }
+
+  /** Le detail est une commande distincte du contexte de la ligne. */
+  function toggleRowDetail(row: StockEntry, jump: Jump | null) {
     const key = rowKey(row);
-    if (hasJumpHints) {
-      const jump = buildStockRowJump(
-        jumpHints,
-        { id: row.item_code, warehouse: row.warehouse },
-        t("nav.linked_to", { id: row.item_code }),
-      );
-      if (jump) {
-        void nav.jump(jump);
-        return;
-      }
-      // Pas de saut possible (hints absents) : l'expansion, comme sans outils.
+    if (jump) {
+      void nav.toggleRootChild(jump, contextItemFor(row).id);
+      return;
     }
     setExpandedKey((cur) => (cur === key ? null : key));
   }
 
-  function handleRowKeyDown(row: StockEntry, event: KeyboardEvent) {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    handleRowClick(row);
-  }
-
   const warehouse = deriveWarehouse(data);
   const grid = isMobile ? GRID_MOBILE : GRID_WIDE;
+  const detailColumn = hasTouchTargets ? "40px" : "32px";
+  const rowGrid = canDrill
+    ? `minmax(0, 1fr) ${detailColumn}`
+    : "minmax(0, 1fr)";
 
   return (
     <ViewerShell containerRef={ref}>
       {
-        /* ── En-tête ────────────────────────────────────────
-          Au-delà du niveau 1, le titre affiche le niveau courant.      */
+        /* ── En-tête : la racine reste visible pendant le detail. ── */
       }
       <header
         class={cx(
@@ -524,70 +559,76 @@ function StockContent(
           {isMobile
             ? (
               <h3 class="m-0 truncate font-display font-semibold text-ink text-card-title">
-                {isRoot ? t("stock.title") : current.title}
+                {t("stock.title")}
               </h3>
             )
             : (
               <h2 class="m-0 truncate font-display font-semibold text-ink text-title tracking-title">
-                {isRoot ? t("stock.title") : current.title}
+                {t("stock.title")}
               </h2>
             )}
-          {isRoot
-            ? <CountBadge narrow={isMobile}>{sorted.length}</CountBadge>
-            : current.count !== undefined && current.kind === "list" && (
-              <CountBadge narrow={isMobile}>{current.count}</CountBadge>
-            )}
+          <CountBadge narrow={isMobile}>{sorted.length}</CountBadge>
         </div>
-        {isRoot && (
-          <div class="flex min-w-0 shrink-0 items-center gap-2">
-            {current.stale && (
-              <div
-                role="status"
-                title={t("nav.stale_title")}
-                class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
-              >
+        <div class="flex min-w-0 shrink-0 items-center gap-2">
+          <ActiveContextChip
+            selections={activeContext.selections}
+            failed={activeContext.failed}
+            evictedLabel={activeContext.evictedLabel}
+            onRemove={activeContext.remove}
+            onClear={activeContext.clear}
+            compact={isMobile}
+          />
+          {isRoot && (
+            <>
+              {current.stale && (
+                <div
+                  role="status"
+                  title={t("nav.stale_title")}
+                  class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+                >
+                  <span
+                    aria-hidden="true"
+                    class="size-[5px] rounded-full bg-warn"
+                  />
+                  {!isMobile && (
+                    <span>
+                      {t("nav.stale_values", { at: current.stale.at })}
+                    </span>
+                  )}
+                  {canRefreshRoot && (
+                    <button
+                      type="button"
+                      disabled={refreshing}
+                      onClick={onRefresh}
+                      aria-label={t("nav.refresh")}
+                      title={t("nav.refresh")}
+                      class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                    >
+                      {refreshing ? "…" : "↻"}
+                    </button>
+                  )}
+                </div>
+              )}
+              {warehouse && (
                 <span
-                  aria-hidden="true"
-                  class="size-[5px] rounded-full bg-warn"
-                />
-                {!isMobile && (
-                  <span>
-                    {t("nav.stale_values", { at: current.stale.at })}
-                  </span>
-                )}
-                {canRefreshRoot && (
-                  <button
-                    type="button"
-                    disabled={refreshing}
-                    onClick={onRefresh}
-                    aria-label={t("nav.refresh")}
-                    title={t("nav.refresh")}
-                    class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
-                  >
-                    {refreshing ? "…" : "↻"}
-                  </button>
-                )}
-              </div>
-            )}
-            {warehouse && (
-              <span
-                class={cx(
-                  "max-w-40 truncate font-mono text-ink-faint",
-                  isMobile ? "text-micro" : "text-chip",
-                )}
-              >
-                {warehouse}
-              </span>
-            )}
-            <SearchControl
-              value={filter}
-              layout={layout}
-              open={searchOpen}
-              onOpenChange={setSearchOpen}
-              onInput={setFilter}
-            />
-          </div>
-        )}
+                  class={cx(
+                    "max-w-40 truncate font-mono text-ink-faint",
+                    isMobile ? "text-micro" : "text-chip",
+                  )}
+                >
+                  {warehouse}
+                </span>
+              )}
+              <SearchControl
+                value={filter}
+                layout={layout}
+                open={searchOpen}
+                onOpenChange={setSearchOpen}
+                onInput={setFilter}
+              />
+            </>
+          )}
+        </div>
       </header>
 
       {isRoot && layout === "mobile" && searchOpen && (
@@ -607,38 +648,26 @@ function StockContent(
         loading={current.loading}
       />
 
-      {/* ── LevelBody — racine : tableau ; niveaux empilés : fiche/liste/graphique */}
-      <LevelBody
-        level={current}
-        app={app}
-        list={list}
-        layout={layout}
-        fixture={fixture}
-        onJump={jumpsEnabled ? nav.jump : undefined}
-        onAsk={ask}
-        onError={onError}
-        onMutated={nav.markStale}
-        onDocumentChanged={nav.reportDocumentChange}
-        onMutationInvalidate={onMutationInvalidate}
-        onMutationRefresh={onMutationRefresh}
-        onRefresh={() => void nav.refreshLevel()}
-      >
-        {/* ── Erreur de rafraîchissement — uniquement au niveau racine ── */}
-        {error && (
-          <div class="border-l-2 border-bad shrink-0 px-4 py-2 bg-bad/10 font-mono text-chip text-bad">
-            {error}
-          </div>
-        )}
+      {/* ── Erreur de rafraîchissement — uniquement au niveau racine ── */}
+      {error && (
+        <div class="border-l-2 border-bad shrink-0 px-4 py-2 bg-bad/10 font-mono text-chip text-bad">
+          {error}
+        </div>
+      )}
 
-        {/* ── Scrollable body ─────────────────────────────── */}
-        <div class="min-h-0 flex-1 overflow-y-auto scroll-slim">
-          {/* Column headers */}
+      {/* ── Scrollable body ─────────────────────────────── */}
+      <div class="min-h-0 flex-1 overflow-y-auto scroll-slim">
+        {/* Column headers */}
+        <div
+          class="grid shrink-0 bg-sunken border-b border-line"
+          style={{
+            gridTemplateColumns: rowGrid,
+            padding: isMobile ? "6px 0 6px 12px" : "7px 0 7px 16px",
+          }}
+        >
           <div
-            class="grid shrink-0 bg-sunken border-b border-line"
-            style={{
-              gridTemplateColumns: grid,
-              padding: isMobile ? "6px 12px" : "7px 16px",
-            }}
+            class="grid min-w-0"
+            style={{ gridTemplateColumns: grid, paddingRight: "4px" }}
           >
             {isMobile
               ? (
@@ -694,50 +723,105 @@ function StockContent(
                 </>
               )}
           </div>
+          {canDrill && <span aria-hidden="true" />}
+        </div>
 
-          {/* Data rows */}
-          {sorted.length === 0
-            ? <StateMessage>{t("stock.filter.no_results")}</StateMessage>
-            : sorted.map((row) => {
-              const tone = qtyTone(row.actual_qty);
-              const key = rowKey(row);
-              // L'expansion inline n'existe qu'en mode fixture (pas de jump).
-              const isSelected = canInlineExpand && expandedKey === key;
-              const isDanger = tone === "bad";
+        {/* Data rows */}
+        {sorted.length === 0
+          ? <StateMessage>{t("stock.filter.no_results")}</StateMessage>
+          : sorted.map((row) => {
+            const tone = qtyTone(row.actual_qty);
+            const key = rowKey(row);
+            const jump = rowJump(row);
+            const canInlineExpand = canDrill && jump === null;
+            const contextItem = contextItemFor(row);
+            const detailId = stockRowDetailId(row);
+            const isContextSelected = context.supported &&
+              context.isSelected(contextItem);
+            const isJumpExpanded = !isRoot &&
+              nav.stack.levels[1]?.rootTriggerKey === contextItem.id;
+            const isInlineExpanded = canInlineExpand && expandedKey === key;
+            const isExpanded = isJumpExpanded || isInlineExpanded;
+            const isDanger = tone === "bad";
+            const interactionEnabled = context.supported || canDrill;
+            const interactionLabel = canDrill
+              ? t(
+                context.supported
+                  ? (isExpanded
+                    ? "document.row.close_detail"
+                    : "document.row.open_detail")
+                  : (isExpanded
+                    ? "document.row.close_detail_only"
+                    : "document.row.open_detail_only"),
+                { label: row.item_code },
+              )
+              : t("context.active.select", { label: row.item_code });
+            const intent = {
+              key: contextItem.id,
+              onSingle: () =>
+                context.supported
+                  ? context.activateReversible(contextItem)
+                  : undefined,
+              onDouble: () => {
+                if (canDrill) toggleRowDetail(row, jump);
+              },
+            };
 
-              return (
-                <div key={key}>
-                  {/* Main row */}
+            return (
+              <div key={key}>
+                {/* Main row */}
+                <div
+                  class={cx(
+                    "grid items-center border-l-2 border-b border-b-line-soft transition-colors",
+                    TONE_RULE[tone],
+                    isDanger || isExpanded || isContextSelected
+                      ? "bg-row-selected"
+                      : "hover:bg-row-hover",
+                    selectionEdge(isContextSelected, interactionEnabled),
+                  )}
+                  style={{
+                    gridTemplateColumns: rowGrid,
+                    minHeight: hasTouchTargets ? "40px" : undefined,
+                  }}
+                >
                   <div
                     class={cx(
-                      "relative grid border-l-2 border-b border-b-line-soft transition-colors",
-                      // group pour le chevron › au survol (saut réellement disponible)
-                      hasJumpHints && "group",
-                      TONE_RULE[tone],
-                      isDanger || isSelected
-                        ? "bg-row-selected"
-                        : "hover:bg-row-hover",
-                      !isDanger && !isSelected && "active:bg-row-selected",
-                      selectionEdge(isSelected, canDrill),
-                      canDrill &&
-                        "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
-                      isMobile ? "items-center" : "items-center",
+                      "grid min-w-0 items-center focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
+                      interactionEnabled && "cursor-pointer",
+                      interactionEnabled && !isExpanded &&
+                        !isContextSelected && "active:bg-row-selected",
                     )}
                     style={{
                       gridTemplateColumns: grid,
-                      padding: isMobile ? "0 12px" : "8px 16px",
+                      padding: isMobile ? "0 4px 0 12px" : "8px 4px 8px 16px",
                       minHeight: hasTouchTargets ? "40px" : undefined,
                     }}
-                    {...(canDrill
+                    {...(interactionEnabled
                       ? {
                         role: "button",
                         tabIndex: 0,
-                        "aria-expanded": canInlineExpand
-                          ? isSelected
+                        "aria-label": interactionLabel,
+                        "aria-pressed": context.supported
+                          ? isContextSelected
                           : undefined,
-                        onClick: () => handleRowClick(row),
-                        onKeyDown: (event: KeyboardEvent) =>
-                          handleRowKeyDown(row, event),
+                        "aria-expanded": canDrill ? isExpanded : undefined,
+                        "aria-controls": canDrill ? detailId : undefined,
+                        "aria-keyshortcuts": context.supported && canDrill
+                          ? "Space Enter"
+                          : (context.supported ? "Space" : "Enter"),
+                        onClick: (event: MouseEvent) =>
+                          clickIntent.click(intent, event.detail),
+                        onDblClick: canDrill
+                          ? () => clickIntent.doubleClick(intent)
+                          : undefined,
+                        onKeyDown: (event: KeyboardEvent) => {
+                          if (
+                            (event.key === " " && context.supported) ||
+                            (event.key === "Enter" && canDrill)
+                          ) {
+                            clickIntent.keyDown(intent, event);
+                          }
+                        },
                       }
                       : {})}
                   >
@@ -796,30 +880,55 @@ function StockContent(
                     >
                       {formatCurrency(row.stock_value, data.currency)}
                     </span>
-
-                    {
-                      /* Chevron › — visible au survol quand jumpsEnabled.
-                        Positionné en absolu dans le padding droit (16 px)
-                        pour ne pas perturber la grille. */
-                    }
-                    {hasJumpHints && (
-                      <span
-                        aria-hidden="true"
-                        class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[14px] text-accent opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
-                      >
-                        ›
-                      </span>
-                    )}
                   </div>
 
-                  {/* Inline expansion — uniquement en mode fixture (pas de jump) */}
-                  {isSelected && (
-                    isMobile
+                  {canDrill && (
+                    <DetailToggleButton
+                      expanded={isExpanded}
+                      label={row.item_code}
+                      controls={detailId}
+                      touch={hasTouchTargets}
+                      onToggle={() => {
+                        toggleRowDetail(row, jump);
+                      }}
+                    />
+                  )}
+                </div>
+
+                {isJumpExpanded && (
+                  <section
+                    id={detailId}
+                    class="flex min-h-[280px] flex-col border-b border-line bg-surface"
+                  >
+                    <LevelBody
+                      level={current}
+                      app={app}
+                      list={list}
+                      layout={layout}
+                      fixture={fixture}
+                      onJump={jumpsEnabled ? nav.jump : undefined}
+                      onAsk={ask}
+                      onError={onError}
+                      onMutated={nav.markStale}
+                      onDocumentChanged={nav.reportDocumentChange}
+                      onMutationInvalidate={onMutationInvalidate}
+                      onMutationRefresh={onMutationRefresh}
+                      onRefresh={() => void nav.refreshLevel()}
+                      context={context}
+                      contextView={contextView}
+                    />
+                  </section>
+                )}
+
+                {isInlineExpanded && (
+                  <div id={detailId}>
+                    {isMobile
                       ? (
                         <StockInlineExpand
                           row={row}
                           isDanger={isDanger}
                           onAsk={messagesEnabled ? ask : undefined}
+                          touch={hasTouchTargets}
                         />
                       )
                       : (
@@ -831,47 +940,47 @@ function StockContent(
                           availableTools={data._availableTools}
                           onClose={() => setExpandedKey(null)}
                         />
-                      )
-                  )}
-                </div>
-              );
-            })}
-        </div>
+                      )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+      </div>
 
-        {/* ── Total footer ──────────────────────────────── */}
-        <div
+      {/* ── Total footer ──────────────────────────────── */}
+      <div
+        class={cx(
+          "flex shrink-0 items-baseline justify-between bg-sunken border-t border-line",
+          isMobile ? "px-3 py-[11px]" : "px-4 py-[10px]",
+        )}
+      >
+        <span
           class={cx(
-            "flex shrink-0 items-baseline justify-between bg-sunken border-t border-line",
-            isMobile ? "px-3 py-[11px]" : "px-4 py-[10px]",
+            "font-mono uppercase tracking-label text-ink-faint",
+            isMobile ? "text-nano" : "text-micro",
           )}
         >
-          <span
-            class={cx(
-              "font-mono uppercase tracking-label text-ink-faint",
-              isMobile ? "text-nano" : "text-micro",
-            )}
-          >
-            {t("stock.footer.total_value")}
-          </span>
-          <span
-            class={cx(
-              "font-display font-semibold tabular-nums text-ink",
-              isMobile ? "text-title" : "text-[19px]",
-            )}
-          >
-            {formatCurrency(totalValue, data.currency)}
-          </span>
-        </div>
-
-        {/* ── Pied de marque ─────────────────────────────── */}
-        <div
-          class={`flex shrink-0 justify-end border-t border-line py-[9px] ${
-            isMobile ? "px-3" : "px-4"
-          }`}
+          {t("stock.footer.total_value")}
+        </span>
+        <span
+          class={cx(
+            "font-display font-semibold tabular-nums text-ink",
+            isMobile ? "text-title" : "text-[19px]",
+          )}
         >
-          <CasysCredit compact={isMobile} />
-        </div>
-      </LevelBody>
+          {formatCurrency(totalValue, data.currency)}
+        </span>
+      </div>
+
+      {/* ── Pied de marque ─────────────────────────────── */}
+      <div
+        class={`flex shrink-0 justify-end border-t border-line py-[9px] ${
+          isMobile ? "px-3" : "px-4"
+        }`}
+      >
+        <CasysCredit compact={isMobile} />
+      </div>
     </ViewerShell>
   );
 }

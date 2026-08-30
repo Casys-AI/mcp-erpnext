@@ -6,8 +6,21 @@
 
 import type { App } from "@modelcontextprotocol/ext-apps";
 import type { ComponentChildren } from "preact";
+import { useEffect } from "preact/hooks";
 import { AttachmentsSection } from "../document/AttachmentsSection.tsx";
 import { documentCapabilities } from "../document/capabilities.ts";
+import type {
+  ContextInteractionTarget,
+  DocumentContextController,
+} from "../document/context-interaction.ts";
+import {
+  childRowContextItem,
+  documentContextItem,
+} from "../document/context-items.ts";
+import {
+  childRowNavigationAsks,
+  childRowNavigationJumps,
+} from "../document/child-row-navigation.ts";
 import { documentModelOf } from "../document/model.ts";
 import { DocumentSurface } from "../document/DocumentSurface.tsx";
 import type { DocumentEnvelope } from "../document/types.ts";
@@ -17,14 +30,31 @@ import { DoclistBody } from "../doclist/DoclistBody";
 import { LoadingSkeleton } from "../doclist/LoadingSkeleton";
 import type { DoclistData } from "../doclist/types";
 import type { DoclistState } from "../doclist/useDoclist";
-import { fillTemplate, hintLabel, type Jump, jumpFromHint } from "../jumps";
+import {
+  fillTemplate,
+  hasUnfilledTemplate,
+  hintLabel,
+  type Jump,
+  jumpFromHint,
+} from "../jumps";
 import type { NavLevel } from "../nav-stack";
 import { useT } from "../i18n-hook";
-import { Label, StateMessage } from "../ui";
+import { Button, Label, StateMessage } from "../ui";
 import type { ViewerLayout } from "../useViewerLayout";
 import { BarsLevel } from "./BarsLevel";
-import { chartHintAt, chartOf, listOf, recordOf } from "./bodies";
+import {
+  type BarsBody,
+  chartHintAt,
+  chartOf,
+  listOf,
+  recordOf,
+} from "./bodies";
 import { JumpList } from "./JumpList";
+import {
+  nestedChartContextCandidates,
+  nestedChartContextId,
+  nestedChartContextItem,
+} from "./nested-chart-interaction.ts";
 
 export const EMPTY_LIST: DoclistData = { count: 0, data: [] };
 
@@ -49,6 +79,7 @@ export function LevelBody(
     onDocumentChanged,
     onMutationInvalidate,
     onMutationRefresh,
+    context,
     children,
   }: {
     level: NavLevel;
@@ -69,14 +100,15 @@ export function LevelBody(
     /** Invalider puis relire la racine autour d'une mutation de liste. */
     onMutationInvalidate?: () => void;
     onMutationRefresh?: () => void;
+    context?: DocumentContextController;
+    contextView?: string;
     /** Ce que la vue rend pour sa racine (niveau 1). */
     children?: ComponentChildren;
   },
 ) {
   const t = useT();
-  const narrow = layout !== "wide";
   if (level.kind === "root") return <>{children}</>;
-  if (level.loading) return <LoadingSkeleton />;
+  if (level.loading) return <LoadingSkeleton embedded />;
   if (level.error) return <StateMessage tone="bad">{level.error}</StateMessage>;
   // Un corps qui n'a pas la forme annoncée est une erreur, pas une liste vide.
   const unexpected = (
@@ -98,49 +130,23 @@ export function LevelBody(
         onDocumentChanged={onDocumentChanged}
         onMutationInvalidate={onMutationInvalidate}
         onMutationRefresh={onMutationRefresh}
+        context={context}
+        contextView={level.title}
+        contextKey={level.key ?? level.id}
       />
     );
   }
   if (level.kind === "chart") {
     const chart = chartOf(level.body);
     if (!chart) return unexpected;
-    // Le segment exact prime sur le saut générique du libellé. Une série
-    // dérivée sans hint (Net Profit) reste lisible mais n'invente aucun saut.
-    const pointJump = (
-      labelIndex: number,
-      seriesIndex: number,
-    ): Jump | null => {
-      if (!onJump) return null;
-      const hint = chartHintAt(chart, labelIndex, seriesIndex);
-      const label = chart.labels[labelIndex];
-      const series = chart.datasets[seriesIndex]?.label;
-      const target = series ? `${label} · ${series}` : label;
-      return hint
-        ? jumpFromHint(
-          hint,
-          {},
-          t("nav.linked_to", { id: target }),
-        )
-        : null;
-    };
-    const clickable = chart.labels.some((_, labelIndex) =>
-      chart.datasets.some((_, seriesIndex) =>
-        pointJump(labelIndex, seriesIndex) !== null
-      )
-    );
     return (
-      <BarsLevel
+      <ChartLevel
+        key={level.id}
+        level={level}
         chart={chart}
-        narrow={narrow}
-        caption={clickable ? t("nav.bar_click") : undefined}
-        isPointInteractive={(labelIndex, seriesIndex) =>
-          pointJump(labelIndex, seriesIndex) !== null}
-        onPointClick={clickable
-          ? (labelIndex, seriesIndex) => {
-            const jump = pointJump(labelIndex, seriesIndex);
-            if (jump) onJump?.(jump);
-          }
-          : undefined}
+        layout={layout}
+        onJump={onJump}
+        context={context}
       />
     );
   }
@@ -162,6 +168,109 @@ export function LevelBody(
       onDocumentChanged={onDocumentChanged}
       onMutationInvalidate={onMutationInvalidate}
       onMutationRefresh={onMutationRefresh}
+      context={context}
+      contextView={level.title}
+      contextKey={level.key ?? level.id}
+    />
+  );
+}
+
+function ChartLevel({
+  level,
+  chart,
+  layout,
+  onJump,
+  context,
+}: {
+  level: NavLevel;
+  chart: BarsBody;
+  layout: ViewerLayout;
+  onJump?: (jump: Jump) => void;
+  context?: DocumentContextController;
+}) {
+  const t = useT();
+  const view = level.title;
+  const chartId = nestedChartContextId(level.key ?? level.id, level.title);
+  const reconcileView = context?.supported ? context.reconcileView : undefined;
+
+  useEffect(() => {
+    if (!reconcileView) return;
+    void reconcileView(
+      chartId,
+      nestedChartContextCandidates(chart, chartId, view),
+    );
+  }, [chart, chartId, reconcileView, view]);
+
+  // Le segment exact prime sur le saut générique du libellé. Une série
+  // dérivée sans hint (Net Profit) reste lisible mais n'invente aucun saut.
+  const pointJump = (
+    labelIndex: number,
+    seriesIndex: number,
+  ): Jump | null => {
+    if (!onJump) return null;
+    const hint = chartHintAt(chart, labelIndex, seriesIndex);
+    const label = chart.labels[labelIndex];
+    const series = chart.datasets[seriesIndex]?.label;
+    const target = series ? `${label} · ${series}` : label;
+    return hint
+      ? jumpFromHint(
+        hint,
+        {},
+        t("nav.linked_to", { id: target }),
+      )
+      : null;
+  };
+  const itemAt = (labelIndex: number, seriesIndex: number) =>
+    nestedChartContextItem(
+      chart,
+      chartId,
+      view,
+      labelIndex,
+      seriesIndex,
+    );
+  const detailEnabled = chart.labels.some((_, labelIndex) =>
+    chart.datasets.some((_, seriesIndex) =>
+      pointJump(labelIndex, seriesIndex) !== null
+    )
+  );
+  const contextEnabled = Boolean(context?.supported);
+  const caption = contextEnabled && detailEnabled
+    ? t("chart.tooltip.click_action_context")
+    : contextEnabled
+    ? t("chart.tooltip.click_action_context_only")
+    : detailEnabled
+    ? t("chart.tooltip.click_action_fallback")
+    : undefined;
+
+  return (
+    <BarsLevel
+      chart={chart}
+      narrow={layout !== "wide"}
+      caption={caption}
+      contextEnabled={contextEnabled}
+      pointKey={(labelIndex, seriesIndex) =>
+        itemAt(labelIndex, seriesIndex)?.id ??
+          `${chartId}:point:${labelIndex}:${seriesIndex}`}
+      isPointSelected={contextEnabled
+        ? (labelIndex, seriesIndex) => {
+          const item = itemAt(labelIndex, seriesIndex);
+          return item ? context!.isSelected(item) : false;
+        }
+        : undefined}
+      isPointDetailEnabled={(labelIndex, seriesIndex) =>
+        pointJump(labelIndex, seriesIndex) !== null}
+      onPointContext={contextEnabled
+        ? (labelIndex, seriesIndex) => {
+          const item = itemAt(labelIndex, seriesIndex);
+          return item ? context!.activateReversible(item) : undefined;
+        }
+        : undefined}
+      onPointDetail={detailEnabled
+        ? (labelIndex, seriesIndex) => {
+          const jump = pointJump(labelIndex, seriesIndex);
+          if (jump) onJump?.(jump);
+        }
+        : undefined}
     />
   );
 }
@@ -177,6 +286,9 @@ function RecordDocumentLevel({
   onDocumentChanged,
   onMutationInvalidate,
   onMutationRefresh,
+  context,
+  contextView,
+  contextKey,
 }: {
   app: App;
   envelope: DocumentEnvelope;
@@ -188,6 +300,9 @@ function RecordDocumentLevel({
   onDocumentChanged?: (event: DocumentChangeEvent) => void;
   onMutationInvalidate?: () => void;
   onMutationRefresh?: () => void;
+  context?: DocumentContextController;
+  contextView?: string;
+  contextKey?: string;
 }) {
   const t = useT();
   const model = documentModelOf(envelope);
@@ -216,28 +331,29 @@ function RecordDocumentLevel({
   };
   const hints = envelope.sendMessageHints ?? [];
   const exactTools = envelope.availableTools;
-  const hintJumps = onJump
-    ? hints
-      .filter((hint) =>
-        hint.tool && app.getHostCapabilities()?.serverTools && exactTools &&
-        exactTools.includes(hint.tool)
-      )
-      .map((hint) =>
-        jumpFromHint(
-          hint,
-          vars,
-          t("nav.linked_to", { id: envelope.name }),
-        )
-      )
-      .filter((jump): jump is Jump => jump !== null)
-    : [];
+  const hintJumpForHint = (hint: (typeof hints)[number]): Jump | null => {
+    if (
+      !onJump || !hint.tool || !app.getHostCapabilities()?.serverTools ||
+      !exactTools?.includes(hint.tool)
+    ) return null;
+    return jumpFromHint(
+      hint,
+      vars,
+      t("nav.linked_to", { id: envelope.name }),
+    );
+  };
+  const hintJumps = hints
+    .map(hintJumpForHint)
+    .filter((jump): jump is Jump => jump !== null);
   const jumps = [...(levelJumps ?? []), ...hintJumps];
   const asks = onAsk
     ? hints.flatMap((hint) => {
-      if (!hint.message || (onJump && hint.tool)) return [];
+      if (!hint.message || hintJumpForHint(hint)) return [];
+      const message = fillTemplate(hint.message, vars);
+      if (hasUnfilledTemplate(message)) return [];
       return [{
         label: hintLabel(hint),
-        message: fillTemplate(hint.message, vars),
+        message,
       }];
     })
     : [];
@@ -250,6 +366,33 @@ function RecordDocumentLevel({
       }),
     });
   }
+  const contextItem = documentContextItem(
+    model,
+    contextView ?? envelope.doctype,
+    contextKey,
+  );
+  const reconcileDocument = context?.supported
+    ? context.reconcileDocument
+    : undefined;
+  useEffect(() => {
+    if (!reconcileDocument) return;
+    const candidates = [
+      contextItem,
+      ...model.childTables.flatMap((table) =>
+        table.rows.flatMap((row, rowIndex) => {
+          const item = childRowContextItem(
+            envelope,
+            table,
+            row,
+            rowIndex,
+            contextKey,
+          );
+          return item ? [item] : [];
+        })
+      ),
+    ];
+    void reconcileDocument(contextItem.id, candidates);
+  }, [contextKey, contextView, envelope, reconcileDocument]);
   const actions = jumps.length > 0 || asks.length > 0
     ? (
       <div class="flex flex-col gap-2">
@@ -264,6 +407,81 @@ function RecordDocumentLevel({
       </div>
     )
     : undefined;
+  const contextTarget: ContextInteractionTarget | undefined = context?.supported
+    ? {
+      label: t("context.active.select", { label: contextItem.label }),
+      selected: context.isSelected(contextItem),
+      onActivate: () => void context.activate(contextItem),
+    }
+    : undefined;
+  const renderChildRowActions = (
+    _table: (typeof model.childTables)[number],
+    row: (typeof model.childTables)[number]["rows"][number],
+  ) => {
+    const rowJumps = onJump && app.getHostCapabilities()?.serverTools
+      ? childRowNavigationJumps({
+        hints,
+        rootVars: vars,
+        row,
+        availableTools: exactTools,
+        subtitle: t("nav.linked_to", { id: envelope.name }),
+      })
+      : [];
+    const rowAsks = onAsk
+      ? childRowNavigationAsks({ hints, rootVars: vars, row }).filter(
+        (ask) => !rowJumps.some((jump) => jump.label === ask.label),
+      )
+      : [];
+    if (rowJumps.length === 0 && rowAsks.length === 0) return undefined;
+    return (
+      <>
+        {rowJumps.map((jump) => (
+          <Button
+            key={`${jump.tool.name}:${jump.label}`}
+            variant="quiet"
+            class="min-h-8 px-2.5 py-1 text-chip"
+            onClick={() => onJump?.(jump)}
+          >
+            {jump.label}
+            <span aria-hidden="true">›</span>
+          </Button>
+        ))}
+        {rowAsks.map((ask) => (
+          <Button
+            key={`ask:${ask.label}`}
+            variant="quiet"
+            class="min-h-8 px-2.5 py-1 text-chip"
+            onClick={() => onAsk?.(ask.message)}
+          >
+            {ask.label}
+            <span aria-hidden="true">~</span>
+          </Button>
+        ))}
+      </>
+    );
+  };
+  const renderChildRowContextTarget = (
+    table: (typeof model.childTables)[number],
+    row: (typeof model.childTables)[number]["rows"][number],
+    rowIndex: number,
+  ): ContextInteractionTarget | undefined => {
+    if (!context?.supported) return undefined;
+    const item = childRowContextItem(
+      envelope,
+      table,
+      row,
+      rowIndex,
+      contextKey,
+    );
+    return item
+      ? {
+        label: t("context.active.select", { label: item.label }),
+        detailLabel: item.label,
+        selected: context.isSelected(item),
+        onActivate: () => context.activateReversible(item),
+      }
+      : undefined;
+  };
 
   return (
     <DocumentSurface
@@ -275,10 +493,15 @@ function RecordDocumentLevel({
             controller={attachments}
             capabilities={capabilities}
             layout={layout}
+            context={context}
           />
         )
         : undefined}
       actions={actions}
+      contextTarget={contextTarget}
+      renderChildRowActions={renderChildRowActions}
+      renderChildRowContextTarget={renderChildRowContextTarget}
+      childRowActionsPlacement="visible"
     />
   );
 }

@@ -17,6 +17,9 @@ import {
 } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
+import { ActiveContextChip } from "~/shared/ActiveContextChip";
+import { canShareActiveContextResource } from "~/shared/active-context";
+import type { DocumentContextController } from "~/shared/document/context-interaction";
 import {
   Button,
   CasysCredit,
@@ -63,6 +66,7 @@ import {
 } from "~/shared/refresh";
 import { jumpFromHint, type NavHint } from "~/shared/jumps";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { useActiveContext } from "~/shared/useActiveContext";
 import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
@@ -361,7 +365,14 @@ function KanbanCard({
               ? (
                 <button
                   type="button"
-                  class="group text-left text-cell text-ink transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  aria-label={t("interaction.detail.open", {
+                    label: card.title,
+                  })}
+                  aria-haspopup="dialog"
+                  class={cx(
+                    "group text-left text-cell text-ink transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                    "min-h-10",
+                  )}
                   onClick={(event) => {
                     event.stopPropagation();
                     onTitleClick(card);
@@ -386,7 +397,10 @@ function KanbanCard({
                     height="8"
                     viewBox="0 0 5 8"
                     fill="none"
-                    class="ml-1.5 inline-block shrink-0 align-[-1px] text-ink-faint transition-all group-hover:translate-x-0.5 group-hover:text-accent"
+                    class={cx(
+                      "ml-1.5 inline-block shrink-0 align-[-1px] text-ink-faint transition-all group-hover:text-accent",
+                      "group-hover:translate-x-0.5",
+                    )}
                   >
                     <path
                       d="M1 1L4 4L1 7"
@@ -418,9 +432,9 @@ function KanbanCard({
             ? (
               <button
                 type="button"
-                aria-label={t("kanban.card.aria_options", {
-                  title: card.title,
-                })}
+                aria-label={t("interaction.detail.open", { label: card.title })}
+                aria-haspopup="dialog"
+                title={t("interaction.detail.open", { label: card.title })}
                 class="shrink-0 flex items-center justify-center text-ink-faint hover:text-ink rounded-chip transition-colors"
                 style={{
                   width: 40,
@@ -695,7 +709,7 @@ function MobileColumnNavWrapper({
             "font-mono text-data text-ink-faint",
             "disabled:opacity-40 transition-colors hover:text-ink",
           )}
-          style={{ width: 32, height: 32 }}
+          style={{ width: 40, height: 40 }}
           onClick={() => setFocusIndex((i) => Math.max(0, i - 1))}
         >
           ‹
@@ -727,7 +741,7 @@ function MobileColumnNavWrapper({
             "font-mono text-data text-ink-muted",
             "disabled:opacity-40 transition-colors hover:text-ink",
           )}
-          style={{ width: 32, height: 32 }}
+          style={{ width: 40, height: 40 }}
           onClick={() =>
             setFocusIndex((i) => Math.min(columns.length - 1, i + 1))}
         >
@@ -884,17 +898,30 @@ function KanbanBoardWithNav({
 }) {
   const t = useT();
   // La pile : racine = le tableau, niveaux empilés = résultats d'outils (listes, fiches, graphiques).
+  const rootKey = viewerRootKey(
+    "kanban",
+    rootRefreshRequest ?? undefined,
+    { boardId: board.boardId, doctype: board.doctype },
+  );
   const viewerNav = useViewerNav(app, {
     title: board.title,
     kind: "root",
     origin: "list",
-    key: viewerRootKey(
-      "kanban",
-      rootRefreshRequest ?? undefined,
-      { boardId: board.boardId, doctype: board.doctype },
-    ),
+    key: rootKey,
   }, { fixture });
   const nav = viewerNav.nav;
+  const activeContext = useActiveContext(app, rootKey);
+  const hostCapabilities = fixture ? undefined : app.getHostCapabilities();
+  const context: DocumentContextController = {
+    supported: !fixture && activeContext.supported,
+    activate: activeContext.activate,
+    activateReversible: activeContext.activateReversible,
+    reconcileView: activeContext.reconcileView,
+    reconcileDocument: activeContext.reconcileDocument,
+    isSelected: activeContext.isSelected,
+    canShareResource: (resource) =>
+      canShareActiveContextResource(hostCapabilities, resource),
+  };
   useLayoutEffect(() => {
     const root = nav.stack.levels[0];
     if (rootFreshEvent > rootMutationEvent && root?.stale) {
@@ -979,64 +1006,74 @@ function KanbanBoardWithNav({
               <CountBadge narrow={narrow}>{headerCount}</CountBadge>
             )}
           </div>
-          {!narrow && nav.isRoot && (
-            <div class="flex shrink-0 items-center gap-2">
-              {nav.current.stale && (
-                <div
-                  role="status"
-                  title={t("nav.stale_title")}
-                  class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
-                >
-                  <span
-                    aria-hidden="true"
-                    class="size-[5px] rounded-full bg-warn"
-                  />
-                  <span>
-                    {t("nav.stale_values", { at: nav.current.stale.at })}
-                  </span>
-                  {canRefreshRoot && (
-                    <button
-                      type="button"
-                      disabled={refreshing}
-                      onClick={onRefreshRoot}
-                      aria-label={t("nav.refresh")}
-                      title={t("nav.refresh")}
-                      class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
-                    >
-                      {refreshing ? "…" : "↻"}
-                    </button>
-                  )}
-                </div>
-              )}
-              <span class="font-mono text-chip text-ink-faint">
-                {actionCapabilities.canMove ? board.moveToolName : null}
-              </span>
-            </div>
-          )}
-          {narrow && nav.isRoot && nav.current.stale && (
-            <div
-              role="status"
-              title={t("nav.stale_title")}
-              class="ml-auto flex shrink-0 items-center gap-1 font-mono text-warn"
-            >
-              <span
-                aria-hidden="true"
-                class="size-[5px] rounded-full bg-warn"
-              />
-              {canRefreshRoot && (
-                <button
-                  type="button"
-                  disabled={refreshing}
-                  onClick={onRefreshRoot}
-                  aria-label={t("nav.refresh")}
-                  title={t("nav.refresh")}
-                  class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
-                >
-                  {refreshing ? "…" : "↻"}
-                </button>
-              )}
-            </div>
-          )}
+          <div class="ml-auto flex min-w-0 shrink-0 items-center gap-2">
+            <ActiveContextChip
+              selections={activeContext.selections}
+              failed={activeContext.failed}
+              evictedLabel={activeContext.evictedLabel}
+              onRemove={activeContext.remove}
+              onClear={activeContext.clear}
+              compact={narrow}
+            />
+            {!narrow && nav.isRoot && (
+              <div class="flex shrink-0 items-center gap-2">
+                {nav.current.stale && (
+                  <div
+                    role="status"
+                    title={t("nav.stale_title")}
+                    class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+                  >
+                    <span
+                      aria-hidden="true"
+                      class="size-[5px] rounded-full bg-warn"
+                    />
+                    <span>
+                      {t("nav.stale_values", { at: nav.current.stale.at })}
+                    </span>
+                    {canRefreshRoot && (
+                      <button
+                        type="button"
+                        disabled={refreshing}
+                        onClick={onRefreshRoot}
+                        aria-label={t("nav.refresh")}
+                        title={t("nav.refresh")}
+                        class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                      >
+                        {refreshing ? "…" : "↻"}
+                      </button>
+                    )}
+                  </div>
+                )}
+                <span class="font-mono text-chip text-ink-faint">
+                  {actionCapabilities.canMove ? board.moveToolName : null}
+                </span>
+              </div>
+            )}
+            {narrow && nav.isRoot && nav.current.stale && (
+              <div
+                role="status"
+                title={t("nav.stale_title")}
+                class="ml-auto flex shrink-0 items-center gap-1 font-mono text-warn"
+              >
+                <span
+                  aria-hidden="true"
+                  class="size-[5px] rounded-full bg-warn"
+                />
+                {canRefreshRoot && (
+                  <button
+                    type="button"
+                    disabled={refreshing}
+                    onClick={onRefreshRoot}
+                    aria-label={t("nav.refresh")}
+                    title={t("nav.refresh")}
+                    class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                  >
+                    {refreshing ? "…" : "↻"}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </header>
 
         {/* Fil de navigation — invisible au niveau 1, visible dès le premier saut */}
@@ -1065,6 +1102,8 @@ function KanbanBoardWithNav({
           onMutationInvalidate={onMutationInvalidate}
           onMutationRefresh={onMutationRefresh}
           onRefresh={() => void nav.refreshLevel()}
+          context={context}
+          contextView={board.title}
         >
           {/* Contenu racine : le tableau kanban lui-même */}
           {inlineError && <StateMessage tone="bad">{inlineError}</StateMessage>}

@@ -7,10 +7,13 @@
  */
 
 import { Skeleton, ViewerShell } from "~/shared/ui";
+import { useHostContext } from "~/shared/host-context-hook";
+import { viewerBoundsStyle } from "~/shared/viewer-bounds.ts";
 
-export function LoadingSkeleton() {
-  return (
-    <ViewerShell class="h-[460px]">
+export function LoadingSkeleton({ embedded = false }: { embedded?: boolean }) {
+  const host = useHostContext();
+  const content = (
+    <>
       <div class="flex items-center gap-3 border-b border-line px-4 py-[13px]">
         <Skeleton class="h-[17px] w-40" />
         <Skeleton class="h-[17px] w-8" />
@@ -30,6 +33,14 @@ export function LoadingSkeleton() {
           ),
         )}
       </div>
+    </>
+  );
+  if (embedded) {
+    return <div class="min-h-0 flex-1 bg-surface">{content}</div>;
+  }
+  return (
+    <ViewerShell style={viewerBoundsStyle(host.containerDimensions)}>
+      {content}
     </ViewerShell>
   );
 }

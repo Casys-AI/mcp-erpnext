@@ -76,6 +76,8 @@ export interface NavLevel {
   jumps?: Jump[];
   /** L'identité du niveau (outil + arguments) : la pile ne la répète jamais. */
   key?: string;
+  /** Identité de la donnée racine qui a ouvert cet enfant inline. */
+  rootTriggerKey?: string;
   /** Racine seulement : la nature du niveau 1, pour colorer l'origine du fil. */
   origin?: Exclude<LevelKind, "root">;
   /** Une action plus bas a changé ce que ce niveau montre ; à l'utilisateur d'actualiser. */

@@ -94,3 +94,58 @@ Deno.test("DocViewer wires child mutations into root invalidation and reread", a
     "canonicalReadbackSupersedesMutation(mutationBaseline, rootFreshEvent)",
   );
 });
+
+Deno.test("DocViewer keeps the context queue above its keyed document", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./DocViewer.tsx", import.meta.url),
+  );
+  assertStringIncludes(source, "function DocumentContextBoundary");
+  assertStringIncludes(
+    source,
+    "const activeContext = useActiveContext(app, rootKey)",
+  );
+  assertStringIncludes(
+    source,
+    "key={`${props.envelope.doctype}:${props.envelope.name}`}",
+  );
+  assertEquals(
+    [...source.matchAll(/useActiveContext\(app, rootKey\)/g)].length,
+    1,
+  );
+});
+
+Deno.test("DocViewer wires root, child rows, and nested records to one context", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./DocViewer.tsx", import.meta.url),
+  );
+  const nested = await Deno.readTextFile(
+    new URL("../../shared/levels/LevelBody.tsx", import.meta.url),
+  );
+
+  assertStringIncludes(source, "contextTarget={rootContextTarget}");
+  assertStringIncludes(source, "renderChildRowActions={renderChildRowActions}");
+  assertStringIncludes(
+    source,
+    "renderChildRowContextTarget={renderChildRowContextTarget}",
+  );
+  assertStringIncludes(
+    source,
+    "onActivate: () => context.activateReversible(item)",
+  );
+  assertStringIncludes(source, "context={context}");
+  assertStringIncludes(source, "contextView={contextView}");
+
+  assertStringIncludes(
+    nested,
+    "void reconcileDocument(contextItem.id, candidates)",
+  );
+  assertStringIncludes(nested, "renderChildRowActions={renderChildRowActions}");
+  assertStringIncludes(
+    nested,
+    "renderChildRowContextTarget={renderChildRowContextTarget}",
+  );
+  assertStringIncludes(
+    nested,
+    "onActivate: () => context.activateReversible(item)",
+  );
+});

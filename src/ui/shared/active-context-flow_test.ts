@@ -163,3 +163,34 @@ Deno.test("génération : un changement pendant l'update bloque le fallback", as
   );
   assertEquals(calls, ["context"]);
 });
+
+Deno.test("génération : un contexte confirmé reste observable après changement", async () => {
+  let current = true;
+  const calls: string[] = [];
+  const fake: ActiveContextFlowHost = {
+    getHostCapabilities: () => ({
+      updateModelContext: { structuredContent: {} },
+      message: { text: {} },
+    }),
+    updateModelContext: () => {
+      calls.push("context");
+      current = false;
+      return Promise.resolve({});
+    },
+    sendMessage: () => {
+      calls.push("message");
+      return Promise.resolve({});
+    },
+  };
+
+  assertEquals(
+    await activateContextWithFallback(
+      fake,
+      [ITEM],
+      "Show August",
+      () => current,
+    ),
+    "context",
+  );
+  assertEquals(calls, ["context"]);
+});

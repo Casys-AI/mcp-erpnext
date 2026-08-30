@@ -138,6 +138,73 @@
     mask-size: contain;
   }
 
+  /* Aide compacte du controle de detail. Elle ne participe jamais a la
+   * largeur de la ligne ou du tooltip qui la contient. */
+  .detail-toggle {
+    position: relative;
+  }
+
+  .detail-toggle::after {
+    content: attr(data-detail-hint);
+    position: absolute;
+    z-index: 40;
+    top: 50%;
+    right: calc(100% + 6px);
+    width: max-content;
+    max-width: min(
+      180px,
+      calc(100vw - 16px),
+      var(--detail-hint-max-width, 180px)
+    );
+    padding: 4px 7px;
+    transform: translateY(-50%) translateX(2px);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-chip);
+    background: var(--color-control);
+    box-shadow: var(--shadow-tooltip);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 400;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms ease, transform 120ms ease;
+  }
+
+  .detail-toggle:hover::after,
+  .detail-toggle:focus-visible::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+
+  .detail-toggle[data-detail-hint-side="right"]::after {
+    right: auto;
+    left: calc(100% + 6px);
+    transform: translateY(-50%) translateX(-2px);
+  }
+
+  .detail-toggle[data-detail-hint-side="right"]:hover::after,
+  .detail-toggle[data-detail-hint-side="right"]:focus-visible::after {
+    transform: translateY(-50%) translateX(0);
+  }
+
+  @media (pointer: coarse) {
+    .detail-toggle {
+      min-width: 40px;
+      min-height: 40px;
+    }
+  }
+
+  @media (hover: none) {
+    .detail-toggle::after {
+      display: none;
+    }
+  }
+
   /* Conteneurs à défilement par glisser — aucune barre visible. */
   .drag-scroll {
     scrollbar-width: none;

@@ -65,8 +65,12 @@ export async function activateContextWithFallback(
   isCurrent: () => boolean = () => true,
 ): Promise<ActiveContextActivation> {
   const contextResult = await replaceActiveContext(host, items);
-  if (!isCurrent()) return "superseded";
+  // Un remplacement réussi reste une vérité distante, même si la racine a
+  // changé pendant l'await. Le hook doit pouvoir la synchroniser avant le
+  // clear sérialisé de la nouvelle racine. La génération ne coupe que le
+  // fallback conversationnel, qui ne doit jamais partir pour une vue périmée.
   if (contextResult === "shared") return "context";
+  if (!isCurrent()) return "superseded";
 
   const message = fallbackMessage?.trim();
   if (!message) return "none";

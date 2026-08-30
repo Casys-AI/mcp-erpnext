@@ -615,12 +615,33 @@ export class FrappeClient {
 
   /**
    * Call a whitelisted Frappe method.
-   * POST /api/method/{method}
+   * POST /api/method/{method}, or GET for methods declared
+   * `@frappe.whitelist(methods=["GET"])` — Frappe reads GET arguments from
+   * the query string into `frappe.form_dict`, JSON-encoding non-string values
+   * the same way the list/resource GET endpoints already do in this client.
    */
   async callMethod<T = unknown>(
     method: string,
     args: Record<string, unknown> = {},
+    httpMethod: "GET" | "POST" = "POST",
   ): Promise<T> {
+    if (httpMethod === "GET") {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(args)) {
+        if (value === undefined) continue;
+        params.set(
+          key,
+          typeof value === "string" ? value : JSON.stringify(value),
+        );
+      }
+      const query = params.toString() ? `?${params.toString()}` : "";
+      const res = await this.request<FrappeMethodResponse<T>>(
+        "GET",
+        `/api/method/${method}${query}`,
+      );
+      return res.message;
+    }
+
     const res = await this.request<FrappeMethodResponse<T>>(
       "POST",
       `/api/method/${method}`,

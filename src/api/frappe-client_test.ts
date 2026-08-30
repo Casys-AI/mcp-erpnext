@@ -67,6 +67,13 @@ function makeClient(overrides: Record<string, unknown> = {}) {
   });
 }
 
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 function withEnv(
   key: string,
   value: string | undefined,
@@ -916,4 +923,91 @@ Deno.test("FrappeClient.invalidate() - clears resolveLink's negative-match cache
   client.invalidate("Customer");
 
   assertEquals(cache.get("resolve:miss:Customer:Acme"), undefined);
+});
+
+// ── callMethod ────────────────────────────────────────────────────────────────
+
+Deno.test("FrappeClient.callMethod() - defaults to POST with a JSON body", async () => {
+  const original = globalThis.fetch;
+  let seen: { url: string; method: string; body: unknown } | undefined;
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    seen = {
+      url: String(url),
+      method: init?.method ?? "GET",
+      body: init?.body,
+    };
+    return jsonResponse({ message: 42 });
+  };
+
+  try {
+    const client = makeClient();
+    const result = await client.callMethod("frappe.client.get_count", {
+      doctype: "Task",
+    });
+    assertEquals(result, 42);
+    assertEquals(
+      seen?.url,
+      "http://localhost:8000/api/method/frappe.client.get_count",
+    );
+    assertEquals(seen?.method, "POST");
+    assertEquals(seen?.body, JSON.stringify({ doctype: "Task" }));
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.callMethod() - GET encodes args into the query string", async () => {
+  const original = globalThis.fetch;
+  let seen: { url: string; method: string; body: unknown } | undefined;
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    seen = {
+      url: String(url),
+      method: init?.method ?? "GET",
+      body: init?.body,
+    };
+    return jsonResponse({ message: { ok: true } });
+  };
+
+  try {
+    const client = makeClient();
+    const result = await client.callMethod(
+      "my_app.api.status",
+      { doctype: "Task", limit: 5 },
+      "GET",
+    );
+    assertEquals(result, { ok: true });
+    assertEquals(seen?.method, "GET");
+    assertEquals(seen?.body, undefined);
+    const url = new URL(seen!.url);
+    assertEquals(url.pathname, "/api/method/my_app.api.status");
+    assertEquals(url.searchParams.get("doctype"), "Task");
+    assertEquals(url.searchParams.get("limit"), "5");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.callMethod() - GET with no args omits the query string", async () => {
+  const original = globalThis.fetch;
+  let seenUrl: string | undefined;
+  globalThis.fetch = async (
+    url: string | URL | Request,
+  ): Promise<Response> => {
+    seenUrl = String(url);
+    return jsonResponse({ message: null });
+  };
+
+  try {
+    const client = makeClient();
+    await client.callMethod("my_app.api.ping", {}, "GET");
+    assertEquals(seenUrl, "http://localhost:8000/api/method/my_app.api.ping");
+  } finally {
+    globalThis.fetch = original;
+  }
 });

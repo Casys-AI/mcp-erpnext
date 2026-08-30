@@ -17,12 +17,13 @@ falling back.
 
 Always required, regardless of transport (stdio or HTTP).
 
-| Variable                   | Type                 | Default             | Required | Notes                                                                                                                  |
-| -------------------------- | -------------------- | ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `ERPNEXT_URL`              | string (URL)         | —                   | **Yes**  | Base URL of the ERPNext instance, e.g. `http://localhost:8000`. No trailing slash.                                     |
-| `ERPNEXT_API_KEY`          | string               | —                   | **Yes**  | API key from ERPNext User Settings → API Access.                                                                       |
-| `ERPNEXT_API_SECRET`       | string               | —                   | **Yes**  | API secret paired with the key above.                                                                                  |
-| `ERPNEXT_MAX_UPLOAD_BYTES` | non-negative integer | `10485760` (10 MiB) | No       | Upper bound in bytes for file uploads. Must be a positive integer; invalid or missing values fall back to the default. |
+| Variable                   | Type                     | Default             | Required | Notes                                                                                                                                                                                                             |
+| -------------------------- | ------------------------ | ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_URL`              | string (URL)             | —                   | **Yes**  | Base URL of the ERPNext instance, e.g. `http://localhost:8000`. No trailing slash.                                                                                                                                |
+| `ERPNEXT_API_KEY`          | string                   | —                   | **Yes**  | API key from ERPNext User Settings → API Access.                                                                                                                                                                  |
+| `ERPNEXT_API_SECRET`       | string                   | —                   | **Yes**  | API secret paired with the key above.                                                                                                                                                                             |
+| `ERPNEXT_MAX_UPLOAD_BYTES` | non-negative integer     | `10485760` (10 MiB) | No       | Upper bound in bytes for file uploads. Must be a positive integer; invalid or missing values fall back to the default.                                                                                            |
+| `ERPNEXT_METHOD_ALLOWLIST` | string (comma-separated) | — (deny-by-default) | No       | Gates `erpnext_method_call`. Each entry is an exact dotted method path or a `prefix.*` wildcard; `*` allows any method. Unset or blank means no method is callable. Read per call, not cached at client creation. |
 
 ---
 
@@ -65,7 +66,9 @@ set.
 
 <!-- Maintainer source references (not user-facing):
   ERPNEXT_URL / ERPNEXT_API_KEY / ERPNEXT_API_SECRET / ERPNEXT_MAX_UPLOAD_BYTES:
-    src/api/frappe-client.ts:102 (DEFAULT_MAX_UPLOAD_BYTES), :647-673 (getFrappeClient)
+    src/api/frappe-client.ts (DEFAULT_MAX_UPLOAD_BYTES, getFrappeClient)
+  ERPNEXT_METHOD_ALLOWLIST:
+    src/tools/method-allowlist.ts (loadMethodAllowlist, isMethodAllowed)
   MCP_MRTR_SIGNING_KEY:
     src/mrtr/config.ts:23-32 (loadMrtrConfig, regex validation)
   MCP_AUTH_TOKEN / MCP_AUTH_TOKENS / MCP_OAUTH_JWKS_URL:

@@ -1,4 +1,4 @@
-# Tools Reference (126)
+# Tools Reference (127)
 
 Full reference for all ERPNext MCP tools. See [README](../README.md) for
 overview.
@@ -153,25 +153,37 @@ overview.
 | `erpnext_asset_maintenance_get`  | Asset Maintenance | Get with maintenance tasks                            |
 | `erpnext_asset_category_list`    | Asset Category    | List all categories                                   |
 
-## Generic Operations (12) → doc-viewer / doclist-viewer
+## Generic Operations (13) → doc-viewer / doclist-viewer
 
-| Tool                    | Operation | Notes                                                   |
-| ----------------------- | --------- | ------------------------------------------------------- |
-| `erpnext_doc_create`    | Create    | Any DocType — essential for master data setup           |
-| `erpnext_doc_get`       | Get       | Any document by DocType + name                          |
-| `erpnext_doc_list`      | List      | Any DocType with fields, filters, limit, order_by       |
-| `erpnext_doc_update`    | Update    | Partial patch — pass only fields to change              |
-| `erpnext_doc_delete`    | Delete    | Draft documents only                                    |
-| `erpnext_doc_submit`    | Submit    | Any submittable document                                |
-| `erpnext_doc_cancel`    | Cancel    | Any submitted document                                  |
-| `erpnext_doc_assign`    | Assign    | Native assignment (ToDo + notification) to users        |
-| `erpnext_doc_unassign`  | Unassign  | Remove one user's native assignment                     |
-| `erpnext_file_list`     | List      | Read attachments and native File metadata               |
-| `erpnext_file_upload`   | Upload    | Attach base64 data as a native File                     |
-| `erpnext_file_download` | Download  | App-only, authenticated and bounded attachment download |
+| Tool                    | Operation | Notes                                                                    |
+| ----------------------- | --------- | ------------------------------------------------------------------------ |
+| `erpnext_doc_create`    | Create    | Any DocType — essential for master data setup                            |
+| `erpnext_doc_get`       | Get       | Any document by DocType + name                                           |
+| `erpnext_doc_list`      | List      | Any DocType with fields, filters, limit, order_by                        |
+| `erpnext_doc_update`    | Update    | Partial patch — pass only fields to change                               |
+| `erpnext_doc_delete`    | Delete    | Draft documents only                                                     |
+| `erpnext_doc_submit`    | Submit    | Any submittable document                                                 |
+| `erpnext_doc_cancel`    | Cancel    | Any submitted document                                                   |
+| `erpnext_doc_assign`    | Assign    | Native assignment (ToDo + notification) to users                         |
+| `erpnext_doc_unassign`  | Unassign  | Remove one user's native assignment                                      |
+| `erpnext_file_list`     | List      | Read attachments and native File metadata                                |
+| `erpnext_file_upload`   | Upload    | Attach base64 data as a native File                                      |
+| `erpnext_file_download` | Download  | App-only, authenticated and bounded attachment download                  |
+| `erpnext_method_call`   | Call      | Escape hatch for whitelisted Frappe methods (deny-by-default, see below) |
 
 `erpnext_file_list` requires `attached_to_doctype` and `attached_to_name`. Its
 optional `limit` is an integer from 1 to 500 and defaults to 50.
+
+`erpnext_method_call` calls `/api/method/{method}` directly for behaviour that
+is not a plain document write — custom-app `@frappe.whitelist` methods,
+`validate` hooks that reject a direct field update, or GET-only endpoints. It
+takes `method` (dotted path), optional `args`, optional `http_method`
+(`GET`/`POST`, default `POST`), and optional `invalidate: { doctype, name }` to
+drop a document from the read cache after a mutating call. The method must match
+an entry in `ERPNEXT_METHOD_ALLOWLIST` — an exact path or a `prefix.*` wildcard
+— or the call is rejected before it reaches ERPNext; the variable is unset by
+default, so no method is callable until configured. See
+[environment-variables.md](./environment-variables.md).
 
 `erpnext_file_upload` requires `file_name`, `content_base64`,
 `attached_to_doctype`, and `attached_to_name`; `attached_to_field` is optional.

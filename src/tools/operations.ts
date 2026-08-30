@@ -23,6 +23,11 @@ import {
   removeAssignment,
   validateAssignees,
 } from "./assignment.ts";
+import {
+  isMethodAllowed,
+  isValidMethodPath,
+  loadMethodAllowlist,
+} from "./method-allowlist.ts";
 
 function bytesToBase64(bytes: Uint8Array): string {
   const chunkSize = 32 * 1024;
@@ -844,6 +849,121 @@ export const operationsTools: ErpNextTool[] = [
         message: `${assignee} unassigned from ${doctype} ${name}`,
         assignment: unassignment,
       };
+    },
+  },
+
+  // ── Method Escape Hatch ────────────────────────────────────────────────────
+
+  {
+    name: "erpnext_method_call",
+    description:
+      "Call a whitelisted Frappe method directly (POST or GET /api/method/{method}). " +
+      "Escape hatch for behaviour that is not a plain document write: custom-app " +
+      "@frappe.whitelist methods, validate hooks that reject direct field updates, " +
+      "and GET-only endpoints. Deny-by-default: the method must match an entry in " +
+      "ERPNEXT_METHOD_ALLOWLIST (exact dotted path or 'prefix.*' wildcard), or the " +
+      "call is rejected before it reaches ERPNext. Set ERPNEXT_METHOD_ALLOWLIST=* " +
+      "to allow any method for a fully open session.",
+    category: "operations",
+    inputSchema: {
+      type: "object",
+      properties: {
+        method: {
+          type: "string",
+          description:
+            "Dotted path to the whitelisted method, e.g. 'frappe.client.get_count' " +
+            "or 'my_app.api.reconcile'.",
+          minLength: 1,
+        },
+        args: {
+          type: "object",
+          description: "Keyword arguments passed to the method.",
+        },
+        http_method: {
+          type: "string",
+          enum: ["GET", "POST"],
+          description:
+            "HTTP verb to use. Defaults to POST. Use GET for methods declared " +
+            '@frappe.whitelist(methods=["GET"]), which reject POST.',
+        },
+        invalidate: {
+          type: "object",
+          description:
+            "Optional { doctype, name } to drop from the read cache after a " +
+            "mutating call, so the next read reflects the method's side effects.",
+          properties: {
+            doctype: { type: "string", minLength: 1 },
+            name: { type: "string", minLength: 1 },
+          },
+          required: ["doctype", "name"],
+        },
+      },
+      required: ["method"],
+    },
+    handler: async (input, ctx) => {
+      if (typeof input.method !== "string" || !input.method.trim()) {
+        throw new Error(
+          "[erpnext_method_call] 'method' must be a non-empty dotted path",
+        );
+      }
+      const method = input.method.trim();
+      if (!isValidMethodPath(method)) {
+        throw new Error(
+          `[erpnext_method_call] 'method' is not a valid dotted path: '${method}'`,
+        );
+      }
+
+      const allowlist = loadMethodAllowlist();
+      if (!isMethodAllowed(method, allowlist)) {
+        throw new Error(
+          `[erpnext_method_call] '${method}' is not permitted. Add it (or a ` +
+            "'prefix.*' covering it) to ERPNEXT_METHOD_ALLOWLIST, or set " +
+            "ERPNEXT_METHOD_ALLOWLIST=* to allow any method.",
+        );
+      }
+
+      if (
+        input.args !== undefined &&
+        (typeof input.args !== "object" || input.args === null ||
+          Array.isArray(input.args))
+      ) {
+        throw new Error(
+          "[erpnext_method_call] 'args' must be an object of keyword arguments",
+        );
+      }
+      const args = (input.args as Record<string, unknown> | undefined) ?? {};
+
+      let httpMethod: "GET" | "POST" = "POST";
+      if (input.http_method !== undefined) {
+        if (input.http_method !== "GET" && input.http_method !== "POST") {
+          throw new Error(
+            "[erpnext_method_call] 'http_method' must be 'GET' or 'POST'",
+          );
+        }
+        httpMethod = input.http_method;
+      }
+
+      let invalidate: { doctype: string; name: string } | undefined;
+      if (input.invalidate !== undefined) {
+        const inv = input.invalidate as Record<string, unknown>;
+        if (
+          typeof inv?.doctype !== "string" || !inv.doctype.trim() ||
+          typeof inv?.name !== "string" || !inv.name.trim()
+        ) {
+          throw new Error(
+            "[erpnext_method_call] 'invalidate' requires non-empty 'doctype' and 'name'",
+          );
+        }
+        invalidate = { doctype: inv.doctype.trim(), name: inv.name.trim() };
+      }
+
+      const result = await ctx.client.callMethod(method, args, httpMethod);
+
+      if (invalidate) {
+        ctx.client.invalidate(invalidate.doctype, invalidate.name);
+      }
+
+      return { data: result };
     },
   },
 ];

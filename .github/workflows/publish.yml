@@ -47,13 +47,14 @@ jobs:
             exit 1
           fi
 
-          DOC_VIEWER_VERSION=$(node -e '
-            const source = require("node:fs").readFileSync("src/ui/doc-viewer/src/DocViewer.tsx", "utf8");
-            const match = source.match(/version:\s*"([^"]+)"/);
-            process.stdout.write(match ? match[1] : "");
-          ')
-          if [ "$DOC_VIEWER_VERSION" != "$VERSION" ]; then
-            echo "::error::DocViewer announces $DOC_VIEWER_VERSION to the host, not $VERSION"
+          # Un viewer annonce sa version applicative a l'hote, pas celle du
+          # paquet. DocViewer suivait la preversion et s'est retrouve deux
+          # releases en arriere ; la convention des sept autres est une version
+          # propre au viewer, qu'aucune release ne fait deriver.
+          TRACKING=$(grep -rlE 'version: "[0-9][^"]*-' src/ui/*/src/*.tsx || true)
+          if [ -n "$TRACKING" ]; then
+            echo "::error::viewer declares a prerelease version: $TRACKING"
+            echo "A viewer App version is its own, not the package release."
             exit 1
           fi
 

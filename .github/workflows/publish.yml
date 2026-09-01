@@ -47,6 +47,34 @@ jobs:
             exit 1
           fi
 
+          DOC_VIEWER_VERSION=$(node -e '
+            const source = require("node:fs").readFileSync("src/ui/doc-viewer/src/DocViewer.tsx", "utf8");
+            const match = source.match(/version:\s*"([^"]+)"/);
+            process.stdout.write(match ? match[1] : "");
+          ')
+          if [ "$DOC_VIEWER_VERSION" != "$VERSION" ]; then
+            echo "::error::DocViewer announces $DOC_VIEWER_VERSION to the host, not $VERSION"
+            exit 1
+          fi
+
+          # Sur une preversion les README portent la commande d'installation
+          # epinglee. Deux betas ont ete publiees avec un README en retard : le
+          # preflight local qui verifie ca n'est pas execute par ce workflow.
+          if [[ "$VERSION" == *-* ]]; then
+            for readme in README.md README.zh-TW.md; do
+              STALE=$(grep -oE "@casys/mcp-erpnext@[0-9][A-Za-z0-9.-]*[A-Za-z0-9]" "$readme" \
+                | grep -vFx "@casys/mcp-erpnext@$VERSION" | sort -u | tr '\n' ' ')
+              if [ -n "$STALE" ]; then
+                echo "::error::$readme pins ${STALE}instead of $VERSION"
+                exit 1
+              fi
+              if ! grep -qF "@casys/mcp-erpnext@$VERSION" "$readme"; then
+                echo "::error::$readme documents no install command for $VERSION"
+                exit 1
+              fi
+            done
+          fi
+
           if [ "$GITHUB_REF" != "refs/tags/v$VERSION" ]; then
             echo "::error::Publish must run from refs/tags/v$VERSION, got $GITHUB_REF"
             exit 1

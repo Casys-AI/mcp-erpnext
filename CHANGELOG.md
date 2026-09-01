@@ -2,6 +2,30 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.1.0-beta.6] - 2026-09-01
+
+### Changed
+
+- **Installing the 3.1 beta follows a channel, not a pinned build.** npm/Node
+  uses `@casys/mcp-erpnext@next`; Deno uses
+  `jsr:@casys/mcp-erpnext@^3.1.0-beta`. JSR has no dist-tags, hence the range
+  there. Exact versions remain in this changelog.
+- The generic document viewer now declares its own application version
+  (`1.0.0`), like the other seven MCP Apps, instead of echoing the package
+  prerelease.
+
+### Fixed
+
+- Opening a document-list detail near the bottom of the frame now brings the
+  panel into view. The viewer scrolls only its internal container, never the
+  host iframe, waits for the loaded document rather than the loading skeleton,
+  and drops the smooth behaviour when the user prefers reduced motion.
+- Layout density is decided before the first paint from both container width and
+  pointer type, so a narrow touch iframe no longer paints the stacked panel
+  layout before settling on mobile.
+- A detail whose row leaves the current page, or disappears from the data, now
+  closes instead of leaving an unmounted panel with stale content.
+
 ## [3.1.0-beta.5] - 2026-08-30
 
 ### Added

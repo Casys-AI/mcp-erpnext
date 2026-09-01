@@ -29,6 +29,7 @@ import type { DoclistData } from "./types";
 import type { DoclistState, Row } from "./useDoclist";
 import { canCallViewerTool } from "../viewer-tools";
 import { doclistDetailPanelId } from "./detail-panel.ts";
+import { nearestScrollDelta } from "./scroll-nearest.ts";
 
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 const CANONICAL_READBACK_DELAY_MS = 1_500;
@@ -96,7 +97,7 @@ export function DoclistBody(
   },
 ) {
   const t = useT();
-  const { rows, rowAction: payloadRowAction, expandedId } = list;
+  const { rows, pageRows, rowAction: payloadRowAction, expandedId } = list;
   const serverTools = app.getHostCapabilities()?.serverTools;
   const rowAction = payloadRowAction && canCallViewerTool(
       serverTools,
@@ -121,6 +122,7 @@ export function DoclistBody(
     setExpandedState(next);
   };
   const pendingRowIdRef = useRef<string | null>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
   useEffect(() => () => {
     pendingRowIdRef.current = null;
   }, []);
@@ -171,14 +173,16 @@ export function DoclistBody(
       setExpanded({ id: null, data: null, loading: false });
       return;
     }
-    const row = rows.find((r, i) =>
+    const row = pageRows.find((r, i) =>
       resolveRowId(r, rowAction, String(i)) === expandedId
     );
     if (!row) {
-      // `rows` porte le jeu complet, pas la page : une ligne absente d'ici a
-      // disparu des données, elle n'est pas seulement sur une autre page. La
-      // garder ouverte laisserait un détail invisible et son contenu périmé en
-      // mémoire, que le retour sur la ligne ne rechargerait pas.
+      // Le tableau ne rend que `pageRows`. Chercher dans `rows` laisserait
+      // `expandedId` posé sur un panneau démonté dès qu'un rafraîchissement
+      // garde la ligne dans les données mais la pousse hors de la page
+      // courante — contenu périmé en mémoire. Changer de page, de filtre
+      // ou de tri efface déjà `expandedId` (voir useDoclist) ; ce trou-ci
+      // est le rafraîchissement.
       pendingRowIdRef.current = null;
       setExpanded({ id: null, data: null, loading: false });
       list.setExpandedId(null);
@@ -256,22 +260,39 @@ export function DoclistBody(
         }
       }
     })();
-  }, [expandedId, rows, rowAction, fixture, data.doctype]);
+  }, [
+    expandedId,
+    // Pas `pageRows` : c'est un `.slice` neuf à chaque render, et
+    // `setExpanded(null)` relancerait l'effet en boucle. `rows` change
+    // au rafraîchissement, c'est le signal qui nous concerne.
+    rows,
+    rowAction,
+    fixture,
+    data.doctype,
+  ]);
 
-  // Un détail qui s'ouvre sous le pli n'existe pas pour qui l'a demandé : la
-  // ligne reste visible, son panneau est hors écran, et rien ne le signale.
-  // `nearest` ne déplace rien quand le panneau tient déjà dans le cadre.
+  // Un détail sous le pli n'existe pas pour qui l'a demandé. On scrolle le
+  // conteneur interne seulement : `scrollIntoView` remonterait jusqu'à
+  // l'iframe hôte. `expanded.loading` est dans les deps — sur le chemin
+  // asynchrone le premier passage vise le squelette (144 px) ; quand
+  // l'enveloppe arrive, `id` ne change pas, il faut un second scroll.
   useEffect(() => {
     if (expanded.id === null) return;
     const panel = document.getElementById(doclistDetailPanelId(expanded.id));
-    if (!panel) return;
+    const scroller = scrollerRef.current;
+    if (!panel || !scroller) return;
     const still = typeof matchMedia === "function" &&
       matchMedia("(prefers-reduced-motion: reduce)").matches;
-    panel.scrollIntoView({
-      block: "nearest",
+    const delta = nearestScrollDelta(
+      scroller.getBoundingClientRect(),
+      panel.getBoundingClientRect(),
+    );
+    if (delta === 0) return;
+    scroller.scrollTo({
+      top: scroller.scrollTop + delta,
       behavior: still ? "auto" : "smooth",
     });
-  }, [expanded.id]);
+  }, [expanded.id, expanded.loading]);
 
   function rowInteractionTarget(
     row: Row,
@@ -465,7 +486,10 @@ export function DoclistBody(
       )}
       {error && <StateMessage tone="bad">{error}</StateMessage>}
       <div class="flex min-h-0 flex-1 flex-col">
-        <div class="scroll-slim min-h-0 flex-1 overflow-y-auto">
+        <div
+          ref={scrollerRef}
+          class="scroll-slim min-h-0 flex-1 overflow-y-auto"
+        >
           <DoclistTable
             columns={list.tableColumns}
             rows={list.pageRows}

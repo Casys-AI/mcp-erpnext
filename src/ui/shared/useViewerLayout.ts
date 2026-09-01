@@ -45,14 +45,22 @@ export function layoutFromSearch(
  * c'est lui qui tranche (voir useViewerLayout). `matchMedia` interroge
  * l'appareil qui affiche la fenêtre, pas le contexte que l'hôte donne à
  * l'iframe — les deux peuvent différer.
+ *
+ * Lecture synchrone au premier render : un `false` initial peindrait `panel`
+ * (lignes empilées) avant `mobile` (tableau) sur un téléphone étroit sans
+ * `deviceCapabilities` d'hôte. Ce n'est pas deux densités du même tableau.
  */
+function readCoarsePointer(): boolean {
+  return typeof matchMedia === "function" &&
+    matchMedia("(pointer: coarse)").matches;
+}
+
 function useCoarsePointer(): boolean {
-  const [coarse, setCoarse] = useState(false);
+  const [coarse, setCoarse] = useState(readCoarsePointer);
 
   useEffect(() => {
     if (typeof matchMedia !== "function") return;
     const query = matchMedia("(pointer: coarse)");
-    setCoarse(query.matches);
     const onChange = (event: MediaQueryListEvent) => setCoarse(event.matches);
     // Un appareil hybride bascule quand on passe du trackpad à l'écran.
     query.addEventListener("change", onChange);

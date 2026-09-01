@@ -11,8 +11,8 @@
 
 > [!IMPORTANT]
 > **安裝 3.1 Beta：** 在新版 UX 驗證期間，請固定使用預發布版本。npm/Node 請執行
-> `npx -y @casys/mcp-erpnext@3.1.0-beta.3`；Deno 請執行
-> `deno run -A jsr:@casys/mcp-erpnext@3.1.0-beta.3/server`。npm 的浮動標籤為
+> `npx -y @casys/mcp-erpnext@3.1.0-beta.5`；Deno 請執行
+> `deno run -A jsr:@casys/mcp-erpnext@3.1.0-beta.5/server`。npm 的浮動標籤為
 > `@next`。此 Beta 新增通用文件檢視器及附件流程；在取代穩定版部署前，請務必
 > 使用實際的 MCP 主機進行測試。
 

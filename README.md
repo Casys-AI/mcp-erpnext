@@ -11,8 +11,8 @@ English | [繁體中文](README.zh-TW.md)
 
 > [!IMPORTANT]
 > **Installing the 3.1 beta:** pin the prerelease while this UX is being
-> validated. For npm/Node use `npx -y @casys/mcp-erpnext@3.1.0-beta.3`; for Deno
-> use `deno run -A jsr:@casys/mcp-erpnext@3.1.0-beta.3/server`. The moving npm
+> validated. For npm/Node use `npx -y @casys/mcp-erpnext@3.1.0-beta.5`; for Deno
+> use `deno run -A jsr:@casys/mcp-erpnext@3.1.0-beta.5/server`. The moving npm
 > alias is `@next`. The beta adds the generic document viewer and attachment
 > workflows, so test it with the MCP host your users actually run before
 > replacing a stable deployment.

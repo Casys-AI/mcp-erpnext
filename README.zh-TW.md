@@ -10,11 +10,12 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > [!IMPORTANT]
-> **安裝 3.1 Beta：** 在新版 UX 驗證期間，請固定使用預發布版本。npm/Node 請執行
-> `npx -y @casys/mcp-erpnext@3.1.0-beta.3`；Deno 請執行
-> `deno run -A jsr:@casys/mcp-erpnext@3.1.0-beta.3/server`。npm 的浮動標籤為
-> `@next`。此 Beta 新增通用文件檢視器及附件流程；在取代穩定版部署前，請務必
-> 使用實際的 MCP 主機進行測試。
+> **安裝 3.1 Beta：** npm/Node 請執行 `npx -y @casys/mcp-erpnext@next`；Deno
+> 請執行
+> `deno run -A jsr:@casys/mcp-erpnext@^3.1.0-beta/server`。兩者都會跟隨當前的預發布
+> 版本；JSR 沒有 dist-tag，因此使用版本範圍。確切版本請見
+> [CHANGELOG](CHANGELOG.md)。此 Beta 新增通用文件檢視器及附件流程；在取代穩定版
+> 部署前，請務必使用實際的 MCP 主機進行測試。
 
 讓任何相容 MCP 的 AI 智慧代理操作您的 [ERPNext](https://erpnext.com) / Frappe
 執行個體 — 文件、工作流程，以及主機內的互動式檢視器（Claude Desktop、 Claude

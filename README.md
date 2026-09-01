@@ -10,12 +10,13 @@ English | [繁體中文](README.zh-TW.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > [!IMPORTANT]
-> **Installing the 3.1 beta:** pin the prerelease while this UX is being
-> validated. For npm/Node use `npx -y @casys/mcp-erpnext@3.1.0-beta.3`; for Deno
-> use `deno run -A jsr:@casys/mcp-erpnext@3.1.0-beta.3/server`. The moving npm
-> alias is `@next`. The beta adds the generic document viewer and attachment
-> workflows, so test it with the MCP host your users actually run before
-> replacing a stable deployment.
+> **Installing the 3.1 beta:** for npm/Node use
+> `npx -y @casys/mcp-erpnext@next`; for Deno use
+> `deno run -A jsr:@casys/mcp-erpnext@^3.1.0-beta/server`. Both follow the
+> current prerelease — JSR has no dist-tags, hence the range there. Exact
+> versions are in the [CHANGELOG](CHANGELOG.md). The beta adds the generic
+> document viewer and attachment workflows, so test it with the MCP host your
+> users actually run before replacing a stable deployment.
 
 Let any MCP-compatible AI agent operate your [ERPNext](https://erpnext.com) /
 Frappe instance — documents, workflows, and interactive viewers inside the host

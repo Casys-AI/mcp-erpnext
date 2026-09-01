@@ -19,7 +19,7 @@ if [[ "$VERSION" == *-* ]]; then
     # bonne : un README qui cite la version courante ET une ancienne passerait
     # un simple grep, alors que c'est exactement le cas qu'on veut attraper.
     STALE="$(grep -oE "@casys/mcp-erpnext@[0-9][A-Za-z0-9.-]*[A-Za-z0-9]" "$readme" |
-      grep -vFx "@casys/mcp-erpnext@$VERSION" | sort -u | tr '\n' ' ')"
+      grep -vFx "@casys/mcp-erpnext@$VERSION" | sort -u | tr '\n' ' ' || true)"
     if [ -n "$STALE" ]; then
       echo "[release-check] $readme pins ${STALE}instead of $VERSION" >&2
       exit 1

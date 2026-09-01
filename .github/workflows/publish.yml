@@ -64,7 +64,7 @@ jobs:
           if [[ "$VERSION" == *-* ]]; then
             for readme in README.md README.zh-TW.md; do
               STALE=$(grep -oE "@casys/mcp-erpnext@[0-9][A-Za-z0-9.-]*[A-Za-z0-9]" "$readme" \
-                | grep -vFx "@casys/mcp-erpnext@$VERSION" | sort -u | tr '\n' ' ')
+                | grep -vFx "@casys/mcp-erpnext@$VERSION" | sort -u | tr '\n' ' ' || true)
               if [ -n "$STALE" ]; then
                 echo "::error::$readme pins ${STALE}instead of $VERSION"
                 exit 1

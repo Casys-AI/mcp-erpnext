@@ -12,7 +12,7 @@
  * des colonnes — dynamiques, dérivées du DocType — porte le montant.
  */
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { RefObject } from "preact";
 
 /** En deçà, la maquette abandonne le tableau pour des lignes empilées. */
@@ -27,14 +27,17 @@ export function useContainerWidth<T extends HTMLElement>(): [
   // clignoter la vue étroite au premier paint.
   const [width, setWidth] = useState<number | null>(null);
 
-  useEffect(() => {
+  // useLayoutEffect, pas useEffect : la mesure doit être posée avant que le
+  // navigateur peigne. Le ResizeObserver ne livre sa première entrée qu'après
+  // ce paint, et en aval `isNarrow(null)` est faux — un conteneur étroit se
+  // rendrait donc « large » le temps d'une frame, exactement le clignotement
+  // que le null initial cherchait à éviter.
+  useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
 
-    if (typeof ResizeObserver === "undefined") {
-      setWidth(element.getBoundingClientRect().width);
-      return;
-    }
+    setWidth(contentWidth(element));
+    if (typeof ResizeObserver === "undefined") return;
 
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
@@ -45,6 +48,21 @@ export function useContainerWidth<T extends HTMLElement>(): [
   }, []);
 
   return [ref, width];
+}
+
+/**
+ * La largeur de contenu, dans la même boîte que `contentRect`.
+ *
+ * `getBoundingClientRect` compterait la bordure, or la coque en porte une de
+ * 1 px de chaque côté (ui.tsx). La mesure initiale déciderait donc 2 px trop
+ * large et le premier passage du ResizeObserver la corrigerait après le paint
+ * — soit le clignotement qu'on retire ici, dans l'autre sens.
+ */
+function contentWidth(element: HTMLElement): number {
+  const style = getComputedStyle(element);
+  return element.clientWidth -
+    parseFloat(style.paddingLeft) -
+    parseFloat(style.paddingRight);
 }
 
 /** Vrai quand la mesure est faite et que le conteneur est sous le seuil. */

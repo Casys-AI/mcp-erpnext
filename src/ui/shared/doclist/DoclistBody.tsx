@@ -171,11 +171,20 @@ export function DoclistBody(
       setExpanded({ id: null, data: null, loading: false });
       return;
     }
-    if (expandedRef.current.id === expandedId) return;
     const row = rows.find((r, i) =>
       resolveRowId(r, rowAction, String(i)) === expandedId
     );
-    if (!row) return;
+    if (!row) {
+      // `rows` porte le jeu complet, pas la page : une ligne absente d'ici a
+      // disparu des données, elle n'est pas seulement sur une autre page. La
+      // garder ouverte laisserait un détail invisible et son contenu périmé en
+      // mémoire, que le retour sur la ligne ne rechargerait pas.
+      pendingRowIdRef.current = null;
+      setExpanded({ id: null, data: null, loading: false });
+      list.setExpandedId(null);
+      return;
+    }
+    if (expandedRef.current.id === expandedId) return;
     if (fixture || (!rowAction && row._detail)) {
       const envelope = recordOf(
         (row._detail as Row | undefined) ?? row,
@@ -248,6 +257,21 @@ export function DoclistBody(
       }
     })();
   }, [expandedId, rows, rowAction, fixture, data.doctype]);
+
+  // Un détail qui s'ouvre sous le pli n'existe pas pour qui l'a demandé : la
+  // ligne reste visible, son panneau est hors écran, et rien ne le signale.
+  // `nearest` ne déplace rien quand le panneau tient déjà dans le cadre.
+  useEffect(() => {
+    if (expanded.id === null) return;
+    const panel = document.getElementById(doclistDetailPanelId(expanded.id));
+    if (!panel) return;
+    const still = typeof matchMedia === "function" &&
+      matchMedia("(prefers-reduced-motion: reduce)").matches;
+    panel.scrollIntoView({
+      block: "nearest",
+      behavior: still ? "auto" : "smooth",
+    });
+  }, [expanded.id]);
 
   function rowInteractionTarget(
     row: Row,

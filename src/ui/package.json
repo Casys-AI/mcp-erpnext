@@ -23,6 +23,7 @@
     "dev:funnel:fixture": "UI_NAME=funnel-viewer vite --config vite.single.config.mjs --open /?fixture=1"
   },
   "dependencies": {
+    "@casys/mcp-view-components": "^0.7.1",
     "@modelcontextprotocol/ext-apps": "^1.7.1",
     "preact": "^10.28.3",
     "react": "^18.3.1",

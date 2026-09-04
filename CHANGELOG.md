@@ -2,6 +2,17 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- The viewer layout decision (`useViewerLayout`) now comes from
+  `@casys/mcp-view-components/layout` 0.7.1, which carries the same first-paint
+  guarantees as [#29](https://github.com/Casys-AI/mcp-erpnext/pull/29). One edge
+  case differs: a host declaring a non-positive container width (`0`, negative,
+  `NaN`) no longer forces the narrow layout and falls through to the measured
+  width. Every other input resolves to the same layout as before.
+
 ## [3.1.0-beta.6] - 2026-09-01
 
 ### Changed

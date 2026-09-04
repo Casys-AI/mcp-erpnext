@@ -36,7 +36,7 @@ export function ViewerShell(
   { children, class: klass, containerRef, style }: {
     children: ComponentChildren;
     class?: string;
-    /** Cible de mesure pour useContainerWidth — la coquille EST le conteneur. */
+    /** Cible de mesure pour le layout — la coquille EST le conteneur. */
     containerRef?: Ref<HTMLDivElement>;
     /** Bornes dynamiques annoncées par l'hôte MCP. */
     style?: JSX.CSSProperties;

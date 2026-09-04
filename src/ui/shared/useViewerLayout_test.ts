@@ -1,24 +1,20 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 
-Deno.test("coarse pointer is read before the first paint", async () => {
+Deno.test("useViewerLayout delegates to @casys/mcp-view-components/layout and keeps no local matchMedia or ResizeObserver", async () => {
   const source = await Deno.readTextFile(
     new URL("./useViewerLayout.ts", import.meta.url),
   );
-  const hookStart = source.indexOf("function readCoarsePointer");
-  const hookEnd = source.indexOf("function useTouchInput");
-  assertEquals(hookStart >= 0 && hookEnd > hookStart, true);
-  const hook = source.slice(hookStart, hookEnd);
 
-  assertStringIncludes(hook, 'matchMedia("(pointer: coarse)")');
-  assertStringIncludes(hook, "useState(readCoarsePointer)");
+  assertStringIncludes(source, "@casys/mcp-view-components/layout");
+  assertStringIncludes(source, "useKitViewerLayout");
   assertEquals(
-    hook.includes("useState(false)"),
+    source.includes("matchMedia"),
     false,
-    "un false initial peindrait panel puis mobile",
+    "first-paint pointer reads live in the kit",
   );
   assertEquals(
-    hook.includes("setCoarse(query.matches)"),
+    source.includes("ResizeObserver"),
     false,
-    "la lecture initiale ne doit plus vivre dans l'effet",
+    "container measurement lives in the kit",
   );
 });

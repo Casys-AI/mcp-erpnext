@@ -276,3 +276,117 @@ Deno.test("erpnext_user_list - escapes LIKE wildcards in search", async () => {
     ["full_name", "like", "%100\\%\\_done\\\\x%"],
   );
 });
+
+// ── erpnext_setup_check ─────────────────────────────────────────────────────
+
+function makeFullSetupClient(): FrappeClient {
+  return makeMockClient({
+    list: async (doctype: string) => {
+      switch (doctype) {
+        case "Price List":
+          return [
+            { name: "Standard Selling", selling: 1, buying: 0 },
+            { name: "Standard Buying", selling: 0, buying: 1 },
+          ];
+        case "Warehouse":
+          return [{ name: "Stores - AC" }];
+        case "Item Group":
+          return [{ name: "All Item Groups" }];
+        case "UOM":
+          return [{ name: "Nos" }, { name: "Kg" }];
+        default:
+          throw new Error(`Unexpected doctype: ${doctype}`);
+      }
+    },
+  });
+}
+
+Deno.test("erpnext_setup_check - reports ready when everything exists", async () => {
+  const result = await getTool("erpnext_setup_check").handler(
+    { company: "Acme" },
+    makeCtx(makeFullSetupClient()),
+  ) as { ready: boolean; missing: string[] };
+
+  assertEquals(result.ready, true);
+  assertEquals(result.missing, []);
+});
+
+Deno.test("erpnext_setup_check - flags every gap on a bare-bones instance", async () => {
+  const result = await getTool("erpnext_setup_check").handler(
+    { company: "Acme" },
+    makeCtx(makeMockClient({ list: async () => [] })),
+  ) as { ready: boolean; missing: string[] };
+
+  assertEquals(result.ready, false);
+  assertEquals(result.missing, [
+    "selling_price_list",
+    "buying_price_list",
+    "warehouse",
+    "item_group",
+    "uom",
+  ]);
+});
+
+Deno.test("erpnext_setup_check - scopes the warehouse check to the given company", async () => {
+  let capturedFilters: unknown[][] = [];
+  await getTool("erpnext_setup_check").handler(
+    { company: "Acme" },
+    makeCtx(makeMockClient({
+      list: async (doctype: string, options: { filters?: unknown[][] }) => {
+        if (doctype === "Warehouse") capturedFilters = options.filters ?? [];
+        return [];
+      },
+    })),
+  );
+
+  assertEquals(capturedFilters, [["company", "=", "Acme"]]);
+});
+
+Deno.test("erpnext_setup_check - honours a custom required_uoms list", async () => {
+  const result = await getTool("erpnext_setup_check").handler(
+    { company: "Acme", required_uoms: ["Litre"] },
+    makeCtx(makeMockClient({
+      list: async (doctype: string) =>
+        doctype === "UOM" ? [{ name: "Litre" }] : [],
+    })),
+  ) as { checks: Array<{ name: string; ok: boolean }> };
+
+  const uomCheck = result.checks.find((c) => c.name === "uom");
+  assertEquals(uomCheck?.ok, true);
+});
+
+Deno.test("erpnext_setup_check - rejects a missing or empty company", async () => {
+  await assertRejects(
+    () =>
+      getTool("erpnext_setup_check").handler(
+        { company: "  " },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "non-empty string",
+  );
+});
+
+Deno.test("erpnext_setup_check - rejects a non-array required_uoms", async () => {
+  await assertRejects(
+    () =>
+      getTool("erpnext_setup_check").handler(
+        { company: "Acme", required_uoms: "Nos" },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "'required_uoms' must be an array",
+  );
+});
+
+Deno.test("erpnext_setup_check - rejects a required_uoms entry that is not a non-empty string", async () => {
+  await assertRejects(
+    () =>
+      getTool("erpnext_setup_check").handler(
+        { company: "Acme", required_uoms: ["Nos", ""] },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "'required_uoms' must be an array",
+  );
+});

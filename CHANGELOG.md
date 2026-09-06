@@ -4,6 +4,13 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `erpnext_setup_check` — checks a company for the master data transactional
+  documents need (a selling and a buying Price List, at least one Warehouse, at
+  least one Item Group, and a configurable set of UOMs) and reports what's
+  missing, with an actionable fix per gap.
+
 ## [3.1.0-beta.11] - 2026-09-19
 
 ### Added

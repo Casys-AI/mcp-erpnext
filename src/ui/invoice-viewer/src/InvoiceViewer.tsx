@@ -27,6 +27,17 @@ import {
 } from "~/shared/refresh";
 import { StatusBadge } from "./components/StatusBadge";
 import { ItemDetailPanel } from "./components/ItemDetailPanel";
+import { RoundingNote } from "./RoundingNote";
+import {
+  type ActionFeedbackKind,
+  buildDocSubmitArguments,
+  formatPurchaseInvoiceAmount,
+  interpretPurchaseInvoiceSubmitResult,
+  interpretSubmitTransportFailure,
+  PURCHASE_INVOICE_DOCTYPE,
+  purchaseInvoiceEffectiveTotal,
+  resolveInvoiceDoctype,
+} from "./submission";
 
 // ============================================================================
 // MCP App
@@ -50,6 +61,7 @@ interface InvoiceItem {
 
 interface InvoiceData {
   name: string;
+  doctype?: string;
   customer?: string;
   customer_name?: string;
   supplier?: string;
@@ -64,6 +76,10 @@ interface InvoiceData {
   total_taxes_and_charges?: number;
   outstanding_amount?: number;
   currency?: string;
+  disable_rounded_total?: number;
+  rounded_total?: number;
+  rounding_adjustment?: number;
+  base_rounded_total?: number;
   items?: InvoiceItem[];
   contact_email?: string;
   address_display?: string;
@@ -142,12 +158,16 @@ function InvoiceEmptyState() {
 
 function FeedbackBanner(
   { type, message, onDismiss }: {
-    type: "error" | "success";
+    type: ActionFeedbackKind;
     message: string;
     onDismiss?: () => void;
   },
 ) {
-  const isError = type === "error";
+  const tone = type === "error"
+    ? { fg: colors.error, bg: colors.errorDim }
+    : type === "attention"
+    ? { fg: colors.warning, bg: colors.warningDim }
+    : { fg: colors.success, bg: colors.successDim };
   return (
     <div
       style={{
@@ -158,11 +178,9 @@ function FeedbackBanner(
         marginBottom: 12,
         borderRadius: 8,
         fontSize: 12,
-        background: isError ? colors.errorDim : colors.successDim,
-        color: isError ? colors.error : colors.success,
-        border: `1px solid ${
-          isError ? colors.error + "30" : colors.success + "30"
-        }`,
+        background: tone.bg,
+        color: tone.fg,
+        border: `1px solid ${colors.border}`,
       }}
     >
       <span>{message}</span>
@@ -222,7 +240,11 @@ export function InvoiceViewer() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionFeedbackType, setActionFeedbackType] = useState<
+    ActionFeedbackKind
+  >("success");
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [roundingOpen, setRoundingOpen] = useState(false);
   const dataRef = useRef<InvoiceData | null>(null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshInFlightRef = useRef(false);
@@ -295,6 +317,22 @@ export function InvoiceViewer() {
     }
   }
 
+  function applyActionFeedback(
+    kind: ActionFeedbackKind,
+    message: string,
+    refresh: boolean,
+    invoice?: Record<string, unknown>,
+  ) {
+    setActionFeedbackType(kind);
+    setActionMessage(message);
+    if (invoice && typeof invoice.name === "string") {
+      hydrateData(invoice as unknown as InvoiceData);
+    }
+    if (refresh) {
+      setTimeout(() => void requestRefresh({ ignoreInterval: true }), 1500);
+    }
+  }
+
   async function callAction(
     key: string,
     toolName: string,
@@ -302,6 +340,8 @@ export function InvoiceViewer() {
     successMsg: string,
   ) {
     if (!app.getHostCapabilities()?.serverTools) return;
+    const isPiSubmit = toolName === "erpnext_doc_submit" &&
+      args.doctype === PURCHASE_INVOICE_DOCTYPE;
     setActionLoading(key);
     setActionMessage(null);
     try {
@@ -309,15 +349,33 @@ export function InvoiceViewer() {
         name: toolName,
         arguments: args,
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
+      if (isPiSubmit) {
+        const requestedName = typeof args.name === "string" ? args.name : "";
+        const feedback = interpretPurchaseInvoiceSubmitResult(
+          result,
+          requestedName,
+        );
+        applyActionFeedback(
+          feedback.kind,
+          feedback.message,
+          feedback.refresh,
+          feedback.invoice,
+        );
+        return;
+      }
       if (result.isError) {
         const text = extractToolResultText(result);
-        setActionMessage(text ?? "Action failed");
+        applyActionFeedback("error", text ?? "Action failed", false);
       } else {
-        setActionMessage(successMsg);
-        setTimeout(() => void requestRefresh({ ignoreInterval: true }), 1500);
+        applyActionFeedback("success", successMsg, true);
       }
-    } catch {
-      setActionMessage("Action failed");
+    } catch (cause) {
+      if (isPiSubmit) {
+        const feedback = interpretSubmitTransportFailure(cause);
+        applyActionFeedback(feedback.kind, feedback.message, feedback.refresh);
+      } else {
+        applyActionFeedback("error", "Action failed", false);
+      }
     } finally {
       setActionLoading(null);
     }
@@ -364,6 +422,16 @@ export function InvoiceViewer() {
     setExpandedIdx(null);
   }, [data?.name]);
 
+  useEffect(() => {
+    setRoundingOpen(false);
+  }, [
+    data?.name,
+    data?.disable_rounded_total,
+    data?.rounded_total,
+    data?.rounding_adjustment,
+    data?.grand_total,
+  ]);
+
   if (loading) {
     return (
       <div
@@ -389,7 +457,10 @@ export function InvoiceViewer() {
 
   const ccy = data.currency ?? "USD";
   const isCustomer = !!data.customer;
-  const doctype = isCustomer ? "Sales Invoice" : "Purchase Invoice";
+  const doctype = resolveInvoiceDoctype(data);
+  const piGross = doctype === PURCHASE_INVOICE_DOCTYPE
+    ? purchaseInvoiceEffectiveTotal(data)
+    : null;
   const partyName = data.customer_name ?? data.customer ?? data.supplier_name ??
     data.supplier ?? "—";
   const outstanding = data.outstanding_amount ?? 0;
@@ -477,8 +548,11 @@ export function InvoiceViewer() {
             onDismiss={() => setError(null)}
           />
         )}
-        {!error && actionMessage && (
-          <FeedbackBanner type="success" message={actionMessage} />
+        {actionMessage && (
+          <FeedbackBanner
+            type={actionFeedbackType}
+            message={actionMessage}
+          />
         )}
 
         {/* Parties — two columns */}
@@ -727,11 +801,15 @@ export function InvoiceViewer() {
             display: "flex",
             justifyContent: "flex-end",
             marginBottom: 16,
+            width: "100%",
+            minWidth: 0,
           }}
         >
           <div
             style={{
-              minWidth: 220,
+              flex: "1 1 220px",
+              maxWidth: 360,
+              minWidth: 0,
               borderTop: `1px solid ${colors.border}`,
               paddingTop: 8,
             }}
@@ -743,8 +821,32 @@ export function InvoiceViewer() {
             <TotalRow
               label="Grand Total"
               value={formatCurrency(data.grand_total, ccy)}
-              bold
+              bold={!piGross?.ok}
             />
+            {piGross?.ok && piGross.roundingAdjustment !== 0 && (
+              <RoundingNote
+                calculatedTotal={data.grand_total}
+                roundingAdjustment={piGross.roundingAdjustment}
+                invoiceTotal={piGross.amount}
+                currency={piGross.currency}
+                isDraft={isDraft}
+                open={roundingOpen}
+                onToggle={() => setRoundingOpen((current) => !current)}
+                panelId={`invoice-rounding-note-${
+                  data.name.replace(/[^A-Za-z0-9_-]/g, "-")
+                }`}
+              />
+            )}
+            {piGross?.ok && piGross.roundingAdjustment === 0 && (
+              <TotalRow
+                label="Invoice Total"
+                value={formatPurchaseInvoiceAmount(
+                  piGross.amount,
+                  piGross.currency,
+                )}
+                bold
+              />
+            )}
           </div>
         </div>
 
@@ -761,15 +863,30 @@ export function InvoiceViewer() {
           >
             {isDraft && (
               <ActionButton
-                label="Submit"
+                label={piGross?.ok
+                  ? `Submit ${
+                    formatPurchaseInvoiceAmount(
+                      piGross.amount,
+                      piGross.currency,
+                    )
+                  }`
+                  : "Submit"}
                 variant="success"
                 confirm
                 loading={actionLoading === "submit"}
-                onClick={() =>
-                  callAction("submit", "erpnext_doc_submit", {
-                    doctype,
-                    name: data.name,
-                  }, "Submitted")}
+                onClick={() => {
+                  const built = buildDocSubmitArguments(data);
+                  if (!built.ok) {
+                    applyActionFeedback("error", built.error, false);
+                    return;
+                  }
+                  void callAction(
+                    "submit",
+                    "erpnext_doc_submit",
+                    built.args,
+                    "Submitted",
+                  );
+                }}
               />
             )}
             {isSubmitted && (

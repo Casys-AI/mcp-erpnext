@@ -28,6 +28,19 @@ import {
   isValidMethodPath,
   loadMethodAllowlist,
 } from "./method-allowlist.ts";
+import {
+  isPurchaseInvoiceDoctype,
+  withPurchaseInvoiceAccountHints,
+} from "./purchase-invoice-hints.ts";
+
+async function withPiAccountHintsIfNeeded<T>(
+  doctype: unknown,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return isPurchaseInvoiceDoctype(doctype)
+    ? await withPurchaseInvoiceAccountHints(fn)
+    : await fn();
+}
 
 export const operationsTools: ErpNextTool[] = [
   // ── File Attachments ───────────────────────────────────────────────────────
@@ -173,9 +186,13 @@ export const operationsTools: ErpNextTool[] = [
         );
       }
 
-      const doc = await ctx.client.create(
-        input.doctype as string,
-        input.data as Record<string, unknown>,
+      const doc = await withPiAccountHintsIfNeeded(
+        input.doctype,
+        () =>
+          ctx.client.create(
+            input.doctype as string,
+            input.data as Record<string, unknown>,
+          ),
       );
 
       return {
@@ -228,10 +245,14 @@ export const operationsTools: ErpNextTool[] = [
         );
       }
 
-      const doc = await ctx.client.update(
-        input.doctype as string,
-        input.name as string,
-        input.data as Record<string, unknown>,
+      const doc = await withPiAccountHintsIfNeeded(
+        input.doctype,
+        () =>
+          ctx.client.update(
+            input.doctype as string,
+            input.name as string,
+            input.data as Record<string, unknown>,
+          ),
       );
 
       return {
@@ -316,29 +337,34 @@ export const operationsTools: ErpNextTool[] = [
         throw new Error("[erpnext_doc_submit] 'name' is required");
       }
 
-      // Fetch fresh doc first — frappe.client.submit requires `modified` for optimistic
-      // locking, so this read must bypass the cache even if a recent copy is cached.
-      const doc = await ctx.client.get(
-        input.doctype as string,
-        input.name as string,
-        { skipCache: true },
-      );
-      const docWithDoctype = { ...doc, doctype: input.doctype as string };
-      const patchedDoc = withRoundedTotalFallback(docWithDoctype);
-      const result = await ctx.client.callMethod("frappe.client.submit", {
-        doc: patchedDoc,
+      return await withPiAccountHintsIfNeeded(input.doctype, async () => {
+        // Fetch fresh doc first — frappe.client.submit requires `modified` for optimistic
+        // locking, so this read must bypass the cache even if a recent copy is cached.
+        const doc = await ctx.client.get(
+          input.doctype as string,
+          input.name as string,
+          { skipCache: true },
+        );
+        const docWithDoctype = { ...doc, doctype: input.doctype as string };
+        const patchedDoc = withRoundedTotalFallback(docWithDoctype);
+        const result = await ctx.client.callMethod("frappe.client.submit", {
+          doc: patchedDoc,
+        });
+        ctx.client.invalidate(input.doctype as string, input.name as string);
+
+        const warnings = roundedTotalFallbackWarning(
+          docWithDoctype,
+          patchedDoc,
+        );
+
+        return {
+          data: result,
+          message: `${input.doctype} ${input.name} submitted successfully`,
+          doctype: input.doctype,
+          name: input.name,
+          ...(warnings.length > 0 ? { warnings } : {}),
+        };
       });
-      ctx.client.invalidate(input.doctype as string, input.name as string);
-
-      const warnings = roundedTotalFallbackWarning(docWithDoctype, patchedDoc);
-
-      return {
-        data: result,
-        message: `${input.doctype} ${input.name} submitted successfully`,
-        doctype: input.doctype,
-        name: input.name,
-        ...(warnings.length > 0 ? { warnings } : {}),
-      };
     },
   },
 

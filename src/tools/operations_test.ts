@@ -6,8 +6,9 @@
  * @module lib/erpnext/tests/tools/operations_test
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assertStrictEquals } from "@std/assert";
 import { operationsTools } from "./operations.ts";
+import { FrappeAPIError } from "../api/frappe-client.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
 
@@ -695,4 +696,283 @@ Deno.test("erpnext_method_call - rejects an incomplete invalidate object", async
     Error,
     "'invalidate' requires non-empty",
   );
+});
+
+// ── Purchase Invoice 417 hints (Issue 34) ────────────────────────────────────
+
+Deno.test("erpnext_doc_create - Purchase Invoice without rounding flag is accepted", async () => {
+  let captured: Record<string, unknown> = {};
+  const result = await getTool("erpnext_doc_create").handler(
+    { doctype: "Purchase Invoice", data: { supplier: "Acme" } },
+    makeCtx(makeMockClient({
+      create: async (_doctype: string, data: Record<string, unknown>) => {
+        captured = data;
+        return { name: "PINV-001", ...data };
+      },
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(captured, { supplier: "Acme" });
+  assertEquals(
+    result.message,
+    "Purchase Invoice PINV-001 created successfully",
+  );
+});
+
+Deno.test("erpnext_doc_create - optional disable_rounded_total passes unchanged", async () => {
+  for (const rounding of [0, 1] as const) {
+    let captured: Record<string, unknown> = {};
+    await getTool("erpnext_doc_create").handler(
+      {
+        doctype: "Purchase Invoice",
+        data: { supplier: "Acme", disable_rounded_total: rounding },
+      },
+      makeCtx(makeMockClient({
+        create: async (_doctype: string, data: Record<string, unknown>) => {
+          captured = data;
+          return { name: "PINV-001", ...data };
+        },
+      })),
+    );
+    assertEquals(captured.disable_rounded_total, rounding);
+  }
+});
+
+Deno.test("erpnext_doc_create/update/submit - public schema stays generic", () => {
+  const create = getTool("erpnext_doc_create");
+  const update = getTool("erpnext_doc_update");
+  const submit = getTool("erpnext_doc_submit");
+  const createData = String(
+    (create.inputSchema.properties?.data as { description?: string })
+      ?.description ?? "",
+  );
+  const updateData = String(
+    (update.inputSchema.properties?.data as { description?: string })
+      ?.description ?? "",
+  );
+  const submitProps = submit.inputSchema.properties ?? {};
+
+  assertEquals(create.description.includes("disable_rounded_total"), false);
+  assertEquals(createData.includes("Purchase Invoice"), false);
+  assertEquals(updateData.includes("Purchase Invoice"), false);
+  assertEquals("expected_total" in submitProps, false);
+  assertEquals("expected_currency" in submitProps, false);
+  assertEquals(submit.inputSchema.required, ["doctype", "name"]);
+});
+
+Deno.test("erpnext_doc_submit - Purchase Invoice with only doctype/name matches baseline keys", async () => {
+  const tool = getTool("erpnext_doc_submit");
+  const so = await tool.handler(
+    { doctype: "Sales Order", name: "SO-001" },
+    makeCtx(makeMockClient({
+      get: async () => ({ name: "SO-001", modified: "2026-01-01 00:00:00" }),
+      callMethod: async () => ({ name: "SO-001", docstatus: 1 }),
+    })),
+  ) as Record<string, unknown>;
+  const pi = await tool.handler(
+    { doctype: "Purchase Invoice", name: "PINV-001" },
+    makeCtx(makeMockClient({
+      get: async (
+        _doctype: string,
+        _name: string,
+        opts?: { skipCache?: boolean },
+      ) => {
+        assertEquals(opts?.skipCache, true);
+        return { name: "PINV-001", modified: "2026-01-01 00:00:00" };
+      },
+      callMethod: async (
+        _method: string,
+        args: { doc: Record<string, unknown> },
+      ) => {
+        assertEquals(args.doc.modified, "2026-01-01 00:00:00");
+        return { name: "PINV-001", docstatus: 1 };
+      },
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(Object.keys(pi).sort(), Object.keys(so).sort());
+  assertEquals(pi.message, "Purchase Invoice PINV-001 submitted successfully");
+  assertEquals("total_verification" in pi, false);
+});
+
+Deno.test("erpnext_doc_submit - extra expected_* fields are ignored", async () => {
+  const result = await getTool("erpnext_doc_submit").handler(
+    {
+      doctype: "Purchase Invoice",
+      name: "PINV-001",
+      expected_total: 3.6,
+      expected_currency: "EUR",
+    },
+    makeCtx(makeMockClient({
+      get: async () => ({ name: "PINV-001", modified: "2026-01-01 00:00:00" }),
+      callMethod: async () => ({ name: "PINV-001", docstatus: 1 }),
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(
+    result.message,
+    "Purchase Invoice PINV-001 submitted successfully",
+  );
+  assertEquals("total_verification" in result, false);
+});
+
+Deno.test("erpnext_doc_submit - Purchase Invoice keeps rounded-total fallback", async () => {
+  let submittedDoc: Record<string, unknown> = {};
+  const result = await getTool("erpnext_doc_submit").handler(
+    { doctype: "Purchase Invoice", name: "PINV-001" },
+    makeCtx(makeMockClient({
+      get: async () => ({
+        name: "PINV-001",
+        base_rounded_total: null,
+        modified: "2026-01-01 00:00:00",
+      }),
+      callMethod: async (
+        _method: string,
+        args: { doc: Record<string, unknown> },
+      ) => {
+        submittedDoc = args.doc;
+        return { name: "PINV-001", docstatus: 1 };
+      },
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(submittedDoc.disable_rounded_total, 1);
+  assertEquals((result.warnings as string[]).length, 1);
+});
+
+Deno.test("erpnext_doc_create/update/submit - known 417 hints preserve error identity", async () => {
+  const cases: Array<{
+    name: string;
+    tool: string;
+    input: Record<string, unknown>;
+    method: "create" | "update" | "callMethod";
+    error: FrappeAPIError;
+    hint: string | undefined;
+  }> = [
+    {
+      name: "empty HTML Party Account on create",
+      tool: "erpnext_doc_create",
+      input: { doctype: "Purchase Invoice", data: { supplier: "Acme" } },
+      method: "create",
+      error: new FrappeAPIError(
+        "POST failed: Party Account <strong></strong> currency (None) and document currency (EUR) should be same",
+        417,
+        {
+          message:
+            "Party Account <strong></strong> currency (None) and document currency (EUR) should be same",
+        },
+        800,
+      ),
+      hint: "credit_to",
+    },
+    {
+      name: "literal None Party Account on update",
+      tool: "erpnext_doc_update",
+      input: {
+        doctype: "Purchase Invoice",
+        name: "PINV-001",
+        data: { bill_no: "X" },
+      },
+      method: "update",
+      error: new FrappeAPIError(
+        "POST failed: Party Account None currency (None) and document currency (EUR) should be same",
+        417,
+        {
+          message:
+            "Party Account None currency (None) and document currency (EUR) should be same",
+        },
+      ),
+      hint: "credit_to",
+    },
+    {
+      name: "GRNI missing default on submit",
+      tool: "erpnext_doc_submit",
+      input: { doctype: "Purchase Invoice", name: "PINV-001" },
+      method: "callMethod",
+      error: new FrappeAPIError(
+        "Please set default Stock Received But Not Billed in Company",
+        417,
+        {
+          message:
+            "Please set default Stock Received But Not Billed in Company",
+        },
+      ),
+      hint: "stock_received_but_not_billed",
+    },
+    {
+      name: "named account is unchanged",
+      tool: "erpnext_doc_create",
+      input: { doctype: "Purchase Invoice", data: { supplier: "Acme" } },
+      method: "create",
+      error: new FrappeAPIError(
+        "POST failed: Party Account Creditors - ABC currency (None) and document currency (EUR) should be same",
+        417,
+        {
+          message:
+            "Party Account Creditors - ABC currency (None) and document currency (EUR) should be same",
+        },
+      ),
+      hint: undefined,
+    },
+    {
+      name: "disabled GRNI is unchanged",
+      tool: "erpnext_doc_create",
+      input: { doctype: "Purchase Invoice", data: { supplier: "Acme" } },
+      method: "create",
+      error: new FrappeAPIError(
+        "Account Stock Received But Not Billed - ACME is disabled",
+        417,
+        { message: "Account Stock Received But Not Billed - ACME is disabled" },
+        500,
+      ),
+      hint: undefined,
+    },
+  ];
+
+  for (const item of cases) {
+    const prefix = item.error.message;
+    const body = item.error.body;
+    const retryAfter = item.error.retryAfterMs;
+    let invalidated = 0;
+    try {
+      await getTool(item.tool).handler(
+        item.input,
+        makeCtx(makeMockClient({
+          get: async () => ({
+            name: "PINV-001",
+            modified: "2026-01-01 00:00:00",
+          }),
+          [item.method]: async () => {
+            throw item.error;
+          },
+          invalidate: () => {
+            invalidated++;
+          },
+        })),
+      );
+      throw new Error(`expected throw: ${item.name}`);
+    } catch (error) {
+      assertStrictEquals(error, item.error, item.name);
+      assertEquals(item.error.status, 417, item.name);
+      assertEquals(item.error.body, body, item.name);
+      assertEquals(item.error.retryAfterMs, retryAfter, item.name);
+      assertEquals(item.error.message.startsWith(prefix), true, item.name);
+      assertEquals(invalidated, 0, item.name);
+      if (item.hint) {
+        assertEquals(item.error.message.includes(item.hint), true, item.name);
+      } else {
+        assertEquals(item.error.message, prefix, item.name);
+        assertEquals(
+          item.error.message.includes("credit_to"),
+          false,
+          item.name,
+        );
+        assertEquals(
+          item.error.message.includes("stock_received_but_not_billed"),
+          false,
+          item.name,
+        );
+      }
+    }
+  }
 });

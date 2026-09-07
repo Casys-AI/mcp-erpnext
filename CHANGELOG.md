@@ -2,6 +2,22 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.0.4] - 2026-09-07
+
+### Fixed
+
+- **Purchase Invoice totals and rounding.** The invoice viewer shows the
+  effective invoice total with a small information icon when an adjustment is
+  applied. Hover, focus, or click the icon to compare the calculated and rounded
+  amounts and learn how to disable final rounding on a draft. Opening the
+  explanation does not modify the invoice. Existing MCP tool inputs remain
+  unchanged. See [#34](https://github.com/Casys-AI/mcp-erpnext/issues/34).
+
+- **Purchase Invoice configuration errors** now identify the payable-account or
+  Stock Received But Not Billed setting when ERPNext rejects the operation for a
+  recognized missing-account error. Native account validation and the original
+  error details are preserved.
+
 ## [3.0.3] - 2026-08-30
 
 ### Added

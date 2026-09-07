@@ -22,6 +22,10 @@ import {
 } from "~/shared/document/context-items.ts";
 import { DocumentSurface } from "~/shared/document/DocumentSurface.tsx";
 import {
+  interpretHostPurchaseInvoiceSubmit,
+  purchaseInvoiceConfirmAmount,
+} from "~/shared/document/purchase-invoice.ts";
+import {
   documentEnvelopeOf,
   documentModelOf,
 } from "~/shared/document/model.ts";
@@ -47,6 +51,7 @@ import {
 import {
   Button,
   CasysCredit,
+  cx,
   StateMessage,
   ToolButton,
   ViewerShell,
@@ -77,7 +82,7 @@ interface DocumentContentProps {
   rootKey: string;
   activeContext: DocumentActiveContext;
   onError: (message: string | null) => void;
-  onInvalidateRefresh: () => void;
+  onInvalidateRefresh: () => number;
   onRefresh: (force?: boolean) => Promise<boolean>;
 }
 
@@ -218,6 +223,7 @@ export function DocViewer() {
     refreshSequenceRef.current = invalidateUiRefresh(
       refreshSequenceRef.current,
     );
+    return rootFreshEventRef.current;
   }
 
   useEffect(() => {
@@ -314,9 +320,18 @@ function DocumentContent({
   const [showJson, setShowJson] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionOk, setActionOk] = useState(true);
   const [mutationCommitted, setMutationCommitted] = useState(false);
   const [mutationBaseline, setMutationBaseline] = useState<number | null>(null);
   const delayedRefreshRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+  const actionInFlightRef = useRef(false);
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const model = documentModelOf(envelope);
   const hostCapabilities = fixture ? undefined : app.getHostCapabilities();
   const context: DocumentContextController = {
@@ -382,19 +397,24 @@ function DocumentContent({
   }, []);
 
   const beginCanonicalReadback = () => {
-    setMutationBaseline(rootFreshEvent);
-    onInvalidateRefresh();
+    setMutationBaseline(onInvalidateRefresh());
   };
 
   const scheduleCanonicalRefresh = () => {
+    if (!mountedRef.current) return;
     if (delayedRefreshRef.current !== null) {
       clearTimeout(delayedRefreshRef.current);
     }
     delayedRefreshRef.current = window.setTimeout(() => {
       delayedRefreshRef.current = null;
+      if (!mountedRef.current) return;
       void onRefresh(true).then((refreshed) => {
-        if (!refreshed) onError(t("common.error.refresh_failed"));
-      }, () => onError(t("common.error.refresh_failed")));
+        if (mountedRef.current && !refreshed) {
+          onError(t("common.error.refresh_failed"));
+        }
+      }, () => {
+        if (mountedRef.current) onError(t("common.error.refresh_failed"));
+      });
     }, CANONICAL_READBACK_DELAY_MS);
   };
 
@@ -526,19 +546,92 @@ function DocumentContent({
   };
 
   async function mutate(mutation: "submit" | "cancel") {
-    if (fixture || actionLoading) return;
+    if (
+      fixture || actionInFlightRef.current || mutationCommitted ||
+      !mountedRef.current
+    ) return;
     const toolName = mutation === "submit"
       ? "erpnext_doc_submit"
       : "erpnext_doc_cancel";
     if (!hasAvailableTool(envelope.availableTools, toolName)) return;
+    const args = { doctype: envelope.doctype, name: envelope.name };
+    actionInFlightRef.current = true;
     setActionLoading(mutation);
     setActionMessage(null);
+    setActionOk(true);
     onError(null);
     try {
-      const result = await app.callServerTool({
-        name: toolName,
-        arguments: { doctype: envelope.doctype, name: envelope.name },
-      }, { timeout: TOOL_CALL_TIMEOUT_MS });
+      let result: ToolResultPayload;
+      try {
+        result = await app.callServerTool({
+          name: toolName,
+          arguments: args,
+        }, { timeout: TOOL_CALL_TIMEOUT_MS });
+      } catch (cause) {
+        if (!mountedRef.current) return;
+        const decision = interpretHostPurchaseInvoiceSubmit(toolName, args, {
+          transportFailure: cause,
+        });
+        if (decision.applies && decision.reread) {
+          // Local lock until a canonical read, not proof that submit succeeded.
+          setMutationCommitted(true);
+          beginCanonicalReadback();
+          setActionOk(false);
+          setActionMessage(t("document.purchase_invoice.submit.transport"));
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, CANONICAL_READBACK_DELAY_MS)
+          );
+          if (!mountedRef.current) return;
+          const refreshed = await onRefresh(true);
+          if (!mountedRef.current) return;
+          if (!refreshed) onError(t("common.error.refresh_failed"));
+          return;
+        }
+        throw cause;
+      }
+      if (!mountedRef.current) return;
+      const decision = interpretHostPurchaseInvoiceSubmit(toolName, args, {
+        result,
+      });
+      if (decision.applies) {
+        if (decision.kind === "error") {
+          throw new Error(
+            extractToolResultText(result) ?? t("doclist.detail.action_failed"),
+          );
+        }
+        if (decision.emitCommittedEvent) {
+          reportChange({
+            doctype: envelope.doctype,
+            name: envelope.name,
+            mutation,
+            committedAt: new Date().toISOString(),
+            source: "doc-viewer",
+          });
+        } else if (decision.reread) {
+          beginCanonicalReadback();
+        }
+        if (decision.reread) setMutationCommitted(true);
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, CANONICAL_READBACK_DELAY_MS)
+        );
+        if (!mountedRef.current) return;
+        const refreshed = await onRefresh(true);
+        if (!mountedRef.current) return;
+        if (decision.claimSubmitted) {
+          setActionOk(true);
+          setActionMessage(
+            refreshed
+              ? t("doclist.detail.action.submit_ok")
+              : t("document.action.refresh_pending"),
+          );
+        } else {
+          setActionOk(false);
+          setActionMessage(
+            t("document.purchase_invoice.submit.unconfirmed"),
+          );
+        }
+        return;
+      }
       if (result.isError) {
         throw new Error(
           extractToolResultText(result) ?? t("doclist.detail.action_failed"),
@@ -555,7 +648,10 @@ function DocumentContent({
       await new Promise<void>((resolve) =>
         setTimeout(resolve, CANONICAL_READBACK_DELAY_MS)
       );
+      if (!mountedRef.current) return;
       const refreshed = await onRefresh(true);
+      if (!mountedRef.current) return;
+      setActionOk(true);
       setActionMessage(
         refreshed
           ? t(
@@ -566,17 +662,23 @@ function DocumentContent({
           : t("document.action.refresh_pending"),
       );
     } catch (cause) {
+      if (!mountedRef.current) return;
       const message = cause instanceof Error && cause.message
         ? cause.message
         : t("doclist.detail.action_failed");
       onError(message);
     } finally {
-      setActionLoading(null);
+      actionInFlightRef.current = false;
+      if (mountedRef.current) setActionLoading(null);
     }
   }
 
   const isDraft = model.docstatus === 0 || model.status === "Draft";
   const isSubmitted = model.docstatus === 1;
+  const submitAmount = purchaseInvoiceConfirmAmount(
+    envelope.doctype,
+    envelope.document,
+  );
   const rootStale = nav.stack.levels[0].stale;
   const canSubmit = isDraft && capabilities.canRefresh &&
     capabilities.canSubmit && !mutationCommitted;
@@ -608,8 +710,16 @@ function DocumentContent({
               confirm.request({
                 subject: envelope.name,
                 title: t("doclist.confirm.submit"),
-                detail: t("doclist.confirm.submit.detail"),
-                actionLabel: t("doclist.confirm.submit.action"),
+                detail: submitAmount
+                  ? t("doclist.confirm.submit.detail_with_amount", {
+                    amount: submitAmount,
+                  })
+                  : t("doclist.confirm.submit.detail"),
+                actionLabel: submitAmount
+                  ? t("doclist.confirm.submit.action_with_amount", {
+                    amount: submitAmount,
+                  })
+                  : t("doclist.confirm.submit.action"),
                 onConfirm: () => void mutate("submit"),
               })}
           >
@@ -695,7 +805,16 @@ function DocumentContent({
         {error
           ? <StateMessage tone="bad">{error}</StateMessage>
           : actionMessage
-          ? <span class="font-mono text-chip text-ok">{actionMessage}</span>
+          ? (
+            <span
+              class={cx(
+                "font-mono text-chip",
+                actionOk ? "text-ok" : "text-warn",
+              )}
+            >
+              {actionMessage}
+            </span>
+          )
           : null}
       </div>
       <CasysCredit />

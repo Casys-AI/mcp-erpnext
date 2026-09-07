@@ -53,6 +53,24 @@ export const en: Record<string, string> = {
   "document.json": "Raw document JSON",
   "document.action.refresh_pending":
     "Change committed — refresh is still pending",
+  "document.purchase_invoice.total": "Invoice total",
+  "document.purchase_invoice.calculated": "Calculated",
+  "document.purchase_invoice.rounding": "Rounding",
+  "document.purchase_invoice.details": "Rounding details",
+  "document.purchase_invoice.disable_rounded_total": "Disable Rounded Total",
+  "document.purchase_invoice.hint.draft":
+    "To keep the calculated total, enable “{label}” on the draft invoice, then save and review its total.",
+  "document.purchase_invoice.hint.submitted":
+    "“{label}” applies before submission. Enable it on future invoices to keep the calculated total.",
+  "document.purchase_invoice.aria.adds":
+    "Rounding adds {amount} to the invoice total",
+  "document.purchase_invoice.aria.reduces":
+    "Rounding reduces the invoice total by {amount}",
+  "document.purchase_invoice.aria.adjustment": "Rounding adjustment {signed}",
+  "document.purchase_invoice.submit.unconfirmed":
+    "Submission could not be confirmed. Inspect the same invoice before retrying.",
+  "document.purchase_invoice.submit.transport":
+    "Submit response was not received. Inspect the same invoice before retrying; submission is unconfirmed.",
   "document.attachments.add": "Add file",
   "document.attachments.refresh": "Refresh attachments",
   "document.attachments.loading": "Loading attachments…",
@@ -344,13 +362,19 @@ export const en: Record<string, string> = {
   "invoice.confirm.cancel.action": "Cancel the invoice",
   "invoice.confirm.submit.detail":
     "The invoice will be submitted and frozen: only a cancellation followed by an amendment can change it afterwards.",
+  "invoice.confirm.submit.detail_with_amount":
+    "The invoice will be submitted for {amount} and frozen: only a cancellation followed by an amendment can change it afterwards.",
   "invoice.confirm.submit.action": "Submit the invoice",
+  "invoice.confirm.submit.action_with_amount": "Submit {amount}",
   "doclist.confirm.cancel.detail":
     "The document will be set to Cancelled and its links undone. ERPNext cannot undo this.",
   "doclist.confirm.cancel.action": "Cancel the document",
   "doclist.confirm.submit.detail":
     "The document will be submitted and frozen: only a cancellation followed by an amendment can change it afterwards.",
+  "doclist.confirm.submit.detail_with_amount":
+    "The document will be submitted for {amount} and frozen: only a cancellation followed by an amendment can change it afterwards.",
   "doclist.confirm.submit.action": "Submit the document",
+  "doclist.confirm.submit.action_with_amount": "Submit {amount}",
   "invoice.confirm.submit": "Submit this invoice?",
   "invoice.confirm.cancel": "Cancel this invoice?",
   "doclist.confirm.submit": "Submit this document?",

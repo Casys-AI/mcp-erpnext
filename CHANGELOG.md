@@ -4,6 +4,16 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Purchase Invoices show their effective total and a small information icon
+  explaining applied rounding, with draft configuration guidance available on
+  hover, keyboard focus, or click. The explanation supports French and English
+  across desktop and mobile layouts. Opening it does not modify the invoice.
+- Recognized Purchase Invoice missing payable-account and Stock Received But Not
+  Billed errors include guidance to the corresponding ERPNext settings while
+  preserving the original error details and existing tool inputs.
+
 ### Changed
 
 - The viewer layout decision (`useViewerLayout`) now comes from

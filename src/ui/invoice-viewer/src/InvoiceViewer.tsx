@@ -30,6 +30,13 @@ import {
   documentContextItem,
 } from "~/shared/document/context-items";
 import { documentModelOf } from "~/shared/document/model";
+import { PurchaseInvoiceRoundingNote } from "~/shared/document/PurchaseInvoiceRoundingNote";
+import {
+  formatPurchaseInvoiceAmount,
+  interpretHostPurchaseInvoiceSubmit,
+  purchaseInvoiceConfirmAmount,
+  purchaseInvoiceGrossTotal,
+} from "~/shared/document/purchase-invoice";
 import { useAttachments } from "~/shared/document/useAttachments";
 import {
   Button,
@@ -170,6 +177,13 @@ export function InvoiceViewer() {
   const mutationCommittedRef = useRef(false);
   const canonicalRefreshBlockedRef = useRef(false);
   const rootEventRef = useRef(0);
+  const mountedRef = useRef(true);
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   /* ── Hydratation ──────────────────────────────────────────────────────── */
 
@@ -350,6 +364,8 @@ export function InvoiceViewer() {
     if (
       fixture ||
       actionInFlightRef.current ||
+      mutationCommittedRef.current ||
+      !mountedRef.current ||
       !app.getHostCapabilities()?.serverTools ||
       !hasAvailableTool(availableToolsRef.current, toolName)
     ) return;
@@ -359,15 +375,83 @@ export function InvoiceViewer() {
     setActionIsError(false);
     const targetIsCurrent = () => {
       const current = envelopeRef.current;
-      return current?.doctype === target.doctype &&
+      return mountedRef.current && current?.doctype === target.doctype &&
         current.name === target.name;
     };
     try {
-      const result = await app.callServerTool({
-        name: toolName,
-        arguments: args,
-      }, { timeout: TOOL_CALL_TIMEOUT_MS });
+      let result: ToolResultPayload;
+      try {
+        result = await app.callServerTool({
+          name: toolName,
+          arguments: args,
+        }, { timeout: TOOL_CALL_TIMEOUT_MS });
+      } catch (cause) {
+        const decision = interpretHostPurchaseInvoiceSubmit(toolName, args, {
+          transportFailure: cause,
+        });
+        if (decision.applies && decision.reread) {
+          if (!targetIsCurrent()) return;
+          mutationCommittedRef.current = true;
+          setMutationCommitted(true);
+          setActionIsError(true);
+          setActionMessage(t("document.purchase_invoice.submit.transport"));
+          beginCanonicalReadback();
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, CANONICAL_READBACK_DELAY_MS)
+          );
+          if (!targetIsCurrent()) return;
+          await requestCanonicalRefresh();
+          return;
+        }
+        throw cause;
+      }
       if (!targetIsCurrent()) return;
+      const decision = interpretHostPurchaseInvoiceSubmit(toolName, args, {
+        result,
+      });
+      if (decision.applies) {
+        if (decision.kind === "error") {
+          const text = extractToolResultText(result);
+          setActionIsError(true);
+          setActionMessage(text ?? t("invoice.error.action_failed"));
+          return;
+        }
+        if (decision.reread) {
+          // Keep the local lock even when the submit outcome is uncertain.
+          mutationCommittedRef.current = true;
+          setMutationCommitted((current) =>
+            nextInvoiceMutationCommitted(current, "mutation-committed")
+          );
+        }
+        if (decision.emitCommittedEvent) {
+          onDocumentChanged(invoiceRootDocumentChange(
+            target.doctype,
+            target.name,
+            mutation,
+            new Date().toISOString(),
+          ));
+        }
+        if (decision.reread) beginCanonicalReadback();
+        setActionIsError(!decision.claimSubmitted);
+        setActionMessage(
+          decision.claimSubmitted
+            ? successMsg
+            : t("document.purchase_invoice.submit.unconfirmed"),
+        );
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, CANONICAL_READBACK_DELAY_MS)
+        );
+        if (!targetIsCurrent()) return;
+        const refreshed = await requestCanonicalRefresh();
+        if (!targetIsCurrent()) return;
+        if (
+          !refreshed && decision.claimSubmitted && mutationCommittedRef.current
+        ) {
+          setActionIsError(true);
+          setActionMessage(t("invoice.error.refresh_failed"));
+        }
+        return;
+      }
       if (result.isError) {
         const text = extractToolResultText(result);
         setActionIsError(true);
@@ -391,6 +475,7 @@ export function InvoiceViewer() {
         );
         if (!targetIsCurrent()) return;
         const refreshed = await requestCanonicalRefresh();
+        if (!targetIsCurrent()) return;
         if (!refreshed && mutationCommittedRef.current) {
           setActionIsError(true);
           setActionMessage(t("invoice.error.refresh_failed"));
@@ -403,7 +488,7 @@ export function InvoiceViewer() {
       }
     } finally {
       actionInFlightRef.current = false;
-      setActionLoading(null);
+      if (mountedRef.current) setActionLoading(null);
     }
   }
 
@@ -571,6 +656,13 @@ function InvoiceContent({
   const [canonicalRefreshPending, setCanonicalRefreshPending] = useState(false);
   const delayedRefreshRef = useRef<number | null>(null);
   const delayedRefreshGenerationRef = useRef(0);
+  const contentMountedRef = useRef(true);
+  useLayoutEffect(() => {
+    contentMountedRef.current = true;
+    return () => {
+      contentMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => () => {
     delayedRefreshGenerationRef.current += 1;
@@ -607,6 +699,7 @@ function InvoiceContent({
   };
 
   function scheduleCanonicalRefresh(invalidate = true) {
+    if (!contentMountedRef.current) return;
     if (invalidate) onBeginCanonicalReadback();
     setCanonicalRefreshPending(true);
     const generation = ++delayedRefreshGenerationRef.current;
@@ -615,7 +708,9 @@ function InvoiceContent({
     }
     delayedRefreshRef.current = window.setTimeout(() => {
       delayedRefreshRef.current = null;
+      if (!contentMountedRef.current) return;
       const finish = () => {
+        if (!contentMountedRef.current) return false;
         if (delayedRefreshGenerationRef.current !== generation) return false;
         setCanonicalRefreshPending(false);
         return true;
@@ -657,6 +752,30 @@ function InvoiceContent({
     ((data.grand_total ?? 0) - netTotal);
   const isDraft = data.status === "Draft" || data.docstatus === 0;
   const isSubmitted = data.docstatus === 1;
+  const piGross = purchaseInvoiceGrossTotal(doctype, data);
+  const submitAmount = purchaseInvoiceConfirmAmount(doctype, data);
+  const roundingPanelId = `invoice-rounding-note-${
+    data.name.replace(/[^A-Za-z0-9_-]/g, "-")
+  }`;
+  const invoiceTotalValue = (amountClass: string) => (
+    <div class="flex min-w-0 items-center justify-end gap-1">
+      <span class={amountClass}>
+        {piGross
+          ? formatPurchaseInvoiceAmount(piGross.amount, piGross.currency)
+          : formatCurrency(data.grand_total, ccy)}
+      </span>
+      {piGross?.showNote && (
+        <PurchaseInvoiceRoundingNote
+          calculatedTotal={piGross.calculatedTotal}
+          roundingAdjustment={piGross.roundingAdjustment}
+          invoiceTotal={piGross.amount}
+          currency={piGross.currency}
+          isDraft={isDraft}
+          panelId={roundingPanelId}
+        />
+      )}
+    </div>
+  );
   const hasServerTools = Boolean(hostCapabilities?.serverTools);
   const canInspectItem = hasServerTools && (
     hasAvailableTool(availableTools, "erpnext_item_get") ||
@@ -904,8 +1023,16 @@ function InvoiceContent({
         confirm.request({
           subject: data.name,
           title: t("invoice.confirm.submit"),
-          detail: t("invoice.confirm.submit.detail"),
-          actionLabel: t("invoice.confirm.submit.action"),
+          detail: submitAmount
+            ? t("invoice.confirm.submit.detail_with_amount", {
+              amount: submitAmount,
+            })
+            : t("invoice.confirm.submit.detail"),
+          actionLabel: submitAmount
+            ? t("invoice.confirm.submit.action_with_amount", {
+              amount: submitAmount,
+            })
+            : t("invoice.confirm.submit.action"),
           onConfirm: () => {
             if (!mutations.submit) return;
             void callAction(
@@ -983,16 +1110,15 @@ function InvoiceContent({
           {taxes !== 0 ? formatNumber(taxes) : "—"}
         </span>
       </div>
-      <div class="flex items-baseline justify-between border-t border-line-soft pt-2">
+      <div class="flex items-center justify-between border-t border-line-soft pt-2">
         <span class="font-mono text-meta uppercase tracking-chip text-ink-muted">
-          {t("invoice.totals.grand_total")}
+          {piGross
+            ? t("document.purchase_invoice.total")
+            : t("invoice.totals.grand_total")}
         </span>
-        <span
-          class="font-display font-semibold tabular-nums text-ink"
-          style={{ fontSize: "19px" }}
-        >
-          {formatCurrency(data.grand_total, ccy)}
-        </span>
+        {invoiceTotalValue(
+          "font-display font-semibold tabular-nums text-ink text-[19px]",
+        )}
       </div>
     </div>
   );
@@ -1445,13 +1571,15 @@ function InvoiceContent({
         </div>
 
         {/* Bande grand total */}
-        <div class="flex items-baseline justify-between border-b border-line bg-sunken px-3 py-[11px]">
+        <div class="flex items-center justify-between border-b border-line bg-sunken px-3 py-[11px]">
           <span class="font-mono text-micro uppercase tracking-chip text-ink-muted">
-            {t("invoice.totals.grand_total")}
+            {piGross
+              ? t("document.purchase_invoice.total")
+              : t("invoice.totals.grand_total")}
           </span>
-          <span class="font-display text-title font-semibold tabular-nums text-ink">
-            {formatCurrency(data.grand_total, ccy)}
-          </span>
+          {invoiceTotalValue(
+            "font-display text-title font-semibold tabular-nums text-ink",
+          )}
         </div>
 
         {attachmentSection && (

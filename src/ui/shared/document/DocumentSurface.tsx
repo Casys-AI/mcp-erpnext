@@ -4,7 +4,7 @@ import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { useT } from "../i18n-hook";
 import type { ViewerLayout } from "../useViewerLayout";
-import { cx } from "../ui";
+import { cx, Label } from "../ui";
 import {
   type ChildRowDisclosure,
   ChildTableSection,
@@ -17,6 +17,11 @@ import {
 import { ScalarFields } from "./ScalarFields";
 import type { ChildTableModel, DocumentModel } from "./types.ts";
 import type { ContextInteractionTarget } from "./context-interaction.ts";
+import { PurchaseInvoiceRoundingNote } from "./PurchaseInvoiceRoundingNote.tsx";
+import {
+  formatPurchaseInvoiceAmount,
+  purchaseInvoiceGrossTotal,
+} from "./purchase-invoice.ts";
 
 export interface DocumentSurfaceProps {
   model: DocumentModel;
@@ -64,6 +69,55 @@ function slug(value: string): string {
 
 function hasSlot(slot: ComponentChildren | undefined): boolean {
   return slot !== undefined && slot !== null && slot !== false;
+}
+
+function PurchaseInvoiceSummary({
+  model,
+  layout,
+  panelId,
+}: {
+  model: DocumentModel;
+  layout: ViewerLayout;
+  panelId: string;
+}) {
+  const t = useT();
+  const gross = purchaseInvoiceGrossTotal(
+    model.envelope.doctype,
+    model.envelope.document,
+  );
+  if (!gross) return null;
+  const isDraft = model.docstatus === 0 || model.status === "Draft";
+  const narrow = layout !== "wide";
+  return (
+    <div
+      class={cx(
+        "flex shrink-0 items-center justify-between gap-2.5 border-b border-line bg-sunken",
+        narrow ? "px-3 py-[11px]" : "px-4 py-2.5",
+      )}
+    >
+      <Label>{t("document.purchase_invoice.total")}</Label>
+      <div class="flex min-w-0 items-center justify-end gap-1">
+        <span
+          class={cx(
+            "font-semibold tabular-nums text-ink",
+            narrow ? "font-display text-title" : "font-mono text-lede",
+          )}
+        >
+          {formatPurchaseInvoiceAmount(gross.amount, gross.currency)}
+        </span>
+        {gross.showNote && (
+          <PurchaseInvoiceRoundingNote
+            calculatedTotal={gross.calculatedTotal}
+            roundingAdjustment={gross.roundingAdjustment}
+            invoiceTotal={gross.amount}
+            currency={gross.currency}
+            isDraft={isDraft}
+            panelId={panelId}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
 
 function DocumentFields(
@@ -192,6 +246,13 @@ export function DocumentSurface({
       contextTarget={contextTarget}
     />
   );
+  const purchaseInvoiceSummary = (
+    <PurchaseInvoiceSummary
+      model={model}
+      layout={layout}
+      panelId={`${domPrefix}-rounding`}
+    />
+  );
 
   if (layout === "wide") {
     return (
@@ -200,6 +261,7 @@ export function DocumentSurface({
         class={surfaceClass}
       >
         {header}
+        {purchaseInvoiceSummary}
         <div
           class={cx(
             "grid",
@@ -258,6 +320,7 @@ export function DocumentSurface({
         class={surfaceClass}
       >
         {header}
+        {purchaseInvoiceSummary}
         <main
           class={cx(
             contained && "scroll-slim min-h-0 flex-1 overflow-y-auto",
@@ -296,6 +359,7 @@ export function DocumentSurface({
       class={surfaceClass}
     >
       {header}
+      {purchaseInvoiceSummary}
       {tabs.length > 0 && (
         <DocumentSectionTabs
           tabs={tabs}

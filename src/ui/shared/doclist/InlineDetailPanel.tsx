@@ -27,6 +27,7 @@ import {
   documentModelOf,
 } from "~/shared/document/model.ts";
 import { DocumentSurface } from "~/shared/document/DocumentSurface.tsx";
+import { purchaseInvoiceConfirmAmount } from "~/shared/document/purchase-invoice.ts";
 import type { DocumentEnvelope } from "~/shared/document/types.ts";
 import { useAttachments } from "~/shared/document/useAttachments.ts";
 import type { DocumentChangeEvent } from "~/shared/document-events.ts";
@@ -60,7 +61,7 @@ interface InlineDetailPanelProps {
   onAction: (
     toolName: string,
     args: Record<string, unknown>,
-  ) => Promise<boolean>;
+  ) => Promise<boolean | { unconfirmed: true } | { transport: true }>;
   onDocumentChanged?: (event: DocumentChangeEvent) => void;
   /** @deprecated Utiliser `envelope`; conservé pour les anciens appelants. */
   data?: Record<string, unknown> | null;
@@ -191,7 +192,7 @@ function InlineDocument({
   onAction: (
     toolName: string,
     args: Record<string, unknown>,
-  ) => Promise<boolean>;
+  ) => Promise<boolean | { unconfirmed: true } | { transport: true }>;
   onDocumentChanged?: (event: DocumentChangeEvent) => void;
   context?: DocumentContextController;
   contextView?: string;
@@ -301,6 +302,10 @@ function InlineDocument({
 
   const isDraft = model.status === "Draft" || model.docstatus === 0;
   const isSubmitted = model.docstatus === 1;
+  const submitAmount = purchaseInvoiceConfirmAmount(
+    envelope.doctype,
+    envelope.document,
+  );
   const showSubmit = isDraft && (fixture || capabilities.canSubmit);
   const showCancel = isSubmitted && (fixture || capabilities.canCancel);
 
@@ -319,9 +324,21 @@ function InlineDocument({
     if (!allowed) return;
     setActLoading(key);
     setActMsg(null);
-    const ok = await onAction(tool, args);
+    const outcome = await onAction(tool, args);
+    const unconfirmed = typeof outcome === "object" &&
+      "unconfirmed" in outcome;
+    const transport = typeof outcome === "object" && "transport" in outcome;
+    const ok = outcome === true;
     setActOk(ok);
-    setActMsg(ok ? msg : t("doclist.detail.action_failed"));
+    setActMsg(
+      unconfirmed
+        ? t("document.purchase_invoice.submit.unconfirmed")
+        : transport
+        ? t("document.purchase_invoice.submit.transport")
+        : ok
+        ? msg
+        : t("doclist.detail.action_failed"),
+    );
     setActLoading(null);
   }
 
@@ -357,8 +374,16 @@ function InlineDocument({
               confirm.request({
                 subject: `${envelope.doctype} ${envelope.name}`,
                 title: t("doclist.confirm.submit"),
-                detail: t("doclist.confirm.submit.detail"),
-                actionLabel: t("doclist.confirm.submit.action"),
+                detail: submitAmount
+                  ? t("doclist.confirm.submit.detail_with_amount", {
+                    amount: submitAmount,
+                  })
+                  : t("doclist.confirm.submit.detail"),
+                actionLabel: submitAmount
+                  ? t("doclist.confirm.submit.action_with_amount", {
+                    amount: submitAmount,
+                  })
+                  : t("doclist.confirm.submit.action"),
                 onConfirm: () =>
                   void act("submit", "erpnext_doc_submit", {
                     doctype: envelope.doctype,

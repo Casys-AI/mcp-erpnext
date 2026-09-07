@@ -5,7 +5,7 @@
  */
 
 import type { App } from "@modelcontextprotocol/ext-apps";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { DocumentChangeEvent } from "../document-events.ts";
 import type { DocumentEnvelope } from "../document/types.ts";
 import type {
@@ -13,6 +13,7 @@ import type {
   DocumentContextController,
 } from "../document/context-interaction.ts";
 import { documentContextItem } from "../document/context-items.ts";
+import { interpretHostPurchaseInvoiceSubmit } from "../document/purchase-invoice.ts";
 import { documentModelOf } from "../document/model.ts";
 import { useT } from "../i18n-hook";
 import type { Jump } from "../jumps";
@@ -122,9 +123,16 @@ export function DoclistBody(
     setExpandedState(next);
   };
   const pendingRowIdRef = useRef<string | null>(null);
+  const activeRowIdRef = useRef(expandedId);
+  activeRowIdRef.current = expandedId;
+  const mountedRef = useRef(true);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => () => {
-    pendingRowIdRef.current = null;
+  useLayoutEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      pendingRowIdRef.current = null;
+    };
   }, []);
   const hasLocalDetail = fixture && rows.some((row) => row._detail != null);
   const isInspectable = !!rowAction || hasLocalDetail;
@@ -342,82 +350,129 @@ export function DoclistBody(
     onMutationRefresh?.();
   }
 
+  function actionTargetIsCurrent(target: DocumentEnvelope | null | undefined) {
+    const current = expandedRef.current.data;
+    return mountedRef.current && !!target &&
+      activeRowIdRef.current === target.name &&
+      pendingRowIdRef.current === target.name &&
+      current?.doctype === target.doctype && current.name === target.name;
+  }
+
+  async function canonicalRereadSameRow(
+    currentEnvelope: DocumentEnvelope | null | undefined,
+  ): Promise<boolean> {
+    if (!currentEnvelope || !actionTargetIsCurrent(currentEnvelope)) {
+      return false;
+    }
+    const currentId = currentEnvelope.name;
+    onMutationInvalidate?.();
+    try {
+      // Keep the old row busy until ERPNext can be read back reliably.
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, CANONICAL_READBACK_DELAY_MS)
+      );
+      if (!rowAction || !actionTargetIsCurrent(currentEnvelope)) return false;
+      const readBack = await app.callServerTool({
+        name: rowAction.toolName,
+        arguments: {
+          ...rowAction.extraArgs,
+          [rowAction.argName]: currentId,
+        },
+      }, { timeout: TOOL_CALL_TIMEOUT_MS });
+      if (!actionTargetIsCurrent(currentEnvelope)) return false;
+      if (readBack.isError) throw new Error("canonical read-back failed");
+      const text = extractToolResultText(readBack);
+      if (!text) throw new Error("canonical read-back is empty");
+      const parsed = JSON.parse(text);
+      const envelope = recordOf(parsed, {
+        doctype: currentEnvelope?.doctype ?? data.doctype,
+        name: currentEnvelope?.name ?? currentId,
+      });
+      if (
+        !envelope || envelope.doctype !== currentEnvelope?.doctype ||
+        envelope.name !== currentId
+      ) {
+        throw new Error("canonical document envelope is invalid");
+      }
+      setExpanded({
+        id: currentId,
+        data: envelope,
+        loading: false,
+      });
+      onError(null);
+      return true;
+    } catch {
+      if (!actionTargetIsCurrent(currentEnvelope)) return false;
+      // La mutation a pu réussir sans relecture fiable : fermer l'ancien
+      // état empêche une seconde action sur un docstatus désormais périmé.
+      onError(t("doclist.error.load_details"));
+      list.setExpandedId(null);
+      return false;
+    } finally {
+      // Root invalidation needs its refresh even after the child row closes.
+      onMutationRefresh?.();
+    }
+  }
+
   async function handleDetailAction(
     toolName: string,
     args: Record<string, unknown>,
-  ): Promise<boolean> {
+  ): Promise<boolean | { unconfirmed: true } | { transport: true }> {
     const actionEnvelope = expandedRef.current.data;
     if (
       fixture ||
       !serverTools ||
-      !actionEnvelope?.availableTools?.includes(toolName)
+      !actionEnvelope?.availableTools?.includes(toolName) ||
+      !actionTargetIsCurrent(actionEnvelope)
     ) return false;
     try {
-      const result = await app.callServerTool({
-        name: toolName,
-        arguments: args,
-      }, { timeout: TOOL_CALL_TIMEOUT_MS });
+      let result;
+      try {
+        result = await app.callServerTool({
+          name: toolName,
+          arguments: args,
+        }, { timeout: TOOL_CALL_TIMEOUT_MS });
+      } catch (cause) {
+        if (!actionTargetIsCurrent(actionEnvelope)) return false;
+        const decision = interpretHostPurchaseInvoiceSubmit(toolName, args, {
+          transportFailure: cause,
+        });
+        if (decision.applies && decision.reread) {
+          await canonicalRereadSameRow(actionEnvelope);
+          return { transport: true };
+        }
+        return false;
+      }
+      if (!actionTargetIsCurrent(actionEnvelope)) return false;
+      const decision = interpretHostPurchaseInvoiceSubmit(toolName, args, {
+        result,
+      });
+      if (decision.applies) {
+        if (decision.kind === "error") return false;
+        if (decision.emitCommittedEvent) {
+          const event = documentChangeForTool(
+            actionEnvelope,
+            toolName,
+            new Date().toISOString(),
+            "doclist.inline-detail",
+          );
+          if (event) notifyDocumentChanged(event);
+          else if (expandedId) onMutated?.(expandedId);
+        }
+        await canonicalRereadSameRow(actionEnvelope);
+        return decision.claimSubmitted ? true : { unconfirmed: true };
+      }
       if (result.isError) return false;
       const currentId = expandedId;
-      const currentEnvelope = actionEnvelope;
-      const event = currentEnvelope
-        ? documentChangeForTool(
-          currentEnvelope,
-          toolName,
-          new Date().toISOString(),
-          "doclist.inline-detail",
-        )
-        : null;
+      const event = documentChangeForTool(
+        actionEnvelope,
+        toolName,
+        new Date().toISOString(),
+        "doclist.inline-detail",
+      );
       if (event) notifyDocumentChanged(event);
       else if (currentId) onMutated?.(currentId);
-      onMutationInvalidate?.();
-
-      // Le bouton reste busy pendant la fenêtre de cohérence ERPNext. Il ne
-      // redevient jamais actionnable sur l'ancien docstatus entre l'écriture
-      // et la relecture canonique.
-      await new Promise<void>((resolve) =>
-        setTimeout(resolve, CANONICAL_READBACK_DELAY_MS)
-      );
-      if (!currentId || !rowAction || pendingRowIdRef.current !== currentId) {
-        onMutationRefresh?.();
-        return true;
-      }
-      try {
-        const readBack = await app.callServerTool({
-          name: rowAction.toolName,
-          arguments: {
-            ...rowAction.extraArgs,
-            [rowAction.argName]: currentId,
-          },
-        }, { timeout: TOOL_CALL_TIMEOUT_MS });
-        if (pendingRowIdRef.current !== currentId) return true;
-        if (readBack.isError) throw new Error("canonical read-back failed");
-        const text = extractToolResultText(readBack);
-        if (!text) throw new Error("canonical read-back is empty");
-        const parsed = JSON.parse(text);
-        const envelope = recordOf(parsed, {
-          doctype: currentEnvelope?.doctype ?? data.doctype,
-          name: currentEnvelope?.name ?? currentId,
-        });
-        if (!envelope) {
-          throw new Error("canonical document envelope is invalid");
-        }
-        setExpanded({
-          id: currentId,
-          data: envelope,
-          loading: false,
-        });
-        onError(null);
-        return true;
-      } catch {
-        // La mutation a pu réussir sans relecture fiable : fermer l'ancien
-        // état empêche une seconde action sur un docstatus désormais périmé.
-        onError(t("doclist.error.load_details"));
-        list.setExpandedId(null);
-        return false;
-      } finally {
-        onMutationRefresh?.();
-      }
+      return await canonicalRereadSameRow(actionEnvelope);
     } catch {
       return false;
     }

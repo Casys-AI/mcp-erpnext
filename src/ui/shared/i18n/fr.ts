@@ -50,6 +50,24 @@ export const fr: Record<string, string> = {
   "document.json": "JSON brut du document",
   "document.action.refresh_pending":
     "Modification enregistrée — le rafraîchissement reste en attente",
+  "document.purchase_invoice.total": "Total facture",
+  "document.purchase_invoice.calculated": "Calculé",
+  "document.purchase_invoice.rounding": "Arrondi",
+  "document.purchase_invoice.details": "Détail de l'arrondi",
+  "document.purchase_invoice.disable_rounded_total": "Disable Rounded Total",
+  "document.purchase_invoice.hint.draft":
+    "Pour conserver le total calculé, activez « {label} » sur le brouillon, puis enregistrez et revérifiez le total.",
+  "document.purchase_invoice.hint.submitted":
+    "« {label} » s'applique avant la soumission. Activez-le sur les factures futures pour conserver le total calculé.",
+  "document.purchase_invoice.aria.adds":
+    "L'arrondi ajoute {amount} au total de la facture",
+  "document.purchase_invoice.aria.reduces":
+    "L'arrondi diminue le total de la facture de {amount}",
+  "document.purchase_invoice.aria.adjustment": "Ajustement d'arrondi {signed}",
+  "document.purchase_invoice.submit.unconfirmed":
+    "La soumission n'a pas pu être confirmée. Inspectez la même facture avant de réessayer.",
+  "document.purchase_invoice.submit.transport":
+    "La réponse de soumission n'a pas été reçue. Inspectez la même facture avant de réessayer ; la soumission n'est pas confirmée.",
   "document.attachments.add": "Ajouter un fichier",
   "document.attachments.refresh": "Rafraîchir les pièces jointes",
   "document.attachments.loading": "Chargement des pièces jointes…",
@@ -347,13 +365,19 @@ export const fr: Record<string, string> = {
   "invoice.confirm.cancel.action": "Annuler la facture",
   "invoice.confirm.submit.detail":
     "La facture sera soumise et figée : seuls une annulation puis un amendement pourront encore la modifier.",
+  "invoice.confirm.submit.detail_with_amount":
+    "La facture sera soumise pour {amount} et figée : seuls une annulation puis un amendement pourront encore la modifier.",
   "invoice.confirm.submit.action": "Soumettre la facture",
+  "invoice.confirm.submit.action_with_amount": "Soumettre {amount}",
   "doclist.confirm.cancel.detail":
     "Le document passera en statut Annulé et ses liens seront défaits. ERPNext ne permet pas de revenir en arrière.",
   "doclist.confirm.cancel.action": "Annuler le document",
   "doclist.confirm.submit.detail":
     "Le document sera soumis et figé : seuls une annulation puis un amendement pourront encore le modifier.",
+  "doclist.confirm.submit.detail_with_amount":
+    "Le document sera soumis pour {amount} et figé : seuls une annulation puis un amendement pourront encore le modifier.",
   "doclist.confirm.submit.action": "Soumettre le document",
+  "doclist.confirm.submit.action_with_amount": "Soumettre {amount}",
   "invoice.confirm.submit": "Soumettre la facture ?",
   "invoice.confirm.cancel": "Annuler la facture ?",
   "doclist.confirm.submit": "Soumettre ce document ?",

@@ -23,7 +23,7 @@ import { zh } from "./i18n/zh.ts";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type Lang = "fr" | "en"| "zh";
+export type Lang = "fr" | "en" | "zh";
 
 // ── Source de langue (injection) ───────────────────────────────────────────
 

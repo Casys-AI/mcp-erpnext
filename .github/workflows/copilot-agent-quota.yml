@@ -1,0 +1,125 @@
+name: Copilot agent quota
+
+# Defense in depth: GitHub already refuses Copilot coding agent to anyone
+# without write access. This workflow rate-limits assignments from
+# non-allowlisted actors (future write collaborators) with exponential backoff.
+on:
+  issues:
+    types: [assigned]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: copilot-agent-quota-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  enforce:
+    if: ${{ contains(github.event.assignee.login, 'copilot') || contains(github.event.assignee.login, 'Copilot') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          ALLOWLIST: ${{ vars.COPILOT_AGENT_ALLOWLIST }}
+        with:
+          script: |
+            const actor = context.payload.sender?.login || '';
+            const assignee = context.payload.assignee?.login || '';
+            const issueNumber = context.payload.issue.number;
+
+            if (/copilot/i.test(actor)) {
+              core.info('sender is Copilot itself, skip');
+              return;
+            }
+
+            const allow = new Set(['superWorldSavior']);
+            for (const name of (process.env.ALLOWLIST || '').split(/[,\s]+/)) {
+              if (name) allow.add(name);
+            }
+
+            try {
+              const collabs = await github.paginate(
+                github.rest.repos.listCollaborators,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  affiliation: 'all',
+                  per_page: 100,
+                },
+              );
+              for (const c of collabs) {
+                if (c.permissions?.admin) allow.add(c.login);
+              }
+            } catch (err) {
+              core.warning(`collaborators: ${err.message}`);
+            }
+
+            if (allow.has(actor)) {
+              core.info(`${actor} is allowlisted`);
+              return;
+            }
+
+            const cutoff = Date.now() - 14 * 24 * 3600 * 1000;
+            const stamps = [];
+            let page = 0;
+            for await (const res of github.paginate.iterator(
+              github.rest.issues.listEventsForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+              },
+            )) {
+              page += 1;
+              for (const event of res.data) {
+                if (event.event !== 'assigned') continue;
+                if (event.actor?.login !== actor) continue;
+                const who = event.assignee?.login || '';
+                if (!/copilot/i.test(who)) continue;
+                const ts = Date.parse(event.created_at);
+                if (ts >= cutoff) stamps.push(ts);
+              }
+              if (page >= 5) break;
+            }
+            stamps.sort((a, b) => a - b);
+
+            const n = stamps.length;
+            const BASE_MS = 60 * 60 * 1000;
+            const MAX_MS = 48 * 60 * 60 * 1000;
+            if (n <= 1) {
+              core.info(`${actor}: first Copilot assignment in window, allow`);
+              return;
+            }
+
+            const delay = Math.min(MAX_MS, BASE_MS * 2 ** (n - 2));
+            const waitUntil = stamps[stamps.length - 2] + delay;
+            if (Date.now() >= waitUntil) {
+              core.info(`${actor}: backoff elapsed, allow`);
+              return;
+            }
+
+            await github.rest.issues.removeAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              assignees: [assignee],
+            });
+
+            const waitMin = Math.max(1, Math.ceil((waitUntil - Date.now()) / 60000));
+            const untilIso = new Date(waitUntil).toISOString();
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: [
+                `Copilot coding agent is rate-limited for @${actor}.`,
+                '',
+                `Assignments so far (14d): **${n}**. Next try after **${untilIso}** (~${waitMin} min).`,
+                '',
+                'Only repository admins can assign Copilot without this backoff. This does not affect Copilot **code review** on pull requests.',
+              ].join('\n'),
+            });
+            core.info(`unassigned Copilot for ${actor}; next ${untilIso}`);

@@ -19,10 +19,11 @@
 
 import { en } from "./i18n/en.ts";
 import { fr } from "./i18n/fr.ts";
+import { zh } from "./i18n/zh.ts";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type Lang = "fr" | "en";
+export type Lang = "fr" | "en"| "zh";
 
 // ── Source de langue (injection) ───────────────────────────────────────────
 
@@ -43,15 +44,17 @@ export function setLangSource(source: () => string | undefined): void {
 // ── resolveLang ────────────────────────────────────────────────────────────
 
 /**
- * Réduit un BCP 47 arbitraire en "fr" | "en".
+ * Réduit un BCP 47 arbitraire en "fr" | "en" | "zh".
  *
  * fr, fr-FR, fr-CA, fr-BE → "fr"
+ * zh, zh-CN, zh-Hans, zh-TW, zh-HK, zh-Hant → "zh"
  * Tout le reste (en, de, ja, undefined, "") → "en"
  */
 export function resolveLang(locale?: string): Lang {
   if (typeof locale !== "string" || locale.length === 0) return "en";
   const tag = locale.toLowerCase();
   if (tag === "fr" || tag.startsWith("fr-")) return "fr";
+  if (tag === "zh" || tag.startsWith("zh-")) return "zh";
   return "en";
 }
 
@@ -64,7 +67,7 @@ export function currentLang(): Lang {
 
 // ── Catalogues ─────────────────────────────────────────────────────────────
 
-const CATALOGS: Record<Lang, Record<string, string>> = { en, fr };
+const CATALOGS: Record<Lang, Record<string, string>> = { en, fr, zh };
 
 // ── t ─────────────────────────────────────────────────────────────────────
 

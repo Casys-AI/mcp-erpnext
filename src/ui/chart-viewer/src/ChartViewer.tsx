@@ -4,7 +4,13 @@
  * Handshake stays on ext-apps (refresh / callServerTool / sendMessage).
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "preact/hooks";
 import type { JSX, Ref } from "preact";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
@@ -37,7 +43,12 @@ import {
 } from "recharts";
 import type { BarShapeProps } from "recharts";
 
-import { formatCurrency, formatNumber, formatPercent } from "~/shared/format";
+import {
+  currentLocale,
+  formatCurrency,
+  formatNumber,
+  formatPercent,
+} from "~/shared/format";
 import { useT } from "~/shared/i18n-hook";
 import { type DrillDownChannel, sharedLabel } from "~/shared/drill-down";
 import {
@@ -85,15 +96,14 @@ import {
   chartJumpHint,
   chartPointActionPlan,
   type ChartPointActivation,
-  chartPointContextItem,
   chartPointExpansionState,
   chartPointLabel,
   chartScatterPointLabel,
   chartSelectionAt,
   chartSeriesFromTarget,
   chartSeriesNames,
-  chartViewContextCandidates,
   chartVisibleSeriesNames,
+  createChartPointContextIndex,
   filterVisibleChartSeries,
   moveChartCursor,
   normalizeHiddenChartSeries,
@@ -2165,6 +2175,11 @@ function ChartContent(
   const rootKey = viewerRootKey("chart", rootRefreshRequest ?? undefined, {
     title: data.title,
   });
+  const contextLocale = currentLocale();
+  const pointIndex = useMemo(
+    () => createChartPointContextIndex(data, rootKey),
+    [data, rootKey, contextLocale],
+  );
   const normalizedHiddenSeries = normalizeHiddenChartSeries(data, hiddenSeries);
   const hiddenSeriesKey = normalizedHiddenSeries.join("\u0000");
   const visibleData = filterVisibleChartSeries(
@@ -2235,21 +2250,18 @@ function ChartContent(
     label: string,
     series?: string,
   ): ContextSelectionItem {
-    return chartPointContextItem(data, rootKey, label, series);
+    return pointIndex.get(label, series);
   }
 
   useEffect(() => {
     void activeContext.reconcileView(
       rootKey,
-      chartViewContextCandidates(
-        data,
-        normalizedHiddenSeries,
-        chartContext.label,
-        rootKey,
-      ),
+      [chartContext, ...pointIndex.values()],
     );
   }, [
     data,
+    rootKey,
+    pointIndex,
     hiddenSeriesKey,
     chartContext.label,
     activeContext.reconcileView,

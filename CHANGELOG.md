@@ -2,6 +2,15 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.1.0-beta.8] - 2026-09-12
+
+### Fixed
+
+- Chart point rendering and context refresh share a single point index, avoiding
+  repeated work when checking selections on large charts.
+- A chart series named `all` keeps its own context identity, so refreshing it
+  preserves both its selection and the complete multi-series point selection.
+
 ## [3.1.0-beta.7] - 2026-09-12
 
 ### Added

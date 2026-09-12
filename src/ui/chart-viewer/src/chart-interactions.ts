@@ -445,7 +445,7 @@ function chartPointItem(
 ): ContextSelectionItem {
   return {
     id: `${namespace}:point:${encodeURIComponent(label)}:${
-      encodeURIComponent(series ?? "all")
+      series === "all" ? "s:all" : encodeURIComponent(series ?? "all")
     }`,
     view: data.title,
     reconcileKey: identity,
@@ -454,10 +454,13 @@ function chartPointItem(
   };
 }
 
-function chartPointContextCandidates(
+export function createChartPointContextIndex(
   data: ChartData,
   identity: string,
-): Map<string, ContextSelectionItem> {
+): {
+  get(label: string, series?: string): ContextSelectionItem;
+  values(): IterableIterator<ContextSelectionItem>;
+} {
   const namespace = chartContextNamespace(identity);
   const datasets = new Map<string, Dataset>();
   for (const dataset of data.datasets) {
@@ -496,10 +499,17 @@ function chartPointContextCandidates(
       }
     }
   }
-  return new Map([...candidates].map(([id, { item, values }]) => [
+  const items = new Map([...candidates].map(([id, { item, values }]) => [
     id,
     { ...item, value: values.length > 0 ? values.join(" · ") : undefined },
   ]));
+  return {
+    get(label, series) {
+      return items.get(JSON.stringify([label, series ?? null])) ??
+        chartPointItem(data, identity, namespace, label, series);
+    },
+    values: () => items.values(),
+  };
 }
 
 /** Point de contexte issu du jeu de données complet, y compris une série masquée. */
@@ -509,16 +519,7 @@ export function chartPointContextItem(
   label: string,
   series?: string,
 ): ContextSelectionItem {
-  const item = chartPointItem(
-    data,
-    identity,
-    chartContextNamespace(identity),
-    label,
-    series,
-  );
-  return chartPointContextCandidates(data, identity).get(
-    JSON.stringify([label, series ?? null]),
-  ) ?? item;
+  return createChartPointContextIndex(data, identity).get(label, series);
 }
 
 /**
@@ -534,7 +535,7 @@ export function chartViewContextCandidates(
   const candidates = new Map<string, ContextSelectionItem>();
   const whole = chartContextSelection(data, hiddenSeries, wholeLabel, identity);
   candidates.set(whole.id, whole);
-  for (const item of chartPointContextCandidates(data, identity).values()) {
+  for (const item of createChartPointContextIndex(data, identity).values()) {
     candidates.set(item.id, item);
   }
   return [...candidates.values()];

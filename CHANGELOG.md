@@ -4,6 +4,12 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Simplified Chinese translations across all eight UI viewers, contributed by
+  [@lioooooh](https://github.com/lioooooh). Chinese locale tags, including
+  Traditional Chinese variants, currently use the Simplified Chinese catalog.
+
 ### Fixed
 
 - Purchase Invoices show their effective total and a small information icon

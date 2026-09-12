@@ -30,9 +30,6 @@ import {
   syntheticUnresolvedSession,
 } from "./synthetic.ts";
 
-export const FIXTURE_ROOT =
-  "/Volumes/DEV/Projects/cdt-frictions-20260912-audit/buy-contract-fixtures";
-
 export interface BuyFixtureFs {
   mkdir(path: string): Promise<void>;
   writeTextFile(path: string, text: string): Promise<void>;
@@ -49,7 +46,7 @@ interface ManifestFile {
 
 export async function writeBuyContractFixtures(
   fs: BuyFixtureFs,
-  root = FIXTURE_ROOT,
+  root: string,
 ): Promise<{ manifestPath: string; files: ManifestFile[] }> {
   await fs.mkdir(`${root}/accepted`);
   await fs.mkdir(`${root}/rejected`);

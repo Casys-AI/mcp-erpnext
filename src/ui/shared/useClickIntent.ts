@@ -4,7 +4,7 @@ import {
   createClickIntentArbiter,
 } from "./click-intent.ts";
 
-/** Une instance stable par composant, dont les clics en attente sont nettoyés. */
+/** Cleanup cancels future detail callbacks; already claimed undo keeps running. */
 export function useClickIntent(): ClickIntentArbiter {
   const arbiterRef = useRef<ClickIntentArbiter | null>(null);
   if (arbiterRef.current === null) {

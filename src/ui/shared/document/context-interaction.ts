@@ -3,6 +3,7 @@ import type {
   ContextSelectionItem,
 } from "../active-context.ts";
 import type {
+  ClickIntent,
   ClickIntentArbiter,
   ClickIntentKeyEvent,
   ClickIntentRevert,
@@ -39,6 +40,7 @@ export interface ContextInteractionTarget {
   controls?: string;
   /** Action exclusive du double-clic / de la touche Entree. */
   onDoubleActivate?: () => void;
+  doublePolicy?: ClickIntent["doublePolicy"];
   onActivate: () => ClickIntentSingleResult;
 }
 
@@ -84,6 +86,7 @@ export function contextInteractionProps(
       key: intent.key,
       onSingle: target.onActivate,
       onDouble: target.onDoubleActivate,
+      doublePolicy: target.doublePolicy,
     }
     : null;
   return {

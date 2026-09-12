@@ -11,7 +11,11 @@
 
 import { assert, assertEquals } from "@std/assert";
 import { SchemaValidator } from "@casys/mcp-server";
-import { analyticsTools } from "./analytics.ts";
+import {
+  analyticsTools,
+  frappeCalendarMonth,
+  localCalendarDate,
+} from "./analytics.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
 
@@ -21,8 +25,17 @@ function relativeMonth(monthsBack: number, day = 15): string {
   const d = new Date();
   d.setDate(day);
   d.setMonth(d.getMonth() - monthsBack);
-  return d.toISOString().split("T")[0];
+  return localCalendarDate(d);
 }
+
+Deno.test("analytics calendar dates never shift through UTC", () => {
+  assertEquals(frappeCalendarMonth("2026-09-01"), {
+    year: 2026,
+    month: 8,
+  });
+  assertEquals(frappeCalendarMonth("2026-13-01"), null);
+  assertEquals(localCalendarDate(new Date(2026, 8, 1)), "2026-09-01");
+});
 
 // ── Mock FrappeClient ─────────────────────────────────────────────────────────
 
@@ -227,6 +240,8 @@ Deno.test("erpnext_revenue_trend - returns line chart with monthly data", async 
   assertEquals(result.type, "line");
   assertEquals(result.labels.length, 3);
   assertEquals(result.datasets.length, 1); // total mode
+  assertEquals(result.datasets[0].values.at(-1), 5000);
+  assertEquals(result.datasets[0].values.at(-2), 3000);
   assertChartMeta(result);
 });
 
@@ -493,13 +508,12 @@ Deno.test("erpnext_price_vs_qty - falls back to Bin data when no Item Price", as
 
 Deno.test("erpnext_kpi_revenue - returns KPI with sparkline (single API call)", async () => {
   const now = new Date();
-  const thisMonth = `${now.getFullYear()}-${
-    String(now.getMonth() + 1).padStart(2, "0")
-  }-15`;
-  const lastMonth =
-    new Date(now.getFullYear(), now.getMonth() - 1, 15).toISOString().split(
-      "T",
-    )[0];
+  const thisMonth = localCalendarDate(
+    new Date(now.getFullYear(), now.getMonth(), 1),
+  );
+  const lastMonth = localCalendarDate(
+    new Date(now.getFullYear(), now.getMonth() - 1, 1),
+  );
 
   const mockClient = makeMockClient({
     list: async () => [
@@ -516,6 +530,13 @@ Deno.test("erpnext_kpi_revenue - returns KPI with sparkline (single API call)", 
   assertEquals(result.value, 5000); // only current month bucket
   assert(Array.isArray(result.sparkline));
   assertEquals(result.sparkline.length, 6);
+  assertEquals(result.sparklineLabels.length, result.sparkline.length);
+  assertEquals(
+    result.sparklineLabels.at(-1),
+    `${now.toLocaleString("en", { month: "short" })} ${
+      now.getFullYear().toString().slice(2)
+    }`,
+  );
   assertEquals(result.sparkline[5], 5000); // current month
   assertEquals(result.sparkline[4], 3000); // previous month
   assert(result.trendIsGood === true);

@@ -154,6 +154,13 @@ export const en: Record<string, string> = {
   "chart.keyboard.help_navigation":
     "Left and right change the point; up and down change the series.",
   "chart.keyboard.control": "Explore chart: {target}. {help}",
+  "chart.context.visible_label": "{title} · visible chart",
+  "chart.context.select_visible":
+    "Add the visible subset of {title} to active context",
+  "chart.legend.aria": "Visible chart series",
+  "chart.legend.hide": "Hide {series}",
+  "chart.legend.show": "Show {series}",
+  "chart.legend.last_visible": "{series} is the last visible series",
   // ── /chart-viewer ─────────────────────────────────────────────────────────
 
   // ── stock-viewer ──────────────────────────────────────────────────────────
@@ -307,6 +314,7 @@ export const en: Record<string, string> = {
   "context.active.clear": "Remove {label} from active context",
   "context.active.clear_all": "Clear all",
   "context.active.error": "Context not updated",
+  "context.active.pending": "Updating context…",
   "context.active.evicted": "8 max · removed {label}",
   "interaction.detail.open": "Open details for {label}",
   "interaction.detail.close": "Close details for {label}",

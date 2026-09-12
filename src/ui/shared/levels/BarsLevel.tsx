@@ -6,7 +6,6 @@
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 import type { ClickIntentSingleResult } from "../click-intent.ts";
-import { DetailToggleButton } from "../DetailToggleButton.tsx";
 import { formatCurrency, formatNumber, formatPercent } from "../format";
 import { useClickIntent } from "../useClickIntent.ts";
 import { type BarsBody, type BarsSeries, chartSeriesFormat } from "./bodies";
@@ -145,12 +144,13 @@ export function BarsLevel(
       `nested-chart:${labelIndex}:${seriesIndex}`,
     onSingle: () => onPointContext?.(labelIndex, seriesIndex),
     onDouble: () => onPointDetail?.(labelIndex, seriesIndex),
+    doublePolicy: "local" as const,
   });
 
   const previewPoint = (labelIndex: number, seriesIndex: number) => {
     const point = { labelIndex, seriesIndex };
-    // Le footer vit hors de la zone du graphe. Il doit conserver la dernière
-    // cible explorée quand le pointeur ou le focus rejoint sa flèche détail.
+    // Le footer vit hors de la zone du graphe : il conserve la dernière cible
+    // explorée après que le pointeur ou le focus a quitté le point.
     setCurrentPoint(point);
     setPreview(point);
   };
@@ -595,21 +595,6 @@ export function BarsLevel(
           ))}
           {caption && (
             <span class="font-sans text-note text-ink-dim">{caption}</span>
-          )}
-          {canOpenPoint(activePoint.labelIndex, activePoint.seriesIndex) && (
-            <DetailToggleButton
-              label={pointLabel(
-                activePoint.labelIndex,
-                activePoint.seriesIndex,
-              )}
-              touch={narrow}
-              class="ml-auto"
-              onToggle={() =>
-                onPointDetail?.(
-                  activePoint.labelIndex,
-                  activePoint.seriesIndex,
-                )}
-            />
           )}
         </div>
       )}

@@ -14,6 +14,8 @@ export interface KpiData {
   trend?: "up" | "down" | "flat";
   trendIsGood?: boolean;
   sparkline?: number[];
+  /** Labels aligned with sparkline values, from oldest to newest. */
+  sparklineLabels?: string[];
   color?: string;
   icon?: string;
   refreshRequest?: UiRefreshRequestData;

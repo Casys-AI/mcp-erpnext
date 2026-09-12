@@ -333,6 +333,7 @@ export function DoclistBody(
         if (isInspectable) return context?.activateReversible(item);
         void context?.activate(item);
       },
+      doublePolicy: "local",
       onDoubleActivate: isInspectable
         ? () => list.setExpandedId(expandedId === rowId ? null : rowId)
         : undefined,

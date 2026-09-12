@@ -5,10 +5,12 @@ import {
   ACTIVE_CONTEXT_LIMITS,
   ACTIVE_CONTEXT_MAX_ITEMS,
   ACTIVE_CONTEXT_MAX_RESOURCE_BYTES,
+  ACTIVE_CONTEXT_MAX_TEXT_FALLBACK_BYTES,
   ACTIVE_CONTEXT_SCHEMA,
   ACTIVE_CONTEXT_VERSION,
   type ActiveContextHost,
   type ActiveContextHostCapabilities,
+  activeContextJsonResource,
   type ActiveContextLocalResource,
   type ActiveContextMutation,
   type ActiveContextSelection,
@@ -812,7 +814,10 @@ Deno.test("replaceActiveContext : un remplacement structuré, aucun message", as
     value: "184",
   }];
   assertEquals(await replaceActiveContext(host, items), "shared");
-  assertEquals(calls, [{ structuredContent: activeContextSnapshot(items) }]);
+  assertEquals(calls, [{
+    structuredContent: activeContextSnapshot(items),
+    content: [],
+  }]);
 });
 
 Deno.test("replaceActiveContext : ajoute une ressource au snapshot structuré", async () => {
@@ -1082,4 +1087,251 @@ Deno.test("clearActiveContext : unsupported et error restent observables", async
     "isError",
   );
   assertEquals(await clearActiveContext(rejected.host), "error");
+});
+
+const SERIES_PAYLOAD = {
+  title: "Revenue MTD",
+  subtitle: "Jun 26 - Aug 26",
+  type: "line",
+  labels: ["Jun 26", "Jul 26", "Aug 26"],
+  datasets: [{
+    label: "Revenue MTD",
+    values: [120, 180, 210.5],
+    currency: "EUR",
+  }],
+};
+
+Deno.test("activeContextJsonResource : JSON borné avec repli texte, sans troncature silencieuse", () => {
+  const resource = activeContextJsonResource(
+    "ui://mcp-erpnext/kpi-viewer/context/trend",
+    SERIES_PAYLOAD,
+  );
+  assertEquals(resource.mimeType, "application/json");
+  assertEquals(resource.textFallback, JSON.stringify(SERIES_PAYLOAD));
+  assertEquals(
+    new TextDecoder().decode(resource.bytes),
+    resource.textFallback,
+  );
+
+  const oversized = activeContextJsonResource(
+    "ui://mcp-erpnext/kpi-viewer/context/trend",
+    { pad: "x".repeat(ACTIVE_CONTEXT_MAX_TEXT_FALLBACK_BYTES) },
+  );
+  assertEquals(
+    oversized.bytes.byteLength > ACTIVE_CONTEXT_MAX_TEXT_FALLBACK_BYTES,
+    true,
+  );
+  assertEquals(oversized.textFallback, undefined);
+});
+
+Deno.test("replaceActiveContext : hôte texte seul reçoit le repli JSON, jamais un binaire", async () => {
+  const resource = activeContextJsonResource(
+    "ui://mcp-erpnext/kpi-viewer/context/trend",
+    SERIES_PAYLOAD,
+  );
+  const item = { ...ITEM, resource };
+  const { host, calls } = fakeHost({ updateModelContext: { text: {} } });
+  assertEquals(await replaceActiveContext(host, [item]), "shared");
+  assertEquals(calls, [{
+    content: [{
+      type: "text",
+      text: JSON.stringify(activeContextSnapshot([item])),
+    }, {
+      type: "text",
+      text: JSON.stringify(SERIES_PAYLOAD),
+    }],
+  }]);
+  assertEquals(JSON.stringify(calls[0]).includes("blob"), false);
+});
+
+Deno.test("replaceActiveContext : hôte resource garde le blob, sans texte supplémentaire", async () => {
+  const resource = activeContextJsonResource(
+    "ui://mcp-erpnext/kpi-viewer/context/trend",
+    SERIES_PAYLOAD,
+  );
+  const item = { ...ITEM, resource };
+  const { host, calls } = fakeHost({
+    updateModelContext: { structuredContent: {}, resource: {} },
+  });
+  assertEquals(await replaceActiveContext(host, [item]), "shared");
+  assertEquals(calls, [{
+    structuredContent: activeContextSnapshot([item]),
+    content: [{
+      type: "resource",
+      resource: {
+        uri: resource.uri,
+        mimeType: resource.mimeType,
+        blob: btoa(JSON.stringify(SERIES_PAYLOAD)),
+      },
+    }],
+  }]);
+});
+
+Deno.test("replaceActiveContext : structuredContent seul n'émet pas de texte non annoncé", async () => {
+  const resource = activeContextJsonResource(
+    "ui://mcp-erpnext/kpi-viewer/context/trend",
+    SERIES_PAYLOAD,
+  );
+  const { host, calls } = fakeHost({
+    updateModelContext: { structuredContent: {} },
+  });
+  assertEquals(
+    await replaceActiveContext(host, [{ ...ITEM, resource }]),
+    "shared",
+  );
+  assertEquals(calls, [{
+    structuredContent: activeContextSnapshot([ITEM]),
+  }]);
+  assertEquals("content" in calls[0], false);
+});
+
+Deno.test("replaceActiveContext : hôte structuré et texte reçoit puis efface la série complète", async () => {
+  const resource = activeContextJsonResource(
+    "ui://mcp-erpnext/kpi-viewer/context/trend",
+    SERIES_PAYLOAD,
+  );
+  const trend = { ...ITEM, id: "kpi:revenue:trend", resource };
+  const { host, calls } = fakeHost({
+    updateModelContext: { structuredContent: {}, text: {} },
+  });
+  assertEquals(await replaceActiveContext(host, [ITEM, trend]), "shared");
+  assertEquals(calls[0], {
+    structuredContent: activeContextSnapshot([ITEM, trend]),
+    content: [{ type: "text", text: JSON.stringify(SERIES_PAYLOAD) }],
+  });
+  assertEquals(await replaceActiveContext(host, [ITEM]), "shared");
+  assertEquals(calls[1], {
+    structuredContent: activeContextSnapshot([ITEM]),
+    content: [],
+  });
+  assertEquals(await clearActiveContext(host), "cleared");
+  assertEquals(calls[2], { structuredContent: {}, content: [] });
+});
+
+Deno.test("replaceActiveContext : retirer une ressource efface le contenu supplémentaire structuré", async () => {
+  const { host, calls } = fakeHost({
+    updateModelContext: { structuredContent: {}, resource: {} },
+  });
+  assertEquals(
+    await replaceActiveContext(host, [{ ...ITEM, resource: RESOURCE }]),
+    "shared",
+  );
+  assertEquals(await replaceActiveContext(host, [ITEM]), "shared");
+  assertEquals(calls[1], {
+    structuredContent: activeContextSnapshot([ITEM]),
+    content: [],
+  });
+});
+
+Deno.test("replaceActiveContext : pièce jointe binaire n'est jamais sérialisée en texte", async () => {
+  const poisoned = {
+    ...RESOURCE,
+    textFallback: "%PDF-1.7",
+  };
+  const { host, calls } = fakeHost({ updateModelContext: { text: {} } });
+  assertEquals(
+    await replaceActiveContext(host, [{ ...ITEM, resource: poisoned }]),
+    "shared",
+  );
+  assertEquals(calls, [{
+    content: [{
+      type: "text",
+      text: JSON.stringify(activeContextSnapshot([ITEM])),
+    }],
+  }]);
+  assertEquals(JSON.stringify(calls[0]).includes("%PDF"), false);
+});
+
+Deno.test("replaceActiveContext : repli trop grand ou vide est omis sans échouer", async () => {
+  const { host, calls } = fakeHost({ updateModelContext: { text: {} } });
+  const oversized = {
+    uri: "ui://mcp-erpnext/kpi-viewer/context/trend",
+    mimeType: "application/json",
+    bytes: new TextEncoder().encode("{}"),
+    textFallback: "n".repeat(ACTIVE_CONTEXT_MAX_TEXT_FALLBACK_BYTES + 1),
+  };
+  assertEquals(
+    await replaceActiveContext(host, [{ ...ITEM, resource: oversized }]),
+    "shared",
+  );
+  assertEquals(
+    await replaceActiveContext(host, [{
+      ...ITEM,
+      resource: { ...oversized, textFallback: "" },
+    }]),
+    "shared",
+  );
+  assertEquals(calls, [{
+    content: [{
+      type: "text",
+      text: JSON.stringify(activeContextSnapshot([ITEM])),
+    }],
+  }, {
+    content: [{
+      type: "text",
+      text: JSON.stringify(activeContextSnapshot([ITEM])),
+    }],
+  }]);
+});
+
+Deno.test("replaceActiveContext : retirer la série efface le repli texte", async () => {
+  const resource = activeContextJsonResource(
+    "ui://mcp-erpnext/kpi-viewer/context/trend",
+    SERIES_PAYLOAD,
+  );
+  const { host, calls } = fakeHost({ updateModelContext: { text: {} } });
+  assertEquals(
+    await replaceActiveContext(host, [{ ...ITEM, resource }]),
+    "shared",
+  );
+  assertEquals(await replaceActiveContext(host, [ITEM]), "shared");
+  assertEquals(calls[1], {
+    content: [{
+      type: "text",
+      text: JSON.stringify(activeContextSnapshot([ITEM])),
+    }],
+  });
+  assertEquals(JSON.stringify(calls[1]).includes("210.5"), false);
+});
+
+Deno.test("panier : un refresh invalide explicitement la série dérivée et efface son contenu hôte", async () => {
+  const resource = activeContextJsonResource(
+    "ui://mcp-erpnext/kpi/context/trend",
+    SERIES_PAYLOAD,
+  );
+  const selected = [{ scopeKey: "kpi-root", item: { ...ITEM, resource } }];
+  const candidate = { ...ITEM, value: "40", resource: undefined };
+  const refreshed = reconcileActiveContextSelections(selected, "kpi-root", [
+    candidate,
+  ]);
+  assertEquals(refreshed[0].item.resource, undefined);
+  assertEquals(refreshed[0].item.value, "40");
+  const reactivated = addActiveContextSelectionWithEviction(
+    selected,
+    "kpi-root",
+    candidate,
+  );
+  assertEquals(reactivated.selections[0].item.resource, undefined);
+  for (
+    const modalities of [{ text: {} }, { structuredContent: {}, text: {} }, {
+      structuredContent: {},
+      resource: {},
+    }]
+  ) {
+    const { host, calls } = fakeHost({ updateModelContext: modalities });
+    assertEquals(
+      await replaceActiveContext(host, selected.map((s) => s.item)),
+      "shared",
+    );
+    assertEquals(
+      await replaceActiveContext(host, refreshed.map((s) => s.item)),
+      "shared",
+    );
+    assertEquals(
+      calls[1].content?.some((block) => block.type === "resource"),
+      false,
+    );
+    assertEquals(JSON.stringify(calls[1]).includes("210.5"), false);
+    if ("structuredContent" in modalities) assertEquals(calls[1].content, []);
+  }
 });

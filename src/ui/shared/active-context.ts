@@ -45,6 +45,11 @@ export interface ActiveContextLocalResource {
   uri: string;
   mimeType: string;
   bytes: Uint8Array;
+  /**
+   * Repli JSON/texte optionnel pour un hôte acceptant `text` sans `resource`.
+   * Jamais dérivé des octets : une pièce jointe binaire n'en a pas.
+   */
+  textFallback?: string;
 }
 
 /** Point unique choisi par l'utilisateur dans un viewer. */
@@ -59,7 +64,10 @@ export interface ContextSelectionItem {
   label: string;
   /** Valeur visible associée, si elle existe. */
   value?: string;
-  /** Pièce jointe locale optionnelle pour les hôtes acceptant `resource`. */
+  /**
+   * Pièce jointe locale. Omettre conserve la pièce jointe déjà chargée ;
+   * fournir explicitement undefined invalide une ressource dérivée obsolète.
+   */
   resource?: ActiveContextLocalResource;
 }
 
@@ -90,6 +98,7 @@ export const ACTIVE_CONTEXT_SCHEMA = "casys.erpnext/active-context" as const;
 export const ACTIVE_CONTEXT_VERSION = 2 as const;
 export const ACTIVE_CONTEXT_MAX_ITEMS = 8;
 export const ACTIVE_CONTEXT_MAX_RESOURCE_BYTES = 5 * 1024 * 1024;
+export const ACTIVE_CONTEXT_MAX_TEXT_FALLBACK_BYTES = 32 * 1024;
 
 /**
  * Bornes en caractères, choisies au-dessus des identifiants ERPNext usuels.
@@ -223,6 +232,7 @@ function sameLocalResource(
   if (
     !left || !right || left.uri !== right.uri ||
     left.mimeType !== right.mimeType ||
+    left.textFallback !== right.textFallback ||
     left.bytes.byteLength !== right.bytes.byteLength
   ) return false;
   if (left.bytes === right.bytes) return true;
@@ -296,7 +306,9 @@ export function addActiveContextSelectionWithEviction(
   const incomingResource = validLocalResource(item.resource)
     ? item.resource
     : undefined;
-  const retainedResource = incomingResource ?? previousItem?.resource;
+  const invalidatedResource = "resource" in item && item.resource === undefined;
+  const retainedResource = incomingResource ??
+    (invalidatedResource ? undefined : previousItem?.resource);
   const normalizedItem = item.resource === retainedResource ? item : {
     ...withoutLocalResource(item),
     ...(retainedResource ? { resource: retainedResource } : {}),
@@ -491,7 +503,7 @@ function reconcileActiveContextSelectionSubset(
       changed = true;
       continue;
     }
-    const refreshedItem = selection.item.resource && !candidate.resource
+    const refreshedItem = selection.item.resource && !("resource" in candidate)
       ? { ...candidate, resource: selection.item.resource }
       : candidate;
     const refreshed = { scopeKey, item: refreshedItem };
@@ -599,6 +611,45 @@ function embeddedResource(
   };
 }
 
+function textualResourceMime(mimeType: string): boolean {
+  const baseType = mimeType.trim().split(";", 1)[0].trim().toLowerCase();
+  return baseType === "application/json" || baseType.startsWith("text/");
+}
+
+function boundTextFallback(
+  resource: ActiveContextLocalResource | undefined,
+): string | undefined {
+  if (!resource || typeof resource.textFallback !== "string") return undefined;
+  if (!validResourceMimeType(resource.mimeType)) return undefined;
+  if (!textualResourceMime(resource.mimeType)) return undefined;
+  if (resource.textFallback.length === 0) return undefined;
+  const size = new TextEncoder().encode(resource.textFallback).byteLength;
+  if (size === 0 || size > ACTIVE_CONTEXT_MAX_TEXT_FALLBACK_BYTES) {
+    return undefined;
+  }
+  return resource.textFallback;
+}
+
+/** Ressource JSON locale, avec repli texte seulement sous la borne. */
+export function activeContextJsonResource(
+  uri: string,
+  payload: unknown,
+): ActiveContextLocalResource {
+  const text = JSON.stringify(payload);
+  if (typeof text !== "string" || text.length === 0) {
+    throw new TypeError("Active context JSON resource is empty");
+  }
+  const bytes = new TextEncoder().encode(text);
+  return {
+    uri,
+    mimeType: "application/json",
+    bytes,
+    ...(bytes.byteLength <= ACTIVE_CONTEXT_MAX_TEXT_FALLBACK_BYTES
+      ? { textFallback: text }
+      : {}),
+  };
+}
+
 /**
  * Remplace le contexte du viewer par le panier complet en un seul appel.
  *
@@ -621,16 +672,30 @@ export async function replaceActiveContext(
         advertised(capabilities?.updateModelContext?.resource)
       ? embeddedResource(resource)
       : undefined;
+    const textAdvertised = advertised(capabilities?.updateModelContext?.text);
+    const contentAdvertised = textAdvertised ||
+      advertised(capabilities?.updateModelContext?.resource);
+    const textFallback = !resourceBlock && textAdvertised
+      ? boundTextFallback(resource)
+      : undefined;
+    const supplementalContent: ActiveContextContentBlock[] = resourceBlock
+      ? [resourceBlock]
+      : textFallback
+      ? [{ type: "text", text: textFallback }]
+      : [];
     const params = modality === "structuredContent"
       ? {
         structuredContent: snapshot,
-        ...(resourceBlock ? { content: [resourceBlock] } : {}),
+        ...(contentAdvertised ? { content: supplementalContent } : {}),
       }
       : {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify(snapshot),
-        }, ...(resourceBlock ? [resourceBlock] : [])],
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(snapshot),
+          },
+          ...supplementalContent,
+        ],
       };
     const result = await host.updateModelContext(params);
     return rejected(result) ? "error" : "shared";
@@ -647,13 +712,13 @@ export async function clearActiveContext(
   const modality = contextModality(capabilities);
   if (!modality) return "unsupported";
 
-  const resourceAdvertised = advertised(
+  const contentAdvertised = advertised(
     capabilities?.updateModelContext?.resource,
-  );
+  ) || advertised(capabilities?.updateModelContext?.text);
   const params = modality === "structuredContent"
     ? {
       structuredContent: {},
-      ...(resourceAdvertised
+      ...(contentAdvertised
         ? { content: [] as ActiveContextContentBlock[] }
         : {}),
     }

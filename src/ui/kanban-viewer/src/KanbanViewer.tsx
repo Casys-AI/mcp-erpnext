@@ -1010,6 +1010,7 @@ function KanbanBoardWithNav({
             <ActiveContextChip
               selections={activeContext.selections}
               failed={activeContext.failed}
+              pending={activeContext.pending}
               evictedLabel={activeContext.evictedLabel}
               onRemove={activeContext.remove}
               onClear={activeContext.clear}

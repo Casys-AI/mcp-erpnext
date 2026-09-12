@@ -61,6 +61,7 @@ export function ActiveContextChip(
   {
     selections,
     failed = false,
+    pending = false,
     evictedLabel,
     onRemove,
     onClear,
@@ -70,6 +71,7 @@ export function ActiveContextChip(
   }: {
     selections: readonly ActiveContextSelection[];
     failed?: boolean;
+    pending?: boolean;
     evictedLabel?: string | null;
     onRemove?: (
       selection: ActiveContextSelection,
@@ -112,7 +114,7 @@ export function ActiveContextChip(
     };
   }, [open]);
 
-  if (count === 0 && !failed) return null;
+  if (count === 0 && !failed && !pending) return null;
 
   const remove = async (
     selection: ActiveContextSelection,
@@ -170,6 +172,7 @@ export function ActiveContextChip(
   return (
     <span
       ref={wrapperRef}
+      aria-busy={pending || undefined}
       class={cx(
         "relative inline-flex min-w-0 max-w-full items-center gap-1.5",
         "font-mono text-chip text-ink-muted",
@@ -302,6 +305,17 @@ export function ActiveContextChip(
             </span>
           )}
         </>
+      )}
+      {pending && (
+        <span
+          role="status"
+          aria-live="polite"
+          class="inline-flex min-w-0 items-center gap-1 text-ink-muted"
+          title={t("context.active.pending")}
+        >
+          <span aria-hidden="true" class="shrink-0 animate-spin">◌</span>
+          <span class="truncate">{t("context.active.pending")}</span>
+        </span>
       )}
       {failed && (
         <span

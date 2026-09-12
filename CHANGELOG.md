@@ -2,16 +2,29 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
-## [Unreleased]
+## [3.1.0-beta.7] - 2026-09-12
 
 ### Added
 
+- KPI mini-charts expose their explicit month labels and allow each month to be
+  added to active context. Selecting the whole trend shares the complete aligned
+  series, including its period and unit, with resource and bounded text hosts.
 - Simplified Chinese translations across all eight UI viewers, contributed by
   [@lioooooh](https://github.com/lioooooh). Chinese locale tags, including
   Traditional Chinese variants, currently use the Simplified Chinese catalog.
 
 ### Fixed
 
+- Local viewer details open immediately on double-click, independently of slow
+  context acknowledgements. Context updates show their pending state, preserve
+  confirmed selections across navigation, and keep failures visible.
+  Conversation fallbacks wait for the current context to be confirmed.
+- Hiding a chart series preserves explicitly selected points; whole-chart
+  context follows only the visible series. Refreshes update hidden selections
+  and remove obsolete KPI series when their date labels are no longer available.
+- The invoice context menu stays inside both desktop and mobile viewer frames.
+- Revenue analytics bucket invoice dates by calendar month and return aligned
+  month labels with KPI sparklines.
 - Purchase Invoices show their effective total and a small information icon
   explaining applied rounding, with draft configuration guidance available on
   hover, keyboard focus, or click. The explanation supports French and English
@@ -22,6 +35,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Changed
 
+- Chart legends can hide and show series while keeping at least one visible. KPI
+  and chart consultation use double-click or Enter without a persistent
+  drill-down button.
 - The viewer layout decision (`useViewerLayout`) now comes from
   `@casys/mcp-view-components/layout` 0.7.1, which carries the same first-paint
   guarantees as [#29](https://github.com/Casys-AI/mcp-erpnext/pull/29). One edge

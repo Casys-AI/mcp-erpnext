@@ -20,6 +20,7 @@ import {
   chartSeriesNames,
   chartViewContextCandidates,
   chartVisibleSeriesNames,
+  createChartPointContextIndex,
   filterVisibleChartSeries,
   moveChartCursor,
   normalizeHiddenChartSeries,
@@ -762,4 +763,74 @@ Deno.test("chart refresh context - reads point values once for a large dataset",
   assertEquals(candidates.length, 2001);
   assert(reads <= 3000, `Expected linear value reads, got ${reads}`);
   assertEquals(candidates.at(-1)?.value, "999");
+});
+
+Deno.test("chart point index - repeated render lookups never reread source values", () => {
+  let reads = 0;
+  const values = new Proxy(Array.from({ length: 1000 }, (_, i) => i), {
+    get(target, property, receiver) {
+      if (typeof property === "string" && /^\d+$/.test(property)) reads++;
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  const data: ChartData = {
+    title: "Large chart",
+    labels: Array.from({ length: 1000 }, (_, i) => `Day ${i}`),
+    datasets: [{ label: "Revenue", values }],
+  };
+  const index = createChartPointContextIndex(data, "large");
+  reads = 0;
+  for (let i = 0; i < 1000; i++) {
+    assertEquals(index.get(`Day ${i}`, "Revenue").value, String(i));
+    assertEquals(index.get(`Day ${i}`).value, `Revenue: ${i}`);
+  }
+  assertEquals(reads, 0);
+  assertEquals(index.get("Missing", "Revenue").value, undefined);
+});
+
+Deno.test("chart point index - a refresh builds fresh values and removed candidates", () => {
+  const data: ChartData = {
+    title: "Refresh",
+    labels: ["July", "August"],
+    datasets: [{ label: "Revenue", values: [10, 20] }],
+  };
+  const original = createChartPointContextIndex(data, "root");
+  data.labels = ["July"];
+  data.datasets[0].values = [30];
+  const refreshed = createChartPointContextIndex(data, "root");
+  assertEquals(original.get("July", "Revenue").value, "10");
+  assertEquals(refreshed.get("July", "Revenue").value, "30");
+  assertEquals(refreshed.get("August", "Revenue").value, undefined);
+  assertEquals([...refreshed.values()].length, 2);
+  assertEquals(
+    original.get("July", "Revenue").id,
+    refreshed.get("July", "Revenue").id,
+  );
+});
+
+Deno.test("chart point index - literal all series cannot collide with generic selection", () => {
+  const data: ChartData = {
+    title: "Collision",
+    labels: ["July"],
+    datasets: [
+      { label: "all", values: [10] },
+      { label: "s:all", values: [20] },
+      { label: "Other", values: [30] },
+    ],
+  };
+  const index = createChartPointContextIndex(data, "root");
+  const generic = index.get("July");
+  const exact = index.get("July", "all");
+  const literalPrefix = index.get("July", "s:all");
+  assertEquals(generic.value, "all: 10 · s:all: 20 · Other: 30");
+  assertEquals(exact.value, "10");
+  assertEquals(literalPrefix.value, "20");
+  assert(generic.id.endsWith(":all"));
+  assert(exact.id.endsWith(":s:all"));
+  assert(literalPrefix.id.endsWith(":s%3Aall"));
+  assertEquals(new Set([...index.values()].map((item) => item.id)).size, 4);
+  assertEquals(
+    chartViewContextCandidates(data, [], "Visible", "root").length,
+    5,
+  );
 });

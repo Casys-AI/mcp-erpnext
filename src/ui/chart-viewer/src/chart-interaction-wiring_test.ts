@@ -59,8 +59,11 @@ Deno.test("chart wiring - full chart and legend expose the visible subset", () =
   assertStringIncludes(legend, "disabled={lastVisible}");
   assertStringIncludes(legendEntries, "chartSeriesNames(data).map");
   assertStringIncludes(content, "chartContextSelection(");
-  assertStringIncludes(content, "chartViewContextCandidates(");
-  assertStringIncludes(content, "chartPointContextItem(");
+  assertStringIncludes(content, "const pointIndex = useMemo(");
+  assertStringIncludes(content, "createChartPointContextIndex(data, rootKey)");
+  assertStringIncludes(content, "[data, rootKey, contextLocale]");
+  assertStringIncludes(content, "pointIndex.get(label, series)");
+  assertStringIncludes(content, "[chartContext, ...pointIndex.values()]");
   assertStringIncludes(content, "activeContext.activate(chartContext)");
   assertStringIncludes(
     content,

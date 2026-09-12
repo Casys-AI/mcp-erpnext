@@ -10,6 +10,7 @@ import type {
   DocumentFieldModel,
   DocumentModel,
 } from "../../shared/document/types.ts";
+import { t } from "../../shared/i18n.ts";
 import type { BuyRecordedResult, BuyResultLine } from "../../../buy/result.ts";
 
 export function buyResultToDocumentModel(
@@ -23,51 +24,51 @@ export function buyResultToDocumentModel(
   const fields: DocumentFieldModel[] = [
     {
       key: "coverage",
-      label: "Coverage",
+      label: t("buy.field.coverage"),
       value: result.coverage.status,
       kind: "status",
     },
     {
       key: "quantityBasis",
-      label: "Quantity basis",
+      label: t("buy.field.quantity_basis"),
       value: result.coverage.quantityBasis,
       kind: "text",
     },
     {
       key: "currency",
-      label: "Currency",
+      label: t("buy.field.currency"),
       value: result.coverage.currency,
       kind: "text",
     },
     {
       key: "projectId",
-      label: "Project",
+      label: t("buy.field.project"),
       value: result.configuration.projectId,
       kind: "text",
     },
     {
       key: "configurationRevision",
-      label: "Configuration revision",
+      label: t("buy.field.configuration_revision"),
       value: result.configuration.configurationRevision,
       kind: "number",
     },
     {
       key: "observedAt",
-      label: "Observed at",
+      label: t("buy.field.observed_at"),
       value: result.pricingContext.observedAt,
       kind: "datetime",
     },
     {
       key: "priceDate",
-      label: "Price date",
+      label: t("buy.field.price_date"),
       value: priceDates.join(", "),
       kind: "date",
     },
     ...result.totals.map((total) => ({
       key: total.kind,
       label: total.kind === "covered-subtotal"
-        ? "Covered subtotal"
-        : "Complete total",
+        ? t("buy.field.covered_subtotal")
+        : t("buy.field.complete_total"),
       value: `${total.amount} ${total.currency}`,
       kind: "text" as const,
     })),
@@ -78,12 +79,12 @@ export function buyResultToDocumentModel(
       doctype: "BuyRecordedResult",
       name,
     },
-    title: "Buy configuration cost",
+    title: t("buy.title"),
     status: result.coverage.status,
     fields,
     longFields: descriptions.map((description, index) => ({
       key: `description-${index}`,
-      label: "Description",
+      label: t("buy.field.description"),
       value: description,
       kind: "text" as const,
     })),
@@ -100,28 +101,32 @@ export function buyResultToDocumentModel(
 
 function linesTable(result: BuyRecordedResult): ChildTableModel {
   const columns = [
-    { key: "itemCode", label: "Item", numeric: false },
-    { key: "sourceName", label: "Source", numeric: false },
-    { key: "unitPrice", label: "Unit price", numeric: false },
-    { key: "currency", label: "Currency", numeric: false },
-    { key: "sourceCategory", label: "Category", numeric: false },
-    { key: "sourceKind", label: "Kind", numeric: false },
-    { key: "sourceDoctype", label: "Document type", numeric: false },
-    { key: "sourceModified", label: "Modified", numeric: false },
-    { key: "sourceSite", label: "Site", numeric: false },
-    { key: "sourceFingerprint", label: "Fingerprint", numeric: false },
-    { key: "sourceRow", label: "Row", numeric: false },
-    { key: "description", label: "Description", numeric: false },
-    { key: "qty", label: "Quantity", numeric: false },
-    { key: "uom", label: "Unit", numeric: false },
-    { key: "lineAmount", label: "Amount", numeric: false },
-    { key: "priceDate", label: "Price date", numeric: false },
-    { key: "validFrom", label: "Valid from", numeric: false },
-    { key: "validUpto", label: "Valid until", numeric: false },
+    { key: "itemCode", label: t("buy.col.item"), numeric: false },
+    { key: "sourceName", label: t("buy.col.source"), numeric: false },
+    { key: "unitPrice", label: t("buy.col.unit_price"), numeric: false },
+    { key: "currency", label: t("buy.col.currency"), numeric: false },
+    { key: "sourceCategory", label: t("buy.col.category"), numeric: false },
+    { key: "sourceKind", label: t("buy.col.kind"), numeric: false },
+    { key: "sourceDoctype", label: t("buy.col.document_type"), numeric: false },
+    { key: "sourceModified", label: t("buy.col.modified"), numeric: false },
+    { key: "sourceSite", label: t("buy.col.site"), numeric: false },
+    {
+      key: "sourceFingerprint",
+      label: t("buy.col.fingerprint"),
+      numeric: false,
+    },
+    { key: "sourceRow", label: t("buy.col.row"), numeric: false },
+    { key: "description", label: t("buy.col.description"), numeric: false },
+    { key: "qty", label: t("buy.col.quantity"), numeric: false },
+    { key: "uom", label: t("buy.col.unit"), numeric: false },
+    { key: "lineAmount", label: t("buy.col.amount"), numeric: false },
+    { key: "priceDate", label: t("buy.col.price_date"), numeric: false },
+    { key: "validFrom", label: t("buy.col.valid_from"), numeric: false },
+    { key: "validUpto", label: t("buy.col.valid_until"), numeric: false },
   ];
   return {
     key: "selected-lines",
-    label: "Selected lines",
+    label: t("buy.table.selected_lines"),
     columns,
     rows: result.lines.map((line) => lineRow(line)),
   };
@@ -176,11 +181,11 @@ function lineRow(line: BuyResultLine): ChildTableModel["rows"][number] {
 function gapsTable(result: BuyRecordedResult): ChildTableModel {
   return {
     key: "gaps",
-    label: "Gaps",
+    label: t("buy.table.gaps"),
     columns: [
-      { key: "code", label: "Code", numeric: false },
-      { key: "reason", label: "Reason", numeric: false },
-      { key: "lineId", label: "Line", numeric: false },
+      { key: "code", label: t("buy.col.code"), numeric: false },
+      { key: "reason", label: t("buy.col.reason"), numeric: false },
+      { key: "lineId", label: t("buy.col.line"), numeric: false },
     ],
     rows: result.gaps.map((gap) => ({
       code: gap.code,
@@ -193,11 +198,11 @@ function gapsTable(result: BuyRecordedResult): ChildTableModel {
 function capturesTable(result: BuyRecordedResult): ChildTableModel {
   return {
     key: "source-captures",
-    label: "Source captures",
+    label: t("buy.table.source_captures"),
     columns: [
-      { key: "siteId", label: "Site", numeric: false },
-      { key: "fingerprint", label: "Fingerprint", numeric: false },
-      { key: "capturedAt", label: "Captured at", numeric: false },
+      { key: "siteId", label: t("buy.col.site"), numeric: false },
+      { key: "fingerprint", label: t("buy.col.fingerprint"), numeric: false },
+      { key: "capturedAt", label: t("buy.col.captured_at"), numeric: false },
     ],
     rows: result.sourceCaptures.map((capture) => ({
       siteId: capture.sourceInstance.siteId,

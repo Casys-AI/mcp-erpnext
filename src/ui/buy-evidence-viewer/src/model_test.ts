@@ -1,8 +1,5 @@
 import { assertEquals, assertRejects } from "@std/assert";
-import {
-  displayStateFromToolResult,
-  displayStateFromViewerSession,
-} from "./model.ts";
+import { displayStateFromViewerSession } from "./model.ts";
 import { sealBuySourceCapture } from "../../../buy/capture.ts";
 import {
   syntheticAvailableSession,
@@ -11,18 +8,6 @@ import {
   syntheticPartialResult,
   syntheticUnavailableSession,
 } from "../../../buy/synthetic.ts";
-
-Deno.test("tool result renders a sealed recorded result and rejects capture wrappers", async () => {
-  const capture = await sealBuySourceCapture(await syntheticCapture());
-  const result = await syntheticCompleteResult(
-    capture.fingerprint,
-    capture.capture.sourceInstance.siteId,
-  );
-  const state = displayStateFromToolResult({ structuredContent: result });
-  assertEquals(state.kind, "result");
-  const rejected = displayStateFromToolResult({ structuredContent: capture });
-  assertEquals(rejected.kind, "error");
-});
 
 Deno.test("viewer session available/partial/unavailable stay truthful", async () => {
   const capture = await sealBuySourceCapture(await syntheticCapture());

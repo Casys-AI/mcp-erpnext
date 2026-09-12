@@ -84,7 +84,7 @@ the current version's highlights.
 
 > **3.1 beta preview:** the beta keeps the 3.0 tool surface and adds a generic
 > document viewer, child tables, document attachments, in-view navigation, and
-> active context. **3.1.0-beta.9** adds read-only Buy evidence capture and an
+> active context. **3.1.0-beta.10** adds read-only Buy evidence capture and an
 > immutable recorded-session viewer. Features remain capability-gated by the MCP
 > host. In particular, downloads require both proxied server tools and the MCP
 > Apps `downloadFile` capability. Buy evidence does not purchase or qualify a
@@ -265,7 +265,7 @@ live ERPNext instance.
   caller cannot pass `sourceInstance`, URL, credentials, `capturedAt`, or a
   digest. Digital Thread stores those bytes in its own CAS; this server does not
   keep a second CAS.
-- App: `io.casys.mcp-erpnext.buy-evidence` `3.1.0-beta.9`, resource
+- App: `io.casys.mcp-erpnext.buy-evidence` `3.1.0-beta.10`, resource
   `ui://mcp-erpnext/buy-evidence-viewer` (`text/html;profile=mcp-app`), manifest
   `ui://mcp-erpnext/buy-evidence-manifest` (`application/json`),
   `acceptedActions` = `viewer.session.apply` only. Complete, partial,

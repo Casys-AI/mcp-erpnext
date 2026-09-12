@@ -12,12 +12,13 @@ import {
   BUY_RECORDED_SESSION_SCHEMA,
   BUY_VIEW_APP_ID,
   BUY_VIEW_APP_VERSION,
+  BUY_VIEWER_SESSION_KIND,
 } from "../../../buy/identities.ts";
 import type { BuyRecordedResult } from "../../../buy/result.ts";
+import { t } from "../../shared/i18n.ts";
 import {
   type BuyEvidenceViewData,
   type DisplayState,
-  displayStateFromToolResult,
   displayStateFromViewerSession,
 } from "./model.ts";
 
@@ -28,6 +29,7 @@ export const BUY_APP_INFO = {
 
 export const BUY_STATUS_CLASS = "buy-evidence-viewer-state";
 export const SESSION_REJECTED_CODE = "session-rejected";
+export const TOOL_RESULT_REJECTED_CODE = "tool-result-rejected";
 
 export type BuySurfaceState = SurfaceDisplayState<BuyEvidenceViewData>;
 
@@ -51,19 +53,27 @@ export function buySurfaceAppOptions(
     strict: true,
     surfaceClassName: "buy-evidence-surface",
     statusClassName: BUY_STATUS_CLASS,
-    loadingLabel: "Receiving a sealed Buy result or recorded session…",
-    emptyLabel: "Buy evidence returned no supported sealed projection.",
-    fromToolResult: (result) =>
-      toSurfaceState(displayStateFromToolResult(result)),
+    loadingLabel: t("buy.app.loading"),
+    emptyLabel: t("buy.app.empty"),
+    fromToolResult: () => ({
+      kind: "error" as const,
+      title: t("buy.app.tool_result_rejected"),
+      code: TOOL_RESULT_REJECTED_CODE,
+      message: t("buy.app.tool_result_rejected_message"),
+    }),
     viewerSession: {
-      validate: (_value: unknown): _value is unknown => true,
+      validate: (value: unknown): value is Record<string, unknown> =>
+        typeof value === "object" && value !== null && !Array.isArray(value) &&
+        (value as Record<string, unknown>).schemaVersion ===
+          BUY_RECORDED_SESSION_SCHEMA &&
+        (value as Record<string, unknown>).kind === BUY_VIEWER_SESSION_KIND,
       toState: async (value) => {
         try {
           return toSurfaceState(await displayStateFromViewerSession(value));
         } catch (error) {
           return {
             kind: "error",
-            title: "Session rejected",
+            title: t("buy.app.session_rejected"),
             code: SESSION_REJECTED_CODE,
             message: `Rejected ${BUY_RECORDED_SESSION_SCHEMA} session: ${
               errorMessage(error)
@@ -93,7 +103,7 @@ export function toSurfaceState(state: DisplayState): BuySurfaceState {
       return {
         kind: "notice",
         tone: "warning",
-        title: "Unresolved recorded evidence",
+        title: t("buy.app.unresolved"),
         message: state.reason,
         code: state.status,
       };
@@ -101,7 +111,7 @@ export function toSurfaceState(state: DisplayState): BuySurfaceState {
       return {
         kind: "notice",
         tone: "warning",
-        title: "Recorded evidence unavailable",
+        title: t("buy.app.unavailable"),
         message: state.reason,
         code: state.status,
       };
@@ -110,10 +120,10 @@ export function toSurfaceState(state: DisplayState): BuySurfaceState {
 
 export function renderStartupFailure(error: unknown): HTMLElement {
   return renderStatusMessage(
-    error instanceof Error ? error.message : "The viewer could not start.",
+    error instanceof Error ? error.message : t("buy.app.startup_failure"),
     {
       className: BUY_STATUS_CLASS,
-      title: "Buy evidence viewer unavailable",
+      title: t("buy.app.startup_unavailable"),
       tone: "danger",
     },
   );

@@ -6,8 +6,10 @@ import {
   syntheticCompleteResult,
   syntheticPartialResult,
 } from "../../../buy/synthetic.ts";
+import { setLangSource, t } from "../../shared/i18n.ts";
 
 Deno.test("document model copies sealed totals and never invents refresh or tools", async () => {
+  setLangSource(() => "en");
   const capture = await sealBuySourceCapture(await syntheticCapture());
   const result = await syntheticCompleteResult(
     capture.fingerprint,
@@ -38,8 +40,8 @@ Deno.test("document model copies sealed totals and never invents refresh or tool
       ? result.lines[0].source.name
       : null,
   );
-  assertEquals(lines?.columns[0].label, "Item");
-  assertEquals(lines?.columns[1].label, "Source");
+  assertEquals(lines?.columns[0].label, t("buy.col.item"));
+  assertEquals(lines?.columns[1].label, t("buy.col.source"));
   assertEquals(
     model.longFields.some((field) =>
       field.label === "Description" &&
@@ -57,6 +59,32 @@ Deno.test("document model copies sealed totals and never invents refresh or tool
     for (const column of table.columns) {
       assertEquals(/[a-z][A-Z]/.test(column.label), false);
     }
+  }
+});
+
+Deno.test("Buy document labels follow the active EN/FR/ZH catalogs", async () => {
+  const capture = await sealBuySourceCapture(await syntheticCapture());
+  const result = await syntheticCompleteResult(
+    capture.fingerprint,
+    capture.capture.sourceInstance.siteId,
+  );
+  try {
+    setLangSource(() => "en");
+    const english = buyResultToDocumentModel(result);
+    assertEquals(english.title, t("buy.title"));
+    assertEquals(english.fields[0].label, t("buy.field.coverage"));
+    setLangSource(() => "fr");
+    const french = buyResultToDocumentModel(result);
+    assertEquals(french.title, t("buy.title"));
+    assertEquals(french.fields[0].label, t("buy.field.coverage"));
+    assertEquals(french.title === english.title, false);
+    assertEquals(french.fields[0].label === english.fields[0].label, false);
+    setLangSource(() => "zh");
+    const chinese = buyResultToDocumentModel(result);
+    assertEquals(chinese.title, t("buy.title"));
+    assertEquals(chinese.title === english.title, false);
+  } finally {
+    setLangSource(() => undefined);
   }
 });
 

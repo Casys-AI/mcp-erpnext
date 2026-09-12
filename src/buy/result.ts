@@ -8,6 +8,7 @@
  */
 
 import {
+  BUY_CAPTURE_URI_PATTERN,
   BUY_COVERAGE_STATUSES,
   BUY_PRICE_SOURCE_CATEGORIES,
   BUY_RECORDED_RESULT_KIND,
@@ -22,6 +23,7 @@ import {
   type BuyTotalKind,
 } from "./identities.ts";
 import {
+  assertDigestAddress,
   boundedArray,
   calendarDate,
   canonicalTimestamp,
@@ -276,14 +278,20 @@ function parseSourceCapture(
     "capturedAt",
     "uri",
   ], name);
+  const captureFingerprint = fingerprint(
+    root.fingerprint,
+    `${name}.fingerprint`,
+  );
+  const uri = nonEmpty(root.uri, `${name}.uri`);
+  assertDigestAddress(uri, captureFingerprint, BUY_CAPTURE_URI_PATTERN, name);
   return {
     sourceInstance: parseSourceInstance(
       root.sourceInstance,
       `${name}.sourceInstance`,
     ),
-    fingerprint: fingerprint(root.fingerprint, `${name}.fingerprint`),
+    fingerprint: captureFingerprint,
     capturedAt: canonicalTimestamp(root.capturedAt, `${name}.capturedAt`),
-    uri: nonEmpty(root.uri, `${name}.uri`),
+    uri,
   };
 }
 

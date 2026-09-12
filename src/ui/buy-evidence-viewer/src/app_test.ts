@@ -8,7 +8,12 @@ import {
   until,
   withDocument,
 } from "@casys/mcp-view-components/testing";
-import { startBuyEvidenceApp, toSurfaceState } from "./app.ts";
+import {
+  SESSION_REJECTED_CODE,
+  startBuyEvidenceApp,
+  TOOL_RESULT_REJECTED_CODE,
+  toSurfaceState,
+} from "./app.ts";
 import { BUY_COMPONENT_REGISTRY } from "./components.tsx";
 import type { BuyEvidenceViewData } from "./model.ts";
 import { sealBuySourceCapture } from "../../../buy/capture.ts";
@@ -65,6 +70,12 @@ Deno.test({
       try {
         const fake = fakeApp(root);
         await startBuyEvidenceApp(root, probeRegistry(), fake.runtime);
+        const initialText = root.textContent;
+        await fake.session({
+          schemaVersion: "unrelated-session/1.0",
+          kind: "other",
+        });
+        assertEquals(root.textContent, initialText);
         const capture = await sealBuySourceCapture(await syntheticCapture());
         const result = await syntheticCompleteResult(
           capture.fingerprint,
@@ -162,6 +173,47 @@ Deno.test({
       } finally {
         globalThis.fetch = originalFetch;
       }
+    }),
+});
+
+Deno.test({
+  name: "raw tool result evidence is rejected; only a recorded session mounts",
+  permissions: PERMISSIONS,
+  fn: () =>
+    withDocument(async (root) => {
+      const fake = fakeApp(root);
+      await startBuyEvidenceApp(root, probeRegistry(), fake.runtime);
+      const capture = await sealBuySourceCapture(await syntheticCapture());
+      const result = await syntheticCompleteResult(
+        capture.fingerprint,
+        capture.capture.sourceInstance.siteId,
+      );
+      await fake.toolResult({ structuredContent: result });
+      await until(
+        () =>
+          root.querySelector(".buy-evidence-probe") === null &&
+          (root.textContent ?? "").includes("not evidence"),
+        "the raw tool result rejection",
+      );
+      assertEquals(root.querySelector(".buy-evidence-probe"), null);
+      const rejected = toSurfaceState({
+        kind: "error",
+        message: "This App accepts a recorded session only.",
+      });
+      assertEquals(rejected.kind, "error");
+      await fake.session(await syntheticAvailableSession(result));
+      await until(
+        () => root.querySelector(".buy-evidence-probe") !== null,
+        "the sealed session mount after rejecting the tool result",
+      );
+      assertEquals(
+        root.querySelector(".buy-evidence-probe")?.getAttribute(
+          "data-coverage",
+        ),
+        "complete",
+      );
+      assertEquals(SESSION_REJECTED_CODE, "session-rejected");
+      assertEquals(TOOL_RESULT_REJECTED_CODE, "tool-result-rejected");
     }),
 });
 

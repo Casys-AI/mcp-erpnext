@@ -20,6 +20,8 @@ Deno.test("buy evidence app composes DocumentSurface without live DocViewer hook
   assertEquals(main.includes("DocViewer"), false);
   assertStringIncludes(app, "viewerSession");
   assertStringIncludes(app, "session-rejected");
+  assertStringIncludes(app, "tool-result-rejected");
+  assertEquals(app.includes("displayStateFromToolResult"), false);
 });
 
 Deno.test("live DocViewer keeps refresh and mutation hooks", async () => {

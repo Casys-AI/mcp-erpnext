@@ -2,6 +2,22 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.1.0-beta.10] - 2026-09-13
+
+### Fixed
+
+- Recorded Buy results reject `sourceCaptures` whose URI is not the public
+  capture digest address matching the fingerprint.
+- The Buy evidence App rejects raw tool results. Only a validated recorded
+  session (`viewer.session.apply`) can display evidence.
+- Buy evidence viewer labels resolve through the shared EN/FR/ZH locale
+  catalogs.
+
+### Added
+
+- `docs/tools.md` documents `erpnext_buy_capture`: closed DocTypes, two-read
+  agreement, and read-only/non-purchasing semantics.
+
 ## [3.1.0-beta.9] - 2026-09-12
 
 ### Added

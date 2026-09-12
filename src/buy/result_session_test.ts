@@ -84,6 +84,36 @@ Deno.test("mixed-site sourceCaptures are rejected", async () => {
   assertRejectsSync(() => parseBuyRecordedResult(mixed), "one sourceInstance");
 });
 
+Deno.test("sourceCaptures URI must be the public capture digest address", async () => {
+  const capture = await sealBuySourceCapture(await syntheticCapture());
+  const result = await syntheticCompleteResult(
+    capture.fingerprint,
+    capture.capture.sourceInstance.siteId,
+  );
+  const unanchored = {
+    ...result,
+    sourceCaptures: [{
+      ...result.sourceCaptures[0],
+      uri: "https://erp.test.example/not-a-capture",
+    }],
+  };
+  assertRejectsSync(
+    () => parseBuyRecordedResult(unanchored),
+    "URI and fingerprint must identify the same bytes",
+  );
+  const mismatched = {
+    ...result,
+    sourceCaptures: [{
+      ...result.sourceCaptures[0],
+      fingerprint: `sha256:${"9".repeat(64)}`,
+    }],
+  };
+  assertRejectsSync(
+    () => parseBuyRecordedResult(mismatched),
+    "URI and fingerprint must identify the same bytes",
+  );
+});
+
 Deno.test("all covered items plus a global transport gap remain partial", async () => {
   const capture = await sealBuySourceCapture(await syntheticCapture());
   const result = await syntheticPartialGlobalGapResult(
@@ -274,7 +304,7 @@ Deno.test("unavailable and unresolved sessions remain labelled", async () => {
 
 Deno.test("manifest is the published whole-view Buy evidence App", () => {
   assertEquals(BUY_VIEW_APP_MANIFEST.app.version, BUY_VIEW_APP_VERSION);
-  assertEquals(BUY_VIEW_APP_MANIFEST.app.version, "3.1.0-beta.9");
+  assertEquals(BUY_VIEW_APP_MANIFEST.app.version, "3.1.0-beta.10");
   assertEquals(
     BUY_VIEW_APP_MANIFEST.app.version.includes("local.buy-evidence"),
     false,

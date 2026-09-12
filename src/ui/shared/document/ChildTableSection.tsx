@@ -229,6 +229,7 @@ export function ChildTableSection({
         expanded,
         controls: rowPanelId,
         onDoubleActivate: toggle,
+        doublePolicy: "local" as const,
       }
       : contextTarget;
     return {

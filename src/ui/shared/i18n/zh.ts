@@ -137,6 +137,12 @@ export const zh: Record<string, string> = {
   "chart.keyboard.help_navigation":
     "左右方向键切换数据点；上下方向键切换系列。",
   "chart.keyboard.control": "探索图表：{target}。{help}",
+  "chart.context.visible_label": "{title} · 可见图表",
+  "chart.context.select_visible": "将 {title} 的可见部分加入当前上下文",
+  "chart.legend.aria": "可见的图表数据系列",
+  "chart.legend.hide": "隐藏 {series}",
+  "chart.legend.show": "显示 {series}",
+  "chart.legend.last_visible": "{series} 是最后一个可见的数据系列",
   // ── 图表视图 ─────────────────────────────────────────────────────────
 
   // ── 库存视图 ──────────────────────────────────────────────────────────
@@ -288,6 +294,7 @@ export const zh: Record<string, string> = {
   "context.active.clear": "将 {label} 移出活动上下文",
   "context.active.clear_all": "全部清除",
   "context.active.error": "上下文未更新",
+  "context.active.pending": "正在更新上下文…",
   "context.active.evicted": "最多 8 项 · 已移除 {label}",
   "interaction.detail.open": "打开 {label} 详情",
   "interaction.detail.close": "关闭 {label} 详情",

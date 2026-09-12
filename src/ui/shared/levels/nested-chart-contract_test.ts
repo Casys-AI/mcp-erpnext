@@ -1,4 +1,4 @@
-import { assertStringIncludes } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 
 const bars = await Deno.readTextFile(
   new URL("./BarsLevel.tsx", import.meta.url),
@@ -17,9 +17,11 @@ Deno.test("nested chart interaction - pointer and keyboard intents stay exclusiv
   assertStringIncludes(bars, 'event.key === "Enter"');
 });
 
-Deno.test("nested chart interaction - visible detail control is independent and touch sized", () => {
-  assertStringIncludes(bars, "<DetailToggleButton");
-  assertStringIncludes(bars, "touch={narrow}");
+Deno.test("nested chart interaction - detail stays on double-click or Enter without a footer button", () => {
+  assertEquals(bars.includes("DetailToggleButton"), false);
+  assertStringIncludes(bars, "onDblClick=");
+  assertStringIncludes(bars, 'event.key === "Enter"');
+  assertStringIncludes(bars, "onPointDetail?.(");
   assertStringIncludes(bars, "setCurrentPoint(point);");
   assertStringIncludes(bars, "isPointSelected");
   if (bars.includes("aria-expanded")) {

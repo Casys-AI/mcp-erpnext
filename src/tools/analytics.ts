@@ -29,6 +29,40 @@ import { CHART_META, FUNNEL_META, KPI_META } from "./viewer-meta.ts";
  */
 const MAX_RADAR_ITEMS = 8;
 
+function monthlyLabels(now: Date, count: number): string[] {
+  const labels: string[] = [];
+  for (let offset = count - 1; offset >= 0; offset--) {
+    const month = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    labels.push(
+      `${month.toLocaleString("en", { month: "short" })} ${
+        month.getFullYear().toString().slice(2)
+      }`,
+    );
+  }
+  return labels;
+}
+
+/** Calendar dates from Frappe are date-only values, not UTC instants. */
+export function frappeCalendarMonth(
+  value: unknown,
+): { year: number; month: number } | null {
+  if (typeof value !== "string") return null;
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  return Number.isInteger(year) && month >= 0 && month <= 11
+    ? { year, month }
+    : null;
+}
+
+/** Formats a local calendar boundary without converting it through UTC. */
+export function localCalendarDate(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 export const analyticsTools: ErpNextTool[] = [
   // ── Stock Chart ───────────────────────────────────────────────────────────
 
@@ -321,7 +355,7 @@ export const analyticsTools: ErpNextTool[] = [
         now.getMonth() - monthsBack + 1,
         1,
       );
-      const startStr = startDate.toISOString().split("T")[0];
+      const startStr = localCalendarDate(startDate);
 
       const orders = await ctx.client.list("Sales Order", {
         fields: ["customer_name", "grand_total", "transaction_date"],
@@ -330,28 +364,16 @@ export const analyticsTools: ErpNextTool[] = [
         order_by: "transaction_date asc",
       });
 
-      // Build month labels
-      const months: string[] = [];
-      for (let m = 0; m < monthsBack; m++) {
-        const d = new Date(
-          now.getFullYear(),
-          now.getMonth() - monthsBack + 1 + m,
-          1,
-        );
-        months.push(
-          `${d.toLocaleString("en", { month: "short" })} ${
-            d.getFullYear().toString().slice(2)
-          }`,
-        );
-      }
+      const months = monthlyLabels(now, monthsBack);
 
       if (groupBy === "customer") {
         // Multi-line: one dataset per customer
         const byCustomerMonth: Record<string, number[]> = {};
         for (const order of orders) {
-          const d = new Date(order.transaction_date as string);
-          const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
-            d.getMonth() - startDate.getMonth();
+          const calendarMonth = frappeCalendarMonth(order.transaction_date);
+          if (!calendarMonth) continue;
+          const mIdx = (calendarMonth.year - startDate.getFullYear()) * 12 +
+            calendarMonth.month - startDate.getMonth();
           if (mIdx < 0 || mIdx >= monthsBack) continue;
           const cust = (order.customer_name as string) ?? "Unknown";
           if (!byCustomerMonth[cust]) {
@@ -389,9 +411,10 @@ export const analyticsTools: ErpNextTool[] = [
       // Single line: total revenue per month
       const monthlyTotals = new Array(monthsBack).fill(0);
       for (const order of orders) {
-        const d = new Date(order.transaction_date as string);
-        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
-          d.getMonth() - startDate.getMonth();
+        const calendarMonth = frappeCalendarMonth(order.transaction_date);
+        if (!calendarMonth) continue;
+        const mIdx = (calendarMonth.year - startDate.getFullYear()) * 12 +
+          calendarMonth.month - startDate.getMonth();
         if (mIdx >= 0 && mIdx < monthsBack) {
           monthlyTotals[mIdx] += Number(order.grand_total) || 0;
         }
@@ -917,7 +940,7 @@ export const analyticsTools: ErpNextTool[] = [
       const now = new Date();
       // Single API call: fetch all orders from 6 months ago to today
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-      const sinceStr = sixMonthsAgo.toISOString().split("T")[0];
+      const sinceStr = localCalendarDate(sixMonthsAgo);
 
       const allOrders = await ctx.client.list("Sales Order", {
         fields: ["grand_total", "transaction_date"],
@@ -930,11 +953,13 @@ export const analyticsTools: ErpNextTool[] = [
 
       // Bucket into 6 monthly bins
       const sparkline: number[] = [0, 0, 0, 0, 0, 0];
+      const sparklineLabels = monthlyLabels(now, sparkline.length);
       for (const o of allOrders) {
-        const d = new Date(o.transaction_date as string);
+        const calendarMonth = frappeCalendarMonth(o.transaction_date);
+        if (!calendarMonth) continue;
         // Month index: 0 = oldest (5 months ago), 5 = current month
-        const monthDiff = (now.getFullYear() - d.getFullYear()) * 12 +
-          (now.getMonth() - d.getMonth());
+        const monthDiff = (now.getFullYear() - calendarMonth.year) * 12 +
+          (now.getMonth() - calendarMonth.month);
         const idx = 5 - monthDiff;
         if (idx >= 0 && idx < 6) {
           sparkline[idx] += Number(o.grand_total) || 0;
@@ -957,6 +982,7 @@ export const analyticsTools: ErpNextTool[] = [
         trend: delta > 0 ? "up" : delta < 0 ? "down" : "flat",
         trendIsGood: true,
         sparkline,
+        sparklineLabels,
         color: "#60a5fa",
         _meta: KPI_META,
       };

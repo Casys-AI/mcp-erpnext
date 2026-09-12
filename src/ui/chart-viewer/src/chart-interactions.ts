@@ -1,4 +1,15 @@
+import {
+  activeContextJsonResource,
+  type ActiveContextLocalResource,
+  type ContextSelectionItem,
+} from "../../shared/active-context.ts";
+import {
+  formatCurrency,
+  formatNumber,
+  formatPercent,
+} from "../../shared/format.ts";
 import type { NavHint } from "../../shared/jumps.ts";
+import { chartSeriesFormat } from "../../shared/levels/bodies.ts";
 import type { ChartData } from "./types.ts";
 
 /** Le point courant du contrôle clavier, indépendant du rendu Recharts. */
@@ -31,32 +42,22 @@ export interface ChartPointActionPlan {
 
 export type ChartPointExpansionState = boolean | undefined;
 
-export interface ChartDetailHintPlacement {
-  side: "left" | "right";
-  maxWidth: number;
-}
-
 const DEFAULT_CHART_STAGE_HEIGHT = 300;
 const NARROW_CHART_STAGE_HEIGHT = 260;
 const MIN_CHART_STAGE_HEIGHT = 240;
 const MAX_CHART_STAGE_HEIGHT = 520;
 
-/** Choisit le côté qui garde le helper dans la largeur réelle du graphe. */
-export function chartDetailHintPlacement(
-  surfaceWidth: number,
-  actionLeft: number,
-  actionSize: number,
-): ChartDetailHintPlacement {
-  const width = Number.isFinite(surfaceWidth) ? Math.max(0, surfaceWidth) : 0;
-  const left = Number.isFinite(actionLeft) ? Math.max(0, actionLeft) : 0;
-  const size = Number.isFinite(actionSize) ? Math.max(0, actionSize) : 0;
-  const gap = 6;
-  const edge = 8;
-  const leftSpace = Math.max(0, left - gap - edge);
-  const rightSpace = Math.max(0, width - left - size - gap - edge);
-  return rightSpace >= leftSpace
-    ? { side: "right", maxWidth: Math.floor(rightSpace) }
-    : { side: "left", maxWidth: Math.floor(leftSpace) };
+/**
+ * Espace de noms compact d'une racine de graphe. L'identite complete reste le
+ * reconcileKey ; ce hash borne seulement les ids exposes au contexte modele.
+ */
+export function chartContextNamespace(identity: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(identity)) {
+    hash ^= BigInt(byte);
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return `chart:${hash.toString(36)}`;
 }
 
 /**
@@ -215,6 +216,316 @@ export function chartCursorCounts(
   };
 }
 
+function seriesKey(label: string): string {
+  return label.trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function subtitleReferencesSeries(subtitle: string, series: string): boolean {
+  return new RegExp(
+    `(^|[^\\p{L}\\p{N}])${escapeRegExp(series)}(?=$|[^\\p{L}\\p{N}])`,
+    "iu",
+  ).test(subtitle);
+}
+
+/** Noms uniques des séries pilotables par la légende, dans l'ordre du payload. */
+export function chartSeriesNames(data: ChartData): string[] {
+  const labels = data.type === "scatter"
+    ? (data.scatterData ?? []).map((series) => series.label)
+    : data.datasets.map((dataset) => dataset.label);
+  const seen = new Set<string>();
+  return labels.flatMap((label) => {
+    const normalized = seriesKey(label);
+    if (!normalized || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [normalized];
+  });
+}
+
+/**
+ * Nettoie un état de légende après refresh et garantit qu'une série reste
+ * visible, même si le payload a changé pendant que la vue était ouverte.
+ */
+export function normalizeHiddenChartSeries(
+  data: ChartData,
+  hiddenSeries: readonly string[],
+): string[] {
+  const available = chartSeriesNames(data);
+  const hidden = new Set(hiddenSeries.map(seriesKey));
+  const normalized = available.filter((series) => hidden.has(series));
+  return available.length > 0 && normalized.length === available.length
+    ? normalized.slice(1)
+    : normalized;
+}
+
+/** Active ou désactive une série sans jamais masquer la dernière visible. */
+export function toggleHiddenChartSeries(
+  data: ChartData,
+  hiddenSeries: readonly string[],
+  series: string,
+): string[] {
+  const available = chartSeriesNames(data);
+  const normalized = normalizeHiddenChartSeries(data, hiddenSeries);
+  const target = seriesKey(series);
+  if (!available.includes(target)) return normalized;
+
+  const hidden = new Set(normalized);
+  if (hidden.delete(target)) {
+    return available.filter((candidate) => hidden.has(candidate));
+  }
+  if (available.length - hidden.size <= 1) return normalized;
+  hidden.add(target);
+  return available.filter((candidate) => hidden.has(candidate));
+}
+
+/** Séries encore rendues et partageables dans le contexte actif. */
+export function chartVisibleSeriesNames(
+  data: ChartData,
+  hiddenSeries: readonly string[],
+): string[] {
+  const hidden = new Set(normalizeHiddenChartSeries(data, hiddenSeries));
+  return chartSeriesNames(data).filter((series) => !hidden.has(series));
+}
+
+/** Retire les séries masquées du rendu, du tooltip et de la navigation. */
+export function filterVisibleChartSeries(
+  data: ChartData,
+  hiddenSeries: readonly string[],
+): ChartData {
+  const hidden = new Set(normalizeHiddenChartSeries(data, hiddenSeries));
+  const datasetNames = new Set<string>();
+  const datasets = data.datasets.filter((dataset) => {
+    const name = seriesKey(dataset.label);
+    if (hidden.has(name)) return false;
+    if (!name || !datasetNames.has(name)) {
+      if (name) datasetNames.add(name);
+      return true;
+    }
+    return false;
+  });
+  const scatterNames = new Set<string>();
+  const scatterData = data.scatterData?.filter((series) => {
+    const name = seriesKey(series.label);
+    if (hidden.has(name)) return false;
+    if (!name || !scatterNames.has(name)) {
+      if (name) scatterNames.add(name);
+      return true;
+    }
+    return false;
+  });
+  const hasHiddenSeries = hidden.size > 0;
+  const visibleNames = chartVisibleSeriesNames(data, hiddenSeries);
+  const seriesSubtitle = chartSeriesNames(data).join(" vs ");
+  const subtitleReferencesHidden = data.subtitle
+    ? [...hidden].some((series) =>
+      subtitleReferencesSeries(data.subtitle ?? "", series)
+    )
+    : false;
+  const subtitle = hasHiddenSeries
+    ? data.subtitle?.trim() === seriesSubtitle
+      ? visibleNames.join(" vs ") || undefined
+      : subtitleReferencesHidden
+      ? undefined
+      : data.subtitle
+    : data.subtitle;
+  const deriveCartesianAxes = hasHiddenSeries && data.type !== "scatter";
+  const hasLeftAxis = datasets.some((dataset) =>
+    (dataset.yAxisId ?? "left") === "left"
+  );
+  const hasRightAxis = datasets.some((dataset) => dataset.yAxisId === "right");
+  return {
+    ...data,
+    subtitle,
+    datasets,
+    ...(deriveCartesianAxes
+      ? {
+        yAxisLabel: hasLeftAxis ? data.yAxisLabel : undefined,
+        showRightAxis: hasRightAxis && data.showRightAxis === true,
+        rightAxisLabel: hasRightAxis ? data.rightAxisLabel : undefined,
+      }
+      : {}),
+    ...(data.scatterData
+      ? {
+        scatterData,
+      }
+      : {}),
+  };
+}
+
+/** Payload métier exact attaché lorsque l'hôte accepte une ressource locale. */
+export function visibleChartContextResource(
+  data: ChartData,
+  hiddenSeries: readonly string[],
+  identity: string,
+): ActiveContextLocalResource {
+  const visible = filterVisibleChartSeries(data, hiddenSeries);
+  const payload = {
+    title: visible.title,
+    ...(visible.subtitle ? { subtitle: visible.subtitle } : {}),
+    type: visible.type ?? "bar",
+    labels: visible.labels,
+    datasets: visible.datasets.map((dataset) => {
+      const format = chartSeriesFormat(visible, dataset);
+      return {
+        label: dataset.label,
+        values: dataset.values,
+        ...(dataset.type ? { type: dataset.type } : {}),
+        ...(dataset.stack ? { stack: dataset.stack } : {}),
+        ...(dataset.yAxisId ? { yAxisId: dataset.yAxisId } : {}),
+        ...(format.unit ? { unit: format.unit } : {}),
+        ...(format.currency ? { currency: format.currency } : {}),
+      };
+    }),
+    ...(visible.scatterData
+      ? {
+        scatterData: visible.scatterData.map((series) => ({
+          label: series.label,
+          points: series.points,
+        })),
+      }
+      : {}),
+    ...(visible.treeData ? { treeData: visible.treeData } : {}),
+    ...(visible.datasets.length === 0 && visible.unit
+      ? { unit: visible.unit }
+      : {}),
+    ...(visible.datasets.length === 0 && visible.currency
+      ? { currency: visible.currency }
+      : {}),
+    ...(visible.generatedAt ? { generatedAt: visible.generatedAt } : {}),
+    ...(visible.xAxisLabel ? { xAxisLabel: visible.xAxisLabel } : {}),
+    ...(visible.yAxisLabel ? { yAxisLabel: visible.yAxisLabel } : {}),
+    ...(visible.showRightAxis ? { showRightAxis: true } : {}),
+    ...(visible.rightAxisLabel
+      ? { rightAxisLabel: visible.rightAxisLabel }
+      : {}),
+  };
+  return activeContextJsonResource(
+    `ui://mcp-erpnext/chart-viewer/context/${
+      encodeURIComponent(chartContextNamespace(identity))
+    }`,
+    payload,
+  );
+}
+
+function chartPointDisplayValue(
+  data: ChartData,
+  selection: ChartSelection,
+): string | null {
+  if (selection.x !== undefined && selection.y !== undefined) {
+    return `${data.xAxisLabel ?? "x"}: ${formatNumber(selection.x, 2)} · ${
+      data.yAxisLabel ?? "y"
+    }: ${formatNumber(selection.y, 2)}`;
+  }
+  if (selection.value === undefined) return null;
+  const dataset = data.datasets.find((candidate) =>
+    candidate.label === selection.series
+  );
+  const format = dataset
+    ? chartSeriesFormat(data, dataset)
+    : { currency: data.currency, unit: data.unit };
+  if (format.currency) return formatCurrency(selection.value, format.currency);
+  if (format.unit === "%") {
+    return formatPercent(selection.value, selection.value % 1 === 0 ? 0 : 1);
+  }
+  return `${formatNumber(selection.value, selection.value % 1 === 0 ? 0 : 1)}${
+    format.unit ? ` ${format.unit}` : ""
+  }`;
+}
+
+/** Point de contexte issu du jeu de données complet, y compris une série masquée. */
+export function chartPointContextItem(
+  data: ChartData,
+  identity: string,
+  label: string,
+  series?: string,
+): ContextSelectionItem {
+  const values = chartNavigationGroups(data).flat().flatMap((selection) => {
+    if (
+      selection.label !== label ||
+      (series !== undefined && selection.series !== series)
+    ) return [];
+    const formatted = chartPointDisplayValue(data, selection);
+    if (!formatted) return [];
+    return [
+      series || !selection.series
+        ? formatted
+        : `${selection.series}: ${formatted}`,
+    ];
+  });
+  const namespace = chartContextNamespace(identity);
+  return {
+    id: `${namespace}:point:${encodeURIComponent(label)}:${
+      encodeURIComponent(series ?? "all")
+    }`,
+    view: data.title,
+    reconcileKey: identity,
+    label: series ? `${label} · ${series}` : label,
+    value: values.length > 0 ? values.join(" · ") : undefined,
+  };
+}
+
+/**
+ * Candidats de réconciliation : points du dataset complet, graphe entier du
+ * sous-ensemble encore visible.
+ */
+export function chartViewContextCandidates(
+  data: ChartData,
+  hiddenSeries: readonly string[],
+  wholeLabel: string,
+  identity: string,
+): ContextSelectionItem[] {
+  const whole = chartContextSelection(data, hiddenSeries, wholeLabel, identity);
+  const candidates = new Map<string, ContextSelectionItem>([[whole.id, whole]]);
+  for (const selection of chartNavigationGroups(data).flat()) {
+    const generic = chartPointContextItem(data, identity, selection.label);
+    candidates.set(generic.id, generic);
+    if (selection.series) {
+      const exact = chartPointContextItem(
+        data,
+        identity,
+        selection.label,
+        selection.series,
+      );
+      candidates.set(exact.id, exact);
+    }
+  }
+  return [...candidates.values()];
+}
+
+/**
+ * Sélection stable du diagramme complet. Le texte reste compact et la
+ * ressource porte toutes les valeurs du seul sous-ensemble encore visible.
+ */
+export function chartContextSelection(
+  data: ChartData,
+  hiddenSeries: readonly string[],
+  label: string,
+  identity: string,
+): ContextSelectionItem {
+  const visibleSeries = chartVisibleSeriesNames(data, hiddenSeries);
+  const first = data.labels[0];
+  const last = data.labels[data.labels.length - 1];
+  const period = first && last
+    ? first === last ? first : `${first} → ${last}`
+    : undefined;
+  const value = [
+    visibleSeries.length > 0 ? visibleSeries.join(", ") : undefined,
+    period,
+  ].filter((part): part is string => Boolean(part)).join(" · ");
+  const namespace = chartContextNamespace(identity);
+  return {
+    id: `${namespace}:whole`,
+    view: data.title,
+    reconcileKey: identity,
+    label,
+    ...(value ? { value } : {}),
+    resource: visibleChartContextResource(data, hiddenSeries, identity),
+  };
+}
+
 /**
  * Résout d'abord le segment exact, puis le saut générique de sa catégorie.
  * L'absence de l'un et de l'autre signifie « contexte seulement ».
@@ -250,6 +561,18 @@ export function chartPointActionPlan(
     updateContext: false,
     sendMessage: !hasJump && messageSupported,
   };
+}
+
+/**
+ * Sans detail disponible, le second click natif et `dblclick` sont inertes :
+ * le premier click reste ainsi selectionne au lieu d'etre compense en vain.
+ */
+export function shouldHandleChartPointActivation(
+  activation: ChartPointActivation,
+  clickCount: number,
+  detailEnabled: boolean,
+): boolean {
+  return detailEnabled || (activation === "context" && clickCount < 2);
 }
 
 /** Un fallback conversationnel est une action, jamais un disclosure ARIA. */

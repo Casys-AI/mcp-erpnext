@@ -120,7 +120,7 @@ Deno.test("kpi interactions : clic simple ou Espace ne touche qu'au contexte", (
   });
 });
 
-Deno.test("kpi interactions : double-clic, Entree ou chevron ne touche qu'au detail", () => {
+Deno.test("kpi interactions : double-clic ou Entree ne touche qu'au detail", () => {
   assertEquals(kpiInteractionPlan("detail", true, true, true), {
     updateContext: false,
     toggleLevel: true,
@@ -140,6 +140,30 @@ Deno.test("kpi navigation detail is an action, not a mounted disclosure", async 
 
   assertEquals(source.includes("expandedTriggerKey"), false);
   assertEquals(source.includes("aria-expanded"), false);
+  assertEquals(source.includes("DetailToggleButton"), false);
   assertStringIncludes(source, "onOpenJump");
   assertStringIncludes(source, "void nav.jump(jump)");
+});
+
+Deno.test("kpi sparkline wires explicit months to independent context targets", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./KpiViewer.tsx", import.meta.url),
+  );
+
+  assertStringIncludes(source, "kpiSparklinePoints(data)");
+  assertStringIncludes(source, "kpiTrendContextResource(data)");
+  assertStringIncludes(source, "labels={sparklineLabels}");
+  assertStringIncludes(source, "ariaLabels={trendPointAriaLabels}");
+  assertStringIncludes(
+    source,
+    'class="group pointer-events-auto flex h-full',
+  );
+  assertStringIncludes(source, "event.stopPropagation()");
+  assertStringIncludes(
+    source,
+    "activeContext.isSelected(trendPointContexts[index])",
+  );
+  assertStringIncludes(source, "onDblClick={trendHasDetail");
+  assertEquals(source.includes('role={trendInteractive ? "button"'), false);
+  assertEquals(source.includes("event.detail > 0"), false);
 });

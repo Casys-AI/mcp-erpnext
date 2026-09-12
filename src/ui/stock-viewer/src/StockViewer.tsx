@@ -573,6 +573,7 @@ function StockContent(
           <ActiveContextChip
             selections={activeContext.selections}
             failed={activeContext.failed}
+            pending={activeContext.pending}
             evictedLabel={activeContext.evictedLabel}
             onRemove={activeContext.remove}
             onClear={activeContext.clear}
@@ -758,6 +759,7 @@ function StockContent(
               : t("context.active.select", { label: row.item_code });
             const intent = {
               key: contextItem.id,
+              doublePolicy: "local" as const,
               onSingle: () =>
                 context.supported
                   ? context.activateReversible(contextItem)

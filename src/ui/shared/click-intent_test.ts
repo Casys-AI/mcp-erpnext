@@ -1,37 +1,14 @@
 import { assertEquals } from "@std/assert";
 import {
-  CLICK_INTENT_DELAY_MS,
+  CLICK_INTENT_REVERT_WINDOW_MS,
   type ClickIntent,
   type ClickIntentRevert,
   type ClickIntentSchedule,
-  createClickIntentArbiter,
+  createClickIntentArbiter as createArbiter,
 } from "./click-intent.ts";
 
-interface ScheduledTask {
-  cancelled: boolean;
-  delayMs: number;
-  run: () => void;
-}
-
-function fakeScheduler() {
-  const tasks: ScheduledTask[] = [];
-  const schedule: ClickIntentSchedule = (run, delayMs) => {
-    const task = { cancelled: false, delayMs, run };
-    tasks.push(task);
-    return () => {
-      task.cancelled = true;
-    };
-  };
-  return {
-    schedule,
-    delays: () => tasks.map((task) => task.delayMs),
-    flush: () => {
-      const current = tasks.splice(0);
-      for (const task of current) {
-        if (!task.cancelled) task.run();
-      }
-    },
-  };
+function createClickIntentArbiter() {
+  return createArbiter(() => () => {});
 }
 
 function intent(key: string, events: string[]): ClickIntent {
@@ -51,80 +28,90 @@ function nextTurn(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-Deno.test("click intent - confirms one simple click after 320 ms", () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+Deno.test("click intent - runs one simple click immediately", () => {
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
 
   arbiter.click(intent("A", events));
-  assertEquals(events, []);
-  assertEquals(scheduler.delays(), [CLICK_INTENT_DELAY_MS]);
 
-  scheduler.flush();
   assertEquals(events, ["single:A"]);
 });
 
-Deno.test("click intent - double-click cancels both simple click events", () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+Deno.test("click intent - retention window releases history but never delays the simple", async () => {
+  let releaseWindow = () => {};
+  let scheduledDelay = 0;
+  const schedule: ClickIntentSchedule = (run, delayMs) => {
+    releaseWindow = run;
+    scheduledDelay = delayMs;
+    return () => {};
+  };
+  const arbiter = createArbiter(schedule);
+  const events: string[] = [];
+  const revert: ClickIntentRevert = () => {
+    events.push("revert");
+  };
+  revert.release = () => {
+    events.push("release");
+  };
+
+  arbiter.click({
+    key: "A",
+    onSingle: () => {
+      events.push("single");
+      return revert;
+    },
+    onDouble: () => events.push("double"),
+  });
+  assertEquals(events, ["single"]);
+  assertEquals(scheduledDelay, CLICK_INTENT_REVERT_WINDOW_MS);
+
+  await Promise.resolve();
+  releaseWindow();
+  await Promise.resolve();
+  assertEquals(events, ["single", "release"]);
+});
+
+Deno.test("click intent - native double reverts the immediate simple before detail", async () => {
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   const target = intent("A", events);
 
-  // Sequence native : click, click, puis dblclick.
+  // Sequence native : click, click(detail=2), puis dblclick.
   arbiter.click(target, 1);
   arbiter.click(target, 2);
   arbiter.doubleClick(target);
-  scheduler.flush();
+  assertEquals(events, ["single:A"]);
 
-  assertEquals(events, ["double:A"]);
+  await nextTurn();
+  assertEquals(events, ["single:A", "revert:A", "double:A"]);
 });
 
-Deno.test("click intent - different targets keep independent simple clicks", () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+Deno.test("click intent - different targets keep both immediate simple clicks", () => {
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
 
   arbiter.click(intent("A", events));
   arbiter.click(intent("B", events));
-  scheduler.flush();
 
   assertEquals(events, ["single:A", "single:B"]);
 });
 
-Deno.test("click intent - a double-click cancels only its own target", () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+Deno.test("click intent - a double-click compensates only its own target", async () => {
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   const first = intent("A", events);
 
-  arbiter.click(first, 1);
   arbiter.click(intent("B", events));
+  arbiter.click(first, 1);
   arbiter.click(first, 2);
   arbiter.doubleClick(first);
-  scheduler.flush();
-
-  assertEquals(events, ["double:A", "single:B"]);
-});
-
-Deno.test("click intent - a late native double reverts context before detail", async () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
-  const events: string[] = [];
-  const target = intent("A", events);
-
-  arbiter.click(target, 1);
-  scheduler.flush();
-  arbiter.click(target, 2);
-  arbiter.doubleClick(target);
-  scheduler.flush();
   await nextTurn();
 
-  assertEquals(events, ["single:A", "revert:A", "double:A"]);
+  assertEquals(events, ["single:B", "single:A", "revert:A", "double:A"]);
 });
 
-Deno.test("click intent - a late double waits for async context restore", async () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+Deno.test("click intent - a double waits for async context restore", async () => {
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   let finishRestore = () => {};
   const target: ClickIntent = {
@@ -142,7 +129,6 @@ Deno.test("click intent - a late double waits for async context restore", async 
   };
 
   arbiter.click(target, 1);
-  scheduler.flush();
   arbiter.click(target, 2);
   arbiter.doubleClick(target);
   await nextTurn();
@@ -153,9 +139,8 @@ Deno.test("click intent - a late double waits for async context restore", async 
   assertEquals(events, ["single", "restore:start", "double"]);
 });
 
-Deno.test("click intent - a failed late restore keeps detail closed", async () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+Deno.test("click intent - a failed immediate restore keeps detail closed", async () => {
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   const target: ClickIntent = {
     key: "A",
@@ -170,7 +155,6 @@ Deno.test("click intent - a failed late restore keeps detail closed", async () =
   };
 
   arbiter.click(target, 1);
-  scheduler.flush();
   arbiter.click(target, 2);
   arbiter.doubleClick(target);
   await nextTurn();
@@ -179,8 +163,7 @@ Deno.test("click intent - a failed late restore keeps detail closed", async () =
 });
 
 Deno.test("click intent - repeated doubles cannot bypass a pending failed restore", async () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   let finishRestore = (_restored: boolean) => {};
   const target: ClickIntent = {
@@ -198,7 +181,6 @@ Deno.test("click intent - repeated doubles cannot bypass a pending failed restor
   };
 
   arbiter.click(target, 1);
-  scheduler.flush();
   arbiter.click(target, 2);
   arbiter.doubleClick(target);
   arbiter.doubleClick(target);
@@ -210,9 +192,40 @@ Deno.test("click intent - repeated doubles cannot bypass a pending failed restor
   assertEquals(events, ["single", "restore:start"]);
 });
 
+Deno.test("click intent - a later double in the same click burst cannot bypass a failed restore", async () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+  const target: ClickIntent = {
+    key: "A",
+    onSingle: () => {
+      events.push("single");
+      return async () => {
+        events.push("restore:failed");
+        return false;
+      };
+    },
+    onDouble: () => events.push("double"),
+  };
+
+  arbiter.click(target, 1);
+  arbiter.click(target, 2);
+  arbiter.doubleClick(target);
+  await nextTurn();
+
+  // Suite native possible d'une rafale de quatre clics.
+  arbiter.click(target, 3);
+  arbiter.click(target, 4);
+  arbiter.doubleClick(target);
+  await nextTurn();
+  assertEquals(events, ["single", "restore:failed"]);
+
+  // Une nouvelle séquence native repart bien d'un premier clic explicite.
+  arbiter.click(target, 1);
+  assertEquals(events, ["single", "restore:failed", "single"]);
+});
+
 Deno.test("click intent - cleanup cancels a double waiting on restore", async () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   let finishRestore = () => {};
   const target: ClickIntent = {
@@ -230,9 +243,9 @@ Deno.test("click intent - cleanup cancels a double waiting on restore", async ()
   };
 
   arbiter.click(target, 1);
-  scheduler.flush();
   arbiter.click(target, 2);
   arbiter.doubleClick(target);
+  await nextTurn();
   arbiter.cancelAll();
   finishRestore();
   await nextTurn();
@@ -240,9 +253,8 @@ Deno.test("click intent - cleanup cancels a double waiting on restore", async ()
   assertEquals(events, ["single", "restore:start"]);
 });
 
-Deno.test("click intent - Space runs context and Enter runs drilldown immediately", () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+Deno.test("click intent - Space runs context and Enter runs detail immediately", () => {
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   const prevented: string[] = [];
   const target = intent("A", events);
@@ -262,12 +274,10 @@ Deno.test("click intent - Space runs context and Enter runs drilldown immediatel
 
   assertEquals(events, ["single:A", "double:A"]);
   assertEquals(prevented, ["Space", "Enter"]);
-  assertEquals(scheduler.delays(), []);
 });
 
 Deno.test("click intent - repeated keyboard events stay inert", () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   let prevented = 0;
 
@@ -281,30 +291,12 @@ Deno.test("click intent - repeated keyboard events stay inert", () => {
   assertEquals(prevented, 0);
 });
 
-Deno.test("click intent - keyboard activation cancels a pending pointer click", () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+Deno.test("click intent - Enter preserves an immediate pointer context", async () => {
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   const target = intent("A", events);
 
   arbiter.click(target);
-  arbiter.keyDown(target, {
-    key: "Enter",
-    preventDefault: () => {},
-  });
-  scheduler.flush();
-
-  assertEquals(events, ["double:A"]);
-});
-
-Deno.test("click intent - Enter preserves a confirmed pointer context", async () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
-  const events: string[] = [];
-  const target = intent("A", events);
-
-  arbiter.click(target);
-  scheduler.flush();
   await Promise.resolve();
   arbiter.keyDown(target, {
     key: "Enter",
@@ -314,9 +306,8 @@ Deno.test("click intent - Enter preserves a confirmed pointer context", async ()
   assertEquals(events, ["single:A", "double:A"]);
 });
 
-Deno.test("click intent - releases history without reverting confirmed context", async () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+Deno.test("click intent - a new first click releases history without reverting", async () => {
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   const revert: ClickIntentRevert = () => {
     events.push("revert");
@@ -327,27 +318,22 @@ Deno.test("click intent - releases history without reverting confirmed context",
   const target: ClickIntent = {
     key: "A",
     onSingle: () => {
-      events.push("single");
+      events.push("single:A");
       return revert;
     },
-    onDouble: () => events.push("double"),
+    onDouble: () => events.push("double:A"),
   };
 
   arbiter.click(target);
-  scheduler.flush();
   await Promise.resolve();
-  arbiter.keyDown(target, {
-    key: "Enter",
-    preventDefault: () => {},
-  });
+  arbiter.click(intent("B", events));
   await Promise.resolve();
 
-  assertEquals(events, ["single", "double", "release"]);
+  assertEquals(events, ["single:A", "single:B", "release"]);
 });
 
 Deno.test("click intent - releases history after a compensated double", async () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
   const revert: ClickIntentRevert = () => {
     events.push("revert");
@@ -365,7 +351,6 @@ Deno.test("click intent - releases history after a compensated double", async ()
   };
 
   arbiter.click(target);
-  scheduler.flush();
   arbiter.click(target, 2);
   arbiter.doubleClick(target);
   await nextTurn();
@@ -373,16 +358,33 @@ Deno.test("click intent - releases history after a compensated double", async ()
   assertEquals(events, ["single", "revert", "release", "double"]);
 });
 
-Deno.test("click intent - cancel and cleanup prevent delayed actions", () => {
-  const scheduler = fakeScheduler();
-  const arbiter = createClickIntentArbiter(scheduler.schedule);
+Deno.test("click intent - cancel and cleanup release without undoing", async () => {
+  const arbiter = createClickIntentArbiter();
   const events: string[] = [];
+  const makeTarget = (key: string): ClickIntent => {
+    const revert: ClickIntentRevert = () => {
+      events.push(`revert:${key}`);
+    };
+    revert.release = () => {
+      events.push(`release:${key}`);
+    };
+    return {
+      key,
+      onSingle: () => {
+        events.push(`single:${key}`);
+        return revert;
+      },
+      onDouble: () => events.push(`double:${key}`),
+    };
+  };
 
-  arbiter.click(intent("A", events));
-  arbiter.click(intent("B", events));
+  arbiter.click(makeTarget("A"));
+  await Promise.resolve();
   arbiter.cancel("A");
+  arbiter.click(makeTarget("B"));
+  await Promise.resolve();
   arbiter.cancelAll();
-  scheduler.flush();
+  await Promise.resolve();
 
-  assertEquals(events, []);
+  assertEquals(events, ["single:A", "single:B", "release:A", "release:B"]);
 });

@@ -201,6 +201,7 @@ function WideFunnelChart(
     hasNavJump,
     hasDetail,
     onToggleContext,
+    runConversation,
     onOpenDetail,
     isContextActive,
   }: {
@@ -210,6 +211,7 @@ function WideFunnelChart(
     hasNavJump: (label: string) => boolean;
     hasDetail: (stage: FunnelStage) => boolean;
     onToggleContext: (stage: FunnelStage) => ClickIntentSingleResult;
+    runConversation: ReturnType<typeof useActiveContext>["runConversation"];
     onOpenDetail: (stage: FunnelStage) => Promise<DrillDownChannel>;
     /** Le contour ne reflète que le panier confirmé par l'hôte. */
     isContextActive: (stage: FunnelStage) => boolean;
@@ -260,7 +262,11 @@ function WideFunnelChart(
             : undefined;
           const intent = {
             key: `funnel-stage:${idx}:${stage.label}`,
+            doublePolicy: hasNavJump(stage.label)
+              ? "local" as const
+              : "after-context" as const,
             onSingle: () => onToggleContext(stage),
+            runConversation,
             onDouble: () => {
               void onOpenDetail(stage);
             },
@@ -325,7 +331,10 @@ function WideFunnelChart(
                   <DetailToggleButton
                     label={stage.label}
                     onToggle={() => {
-                      void onOpenDetail(stage);
+                      if (jumpable) void onOpenDetail(stage);
+                      else {void runConversation(() => {
+                          void onOpenDetail(stage);
+                        }, Promise.resolve(true));}
                     }}
                     class="absolute right-0 top-0"
                   />
@@ -432,6 +441,7 @@ function MobileFunnelChart(
     hasNavJump,
     hasDetail,
     onToggleContext,
+    runConversation,
     onOpenDetail,
     isContextActive,
     touch,
@@ -442,6 +452,7 @@ function MobileFunnelChart(
     hasNavJump: (label: string) => boolean;
     hasDetail: (stage: FunnelStage) => boolean;
     onToggleContext: (stage: FunnelStage) => ClickIntentSingleResult;
+    runConversation: ReturnType<typeof useActiveContext>["runConversation"];
     onOpenDetail: (stage: FunnelStage) => Promise<DrillDownChannel>;
     /** Les surbrillances reflètent uniquement le panier confirmé par l'hôte. */
     isContextActive: (stage: FunnelStage) => boolean;
@@ -501,7 +512,11 @@ function MobileFunnelChart(
           : undefined;
         const intent = {
           key: `funnel-stage:${idx}:${stage.label}`,
+          doublePolicy: hasNavJump(stage.label)
+            ? "local" as const
+            : "after-context" as const,
           onSingle: () => onToggleContext(stage),
+          runConversation,
           onDouble: () => {
             void handleRowDetail(stage, idx);
           },
@@ -595,7 +610,10 @@ function MobileFunnelChart(
                 <DetailToggleButton
                   label={stage.label}
                   onToggle={() => {
-                    void handleRowDetail(stage, idx);
+                    if (jumpable) void handleRowDetail(stage, idx);
+                    else {void runConversation(() => {
+                        void handleRowDetail(stage, idx);
+                      }, Promise.resolve(true));}
                   }}
                   touch={touch}
                 />
@@ -898,6 +916,7 @@ function FunnelContent(
                   compact={!isWide}
                   selections={activeContext.selections}
                   failed={activeContext.failed}
+                  pending={activeContext.pending}
                   evictedLabel={activeContext.evictedLabel}
                   onRemove={(selection) => activeContext.remove(selection)}
                   onClear={() => activeContext.clear()}
@@ -946,6 +965,7 @@ function FunnelContent(
                 compact={!isWide}
                 selections={activeContext.selections}
                 failed={activeContext.failed}
+                pending={activeContext.pending}
                 evictedLabel={activeContext.evictedLabel}
                 onRemove={(selection) => activeContext.remove(selection)}
                 onClear={() => activeContext.clear()}
@@ -993,6 +1013,7 @@ function FunnelContent(
               hasNavJump={hasNavJump}
               hasDetail={hasStageDetail}
               onToggleContext={activateStageContext}
+              runConversation={activeContext.runConversation}
               onOpenDetail={openStageDetail}
               isContextActive={(stage) =>
                 activeContext.isSelected(funnelStageContext(data, stage))}
@@ -1005,6 +1026,7 @@ function FunnelContent(
               hasNavJump={hasNavJump}
               hasDetail={hasStageDetail}
               onToggleContext={activateStageContext}
+              runConversation={activeContext.runConversation}
               onOpenDetail={openStageDetail}
               isContextActive={(stage) =>
                 activeContext.isSelected(funnelStageContext(data, stage))}

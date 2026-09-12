@@ -864,6 +864,7 @@ function InvoiceContent({
         if (canExpand) return context.activateReversible(item);
         void context.activate(item);
       },
+      doublePolicy: "local",
       onDoubleActivate: canExpand
         ? () => setExpandedIdx(expandedIdx === row.idx ? null : row.idx)
         : undefined,
@@ -891,10 +892,12 @@ function InvoiceContent({
     <ActiveContextChip
       selections={activeContext.selections}
       failed={activeContext.failed}
+      pending={activeContext.pending}
       evictedLabel={activeContext.evictedLabel}
       onRemove={activeContext.remove}
       onClear={activeContext.clear}
       compact={!isWide}
+      popoverAlign={isWide ? "start" : "end"}
     />
   );
 

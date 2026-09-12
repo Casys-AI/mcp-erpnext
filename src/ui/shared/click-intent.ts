@@ -1,31 +1,53 @@
 /**
- * Arbitre entre clic simple et double-clic.
+ * Arbitre entre clic simple et double-clic sans retarder le premier effet.
  *
- * Le navigateur envoie deux `click` avant `dblclick`. Le clic simple attend
- * donc une courte confirmation ; le double-clic annule seulement le clic en
- * attente de la même cible. Les autres cibles restent indépendantes.
+ * Le navigateur envoie `click(detail=1)`, puis `click(detail=2)` avant
+ * `dblclick`. Le premier clic active donc immédiatement le contexte et garde
+ * seulement sa compensation. Si un second clic natif suit sur la même cible,
+ * cette compensation continue indépendamment de la consultation locale.
  */
-
-export const CLICK_INTENT_DELAY_MS = 320;
 
 export interface ClickIntentRevert {
   /** `false` indique que la compensation distante n'a pas été confirmée. */
   (): boolean | void | Promise<boolean | void>;
-  /** Libère l'historique dès que ce clic ne peut plus devenir un double-clic. */
+  /** Libère l'historique quand ce clic ne peut plus devenir un double-clic. */
   release?: () => void;
+}
+export interface ClickIntentCommit
+  extends Promise<undefined | ClickIntentRevert> {
+  /** Holds visible pending while an undo waits for the initial acknowledgement. */
+  retainPending?: () => () => void;
 }
 export type ClickIntentSingleResult =
   | void
   | ClickIntentRevert
   | Promise<void | ClickIntentRevert>;
 
+/**
+ * Fenêtre de réversibilité seulement : elle ne retarde jamais le clic simple.
+ * Elle dépasse volontairement un double-clic usuel, puis libère le journal.
+ */
+export const CLICK_INTENT_REVERT_WINDOW_MS = 5_000;
+
+export type ClickIntentSchedule = (
+  run: () => void,
+  delayMs: number,
+) => () => void;
+
 export interface ClickIntent {
   /** Identité stable de la ligne, barre ou point concerné. */
   key: string;
-  /** Action du clic simple confirmé, typiquement l'ajout au contexte. */
+  /** Action immédiate du clic simple, typiquement l'ajout au contexte. */
   onSingle: () => ClickIntentSingleResult;
   /** Action exclusive du double-clic, typiquement le drilldown. */
   onDouble: () => void;
+  /** Unclassified/conversational actions wait for confirmed compensation. */
+  doublePolicy?: "local" | "after-context";
+  /** Viewer-owned gate: no conversation while another context write is pending. */
+  runConversation?: (
+    action: () => void,
+    restored: Promise<boolean>,
+  ) => Promise<boolean>;
 }
 
 export interface ClickIntentKeyEvent {
@@ -34,26 +56,22 @@ export interface ClickIntentKeyEvent {
   preventDefault(): void;
 }
 
-export type ClickIntentSchedule = (
-  run: () => void,
-  delayMs: number,
-) => () => void;
-
 export interface ClickIntentArbiter {
-  /** Attend la confirmation qu'aucun double-clic ne suit. */
+  /** Exécute le simple immédiatement ; `detail >= 2` lance sa compensation. */
   click(intent: ClickIntent, clickCount?: number): void;
-  /** Annule le simple de cette cible et exécute uniquement le double. */
+  /** Opens local detail immediately; conversation waits for compensation. */
   doubleClick(intent: ClickIntent): void;
   /** Espace exécute le simple ; Entrée exécute le double, sans attente. */
   keyDown(intent: ClickIntent, event: ClickIntentKeyEvent): void;
-  /** Annule le clic simple en attente d'une cible. */
+  /** Libère l'historique réversible d'une cible sans annuler son effet. */
   cancel(key: string): void;
-  /** Annule tous les clics en attente, notamment lors du démontage. */
+  /** Libère tout l'historique, notamment lors du démontage. */
   cancelAll(): void;
 }
 
-interface PendingClick {
-  cancelTimer: () => void;
+interface RetainedSingle {
+  committed: ClickIntentCommit;
+  cancelRelease: () => void;
 }
 
 function scheduleTimeout(run: () => void, delayMs: number): () => void {
@@ -64,31 +82,37 @@ function scheduleTimeout(run: () => void, delayMs: number): () => void {
 export function createClickIntentArbiter(
   schedule: ClickIntentSchedule = scheduleTimeout,
 ): ClickIntentArbiter {
-  const pending = new Map<string, PendingClick>();
-  // Le seuil natif du double-clic appartient au système et peut dépasser
-  // notre délai. On garde donc de quoi annuler un simple déjà confirmé
-  // si le second `click` porte malgré tout `detail >= 2`.
-  const committedSingles = new Map<
-    string,
-    Promise<ClickIntentRevert | null>
-  >();
+  // Un nouveau premier clic libère les compensations plus anciennes. Il ne
+  // peut pas appartenir au même double-clic natif (son `detail` vaudrait 2).
+  const retainedSingles = new Map<string, RetainedSingle>();
   const pendingReverts = new Map<string, Promise<boolean>>();
   const delayedDoubles = new Map<string, object>();
+  const failedDoubleSequences = new Set<string>();
 
-  function startSingle(intent: ClickIntent): Promise<ClickIntentRevert | null> {
+  function startSingle(intent: ClickIntent): ClickIntentCommit {
     try {
-      return Promise.resolve(intent.onSingle()).then(
-        (revert) => typeof revert === "function" ? revert : null,
-        () => null,
+      const result = intent.onSingle();
+      const committed = Promise.resolve(result).then(
+        (revert) => typeof revert === "function" ? revert : undefined,
+        () => () => false,
       );
+      return Object.assign(committed, {
+        retainPending: result && "retainPending" in result &&
+            typeof result.retainPending === "function"
+          ? result.retainPending as () => () => void
+          : undefined,
+      });
     } catch {
-      return Promise.resolve(null);
+      return Promise.resolve(() => false);
     }
   }
 
   function startRevert(
-    committed: Promise<ClickIntentRevert | null>,
+    committed: ClickIntentCommit,
   ): Promise<boolean> {
+    // Claim before opening anything that can unmount this arbiter. The promise
+    // owns undo and release from here; cancelAll only cancels future callbacks.
+    const releasePending = committed.retainPending?.();
     return committed.then(async (revert) => {
       try {
         return (await revert?.()) !== false;
@@ -97,52 +121,58 @@ export function createClickIntentArbiter(
       } finally {
         revert?.release?.();
       }
-    }, () => false);
+    }, () => false).finally(() => releasePending?.());
   }
 
   function releaseCommitted(
-    committed: Promise<ClickIntentRevert | null>,
+    committed: ClickIntentCommit,
   ) {
     void committed.then((revert) => revert?.release?.(), () => {});
   }
 
   function releaseAllCommitted() {
-    for (const committed of committedSingles.values()) {
-      releaseCommitted(committed);
+    for (const retained of retainedSingles.values()) {
+      retained.cancelRelease();
+      releaseCommitted(retained.committed);
     }
-    committedSingles.clear();
-  }
-
-  function cancelTimer(key: string) {
-    const current = pending.get(key);
-    if (!current) return;
-    pending.delete(key);
-    current.cancelTimer();
+    retainedSingles.clear();
   }
 
   function cancel(key: string) {
-    cancelTimer(key);
-    const committed = committedSingles.get(key);
-    committedSingles.delete(key);
-    if (committed) releaseCommitted(committed);
+    const retained = retainedSingles.get(key);
+    retainedSingles.delete(key);
+    if (retained) {
+      retained.cancelRelease();
+      releaseCommitted(retained.committed);
+    }
     pendingReverts.delete(key);
     delayedDoubles.delete(key);
+    failedDoubleSequences.delete(key);
   }
 
   function cancelAll() {
-    const current = [...pending.values()];
-    pending.clear();
     releaseAllCommitted();
     pendingReverts.clear();
     delayedDoubles.clear();
-    for (const click of current) click.cancelTimer();
+    failedDoubleSequences.clear();
   }
 
   function runSingle(intent: ClickIntent, reversible: boolean) {
     cancel(intent.key);
     const committed = startSingle(intent);
     if (reversible) {
-      committedSingles.set(intent.key, committed);
+      // Enregistrer avant de programmer garde l'arbitre correct même avec un
+      // ordonnanceur de test synchrone.
+      const retained: RetainedSingle = {
+        committed,
+        cancelRelease: () => {},
+      };
+      retainedSingles.set(intent.key, retained);
+      retained.cancelRelease = schedule(() => {
+        if (retainedSingles.get(intent.key) !== retained) return;
+        retainedSingles.delete(intent.key);
+        releaseCommitted(committed);
+      }, CLICK_INTENT_REVERT_WINDOW_MS);
     } else {
       releaseCommitted(committed);
     }
@@ -150,84 +180,93 @@ export function createClickIntentArbiter(
 
   function runDouble(intent: ClickIntent) {
     // Plusieurs `dblclick` peuvent être émis pendant une séquence rapide de
-    // quatre clics. Tant que la compensation distante du premier est en vol,
-    // aucun suivant ne doit contourner son résultat et ouvrir le détail.
-    if (delayedDoubles.has(intent.key)) return;
-    cancelTimer(intent.key);
-    const committed = committedSingles.get(intent.key);
-    committedSingles.delete(intent.key);
+    // quatre clics. Aucun suivant ne doit contourner une compensation en vol.
+    if (
+      delayedDoubles.has(intent.key) ||
+      failedDoubleSequences.has(intent.key)
+    ) return;
+    const retained = retainedSingles.get(intent.key);
+    retainedSingles.delete(intent.key);
+    retained?.cancelRelease();
     const pendingRevert = pendingReverts.get(intent.key) ??
-      (committed ? startRevert(committed) : null);
+      (retained ? startRevert(retained.committed) : null);
     pendingReverts.delete(intent.key);
-    if (pendingRevert) {
-      const token = {};
-      delayedDoubles.set(intent.key, token);
-      void pendingRevert.then((restored) => {
-        if (delayedDoubles.get(intent.key) !== token) return;
-        delayedDoubles.delete(intent.key);
-        // Ne jamais superposer détail et contexte : si le host n'a pas
-        // confirmé la compensation du clic simple tardif, le détail reste
-        // fermé et l'état d'échec du contexte demeure visible.
-        if (!restored) return;
-        intent.onDouble();
-      });
-    } else {
-      delayedDoubles.delete(intent.key);
-      intent.onDouble();
+    if (intent.doublePolicy !== "local" && intent.runConversation) {
+      runConversation(intent, pendingRevert ?? Promise.resolve(true));
+      return;
     }
+    if (!pendingRevert) {
+      failedDoubleSequences.add(intent.key);
+      intent.onDouble();
+      return;
+    }
+
+    const token = {};
+    delayedDoubles.set(intent.key, token);
+    // Register all cleanup ownership before this callback can navigate/unmount.
+    if (intent.doublePolicy === "local") intent.onDouble();
+    void pendingRevert.then((restored) => {
+      if (delayedDoubles.get(intent.key) !== token) return;
+      delayedDoubles.delete(intent.key);
+      // Keep this native burst consumed after success as well as failure.
+      failedDoubleSequences.add(intent.key);
+      if (restored) {
+        if (intent.doublePolicy !== "local") intent.onDouble();
+      }
+    });
+  }
+
+  function runConversation(intent: ClickIntent, restored: Promise<boolean>) {
+    const token = {};
+    delayedDoubles.set(intent.key, token);
+    const finish = () => {
+      if (delayedDoubles.get(intent.key) !== token) return;
+      delayedDoubles.delete(intent.key);
+      failedDoubleSequences.add(intent.key);
+    };
+    void intent.runConversation!(() => {
+      if (delayedDoubles.get(intent.key) === token) intent.onDouble();
+    }, restored).then(finish, finish);
   }
 
   return {
     click(intent, clickCount = 1) {
       if (clickCount >= 2) {
-        if (pending.has(intent.key)) {
-          // Le second clic est arrivé à temps : couper immédiatement le
-          // simple, le `dblclick` qui suit exécutera seul le drilldown.
-          cancelTimer(intent.key);
-        } else {
-          // Le système a reconnu un double-clic après notre confirmation :
-          // retirer l'effet du simple avant que `dblclick` exécute le détail.
-          const committed = committedSingles.get(intent.key);
-          committedSingles.delete(intent.key);
-          if (committed) {
-            pendingReverts.set(intent.key, startRevert(committed));
-          }
+        const retained = retainedSingles.get(intent.key);
+        retainedSingles.delete(intent.key);
+        retained?.cancelRelease();
+        if (retained && !pendingReverts.has(intent.key)) {
+          pendingReverts.set(
+            intent.key,
+            startRevert(retained.committed),
+          );
         }
         return;
       }
 
-      // Un nouveau premier clic ne peut plus appartenir à la séquence
-      // précédente. Les compensations devenues inutiles sont oubliées.
+      failedDoubleSequences.delete(intent.key);
       releaseAllCommitted();
       pendingReverts.clear();
-      cancel(intent.key);
-
-      // Enregistrer avant de programmer rend aussi l'arbitre sûr face à un
-      // ordonnanceur de test synchrone.
-      const current: PendingClick = { cancelTimer: () => {} };
-      pending.set(intent.key, current);
-      current.cancelTimer = schedule(() => {
-        if (pending.get(intent.key) !== current) return;
-        pending.delete(intent.key);
-        committedSingles.set(intent.key, startSingle(intent));
-      }, CLICK_INTENT_DELAY_MS);
+      runSingle(intent, true);
     },
     doubleClick: runDouble,
     keyDown(intent, event) {
       if (event.repeat) return;
       if (event.key === " ") {
         event.preventDefault();
-        // Espace et Entrée sont deux commandes explicites, pas une séquence
-        // de clics à arbitrer : une Entrée ultérieure ne retire pas Espace.
+        // Les commandes clavier sont explicites, pas une séquence à arbitrer.
         runSingle(intent, false);
         return;
       }
       if (event.key === "Enter") {
         event.preventDefault();
-        // Entrée est une commande explicite : elle annule seulement un clic
-        // encore en attente, jamais un contexte déjà confirmé.
+        // Une Entrée ultérieure conserve un contexte pointer déjà appliqué.
         cancel(intent.key);
-        intent.onDouble();
+        if (intent.doublePolicy !== "local" && intent.runConversation) {
+          runConversation(intent, Promise.resolve(true));
+        } else {
+          intent.onDouble();
+        }
       }
     },
     cancel,

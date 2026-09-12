@@ -1,6 +1,10 @@
 import { assertEquals } from "@std/assert";
-import { createClickIntentArbiter } from "../click-intent.ts";
+import { createClickIntentArbiter as createArbiter } from "../click-intent.ts";
 import { contextInteractionProps } from "./context-interaction.ts";
+
+function createClickIntentArbiter() {
+  return createArbiter(() => () => {});
+}
 
 function nextTurn(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -55,46 +59,13 @@ Deno.test("document context interaction - separates context selection from actio
   assertEquals(props["aria-controls"], "invoice-items-row-1-actions");
 });
 
-Deno.test("document context interaction - single and double pointer gestures stay exclusive", () => {
-  let flushPending = () => {};
-  const arbiter = createClickIntentArbiter((run) => {
-    let cancelled = false;
-    flushPending = () => {
-      if (!cancelled) run();
-    };
-    return () => {
-      cancelled = true;
-    };
-  });
+Deno.test("document context interaction - double pointer gesture compensates context", async () => {
+  const arbiter = createClickIntentArbiter();
   const activations: string[] = [];
   const props = contextInteractionProps({
     label: "Select ITEM-1 as active context",
     selected: false,
     expanded: false,
-    onActivate: () => {
-      activations.push("context");
-    },
-    onDoubleActivate: () => activations.push("detail"),
-  }, { arbiter, key: "invoice:ITEM-1" });
-
-  props.onClick({ detail: 1 });
-  props.onClick({ detail: 2 });
-  props.onDblClick?.();
-  flushPending();
-
-  assertEquals(activations, ["detail"]);
-  assertEquals(props["aria-keyshortcuts"], "Enter");
-});
-
-Deno.test("document context interaction - a late native double restores context", async () => {
-  let flushPending = () => {};
-  const arbiter = createClickIntentArbiter((run) => {
-    flushPending = run;
-    return () => {};
-  });
-  const activations: string[] = [];
-  const props = contextInteractionProps({
-    label: "Select ITEM-1 as active context",
     onActivate: () => {
       activations.push("context");
       return () => {
@@ -105,12 +76,29 @@ Deno.test("document context interaction - a late native double restores context"
   }, { arbiter, key: "invoice:ITEM-1" });
 
   props.onClick({ detail: 1 });
-  flushPending();
+  assertEquals(activations, ["context"]);
   props.onClick({ detail: 2 });
   props.onDblClick?.();
   await nextTurn();
 
   assertEquals(activations, ["context", "restore", "detail"]);
+  assertEquals(props["aria-keyshortcuts"], "Enter");
+});
+
+Deno.test("document context interaction - simple pointer activation has no delay", () => {
+  const arbiter = createClickIntentArbiter();
+  const activations: string[] = [];
+  const props = contextInteractionProps({
+    label: "Select ITEM-1 as active context",
+    onActivate: () => {
+      activations.push("context");
+    },
+    onDoubleActivate: () => activations.push("detail"),
+  }, { arbiter, key: "invoice:ITEM-1" });
+
+  props.onClick({ detail: 1 });
+
+  assertEquals(activations, ["context"]);
 });
 
 Deno.test("document context interaction - Space is context and Enter is detail", () => {
@@ -140,9 +128,7 @@ Deno.test("document context interaction - Space is context and Enter is detail",
 
 Deno.test("document context interaction - a context-only target stays immediate", () => {
   let activations = 0;
-  const arbiter = createClickIntentArbiter(() => {
-    throw new Error("context-only interaction must not schedule a timer");
-  });
+  const arbiter = createClickIntentArbiter();
   const props = contextInteractionProps({
     label: "Add ITEM-1 to active context",
     onActivate: () => {

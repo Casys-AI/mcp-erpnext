@@ -10,7 +10,7 @@ import {
 } from "../../shared/format.ts";
 import type { NavHint } from "../../shared/jumps.ts";
 import { chartSeriesFormat } from "../../shared/levels/bodies.ts";
-import type { ChartData } from "./types.ts";
+import type { ChartData, Dataset } from "./types.ts";
 
 /** Le point courant du contrôle clavier, indépendant du rendu Recharts. */
 export interface ChartCursor {
@@ -413,6 +413,7 @@ export function visibleChartContextResource(
 function chartPointDisplayValue(
   data: ChartData,
   selection: ChartSelection,
+  datasets: ReadonlyMap<string, Dataset>,
 ): string | null {
   if (selection.x !== undefined && selection.y !== undefined) {
     return `${data.xAxisLabel ?? "x"}: ${formatNumber(selection.x, 2)} · ${
@@ -420,9 +421,9 @@ function chartPointDisplayValue(
     }: ${formatNumber(selection.y, 2)}`;
   }
   if (selection.value === undefined) return null;
-  const dataset = data.datasets.find((candidate) =>
-    candidate.label === selection.series
-  );
+  const dataset = selection.series === undefined
+    ? undefined
+    : datasets.get(selection.series);
   const format = dataset
     ? chartSeriesFormat(data, dataset)
     : { currency: data.currency, unit: data.unit };
@@ -435,27 +436,13 @@ function chartPointDisplayValue(
   }`;
 }
 
-/** Point de contexte issu du jeu de données complet, y compris une série masquée. */
-export function chartPointContextItem(
+function chartPointItem(
   data: ChartData,
   identity: string,
+  namespace: string,
   label: string,
   series?: string,
 ): ContextSelectionItem {
-  const values = chartNavigationGroups(data).flat().flatMap((selection) => {
-    if (
-      selection.label !== label ||
-      (series !== undefined && selection.series !== series)
-    ) return [];
-    const formatted = chartPointDisplayValue(data, selection);
-    if (!formatted) return [];
-    return [
-      series || !selection.series
-        ? formatted
-        : `${selection.series}: ${formatted}`,
-    ];
-  });
-  const namespace = chartContextNamespace(identity);
   return {
     id: `${namespace}:point:${encodeURIComponent(label)}:${
       encodeURIComponent(series ?? "all")
@@ -463,8 +450,75 @@ export function chartPointContextItem(
     view: data.title,
     reconcileKey: identity,
     label: series ? `${label} · ${series}` : label,
-    value: values.length > 0 ? values.join(" · ") : undefined,
+    value: undefined,
   };
+}
+
+function chartPointContextCandidates(
+  data: ChartData,
+  identity: string,
+): Map<string, ContextSelectionItem> {
+  const namespace = chartContextNamespace(identity);
+  const datasets = new Map<string, Dataset>();
+  for (const dataset of data.datasets) {
+    if (!datasets.has(dataset.label)) datasets.set(dataset.label, dataset);
+  }
+  const candidates = new Map<
+    string,
+    { item: ContextSelectionItem; values: string[] }
+  >();
+  function append(
+    label: string,
+    series: string | undefined,
+    value: string | null,
+  ) {
+    const item = chartPointItem(data, identity, namespace, label, series);
+    const key = JSON.stringify([label, series ?? null]);
+    let candidate = candidates.get(key);
+    if (!candidate) {
+      candidate = { item, values: [] };
+      candidates.set(key, candidate);
+    }
+    if (value) candidate.values.push(value);
+  }
+  for (const group of chartNavigationGroups(data)) {
+    for (const selection of group) {
+      const formatted = chartPointDisplayValue(data, selection, datasets);
+      append(
+        selection.label,
+        undefined,
+        formatted && selection.series
+          ? `${selection.series}: ${formatted}`
+          : formatted,
+      );
+      if (selection.series) {
+        append(selection.label, selection.series, formatted);
+      }
+    }
+  }
+  return new Map([...candidates].map(([id, { item, values }]) => [
+    id,
+    { ...item, value: values.length > 0 ? values.join(" · ") : undefined },
+  ]));
+}
+
+/** Point de contexte issu du jeu de données complet, y compris une série masquée. */
+export function chartPointContextItem(
+  data: ChartData,
+  identity: string,
+  label: string,
+  series?: string,
+): ContextSelectionItem {
+  const item = chartPointItem(
+    data,
+    identity,
+    chartContextNamespace(identity),
+    label,
+    series,
+  );
+  return chartPointContextCandidates(data, identity).get(
+    JSON.stringify([label, series ?? null]),
+  ) ?? item;
 }
 
 /**
@@ -477,20 +531,11 @@ export function chartViewContextCandidates(
   wholeLabel: string,
   identity: string,
 ): ContextSelectionItem[] {
+  const candidates = new Map<string, ContextSelectionItem>();
   const whole = chartContextSelection(data, hiddenSeries, wholeLabel, identity);
-  const candidates = new Map<string, ContextSelectionItem>([[whole.id, whole]]);
-  for (const selection of chartNavigationGroups(data).flat()) {
-    const generic = chartPointContextItem(data, identity, selection.label);
-    candidates.set(generic.id, generic);
-    if (selection.series) {
-      const exact = chartPointContextItem(
-        data,
-        identity,
-        selection.label,
-        selection.series,
-      );
-      candidates.set(exact.id, exact);
-    }
+  candidates.set(whole.id, whole);
+  for (const item of chartPointContextCandidates(data, identity).values()) {
+    candidates.set(item.id, item);
   }
   return [...candidates.values()];
 }

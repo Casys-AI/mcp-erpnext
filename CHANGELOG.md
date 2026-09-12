@@ -23,6 +23,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   context follows only the visible series. Refreshes update hidden selections
   and remove obsolete KPI series when their date labels are no longer available.
 - The invoice context menu stays inside both desktop and mobile viewer frames.
+- Double-clicking an element without a detail action preserves its context
+  selection without sending duplicate updates. Large-chart refreshes reuse their
+  point index instead of rebuilding it for each selected point.
 - Revenue analytics bucket invoice dates by calendar month and return aligned
   month labels with KPI sparklines.
 - Purchase Invoices show their effective total and a small information icon

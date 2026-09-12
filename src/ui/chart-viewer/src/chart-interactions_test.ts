@@ -719,3 +719,47 @@ Deno.test("chart whole context - a refresh title change keeps and refreshes the 
     { x: 12, y: 6, label: "BOLT" },
   );
 });
+
+Deno.test("chart refresh context - aggregates repeated labels in payload order", () => {
+  const data: ChartData = {
+    title: "Repeated categories",
+    labels: ["July", "July"],
+    datasets: [
+      { label: "Income", values: [10, 20], unit: "%" },
+      { label: "Expenses", values: [4, 7] },
+    ],
+  };
+  const points = chartViewContextCandidates(data, [], "Visible", "root").slice(
+    1,
+  );
+  assertEquals(points.map((point) => point.label), [
+    "July",
+    "July · Income",
+    "July · Expenses",
+  ]);
+  assertEquals(points.map((point) => point.value), [
+    "Income: 10% · Income: 20% · Expenses: 4 · Expenses: 7",
+    "10% · 20%",
+    "4 · 7",
+  ]);
+});
+
+Deno.test("chart refresh context - reads point values once for a large dataset", () => {
+  let reads = 0;
+  const values = new Proxy(Array.from({ length: 1000 }, (_, i) => i), {
+    get(target, property, receiver) {
+      if (typeof property === "string" && /^\d+$/.test(property)) reads++;
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  const data: ChartData = {
+    title: "Large chart",
+    labels: values.map((_, i) => `Day ${i}`),
+    datasets: [{ label: "Revenue", values }],
+  };
+  reads = 0;
+  const candidates = chartViewContextCandidates(data, [], "Visible", "large");
+  assertEquals(candidates.length, 2001);
+  assert(reads <= 3000, `Expected linear value reads, got ${reads}`);
+  assertEquals(candidates.at(-1)?.value, "999");
+});

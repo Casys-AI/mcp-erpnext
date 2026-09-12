@@ -291,13 +291,23 @@ function WideFunnelChart(
                       "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                   )}
                   onClick={interactive
-                    ? (event) => clickIntent.click(intent, event.detail)
+                    ? (event) => {
+                      if (detailAvailable || event.detail < 2) {
+                        clickIntent.click(intent, event.detail);
+                      }
+                    }
                     : undefined}
-                  onDblClick={interactive
+                  onDblClick={detailAvailable
                     ? () => clickIntent.doubleClick(intent)
                     : undefined}
                   onKeyDown={interactive
-                    ? (event) => clickIntent.keyDown(intent, event)
+                    ? (event) => {
+                      if (
+                        detailAvailable || (contextEnabled && event.key === " ")
+                      ) {
+                        clickIntent.keyDown(intent, event);
+                      }
+                    }
                     : undefined}
                   aria-label={interactive
                     ? funnelStageAriaLabel(stage, jumpable, contextEnabled, t)
@@ -553,13 +563,23 @@ function MobileFunnelChart(
                   minHeight: touch ? 40 : undefined,
                 }}
                 onClick={interactive
-                  ? (event) => clickIntent.click(intent, event.detail)
+                  ? (event) => {
+                    if (detailAvailable || event.detail < 2) {
+                      clickIntent.click(intent, event.detail);
+                    }
+                  }
                   : undefined}
-                onDblClick={interactive
+                onDblClick={detailAvailable
                   ? () => clickIntent.doubleClick(intent)
                   : undefined}
                 onKeyDown={interactive
-                  ? (event) => clickIntent.keyDown(intent, event)
+                  ? (event) => {
+                    if (
+                      detailAvailable || (contextEnabled && event.key === " ")
+                    ) {
+                      clickIntent.keyDown(intent, event);
+                    }
+                  }
                   : undefined}
                 aria-label={interactive
                   ? funnelStageAriaLabel(stage, jumpable, contextEnabled, t)

@@ -2,19 +2,20 @@
  * Tests du moteur i18n.
  *
  * Règles vérifiées :
- *   1. Parité des clés fr / en (même ensemble exact).
+ *   1. Parité des clés fr / en / zh (même ensemble exact).
  *   2. resolveLang réduit correctement les tags BCP 47.
  *   3. Interpolation nommée ({n}, {label}, …).
  *   4. Clé absente → retourne la clé, jamais undefined ni exception.
- *   5. Repli en → en si la langue n'est pas fr.
+ *   5. Repli vers en si la langue ou une traduction n'est pas reconnue.
  */
 
 import { assertEquals, assertNotEquals } from "@std/assert";
 import { en } from "./i18n/en.ts";
 import { fr } from "./i18n/fr.ts";
+import { zh } from "./i18n/zh.ts";
 import { getCatalog, resolveLang, setLangSource, t } from "./i18n.ts";
 
-// ── 1. Parité des clés fr / en ────────────────────────────────────────────
+// ── 1. Parité des catalogues ──────────────────────────────────────────────
 
 Deno.test("i18n - fr et en ont exactement les mêmes clés", () => {
   const enKeys = new Set(Object.keys(en));
@@ -39,6 +40,24 @@ Deno.test("i18n - fr et en ont exactement les mêmes clés", () => {
   );
 });
 
+Deno.test("i18n - zh et en ont exactement les mêmes clés", () => {
+  assertEquals(Object.keys(zh).sort(), Object.keys(en).sort());
+  for (const [key, value] of Object.entries(zh)) {
+    assertNotEquals(value.trim(), "", `Traduction chinoise vide : ${key}`);
+  }
+});
+
+Deno.test("i18n - zh conserve les paramètres d'interpolation métier", () => {
+  const placeholders = (value: string): string[] =>
+    [...new Set([...value.matchAll(/\{(\w+)\}/g)].map((match) => match[1]))]
+      // Le suffixe pluriel anglais n'a pas d'équivalent en chinois.
+      .filter((name) => name !== "s")
+      .sort();
+  for (const [key, value] of Object.entries(en)) {
+    assertEquals(placeholders(zh[key]), placeholders(value), key);
+  }
+});
+
 Deno.test("i18n - les catalogues ont au moins une clé commune.*", () => {
   const hasCommon = Object.keys(en).some((k) => k.startsWith("common."));
   assertEquals(hasCommon, true);
@@ -52,6 +71,25 @@ Deno.test("resolveLang - fr et ses variantes régionales → fr", () => {
   assertEquals(resolveLang("fr-CA"), "fr");
   assertEquals(resolveLang("fr-BE"), "fr");
   assertEquals(resolveLang("FR-FR"), "fr"); // insensible à la casse
+});
+
+Deno.test("resolveLang - les tags chinois utilisent le catalogue simplifié", () => {
+  for (
+    const locale of [
+      "zh",
+      "zh-CN",
+      "zh-SG",
+      "zh-Hans",
+      "zh-Hans-CN",
+      "ZH-CN",
+      "zh-TW",
+      "zh-HK",
+      "zh-Hant",
+      "zh-Hant-TW",
+    ]
+  ) {
+    assertEquals(resolveLang(locale), "zh", locale);
+  }
 });
 
 Deno.test("resolveLang - tout le reste → en", () => {
@@ -146,4 +184,40 @@ Deno.test("t - locale fr utilise le catalogue français", () => {
   setLangSource(() => "fr-FR");
   assertEquals(t("common.refresh"), fr["common.refresh"]);
   assertNotEquals(t("common.refresh"), en["common.refresh"]);
+});
+
+Deno.test("t - la locale chinoise traduit et interpole sans mise en cache", () => {
+  let locale = "zh-CN";
+  setLangSource(() => locale);
+  try {
+    assertEquals(t("common.refresh"), "刷新");
+    assertEquals(
+      t("invoice.header.due", { date: "2026-09-12" }),
+      "到期 2026-09-12",
+    );
+    locale = "en-US";
+    assertEquals(t("common.refresh"), "Refresh");
+    locale = "zh-Hans";
+    assertEquals(t("common.refresh"), "刷新");
+  } finally {
+    setLangSource(() => undefined);
+  }
+});
+
+Deno.test("t - une traduction absente de zh retombe sur en puis sur la clé", () => {
+  const key = "test.__zh_fallback__";
+  const original = en[key];
+  en[key] = "Fallback {n}";
+  setLangSource(() => "zh-CN");
+  try {
+    assertEquals(t(key, { n: 5 }), "Fallback 5");
+    assertEquals(
+      t("test.__missing_in_all_catalogs__"),
+      "test.__missing_in_all_catalogs__",
+    );
+  } finally {
+    if (original === undefined) delete en[key];
+    else en[key] = original;
+    setLangSource(() => undefined);
+  }
 });

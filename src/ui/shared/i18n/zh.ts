@@ -60,10 +60,8 @@ export const zh: Record<string, string> = {
     "若要在草稿发票上保留计算总额，请启用“{label}”，然后保存并核对总额。",
   "document.purchase_invoice.hint.submitted":
     "“{label}”在提交前生效。请在未来的发票上启用它以保留计算总额。",
-  "document.purchase_invoice.aria.adds":
-    "舍入使发票总额增加 {amount}",
-  "document.purchase_invoice.aria.reduces":
-    "舍入使发票总额减少 {amount}",
+  "document.purchase_invoice.aria.adds": "舍入使发票总额增加 {amount}",
+  "document.purchase_invoice.aria.reduces": "舍入使发票总额减少 {amount}",
   "document.purchase_invoice.aria.adjustment": "舍入调整 {signed}",
   "document.purchase_invoice.submit.unconfirmed":
     "无法确认是否已提交。请在重试前检查同一张发票。",
@@ -77,14 +75,11 @@ export const zh: Record<string, string> = {
   "document.attachments.private": "私有",
   "document.attachments.public": "公开",
   "document.attachments.privacy": "附件权限",
-  "document.attachments.privacy_private":
-    "私有附件。点击设为公开",
-  "document.attachments.privacy_public":
-    "公开附件。点击设为私有",
+  "document.attachments.privacy_private": "私有附件。点击设为公开",
+  "document.attachments.privacy_public": "公开附件。点击设为私有",
   "document.attachments.private_hint":
     "仅具有访问权限的已登录 ERPNext 用户可获取此文件",
-  "document.attachments.public_hint":
-    "ERPNext 将从其公开文件区公开此文件",
+  "document.attachments.public_hint": "ERPNext 将从其公开文件区公开此文件",
   "document.attachments.download": "下载 {name}",
   "document.attachments.download_short": "下载",
   "document.attachments.download_in_progress": "正在下载附件…",
@@ -111,8 +106,7 @@ export const zh: Record<string, string> = {
   "document.attachments.error.list": "无法加载附件",
   "document.attachments.error.upload": "无法上传此文件",
   "document.attachments.error.too_large": "此文件超过 {limit} MB 上传上限",
-  "document.attachments.error.relist":
-    "文件已添加，但无法校验附件列表",
+  "document.attachments.error.relist": "文件已添加，但无法校验附件列表",
   "document.attachments.error.download": "无法下载此文件",
   "document.attachments.error.preview": "无法预览此文件",
   "document.attachments.error.host_denied": "宿主已取消或拒绝下载",
@@ -303,18 +297,14 @@ export const zh: Record<string, string> = {
     "单击或按空格将 {label} 加入上下文 · 双击或按回车显示其操作",
   "document.row.close_actions":
     "单击或按空格将 {label} 加入上下文 · 双击或按回车关闭其操作",
-  "document.row.open_actions_only":
-    "双击或按回车显示 {label} 的操作",
-  "document.row.close_actions_only":
-    "双击或按回车关闭 {label} 的操作",
+  "document.row.open_actions_only": "双击或按回车显示 {label} 的操作",
+  "document.row.close_actions_only": "双击或按回车关闭 {label} 的操作",
   "document.row.open_detail":
     "单击或按空格将 {label} 加入上下文 · 双击或按回车打开其详情",
   "document.row.close_detail":
     "单击或按空格将 {label} 加入上下文 · 双击或按回车关闭其详情",
-  "document.row.open_detail_only":
-    "双击或按回车打开 {label} 的详情",
-  "document.row.close_detail_only":
-    "双击或按回车关闭 {label} 的详情",
+  "document.row.open_detail_only": "双击或按回车打开 {label} 的详情",
+  "document.row.close_detail_only": "双击或按回车关闭 {label} 的详情",
   "chart.tooltip.click_action_context": "单击 + 上下文 · 双击详情",
   "chart.tooltip.click_action_context_only": "单击 + 上下文",
   "chart.tooltip.click_action_fallback": "双击详情",

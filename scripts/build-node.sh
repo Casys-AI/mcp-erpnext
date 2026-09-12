@@ -112,6 +112,7 @@ cat bin/mcp-erpnext.mjs >> "$tmp_shebang"
 mv "$tmp_shebang" bin/mcp-erpnext.mjs
 chmod +x bin/mcp-erpnext.mjs
 cp -r src/ui/dist bin/ui-dist
+cp "$ROOT_DIR/LICENSE" "$ROOT_DIR/THIRD_PARTY_NOTICES.txt" bin/
 cp README.md bin/README.md 2>/dev/null || cp ../README.md bin/README.md 2>/dev/null || true
 
 cat > bin/package.json <<PKGJSON
@@ -124,6 +125,8 @@ cat > bin/package.json <<PKGJSON
     "mcp-erpnext": "mcp-erpnext.mjs"
   },
   "files": [
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.txt",
     "mcp-erpnext.mjs",
     "ui-dist/**/*",
     "README.md"

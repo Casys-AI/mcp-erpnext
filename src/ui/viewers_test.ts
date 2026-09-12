@@ -12,7 +12,8 @@ Deno.test("UI_VIEWERS includes the canonical kanban viewer", () => {
     (UI_VIEWERS as readonly string[]).includes("order-pipeline-viewer"),
     false,
   );
-  assertEquals(UI_VIEWERS.length, 8);
+  assertEquals(UI_VIEWERS.length, 9);
+  assert(UI_VIEWERS.includes("buy-evidence-viewer"));
 });
 
 Deno.test("viewer resources expose the Blob URL CSP on list and read shapes", () => {

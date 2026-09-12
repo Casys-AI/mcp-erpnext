@@ -30,31 +30,34 @@ Deno.test("Node and Deno produce the same canonicalText fingerprint and byteCoun
   const outfile = `${outDir}/smoke.mjs`;
   const runner = `${outDir}/run.mjs`;
   try {
-    let bundled = false;
     try {
       await Deno.stat(localEsbuild);
-      const bundle = await new Deno.Command(localEsbuild, {
-        args: [
-          jsonEntry,
-          "--bundle",
-          "--platform=node",
-          "--format=esm",
-          `--outfile=${outfile}`,
-        ],
-        stdout: "piped",
-        stderr: "piped",
-      }).output();
-      if (!bundle.success) {
-        throw new Error(new TextDecoder().decode(bundle.stderr));
-      }
-      bundled = true;
     } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error;
+      if (error instanceof Deno.errors.NotFound) {
+        throw new TypeError(
+          "UI esbuild is required for the Node canonical smoke; run npm ci in src/ui.",
+        );
+      }
+      throw error;
+    }
+    const bundle = await new Deno.Command(localEsbuild, {
+      args: [
+        jsonEntry,
+        "--bundle",
+        "--platform=node",
+        "--format=esm",
+        `--outfile=${outfile}`,
+      ],
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    if (!bundle.success) {
+      throw new Error(new TextDecoder().decode(bundle.stderr));
     }
     await Deno.writeTextFile(
       runner,
       `import { canonicalJson, sha256FingerprintOfUtf8, utf8ByteCount } from ${
-        JSON.stringify(bundled ? outfile : jsonEntry)
+        JSON.stringify(outfile)
       };
 const sample = ${JSON.stringify(SAMPLE)};
 const text = canonicalJson(sample, "sample");
@@ -63,7 +66,7 @@ console.log(JSON.stringify({ text, fingerprint, byteCount: utf8ByteCount(text) }
 `,
     );
     const node = await new Deno.Command("node", {
-      args: bundled ? [runner] : ["--experimental-strip-types", runner],
+      args: [runner],
       stdout: "piped",
       stderr: "piped",
     }).output();

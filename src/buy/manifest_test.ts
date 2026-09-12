@@ -19,7 +19,7 @@ Deno.test("Buy View App manifest is the published whole-view contract", () => {
   );
   assertEquals(parsed.schemaVersion, VIEW_APP_MANIFEST_SCHEMA);
   assertEquals(parsed.app.version, BUY_VIEW_APP_VERSION);
-  assertEquals(parsed.app.version, "3.1.0-beta.9");
+  assertEquals(parsed.app.version, "3.1.0-beta.10");
   assertEquals(parsed.resources[0].uri, BUY_EVIDENCE_VIEWER_URI);
   assertEquals(parsed.resources[0].ownership, "whole-view");
   assertEquals(parsed.resources[0].acceptedActions, [

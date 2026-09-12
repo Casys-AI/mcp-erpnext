@@ -85,7 +85,20 @@ const CATALOGS: Record<Lang, Record<string, string>> = { en, fr, zh };
  *   t("doclist.rows.count", { n: 5}) // → "5 rows"  (clé définie par l'agent)
  */
 export function t(key: string, params?: Record<string, unknown>): string {
-  const lang = currentLang();
+  return translate(currentLang(), key, params);
+}
+
+/** Scoped translation for a surface whose host context is already available. */
+export function translatorForLocale(locale?: string): typeof t {
+  const lang = resolveLang(locale);
+  return (key, params) => translate(lang, key, params);
+}
+
+function translate(
+  lang: Lang,
+  key: string,
+  params?: Record<string, unknown>,
+): string {
   const catalog = CATALOGS[lang];
   const raw: string = catalog[key] ?? en[key] ?? key;
   if (!params) return raw;

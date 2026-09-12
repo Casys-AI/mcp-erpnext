@@ -12,12 +12,12 @@ import {
   BUY_RECORDED_SESSION_SCHEMA,
   BUY_VIEW_APP_ID,
   BUY_VIEW_APP_VERSION,
+  BUY_VIEWER_SESSION_KIND,
 } from "../../../buy/identities.ts";
 import type { BuyRecordedResult } from "../../../buy/result.ts";
 import {
   type BuyEvidenceViewData,
   type DisplayState,
-  displayStateFromToolResult,
   displayStateFromViewerSession,
 } from "./model.ts";
 
@@ -28,6 +28,7 @@ export const BUY_APP_INFO = {
 
 export const BUY_STATUS_CLASS = "buy-evidence-viewer-state";
 export const SESSION_REJECTED_CODE = "session-rejected";
+export const TOOL_RESULT_REJECTED_CODE = "tool-result-rejected";
 
 export type BuySurfaceState = SurfaceDisplayState<BuyEvidenceViewData>;
 
@@ -40,6 +41,8 @@ export function startBuyEvidenceApp(
   return startPreactSurfaceApp(buySurfaceAppOptions(root, registry), runtime);
 }
 
+// Shared surface status screens do not expose host context yet. Keep their
+// fallback English explicit; result components own host-aware localization.
 export function buySurfaceAppOptions(
   root: HTMLElement,
   registry: ViewComponentRegistry<BuyEvidenceViewData>,
@@ -53,10 +56,19 @@ export function buySurfaceAppOptions(
     statusClassName: BUY_STATUS_CLASS,
     loadingLabel: "Receiving a sealed Buy result or recorded session…",
     emptyLabel: "Buy evidence returned no supported sealed projection.",
-    fromToolResult: (result) =>
-      toSurfaceState(displayStateFromToolResult(result)),
+    fromToolResult: () => ({
+      kind: "error" as const,
+      title: "Raw tool result rejected",
+      code: TOOL_RESULT_REJECTED_CODE,
+      message:
+        "This App accepts a recorded session only. Raw tool results are not evidence.",
+    }),
     viewerSession: {
-      validate: (_value: unknown): _value is unknown => true,
+      validate: (value: unknown): value is Record<string, unknown> =>
+        typeof value === "object" && value !== null && !Array.isArray(value) &&
+        (value as Record<string, unknown>).schemaVersion ===
+          BUY_RECORDED_SESSION_SCHEMA &&
+        (value as Record<string, unknown>).kind === BUY_VIEWER_SESSION_KIND,
       toState: async (value) => {
         try {
           return toSurfaceState(await displayStateFromViewerSession(value));

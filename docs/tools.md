@@ -208,6 +208,26 @@ The response contains one inline MCP resource for the host's `downloadFile`
 channel. Downloads are capped at 10 MiB by default; override the positive byte
 limit with `ERPNEXT_MAX_DOWNLOAD_BYTES`.
 
+## Buy → buy-evidence-viewer
+
+| Tool                  | DocType                                                                                 | Operations                                         |
+| --------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `erpnext_buy_capture` | Item, BOM, Item Price, Supplier Quotation, Supplier, Price List, UOM, Currency Exchange | Read-only bounded capture of exact named documents |
+
+`erpnext_buy_capture` is a closed, read-only capture. It is not a purchase
+capability: it does not create a BOM, RFQ, or purchase order, does not store
+CAS, and does not compute a commercial total or qualify a live ERP.
+
+Pass only exact `{doctype, name}` references (optional `expectedModified`). The
+caller cannot supply `sourceInstance`, URL, credentials, `capturedAt`, or a
+digest. Two `skipCache` reads must agree on `modified` and the closed projection
+fingerprint. The return is ephemeral canonical JSON, SHA-256, and byte count.
+
+The recorded App `io.casys.mcp-erpnext.buy-evidence` applies a viewer session
+only (`viewer.session.apply`). Complete, partial, unresolved, and unavailable
+projections stay labelled. See
+[README — Buy evidence capture](../README.md#buy-evidence-capture).
+
 ## Kanban → kanban-viewer
 
 | Tool                       | Description                                                         |

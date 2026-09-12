@@ -16,15 +16,15 @@ deno lint
 echo "[release-check] deno task check"
 deno task check
 
-echo "[release-check] deno test --allow-all src/"
-deno test --allow-all src/
-
 echo "[release-check] npm ci && npm run build (src/ui)"
 (
   cd src/ui
   npm ci
   npm run build
 )
+
+echo "[release-check] deno test --allow-all src/"
+deno test --allow-all src/
 
 echo "[release-check] built Buy App bundle"
 deno task check:buy-evidence-bundle

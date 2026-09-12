@@ -7,6 +7,7 @@ import {
   type PreactSurfaceComponentProps,
 } from "@casys/mcp-view-components/preact";
 import { DocumentSurface } from "../../shared/document/DocumentSurface.tsx";
+import { translatorForLocale } from "../../shared/i18n.ts";
 import { mergeHostContext } from "../../shared/host-context.ts";
 import { ViewerShell } from "../../shared/ui.tsx";
 import { useViewerLayout } from "../../shared/useViewerLayout.ts";
@@ -33,7 +34,10 @@ const BuyEvidenceCard = (
     });
   }, [host.theme, host.locale]);
   const { ref, layout, boundsStyle } = useViewerLayout<HTMLDivElement>();
-  const model = buyResultToDocumentModel(data);
+  const model = buyResultToDocumentModel(
+    data,
+    translatorForLocale(host.locale),
+  );
   return (
     <ViewerShell
       containerRef={ref}

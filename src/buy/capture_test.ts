@@ -474,3 +474,49 @@ Deno.test("constructed wire rejects a duplicate document identity", async () => 
     "duplicates",
   );
 });
+
+Deno.test("closed wire refuses an empty capture before sealing", async () => {
+  const capture = await wireCapture();
+  capture.documents = [];
+  await assertRejects(
+    () => parseBuySourceCapture(capture),
+    TypeError,
+    "must not be empty",
+  );
+});
+
+Deno.test("capture and closed wire refuse impossible dates and incomplete revision timestamps", async () => {
+  for (
+    const [field, value] of [
+      ["valid_from", "2026-02-30"],
+      ["valid_upto", "2026-13-01"],
+      ["modified", "2026-09-12"],
+      ["modified", "2026-02-30 12:00:00.123456"],
+      ["modified", "2026-09-12 25:00:00"],
+      ["modified", "2026-09-12 12:60:00"],
+    ]
+  ) {
+    const { client } = fakeClient({
+      "Item Price:ITEM-PRICE-SYNTHETIC-001": [fastenerDoc({ [field]: value })],
+    });
+    await assertRejects(
+      () =>
+        runBuyCapture({
+          documents: [{
+            doctype: "Item Price",
+            name: "ITEM-PRICE-SYNTHETIC-001",
+          }],
+        }, { client }),
+      BuyCaptureError,
+      field,
+    );
+    const capture = await wireCapture();
+    const item = (capture.documents as Record<string, unknown>[]).find((doc) =>
+      doc.doctype === "Item Price"
+    )!;
+    if (field === "modified") item.modified = value;
+    else (item.fields as Record<string, unknown>)[field] = value;
+    await rehashDocument(item);
+    await assertRejects(() => parseBuySourceCapture(capture), Error, field);
+  }
+});

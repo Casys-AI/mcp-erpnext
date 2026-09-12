@@ -26,6 +26,9 @@ echo "[release-check] npm ci && npm run build (src/ui)"
   npm run build
 )
 
+echo "[release-check] built Buy App bundle"
+deno task check:buy-evidence-bundle
+
 echo "[release-check] immutable Buy App session tests"
 deno task test:buy-evidence-app
 

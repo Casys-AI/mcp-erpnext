@@ -33,5 +33,8 @@ jobs:
       - name: Tests
         run: deno test --allow-all src/
 
+      - name: Built Buy App bundle
+        run: deno task check:buy-evidence-bundle
+
       - name: Immutable Buy App session tests
         run: deno task test:buy-evidence-app

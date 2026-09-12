@@ -16,13 +16,15 @@ import {
   type BuyDocumentSourceCategory,
 } from "./identities.ts";
 import { BuyCaptureError } from "./errors.ts";
-import { canonicalJson, sha256FingerprintOfUtf8 } from "./json.ts";
+import {
+  calendarDate,
+  canonicalJson,
+  frappeDatetime,
+  sha256FingerprintOfUtf8,
+} from "./json.ts";
 
 const DECIMAL = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const CURRENCY = /^[A-Z]{3}$/;
-const CALENDAR_DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
-const FRAPPE_DATETIME =
-  /^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?)?$/;
 
 const SENSITIVE_FIELDS = new Set([
   "api_key",
@@ -391,8 +393,9 @@ function requiredName(value: unknown, path: string): string {
 }
 
 function requiredModified(value: unknown, path: string): string {
-  const modified = requiredString(value, path);
-  if (!FRAPPE_DATETIME.test(modified)) {
+  try {
+    return frappeDatetime(value, path);
+  } catch {
     throw new BuyCaptureError(
       "BUY_CAPTURE_INVALID_PROJECTION",
       `${path} is not a Frappe datetime.`,
@@ -402,7 +405,6 @@ function requiredModified(value: unknown, path: string): string {
       },
     );
   }
-  return modified;
 }
 
 function requiredString(value: unknown, path: string): string {
@@ -488,18 +490,18 @@ function requiredCurrency(value: unknown, path: string): string {
 }
 
 function requiredDate(value: unknown, path: string): string {
-  const date = requiredString(value, path);
-  if (!CALENDAR_DATE.test(date)) {
+  try {
+    return calendarDate(value, path);
+  } catch {
     throw new BuyCaptureError(
       "BUY_CAPTURE_INVALID_PROJECTION",
-      `${path} must be a YYYY-MM-DD date.`,
+      `${path} must be a real YYYY-MM-DD date.`,
       {
         recovery: "Keep the ERP calendar date; do not localize it.",
         context: { path },
       },
     );
   }
-  return date;
 }
 
 function requiredInteger(value: unknown, path: string): number {
@@ -691,10 +693,7 @@ function parseWireValue(
       }
       return value;
     case "date":
-      if (typeof value !== "string" || !CALENDAR_DATE.test(value)) {
-        throw new TypeError(`${path} must be a YYYY-MM-DD date.`);
-      }
-      return value;
+      return calendarDate(value, path);
     case "integer":
       if (!Number.isSafeInteger(value)) {
         throw new TypeError(`${path} must be a safe integer.`);

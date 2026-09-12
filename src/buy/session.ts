@@ -347,6 +347,14 @@ function assertPublishedBundleAnchor(
     BUY_BUNDLE_URI_PATTERN,
     "viewer session.anchor",
   );
+  if (
+    anchor.id !==
+      `buy-cost-bundle-${anchor.fingerprint.slice("sha256:".length)}`
+  ) {
+    throw new TypeError(
+      "viewer session.anchor.id must name the bundleRef digest.",
+    );
+  }
 }
 
 function evidenceArtifact(

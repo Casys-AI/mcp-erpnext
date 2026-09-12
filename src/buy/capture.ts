@@ -204,6 +204,9 @@ export async function parseBuySourceCapture(
     BUY_CAPTURE_MAX_DOCUMENTS,
     "buy source capture.documents",
   );
+  if (rawDocuments.length === 0) {
+    throw new TypeError("buy source capture.documents must not be empty.");
+  }
   const seenDocuments = new Set<string>();
   for (let index = 0; index < rawDocuments.length; index += 1) {
     const parsed = await parseCapturedDocument(rawDocuments[index], index);

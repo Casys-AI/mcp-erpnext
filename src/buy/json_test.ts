@@ -1,9 +1,11 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import {
+  calendarDate,
   canonicalJson,
   canonicalTimestamp,
   decimalString,
   fingerprint,
+  frappeDatetime,
   sha256Fingerprint,
   sha256FingerprintOfUtf8,
   utf8ByteCount,
@@ -62,4 +64,24 @@ Deno.test("decimal strings refuse scientific notation and padding", () => {
   assertThrows(() => decimalString("1e2", "qty"), TypeError);
   assertThrows(() => decimalString(" 1", "qty"), TypeError);
   assertThrows(() => decimalString(1, "qty"), TypeError);
+});
+
+Deno.test("Frappe revision timestamps preserve valid precision and reject invalid dates or times", () => {
+  for (const value of ["2024-02-29 23:59:59.123456", "2026-09-12T00:00:00"]) {
+    assertEquals(frappeDatetime(value, "modified"), value);
+  }
+  assertEquals(calendarDate("2024-02-29", "date"), "2024-02-29");
+  for (const value of ["2026-02-29", "2026-02-30", "2026-13-01"]) {
+    assertThrows(() => calendarDate(value, "date"), TypeError);
+  }
+  for (
+    const value of [
+      "2026-09-12",
+      "2026-02-30 12:00:00",
+      "2026-09-12 24:00:00",
+      "2026-09-12 12:00:60",
+    ]
+  ) {
+    assertThrows(() => frappeDatetime(value, "modified"), TypeError);
+  }
 });

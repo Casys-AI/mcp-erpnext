@@ -15,7 +15,7 @@ const CALENDAR_DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 const CURRENCY = /^[A-Z]{3}$/;
 const DECIMAL = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const FRAPPE_DATETIME =
-  /^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?)?$/;
+  /^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?$/;
 
 const FORBIDDEN_KEYS = new Set([
   "api_key",
@@ -171,7 +171,13 @@ export function calendarDate(value: unknown, name: string): string {
 }
 
 export function frappeDatetime(value: unknown, name: string): string {
-  return pattern(value, FRAPPE_DATETIME, name);
+  const datetime = pattern(value, FRAPPE_DATETIME, name);
+  calendarDate(datetime.slice(0, 10), name);
+  const [hour, minute, second] = datetime.slice(11, 19).split(":").map(Number);
+  if (hour > 23 || minute > 59 || second > 59) {
+    throw new TypeError(`${name} is not a real Frappe datetime.`);
+  }
+  return datetime;
 }
 
 export function currencyCode(value: unknown, name: string): string {

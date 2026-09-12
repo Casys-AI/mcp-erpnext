@@ -295,3 +295,21 @@ function assertRejectsSync(fn: () => unknown, snippet: string): void {
   }
   throw new Error(`expected TypeError containing ${snippet}`);
 }
+
+Deno.test("bundle anchor ID cannot contradict its digest despite a valid session hash", async () => {
+  const capture = await sealBuySourceCapture(await syntheticCapture());
+  const result = await syntheticCompleteResult(
+    capture.fingerprint,
+    capture.capture.sourceInstance.siteId,
+  );
+  const session = await syntheticAvailableSession(result);
+  const mutated = await withSessionFingerprint({
+    ...session,
+    anchor: { ...session.anchor, id: `buy-cost-bundle-${"0".repeat(64)}` },
+  });
+  await assertRejects(
+    () => parseBuyViewerSession(mutated),
+    TypeError,
+    "anchor.id",
+  );
+});

@@ -266,8 +266,8 @@ live ERPNext instance.
   digest. Digital Thread stores those bytes in its own CAS; this server does not
   keep a second CAS.
 - App: `io.casys.mcp-erpnext.buy-evidence` `3.1.0-beta.9`, resource
-  `ui://mcp-erpnext/buy-evidence-viewer`, manifest
-  `ui://mcp-erpnext/buy-evidence-manifest`, `text/html;profile=mcp-app`,
+  `ui://mcp-erpnext/buy-evidence-viewer` (`text/html;profile=mcp-app`), manifest
+  `ui://mcp-erpnext/buy-evidence-manifest` (`application/json`),
   `acceptedActions` = `viewer.session.apply` only. Complete, partial,
   unresolved, and unavailable projections stay labelled. No live DocViewer
   refresh, mutation, or `app.callServerTool`. Session `anchor` is the sealed

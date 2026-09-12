@@ -10,8 +10,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   capture digest address matching the fingerprint.
 - The Buy evidence App rejects raw tool results. Only a validated recorded
   session (`viewer.session.apply`) can display evidence.
-- Buy evidence viewer labels resolve through the shared EN/FR/ZH locale
-  catalogs.
+- Buy result fields resolve through the shared EN/FR/ZH locale catalogs and
+  update when the host locale changes. App-level waiting/rejection screens
+  retain English labels pending shared MCP View status-context support.
 
 ### Added
 

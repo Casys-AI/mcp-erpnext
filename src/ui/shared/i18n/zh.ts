@@ -550,15 +550,5 @@ export const zh: Record<string, string> = {
   "buy.col.reason": "原因",
   "buy.col.line": "行",
   "buy.col.captured_at": "捕获时间",
-  "buy.app.loading": "正在接收已封印的 Buy 结果或已记录会话…",
-  "buy.app.empty": "Buy 证据未返回受支持的封印投影。",
-  "buy.app.session_rejected": "会话已拒绝",
-  "buy.app.unresolved": "未解析的已记录证据",
-  "buy.app.unavailable": "已记录证据不可用",
-  "buy.app.startup_failure": "查看器无法启动。",
-  "buy.app.startup_unavailable": "Buy 证据查看器不可用",
-  "buy.app.tool_result_rejected": "已拒绝原始工具结果",
-  "buy.app.tool_result_rejected_message":
-    "此 App 仅接受已记录会话。原始工具结果不是证据。",
   // ── /buy-evidence-viewer ──────────────────────────────────────────────────
 };

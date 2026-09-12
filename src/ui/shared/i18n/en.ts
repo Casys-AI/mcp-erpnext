@@ -576,15 +576,5 @@ export const en: Record<string, string> = {
   "buy.col.reason": "Reason",
   "buy.col.line": "Line",
   "buy.col.captured_at": "Captured at",
-  "buy.app.loading": "Receiving a sealed Buy result or recorded session…",
-  "buy.app.empty": "Buy evidence returned no supported sealed projection.",
-  "buy.app.session_rejected": "Session rejected",
-  "buy.app.unresolved": "Unresolved recorded evidence",
-  "buy.app.unavailable": "Recorded evidence unavailable",
-  "buy.app.startup_failure": "The viewer could not start.",
-  "buy.app.startup_unavailable": "Buy evidence viewer unavailable",
-  "buy.app.tool_result_rejected": "Raw tool result rejected",
-  "buy.app.tool_result_rejected_message":
-    "This App accepts a recorded session only. Raw tool results are not evidence.",
   // ── /buy-evidence-viewer ──────────────────────────────────────────────────
 };

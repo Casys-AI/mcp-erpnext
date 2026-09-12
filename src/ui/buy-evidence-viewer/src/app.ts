@@ -15,7 +15,6 @@ import {
   BUY_VIEWER_SESSION_KIND,
 } from "../../../buy/identities.ts";
 import type { BuyRecordedResult } from "../../../buy/result.ts";
-import { t } from "../../shared/i18n.ts";
 import {
   type BuyEvidenceViewData,
   type DisplayState,
@@ -42,6 +41,8 @@ export function startBuyEvidenceApp(
   return startPreactSurfaceApp(buySurfaceAppOptions(root, registry), runtime);
 }
 
+// Shared surface status screens do not expose host context yet. Keep their
+// fallback English explicit; result components own host-aware localization.
 export function buySurfaceAppOptions(
   root: HTMLElement,
   registry: ViewComponentRegistry<BuyEvidenceViewData>,
@@ -53,13 +54,14 @@ export function buySurfaceAppOptions(
     strict: true,
     surfaceClassName: "buy-evidence-surface",
     statusClassName: BUY_STATUS_CLASS,
-    loadingLabel: t("buy.app.loading"),
-    emptyLabel: t("buy.app.empty"),
+    loadingLabel: "Receiving a sealed Buy result or recorded session…",
+    emptyLabel: "Buy evidence returned no supported sealed projection.",
     fromToolResult: () => ({
       kind: "error" as const,
-      title: t("buy.app.tool_result_rejected"),
+      title: "Raw tool result rejected",
       code: TOOL_RESULT_REJECTED_CODE,
-      message: t("buy.app.tool_result_rejected_message"),
+      message:
+        "This App accepts a recorded session only. Raw tool results are not evidence.",
     }),
     viewerSession: {
       validate: (value: unknown): value is Record<string, unknown> =>
@@ -73,7 +75,7 @@ export function buySurfaceAppOptions(
         } catch (error) {
           return {
             kind: "error",
-            title: t("buy.app.session_rejected"),
+            title: "Session rejected",
             code: SESSION_REJECTED_CODE,
             message: `Rejected ${BUY_RECORDED_SESSION_SCHEMA} session: ${
               errorMessage(error)
@@ -103,7 +105,7 @@ export function toSurfaceState(state: DisplayState): BuySurfaceState {
       return {
         kind: "notice",
         tone: "warning",
-        title: t("buy.app.unresolved"),
+        title: "Unresolved recorded evidence",
         message: state.reason,
         code: state.status,
       };
@@ -111,7 +113,7 @@ export function toSurfaceState(state: DisplayState): BuySurfaceState {
       return {
         kind: "notice",
         tone: "warning",
-        title: t("buy.app.unavailable"),
+        title: "Recorded evidence unavailable",
         message: state.reason,
         code: state.status,
       };
@@ -120,10 +122,10 @@ export function toSurfaceState(state: DisplayState): BuySurfaceState {
 
 export function renderStartupFailure(error: unknown): HTMLElement {
   return renderStatusMessage(
-    error instanceof Error ? error.message : t("buy.app.startup_failure"),
+    error instanceof Error ? error.message : "The viewer could not start.",
     {
       className: BUY_STATUS_CLASS,
-      title: t("buy.app.startup_unavailable"),
+      title: "Buy evidence viewer unavailable",
       tone: "danger",
     },
   );

@@ -1,3 +1,5 @@
+import { act } from "preact/test-utils";
+import { mergeHostContext } from "../../shared/host-context.ts";
 import { assert, assertEquals } from "@std/assert";
 import { createElement } from "preact";
 import { defineComponentRegistry } from "@casys/mcp-view-components";
@@ -240,5 +242,45 @@ Deno.test({
       });
       assertEquals(notice.kind, "notice");
       if (notice.kind === "notice") assertEquals(notice.code, "unavailable");
+    }),
+});
+
+Deno.test({
+  name:
+    "Buy result fields follow the French host locale and subsequent locale changes",
+  permissions: PERMISSIONS,
+  fn: () =>
+    withDocument(async (root) => {
+      const fake = fakeApp(root, { hostContext: { locale: "fr-FR" } });
+      const handle = await startBuyEvidenceApp(
+        root,
+        BUY_COMPONENT_REGISTRY,
+        fake.runtime,
+      );
+      try {
+        const capture = await sealBuySourceCapture(await syntheticCapture());
+        const result = await syntheticCompleteResult(
+          capture.fingerprint,
+          capture.capture.sourceInstance.siteId,
+        );
+        await act(async () => {
+          await fake.session(await syntheticAvailableSession(result));
+        });
+        await until(
+          () => (root.textContent ?? "").includes("Couverture"),
+          "French result fields",
+        );
+        await act(async () => {
+          fake.hostContextChanged({ locale: "en-US" });
+          await fake.idle();
+        });
+        await until(
+          () => (root.textContent ?? "").includes("Coverage"),
+          "English result fields after host change",
+        );
+      } finally {
+        await handle.dispose();
+        mergeHostContext({ locale: "en-US" });
+      }
     }),
 });

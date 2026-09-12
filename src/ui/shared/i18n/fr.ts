@@ -585,16 +585,5 @@ export const fr: Record<string, string> = {
   "buy.col.reason": "Motif",
   "buy.col.line": "Ligne",
   "buy.col.captured_at": "Capturé le",
-  "buy.app.loading":
-    "Réception d'un résultat Buy scellé ou d'une session enregistrée…",
-  "buy.app.empty": "Aucune projection scellée prise en charge.",
-  "buy.app.session_rejected": "Session rejetée",
-  "buy.app.unresolved": "Preuve enregistrée non résolue",
-  "buy.app.unavailable": "Preuve enregistrée indisponible",
-  "buy.app.startup_failure": "Le visualiseur n'a pas pu démarrer.",
-  "buy.app.startup_unavailable": "Visualiseur de preuves Buy indisponible",
-  "buy.app.tool_result_rejected": "Résultat d'outil brut rejeté",
-  "buy.app.tool_result_rejected_message":
-    "Cette App n'accepte qu'une session enregistrée. Un résultat d'outil brut n'est pas une preuve.",
   // ── /buy-evidence-viewer ──────────────────────────────────────────────────
 };

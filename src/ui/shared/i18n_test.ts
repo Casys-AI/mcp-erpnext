@@ -67,7 +67,6 @@ Deno.test("i18n - les catalogues ont les libellés Buy evidence", () => {
   const buyKeys = Object.keys(en).filter((k) => k.startsWith("buy."));
   assertEquals(buyKeys.includes("buy.title"), true);
   assertEquals(buyKeys.includes("buy.col.item"), true);
-  assertEquals(buyKeys.includes("buy.app.tool_result_rejected"), true);
   assertEquals(en["buy.col.item"], "Item");
   assertEquals(fr["buy.col.item"], "Article");
   assertEquals(zh["buy.col.item"].trim() === "", false);

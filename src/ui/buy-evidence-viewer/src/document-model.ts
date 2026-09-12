@@ -10,11 +10,12 @@ import type {
   DocumentFieldModel,
   DocumentModel,
 } from "../../shared/document/types.ts";
-import { t } from "../../shared/i18n.ts";
+import { t as defaultTranslate } from "../../shared/i18n.ts";
 import type { BuyRecordedResult, BuyResultLine } from "../../../buy/result.ts";
 
 export function buyResultToDocumentModel(
   result: BuyRecordedResult,
+  t: typeof defaultTranslate = defaultTranslate,
 ): DocumentModel {
   const name = result.configuration.subjectId;
   const descriptions = result.lines
@@ -91,15 +92,18 @@ export function buyResultToDocumentModel(
     progressFields: [],
     collections: [],
     childTables: [
-      linesTable(result),
-      gapsTable(result),
-      capturesTable(result),
+      linesTable(result, t),
+      gapsTable(result, t),
+      capturesTable(result, t),
     ].filter((table) => table.rows.length > 0),
     systemFields: [],
   };
 }
 
-function linesTable(result: BuyRecordedResult): ChildTableModel {
+function linesTable(
+  result: BuyRecordedResult,
+  t: typeof defaultTranslate,
+): ChildTableModel {
   const columns = [
     { key: "itemCode", label: t("buy.col.item"), numeric: false },
     { key: "sourceName", label: t("buy.col.source"), numeric: false },
@@ -178,7 +182,10 @@ function lineRow(line: BuyResultLine): ChildTableModel["rows"][number] {
   };
 }
 
-function gapsTable(result: BuyRecordedResult): ChildTableModel {
+function gapsTable(
+  result: BuyRecordedResult,
+  t: typeof defaultTranslate,
+): ChildTableModel {
   return {
     key: "gaps",
     label: t("buy.table.gaps"),
@@ -195,7 +202,10 @@ function gapsTable(result: BuyRecordedResult): ChildTableModel {
   };
 }
 
-function capturesTable(result: BuyRecordedResult): ChildTableModel {
+function capturesTable(
+  result: BuyRecordedResult,
+  t: typeof defaultTranslate,
+): ChildTableModel {
   return {
     key: "source-captures",
     label: t("buy.table.source_captures"),

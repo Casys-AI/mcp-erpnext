@@ -21,12 +21,14 @@ import { operationsTools } from "./operations.ts";
 import { setupTools } from "./setup.ts";
 import { analyticsTools } from "./analytics.ts";
 import { kanbanTools } from "./kanban.ts";
+import { buyTools } from "./buy.ts";
 import type { ErpNextTool, ErpNextToolCategory } from "./types.ts";
 
 export {
   accountingTools,
   analyticsTools,
   assetsTools,
+  buyTools,
   crmTools,
   deliveryTools,
   hrTools,
@@ -57,6 +59,7 @@ export const toolsByCategory: Record<string, ErpNextTool[]> = {
   setup: setupTools,
   analytics: analyticsTools,
   kanban: kanbanTools,
+  buy: buyTools,
 };
 
 /** Flat array of all tools */
@@ -75,6 +78,7 @@ export const allTools: ErpNextTool[] = [
   ...setupTools,
   ...analyticsTools,
   ...kanbanTools,
+  ...buyTools,
 ];
 
 /** Get tools for a specific category */

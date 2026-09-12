@@ -26,6 +26,9 @@ echo "[release-check] npm ci && npm run build (src/ui)"
   npm run build
 )
 
+echo "[release-check] immutable Buy App session tests"
+deno task test:buy-evidence-app
+
 echo "[release-check] scripts/build-node.sh"
 bash scripts/build-node.sh
 

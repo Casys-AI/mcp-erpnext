@@ -2,6 +2,24 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.1.0-beta.9] - 2026-09-12
+
+### Added
+
+- Read-only `erpnext_buy_capture` records a bounded, closed set of commercial
+  documents (Item, BOM, Item Price, Supplier Quotation, Supplier, Price List,
+  UOM, Currency Exchange). Two cache-bypassing reads must agree on `modified`
+  and the closed projection fingerprint. The tool returns ephemeral canonical
+  JSON, SHA-256, and byte count. It does not store CAS, purchase, create a
+  BOM/RFQ/PO, or compute a commercial total.
+- Immutable Buy evidence viewer (`ui://mcp-erpnext/buy-evidence-viewer`) and
+  View App `io.casys.mcp-erpnext.buy-evidence@3.1.0-beta.9`, with the whole-view
+  manifest at `ui://mcp-erpnext/buy-evidence-manifest`. The App applies a
+  recorded session only (`viewer.session.apply`). Complete, partial, unresolved,
+  and unavailable projections stay labelled. There is no live DocViewer refresh,
+  mutation, or `app.callServerTool`. This is presentation of sealed evidence,
+  not a live ERP qualification.
+
 ## [3.1.0-beta.8] - 2026-09-12
 
 ### Fixed

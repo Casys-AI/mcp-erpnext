@@ -309,6 +309,29 @@ function decodeBase64File(contentBase64: string, maxBytes: number): Uint8Array {
  * }
  * ```
  */
+/**
+ * Origin + site path of a Frappe base URL, without credentials, query,
+ * fragment, or a trailing slash. Used as the Buy `sourceInstance` preimage.
+ */
+export function normalizeFrappeSiteUrl(baseUrl: string): string {
+  if (typeof baseUrl !== "string" || baseUrl.trim() === "") {
+    throw new Error(
+      "[FrappeClient] baseUrl is required to derive site identity",
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new Error("[FrappeClient] baseUrl must be an absolute URL");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("[FrappeClient] baseUrl must be http or https");
+  }
+  const path = url.pathname.replace(/\/+$/, "");
+  return `${url.protocol}//${url.host}${path}`;
+}
+
 export class FrappeAPIError extends Error {
   /**
    * @param message - Human-readable error description
@@ -417,6 +440,18 @@ export class FrappeClient {
     this.retryBackoffMs = config.retryBackoffMs ?? 200;
     this.retryMethods = config.retryMethods ?? DEFAULT_RETRY_METHODS;
     this.cache = config.cache ?? new MemoryCache();
+  }
+
+  /**
+   * Normalized site URL of this configured client: origin + site path, with
+   * credentials, query, and fragment stripped, and without a trailing slash.
+   *
+   * This is the preimage of the Buy capture `sourceInstance.siteId` SHA-256.
+   * It is not an ERP database UUID and must not be copied onto the wire when
+   * the opaque site identifier is sufficient.
+   */
+  normalizedSiteUrl(): string {
+    return normalizeFrappeSiteUrl(this.baseUrl);
   }
 
   // ── Private HTTP helpers ────────────────────────────────────────────────────

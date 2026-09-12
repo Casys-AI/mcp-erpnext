@@ -1,16 +1,21 @@
 {
   "name": "@casys/mcp-erpnext",
-  "version": "3.1.0-beta.8",
+  "version": "3.1.0-beta.9",
   "nodeModulesDir": "auto",
   "minimumDependencyAge": {
     "age": "PT24H",
-    "exclude": ["jsr:@casys/mcp-server"]
+    "exclude": [
+      "jsr:@casys/mcp-server"
+    ]
   },
   "tasks": {
     "serve": "deno run --allow-all server.ts --http --port=3012",
     "compile": "deno compile -A --output mcp-erpnext server.ts",
     "test": "deno test --allow-all src/",
     "ui:build": "cd src/ui && node build-all.mjs",
+    "ui:build:buy-evidence": "cd src/ui && node buy-evidence-viewer/build.mjs",
+    "test:buy-evidence-app": "deno run -A src/ui/buy-evidence-viewer/test.ts",
+    "check:buy-evidence-bundle": "deno run -A src/ui/buy-evidence-viewer/check-bundle.ts",
     "inspect": "deno run --allow-all server.ts --inspect",
     "check": "deno check mod.ts server.ts",
     "pre-commit": "deno fmt --check && deno lint && deno task check",
@@ -28,7 +33,8 @@
       "src/**/*.ts",
       "src/ui/dist/",
       "README.md",
-      "LICENSE"
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.txt"
     ],
     "exclude": [
       "**/*_test.ts",
@@ -40,7 +46,8 @@
     "exclude": [
       "src/ui/**/*.tsx",
       "src/ui/**/*.mjs",
-      "src/ui/node_modules/"
+      "src/ui/node_modules/",
+      "src/ui/buy-evidence-viewer/src/"
     ],
     "rules": {
       "exclude": [
@@ -58,7 +65,9 @@
   "test": {
     "exclude": [
       "src/ui/node_modules/",
-      "src/ui/dist/"
+      "src/ui/dist/",
+      "src/ui/buy-evidence-viewer/src/app_test.ts",
+      "src/ui/buy-evidence-viewer/test.ts"
     ]
   },
   "imports": {

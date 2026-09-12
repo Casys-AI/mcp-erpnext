@@ -12,6 +12,7 @@ import {
   FrappeAPIError,
   FrappeClient,
   getFrappeClient,
+  normalizeFrappeSiteUrl,
   setFrappeClient,
 } from "./frappe-client.ts";
 import { MemoryCache } from "../cache/memory.ts";
@@ -1429,4 +1430,32 @@ Deno.test("FrappeClient.callMethod() - GET with no args omits the query string",
   } finally {
     globalThis.fetch = original;
   }
+});
+
+Deno.test("normalizeFrappeSiteUrl strips credentials, query, fragment, and trailing slash", () => {
+  assertEquals(
+    normalizeFrappeSiteUrl(
+      "https://user:secret@erp.example.com:8443/site-a/?x=1#frag",
+    ),
+    "https://erp.example.com:8443/site-a",
+  );
+  assertEquals(
+    normalizeFrappeSiteUrl("http://localhost:8000/"),
+    "http://localhost:8000",
+  );
+});
+
+Deno.test("FrappeClient.normalizedSiteUrl is derived from the configured client, not a caller label", () => {
+  const client = makeClient({
+    baseUrl: "https://user:secret@erp.example.com/site-a/",
+  });
+  assertEquals(client.normalizedSiteUrl(), "https://erp.example.com/site-a");
+});
+
+Deno.test("normalizeFrappeSiteUrl rejects non-http URLs", () => {
+  assertThrows(
+    () => normalizeFrappeSiteUrl("file:///tmp/erp"),
+    Error,
+    "http or https",
+  );
 });

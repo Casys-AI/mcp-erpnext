@@ -24,3 +24,4 @@ export const CHART_META = viewer("chart-viewer");
 export const KANBAN_META = viewer("kanban-viewer");
 export const KPI_META = viewer("kpi-viewer");
 export const FUNNEL_META = viewer("funnel-viewer");
+export const BUY_EVIDENCE_META = viewer("buy-evidence-viewer");

@@ -36,6 +36,11 @@ import { ErpNextToolsClient } from "./src/client.ts";
 import { FrappeAPIError } from "./src/api/frappe-client.ts";
 import { UI_VIEWERS, withViewerResourceMeta } from "./src/ui/viewers.ts";
 import {
+  BUY_VIEW_APP_MANIFEST,
+  BUY_VIEW_APP_MANIFEST_JSON,
+} from "./src/buy/manifest.ts";
+import { BUY_VIEW_APP_MANIFEST_URI } from "./src/buy/identities.ts";
+import {
   readViewerDist,
   resolveViewerDistPath,
 } from "./src/ui/viewer-resource-paths.ts";
@@ -52,6 +57,31 @@ import { resourceMetadataRoute } from "./src/auth/resource-metadata-route.ts";
 import { loadMrtrConfig } from "./src/mrtr/config.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
+
+function registerBuyViewAppManifest(server: McpApp): void {
+  const bytes = new TextEncoder().encode(BUY_VIEW_APP_MANIFEST_JSON);
+  server.registerResource(
+    {
+      uri: BUY_VIEW_APP_MANIFEST_URI,
+      name: "ERPNext Buy Evidence App manifest",
+      description:
+        `Exact ${BUY_VIEW_APP_MANIFEST.app.id}@${BUY_VIEW_APP_MANIFEST.app.version} ` +
+        "whole-view and recorded-session contract.",
+      mimeType: "application/json",
+      size: bytes.byteLength,
+    },
+    (requested) => {
+      if (requested.toString() !== BUY_VIEW_APP_MANIFEST_URI) {
+        throw new Error("Requested URI does not match the Buy App manifest.");
+      }
+      return {
+        uri: BUY_VIEW_APP_MANIFEST_URI,
+        mimeType: "application/json",
+        text: BUY_VIEW_APP_MANIFEST_JSON,
+      };
+    },
+  );
+}
 
 async function main() {
   const args = getArgs();
@@ -105,7 +135,7 @@ async function main() {
   // Build MCP server
   const server = new McpApp({
     name: "mcp-erpnext",
-    version: "3.1.0-beta.8",
+    version: "3.1.0-beta.9",
     transport: "stateless",
     cache: {
       ttlMs: 3_600_000,
@@ -128,6 +158,8 @@ async function main() {
   const mcpTools = toolsClient.toMCPFormat();
   const handlers = toolsClient.buildHandlersMap();
   server.registerTools(mcpTools, handlers);
+
+  registerBuyViewAppManifest(server);
 
   // Register UI resources (MCP Apps viewers)
   // Built by: cd lib/erpnext/src/ui && node build-all.mjs

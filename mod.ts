@@ -49,6 +49,21 @@ export {
 } from "./src/api/frappe-client.ts";
 
 export type { FrappeClientConfig } from "./src/api/frappe-client.ts";
+export { normalizeFrappeSiteUrl } from "./src/api/frappe-client.ts";
+
+export {
+  BUY_EVIDENCE_VIEWER_URI,
+  BUY_RECORDED_RESULT_SCHEMA,
+  BUY_RECORDED_SESSION_SCHEMA,
+  BUY_SOURCE_CAPTURE_SCHEMA,
+  BUY_VIEW_APP_ID,
+  BUY_VIEW_APP_MANIFEST_URI,
+  BUY_VIEW_APP_VERSION,
+} from "./src/buy/mod.ts";
+export {
+  BUY_VIEW_APP_MANIFEST,
+  BUY_VIEW_APP_MANIFEST_JSON,
+} from "./src/buy/mod.ts";
 
 // Re-export cache (for direct use or DI in tests)
 export { getCache, setCache } from "./src/cache/cache.ts";

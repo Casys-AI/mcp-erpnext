@@ -122,6 +122,7 @@ export interface DemoCataloguePlanObservation {
   readonly uom: string;
   readonly pack?: string;
   readonly taxShipping: string;
+  readonly note?: string;
 }
 
 export interface DemoCataloguePlan {
@@ -224,12 +225,26 @@ function assertPositiveDecimal(value: string, name: string): void {
 }
 
 function assertPublicUrl(value: string, name: string): string {
-  if (!/^https?:\/\/.+/.test(value)) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    fail(
+      "DEMO_CATALOGUE_INVALID_INPUT",
+      `${name} must be a valid public http(s) URL.`,
+      {},
+      `Set ${name} to the public catalogue page without credentials.`,
+    );
+  }
+  if (
+    !["http:", "https:"].includes(url.protocol) || !url.hostname ||
+    url.username || url.password
+  ) {
     fail(
       "DEMO_CATALOGUE_INVALID_INPUT",
       `${name} must be a public http(s) URL.`,
       {},
-      `Set ${name} to the public catalogue page the observation was read from.`,
+      `Set ${name} to the public catalogue page without credentials.`,
     );
   }
   return value;
@@ -419,7 +434,11 @@ function parseDemoCatalogueInputInner(value: unknown): DemoCatalogueInput {
     );
   }
   const scenario = nonEmpty(root.scenario, "input.scenario");
-  if (!scenario.includes(DEMO_CATALOGUE_PREFIX)) {
+  if (
+    scenario !== DEMO_CATALOGUE_PREFIX &&
+    !scenario.startsWith(`${DEMO_CATALOGUE_PREFIX} `) &&
+    !scenario.startsWith(`${DEMO_CATALOGUE_PREFIX}-`)
+  ) {
     fail(
       "DEMO_CATALOGUE_INVALID_INPUT",
       `input.scenario must name the ${DEMO_CATALOGUE_PREFIX} demo scenario.`,
@@ -514,6 +533,16 @@ function parseDemoCatalogueInputInner(value: unknown): DemoCatalogueInput {
   )
     .map((entry, index) => nonEmpty(entry, `input.unresolved[${index}]`));
 
+  for (const sourceId of new Set(lines.map((line) => line.sourceRef))) {
+    const source = sourcesById.get(sourceId)!;
+    const missing = (["url", "retrievedAt", "sha256"] as const).filter(
+      (key) => source[key] === undefined,
+    );
+    if (missing.length > 0) {
+      unresolved.push(`Source ${sourceId} is missing ${missing.join(", ")}.`);
+    }
+  }
+
   return {
     scenario,
     priceList: { name: priceListName, currency: priceListCurrency },
@@ -569,6 +598,7 @@ export function planDemoCatalogue(input: unknown): DemoCataloguePlan {
         ? {}
         : { pack: line.observation.pack }),
       taxShipping: line.observation.taxShipping ?? "unknown",
+      ...(line.note === undefined ? {} : { note: line.note }),
     });
     if (priced) {
       calls.push({

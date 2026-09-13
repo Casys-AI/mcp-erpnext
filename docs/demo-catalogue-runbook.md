@@ -63,8 +63,9 @@ Closed object; unknown keys (including any validity date) are refused.
 
 Rules:
 
-- `scenario` names `DEMO-ID01`; `itemCode` and `priceList.name` start with
-  `DEMO-ID01-`. UOM names are preserved as-is (e.g. `Nos`).
+- `scenario` starts with `DEMO-ID01` followed by a space, a hyphen or the end of
+  the name; `itemCode` and `priceList.name` start with `DEMO-ID01-`. UOM names
+  are preserved as-is (e.g. `Nos`).
 - `priceList` is buying only (plan emits `buying: 1, selling: 0`). Line currency
   must match it; line `uom` must match `stockUom`. No conversions, no inferred
   quantities.
@@ -73,13 +74,14 @@ Rules:
   zero, and negatives are refused.
 - **Priced lines** require `url` (public `http(s)`), `retrievedAt` (canonical
   UTC), and `sha256` (`sha256:…`) on the referenced source. Hashes are linked
-  when authoritatively known — never manufactured. Unpriced lines may reference
-  sources with missing metadata; record the gap in `unresolved`.
+  when authoritatively known — never manufactured. URLs are parsed and refuse
+  credentials. Unpriced lines may reference sources with missing metadata; the
+  parser adds each referenced source's missing fields to `unresolved`.
 - Duplicate `itemCode` / source `id` values are refused.
 
-Plan output preserves the `sources` entries alongside per-line observations
-(`priced` flag) and the ordered `calls`, plus UOM / Item Group `prerequisites`
-that must already exist on the site.
+Plan output preserves the `sources` entries and optional per-line `note`
+alongside observations (`priced` flag) and the ordered `calls`, plus UOM / Item
+Group `prerequisites` that must already exist on the site.
 
 ## 3. CLI
 

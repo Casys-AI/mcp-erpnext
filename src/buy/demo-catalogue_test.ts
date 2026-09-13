@@ -77,6 +77,7 @@ Deno.test("demo catalogue plans priced line as Price List, Item, Item Price", ()
   assertEquals(plan.sources[0].url, "https://example.invalid/synthetic");
   assertEquals(plan.sources[0].retrievedAt, "2026-09-13T08:00:00.000Z");
   assertEquals(plan.sources[0].sha256, SYNTHETIC_SOURCE_HASH);
+  assertEquals(plan.observations[0].note, SYNTHETIC_TEST_NOTICE);
   const text = JSON.stringify(plan);
   for (
     const forbidden of [
@@ -177,9 +178,17 @@ Deno.test("demo catalogue refuses priced line without source metadata", () => {
 });
 
 Deno.test("demo catalogue refuses non-public source URL", () => {
-  const input = syntheticPreparation(false);
-  input.sources[0].url = "ftp://example.invalid/synthetic";
-  assertThrows(() => planDemoCatalogue(input), DemoCatalogueError);
+  for (
+    const url of [
+      "ftp://example.invalid/synthetic",
+      "https://?",
+      "https://user:secret@example.invalid/synthetic",
+    ]
+  ) {
+    const input = syntheticPreparation(false);
+    input.sources[0].url = url;
+    assertThrows(() => planDemoCatalogue(input), DemoCatalogueError);
+  }
 });
 
 Deno.test("demo catalogue keeps unpriced line with missing metadata", () => {
@@ -193,6 +202,26 @@ Deno.test("demo catalogue keeps unpriced line with missing metadata", () => {
   assertEquals(plan.calls.length, 2);
   assertEquals(plan.observations[0].priced, false);
   assertEquals(plan.sources[0].sha256, undefined);
+  assert(
+    plan.unresolved.includes(
+      "Source src-synthetic-001 is missing retrievedAt, sha256.",
+    ),
+  );
+  const undeclared = planDemoCatalogue(input);
+  assert(
+    undeclared.unresolved.includes(
+      "Source src-synthetic-001 is missing retrievedAt, sha256.",
+    ),
+  );
+});
+
+Deno.test("demo catalogue refuses a demo marker inside another scenario name", () => {
+  for (const scenario of ["production-DEMO-ID01", "DEMO-ID01X"]) {
+    assertThrows(
+      () => planDemoCatalogue({ ...syntheticPreparation(false), scenario }),
+      DemoCatalogueError,
+    );
+  }
 });
 
 Deno.test("demo catalogue normalizes primitive type errors", () => {

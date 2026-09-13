@@ -1,5 +1,5 @@
 /**
- * Strict parser for io.casys.mcp-erpnext.buy-recorded-result/1.0.
+ * Strict parsers for the versioned Buy recorded-result schemas.
  *
  * The provider owns this projection schema. Digital Thread selects reviewed
  * cost lines and calculates sums; this parser never recomputes a total.
@@ -13,6 +13,8 @@ import {
   BUY_PRICE_SOURCE_CATEGORIES,
   BUY_RECORDED_RESULT_KIND,
   BUY_RECORDED_RESULT_SCHEMA,
+  BUY_RECORDED_RESULT_SCHEMA_V2,
+  BUY_RECORDED_RESULT_SCHEMAS,
   BUY_RESULT_MAX_CAPTURES,
   BUY_RESULT_MAX_GAPS,
   BUY_RESULT_MAX_LINES,
@@ -101,6 +103,17 @@ export interface BuyResultLine {
   readonly source: BuyResultLineSource;
 }
 
+/**
+ * Configuration line metadata for an intentionally unpriced selection.
+ * This closed row carries no monetary value or price source.
+ */
+export interface BuyExcludedResultLine {
+  readonly lineId: string;
+  readonly qty: string;
+  readonly uom: string;
+  readonly reason: string;
+}
+
 export interface BuyResultCoverage {
   readonly status: BuyCoverageStatus;
   readonly coveredLineIds: readonly string[];
@@ -131,8 +144,8 @@ export interface BuyResultBasis {
   readonly old?: BuyResultBasisSlice;
 }
 
-export interface BuyRecordedResult {
-  readonly schemaVersion: typeof BUY_RECORDED_RESULT_SCHEMA;
+export interface BuyRecordedResultBase {
+  readonly schemaVersion: typeof BUY_RECORDED_RESULT_SCHEMAS[number];
   readonly kind: typeof BUY_RECORDED_RESULT_KIND;
   readonly configurationRef: BuyArtifactRef;
   readonly configuration: BuyResultConfiguration;
@@ -143,27 +156,64 @@ export interface BuyRecordedResult {
   readonly totals: readonly BuyResultTotal[];
   readonly gaps: readonly BuyResultGap[];
   readonly basis: BuyResultBasis;
+  readonly excludedLines?: readonly BuyExcludedResultLine[];
 }
 
+export interface BuyRecordedResultV1 extends BuyRecordedResultBase {
+  readonly schemaVersion: typeof BUY_RECORDED_RESULT_SCHEMA;
+  readonly excludedLines?: undefined;
+}
+
+export interface BuyRecordedResultV2 extends BuyRecordedResultBase {
+  readonly schemaVersion: typeof BUY_RECORDED_RESULT_SCHEMA_V2;
+  readonly excludedLines: readonly BuyExcludedResultLine[];
+}
+
+export type BuyRecordedResult = BuyRecordedResultV1 | BuyRecordedResultV2;
+
+const RESULT_ROOT_KEYS = [
+  "schemaVersion",
+  "kind",
+  "configurationRef",
+  "configuration",
+  "sourceCaptures",
+  "pricingContext",
+  "lines",
+  "coverage",
+  "totals",
+  "gaps",
+  "basis",
+] as const;
+
+const RESULT_V2_ROOT_KEYS = [...RESULT_ROOT_KEYS, "excludedLines"] as const;
+
 export function parseBuyRecordedResult(value: unknown): BuyRecordedResult {
-  const root = exactRecord(value, [
-    "schemaVersion",
-    "kind",
-    "configurationRef",
-    "configuration",
-    "sourceCaptures",
-    "pricingContext",
-    "lines",
-    "coverage",
-    "totals",
-    "gaps",
-    "basis",
-  ], "buy recorded result");
-  literal(
-    root.schemaVersion,
-    BUY_RECORDED_RESULT_SCHEMA,
+  const candidate = record(value, "buy recorded result");
+  const schemaVersion = oneOf(
+    candidate.schemaVersion,
+    BUY_RECORDED_RESULT_SCHEMAS,
     "buy recorded result.schemaVersion",
   );
+  const root = exactRecord(
+    value,
+    schemaVersion === BUY_RECORDED_RESULT_SCHEMA
+      ? RESULT_ROOT_KEYS
+      : RESULT_V2_ROOT_KEYS,
+    "buy recorded result",
+  );
+  if (schemaVersion === BUY_RECORDED_RESULT_SCHEMA) {
+    literal(
+      root.schemaVersion,
+      BUY_RECORDED_RESULT_SCHEMA,
+      "buy recorded result.schemaVersion",
+    );
+  } else {
+    literal(
+      root.schemaVersion,
+      BUY_RECORDED_RESULT_SCHEMA_V2,
+      "buy recorded result.schemaVersion",
+    );
+  }
   literal(root.kind, BUY_RECORDED_RESULT_KIND, "buy recorded result.kind");
   const configurationRef = parseArtifactRef(
     root.configurationRef,
@@ -200,7 +250,28 @@ export function parseBuyRecordedResult(value: unknown): BuyRecordedResult {
     }
     lineIds.add(line.lineId);
   }
+  const excludedLines = schemaVersion === BUY_RECORDED_RESULT_SCHEMA_V2
+    ? parseExcludedLines(root.excludedLines)
+    : undefined;
+  if (excludedLines !== undefined) {
+    if (lineIds.size + excludedLines.length > BUY_RESULT_MAX_LINES) {
+      throw new TypeError(
+        `buy recorded result selected lines exceed the ${BUY_RESULT_MAX_LINES}-line bound.`,
+      );
+    }
+    for (const line of excludedLines) {
+      if (lineIds.has(line.lineId)) {
+        throw new TypeError(
+          "buy recorded result.excludedLines cannot duplicate a priced lineId.",
+        );
+      }
+      lineIds.add(line.lineId);
+    }
+  }
   const coverage = parseCoverage(root.coverage, lineIds);
+  if (excludedLines !== undefined) {
+    assertV2ExcludedLineClassification(coverage, excludedLines, lines);
+  }
   const totals = boundedArray(
     root.totals,
     8,
@@ -223,8 +294,7 @@ export function parseBuyRecordedResult(value: unknown): BuyRecordedResult {
   );
   assertCoverageIncompleteness(coverage, gaps);
   const basis = parseBasis(root.basis);
-  return {
-    schemaVersion: BUY_RECORDED_RESULT_SCHEMA,
+  const common = {
     kind: BUY_RECORDED_RESULT_KIND,
     configurationRef,
     configuration,
@@ -236,6 +306,74 @@ export function parseBuyRecordedResult(value: unknown): BuyRecordedResult {
     gaps,
     basis,
   };
+  if (schemaVersion === BUY_RECORDED_RESULT_SCHEMA_V2) {
+    if (excludedLines === undefined) {
+      throw new TypeError(
+        "buy recorded result.excludedLines is required for /2.0.",
+      );
+    }
+    return {
+      schemaVersion: BUY_RECORDED_RESULT_SCHEMA_V2,
+      ...common,
+      excludedLines,
+    };
+  }
+  return {
+    schemaVersion: BUY_RECORDED_RESULT_SCHEMA,
+    ...common,
+  };
+}
+
+function parseExcludedLines(value: unknown): readonly BuyExcludedResultLine[] {
+  const lines = boundedArray(
+    value,
+    BUY_RESULT_MAX_LINES,
+    "buy recorded result.excludedLines",
+  ).map((item, index) => {
+    const name = `buy recorded result.excludedLines[${index}]`;
+    const root = exactRecord(item, ["lineId", "qty", "uom", "reason"], name);
+    return {
+      lineId: nonEmpty(root.lineId, `${name}.lineId`),
+      qty: decimalString(root.qty, `${name}.qty`),
+      uom: nonEmpty(root.uom, `${name}.uom`),
+      reason: nonEmpty(root.reason, `${name}.reason`),
+    };
+  });
+  const ids = new Set<string>();
+  for (const line of lines) {
+    if (ids.has(line.lineId)) {
+      throw new TypeError(
+        "buy recorded result.excludedLines lineId values must be unique.",
+      );
+    }
+    ids.add(line.lineId);
+  }
+  return lines;
+}
+
+function assertV2ExcludedLineClassification(
+  coverage: BuyResultCoverage,
+  excludedLines: readonly BuyExcludedResultLine[],
+  lines: readonly BuyResultLine[],
+): void {
+  const excludedIds = new Set(excludedLines.map((line) => line.lineId));
+  const coveredIds = new Set(coverage.coveredLineIds);
+  if (
+    coverage.excludedLineIds.length !== excludedIds.size ||
+    coverage.excludedLineIds.some((lineId) => !excludedIds.has(lineId))
+  ) {
+    throw new TypeError(
+      "buy recorded result.coverage.excludedLineIds must classify exactly the excludedLines.",
+    );
+  }
+  if (
+    coveredIds.size !== lines.length ||
+    lines.some((line) => !coveredIds.has(line.lineId))
+  ) {
+    throw new TypeError(
+      "buy recorded result.coverage.coveredLineIds must classify every priced line in /2.0.",
+    );
+  }
 }
 
 function parseArtifactRef(value: unknown, name: string): BuyArtifactRef {

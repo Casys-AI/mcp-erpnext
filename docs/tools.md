@@ -225,7 +225,9 @@ fingerprint. The return is ephemeral canonical JSON, SHA-256, and byte count.
 
 The recorded App `io.casys.mcp-erpnext.buy-evidence` applies a viewer session
 only (`viewer.session.apply`). Complete, partial, unresolved, and unavailable
-projections stay labelled. See
+projections stay labelled. Recorded result `/2.0` additionally displays bounded
+unpriced/excluded configuration-line metadata without inventing a price or
+recalculating a total. See
 [README — Buy evidence capture](../README.md#buy-evidence-capture).
 
 ## Kanban → kanban-viewer

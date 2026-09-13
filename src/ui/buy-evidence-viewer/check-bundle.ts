@@ -6,6 +6,7 @@
 import {
   BUY_EVIDENCE_VIEWER_URI,
   BUY_RECORDED_RESULT_SCHEMA,
+  BUY_RECORDED_RESULT_SCHEMA_V2,
   BUY_RECORDED_SESSION_SCHEMA,
   BUY_VIEW_APP_ID,
 } from "../../buy/identities.ts";
@@ -34,6 +35,7 @@ if ((html.match(/<!doctype html>/gi) ?? []).length !== 1) {
 requireContains(VIEWER_SESSION_APPLY_ACTION);
 requireContains(BUY_RECORDED_SESSION_SCHEMA);
 requireContains(BUY_RECORDED_RESULT_SCHEMA);
+requireContains(BUY_RECORDED_RESULT_SCHEMA_V2);
 requireContains(BUY_VIEW_APP_ID);
 requireContains("buy.configuration-cost");
 requireContains("covered-subtotal");

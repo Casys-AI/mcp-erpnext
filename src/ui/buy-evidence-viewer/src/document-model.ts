@@ -93,10 +93,33 @@ export function buyResultToDocumentModel(
     collections: [],
     childTables: [
       linesTable(result, t),
+      excludedLinesTable(result, t),
       gapsTable(result, t),
       capturesTable(result, t),
     ].filter((table) => table.rows.length > 0),
     systemFields: [],
+  };
+}
+
+function excludedLinesTable(
+  result: BuyRecordedResult,
+  t: typeof defaultTranslate,
+): ChildTableModel {
+  return {
+    key: "excluded-lines",
+    label: t("buy.table.excluded_lines"),
+    columns: [
+      { key: "lineId", label: t("buy.col.line"), numeric: false },
+      { key: "qty", label: t("buy.col.quantity"), numeric: false },
+      { key: "uom", label: t("buy.col.unit"), numeric: false },
+      { key: "reason", label: t("buy.col.reason"), numeric: false },
+    ],
+    rows: (result.excludedLines ?? []).map((line) => ({
+      lineId: line.lineId,
+      qty: line.qty,
+      uom: line.uom,
+      reason: line.reason,
+    })),
   };
 }
 

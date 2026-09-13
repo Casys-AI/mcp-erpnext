@@ -14,6 +14,7 @@ import {
   syntheticPartialResult,
   syntheticSiteId,
   syntheticUnavailableSession,
+  syntheticUnpricedResult,
   syntheticUnresolvedSession,
 } from "./synthetic.ts";
 import { sealBuySourceCapture } from "./capture.ts";
@@ -46,6 +47,137 @@ Deno.test("authentic partial result remains partial", async () => {
     false,
   );
   assertEquals(parsed.gaps[0].code, "documentary");
+});
+
+Deno.test("/2.0 retains an unpriced selected line beside priced evidence", async () => {
+  const capture = await sealBuySourceCapture(await syntheticCapture());
+  const result = await syntheticUnpricedResult(
+    capture.fingerprint,
+    capture.capture.sourceInstance.siteId,
+  );
+  const parsed = parseBuyRecordedResult(result);
+  assertEquals(
+    parsed.schemaVersion,
+    "io.casys.mcp-erpnext.buy-recorded-result/2.0",
+  );
+  assertEquals(parsed.coverage.status, "partial");
+  assertEquals(parsed.totals, [
+    { kind: "covered-subtotal", currency: "EUR", amount: "5.00" },
+  ]);
+  assertEquals(parsed.excludedLines, [{
+    lineId: "line-unpriced",
+    qty: "1",
+    uom: "Nos",
+    reason: "No admitted price source",
+  }]);
+  const session = await parseBuyViewerSession(
+    await syntheticAvailableSession(parsed),
+  );
+  assertEquals(session.projection.status, "available");
+  if (session.projection.status === "available") {
+    assertEquals(
+      session.projection.result.schemaVersion,
+      "io.casys.mcp-erpnext.buy-recorded-result/2.0",
+    );
+  }
+});
+
+Deno.test("/2.0 all-unpriced evidence remains unresolved without a complete total", async () => {
+  const capture = await sealBuySourceCapture(await syntheticCapture());
+  const mixed = await syntheticUnpricedResult(
+    capture.fingerprint,
+    capture.capture.sourceInstance.siteId,
+  );
+  const allUnpriced = {
+    ...mixed,
+    lines: [],
+    coverage: {
+      ...mixed.coverage,
+      status: "unresolved" as const,
+      coveredLineIds: [],
+    },
+    totals: [{
+      kind: "covered-subtotal" as const,
+      currency: "EUR",
+      amount: "0",
+    }],
+  };
+  const parsed = parseBuyRecordedResult(allUnpriced);
+  assertEquals(parsed.coverage.status, "unresolved");
+  assertEquals(
+    parsed.totals.some((total) => total.kind === "complete-total"),
+    false,
+  );
+});
+
+Deno.test("/2.0 refuses duplicate, unclassified, overlapping, and monetary excluded lines", async () => {
+  const capture = await sealBuySourceCapture(await syntheticCapture());
+  const result = await syntheticUnpricedResult(
+    capture.fingerprint,
+    capture.capture.sourceInstance.siteId,
+  );
+  assertRejectsSync(
+    () =>
+      parseBuyRecordedResult({
+        ...result,
+        excludedLines: [...result.excludedLines, result.excludedLines[0]],
+      }),
+    "must be unique",
+  );
+  assertRejectsSync(
+    () =>
+      parseBuyRecordedResult({
+        ...result,
+        excludedLines: [{
+          ...result.excludedLines[0],
+          lineId: "line-fastener",
+        }],
+        coverage: {
+          ...result.coverage,
+          excludedLineIds: ["line-fastener"],
+        },
+      }),
+    "cannot duplicate a priced lineId",
+  );
+  assertRejectsSync(
+    () =>
+      parseBuyRecordedResult({
+        ...result,
+        coverage: { ...result.coverage, excludedLineIds: [] },
+      }),
+    "must classify every selected line",
+  );
+  assertRejectsSync(
+    () =>
+      parseBuyRecordedResult({
+        ...result,
+        coverage: {
+          ...result.coverage,
+          coveredLineIds: ["line-fastener", "line-unpriced"],
+        },
+      }),
+    "disjoint",
+  );
+  assertRejectsSync(
+    () =>
+      parseBuyRecordedResult({
+        ...result,
+        excludedLines: [{ ...result.excludedLines[0], amount: "0" }],
+      }),
+    "unsupported fields",
+  );
+});
+
+Deno.test("/1.0 remains exact and refuses the /2.0 excludedLines key", async () => {
+  const capture = await sealBuySourceCapture(await syntheticCapture());
+  const result = await syntheticCompleteResult(
+    capture.fingerprint,
+    capture.capture.sourceInstance.siteId,
+  );
+  assertRejectsSync(
+    () => parseBuyRecordedResult({ ...result, excludedLines: [] }),
+    "unsupported fields",
+  );
 });
 
 Deno.test("expired catalogue price stays dated and unresolved", async () => {

@@ -274,8 +274,12 @@ live ERPNext instance.
   Digital Thread artefact (`provenance.bundleRef`), not a hash of the displayed
   projection.
 - Schemas: `io.casys.mcp-erpnext.buy-source-capture/1.0`,
-  `io.casys.mcp-erpnext.buy-recorded-result/1.0`,
+  `io.casys.mcp-erpnext.buy-recorded-result/1.0` and `/2.0`,
   `io.casys.mcp-erpnext.buy-recorded-session/1.0`.
+- Result `/2.0` carries bounded `excludedLines` metadata for selected lines
+  absent from priced `lines`: exact line ID, quantity, unit, and stated reason.
+  It carries no amount, currency, or price source; covered subtotals remain
+  sealed values and unresolved lines remain visible.
 - The viewer is built with the other MCP Apps
   (`cd src/ui && npm ci && node
   build-all.mjs`). Published JSR/npm artifacts

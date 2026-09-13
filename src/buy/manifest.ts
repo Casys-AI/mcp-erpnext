@@ -8,6 +8,7 @@
 import {
   BUY_EVIDENCE_VIEWER_URI,
   BUY_RECORDED_RESULT_SCHEMA,
+  BUY_RECORDED_RESULT_SCHEMA_V2,
   BUY_RECORDED_SESSION_SCHEMA,
   BUY_VIEW_APP_ID,
   BUY_VIEW_APP_TITLE,
@@ -29,7 +30,10 @@ export interface BuyViewAppManifest {
   readonly resources: readonly [{
     readonly uri: typeof BUY_EVIDENCE_VIEWER_URI;
     readonly ownership: "whole-view";
-    readonly resultSchemas: readonly [typeof BUY_RECORDED_RESULT_SCHEMA];
+    readonly resultSchemas: readonly [
+      typeof BUY_RECORDED_RESULT_SCHEMA,
+      typeof BUY_RECORDED_RESULT_SCHEMA_V2,
+    ];
     readonly acceptedActions: readonly [typeof VIEWER_SESSION_APPLY_ACTION];
     readonly sessionSchemas: readonly [typeof BUY_RECORDED_SESSION_SCHEMA];
   }];
@@ -45,7 +49,7 @@ export const BUY_VIEW_APP_MANIFEST: BuyViewAppManifest = {
   resources: [{
     uri: BUY_EVIDENCE_VIEWER_URI,
     ownership: "whole-view",
-    resultSchemas: [BUY_RECORDED_RESULT_SCHEMA],
+    resultSchemas: [BUY_RECORDED_RESULT_SCHEMA, BUY_RECORDED_RESULT_SCHEMA_V2],
     acceptedActions: [VIEWER_SESSION_APPLY_ACTION],
     sessionSchemas: [BUY_RECORDED_SESSION_SCHEMA],
   }],
@@ -113,11 +117,12 @@ export function parseBuyViewAppManifest(value: unknown): BuyViewAppManifest {
     "Buy View App manifest.resources[0].resultSchemas",
   );
   if (
-    resultSchemas.length !== 1 ||
-    resultSchemas[0] !== BUY_RECORDED_RESULT_SCHEMA
+    resultSchemas.length !== 2 ||
+    resultSchemas[0] !== BUY_RECORDED_RESULT_SCHEMA ||
+    resultSchemas[1] !== BUY_RECORDED_RESULT_SCHEMA_V2
   ) {
     throw new TypeError(
-      "Buy View App manifest result schemas must be io.casys.mcp-erpnext.buy-recorded-result/1.0 exactly.",
+      "Buy View App manifest result schemas must list buy-recorded-result/1.0 then /2.0 exactly.",
     );
   }
   const acceptedActions = denseArray(

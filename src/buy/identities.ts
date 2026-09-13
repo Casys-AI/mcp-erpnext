@@ -12,6 +12,12 @@ export const BUY_SOURCE_CAPTURE_SCHEMA =
   "io.casys.mcp-erpnext.buy-source-capture/1.0" as const;
 export const BUY_RECORDED_RESULT_SCHEMA =
   "io.casys.mcp-erpnext.buy-recorded-result/1.0" as const;
+export const BUY_RECORDED_RESULT_SCHEMA_V2 =
+  "io.casys.mcp-erpnext.buy-recorded-result/2.0" as const;
+export const BUY_RECORDED_RESULT_SCHEMAS = [
+  BUY_RECORDED_RESULT_SCHEMA,
+  BUY_RECORDED_RESULT_SCHEMA_V2,
+] as const;
 export const BUY_RECORDED_SESSION_SCHEMA =
   "io.casys.mcp-erpnext.buy-recorded-session/1.0" as const;
 

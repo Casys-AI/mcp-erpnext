@@ -27,6 +27,7 @@ import {
   syntheticPartialGlobalGapResult,
   syntheticPartialResult,
   syntheticUnavailableSession,
+  syntheticUnpricedResult,
   syntheticUnresolvedSession,
 } from "./synthetic.ts";
 
@@ -77,6 +78,12 @@ export async function writeBuyContractFixtures(
       capture.capture.sourceInstance.siteId,
     ),
   );
+  const unpriced = parseBuyRecordedResult(
+    await syntheticUnpricedResult(
+      capture.fingerprint,
+      capture.capture.sourceInstance.siteId,
+    ),
+  );
   const completeSession = await parseBuyViewerSession(
     await syntheticAvailableSession(complete),
   );
@@ -91,6 +98,9 @@ export async function writeBuyContractFixtures(
   );
   const partialGlobalSession = await parseBuyViewerSession(
     await syntheticAvailableSession(partialGlobal),
+  );
+  const unpricedSession = await parseBuyViewerSession(
+    await syntheticAvailableSession(unpriced),
   );
 
   const files: ManifestFile[] = [];
@@ -172,6 +182,12 @@ export async function writeBuyContractFixtures(
     "All priced items covered; explicit global transport-unknown gap; no complete-total.",
   );
   await writeAccepted(
+    "accepted/buy-recorded-result.partial-unpriced.json",
+    unpriced,
+    "io.casys.mcp-erpnext.buy-recorded-result/2.0",
+    "Partial coverage with bounded unpriced line metadata; no invented price or complete-total.",
+  );
+  await writeAccepted(
     "accepted/buy-recorded-session.complete.json",
     completeSession,
     "io.casys.mcp-erpnext.buy-recorded-session/1.0",
@@ -200,6 +216,12 @@ export async function writeBuyContractFixtures(
     partialGlobalSession,
     "io.casys.mcp-erpnext.buy-recorded-session/1.0",
     "Available session wrapping the global-gap partial result. Anchor equals DT bundleRef.",
+  );
+  await writeAccepted(
+    "accepted/buy-recorded-session.partial-unpriced.json",
+    unpricedSession,
+    "io.casys.mcp-erpnext.buy-recorded-session/1.0",
+    "Available session wrapping the /2.0 unpriced-line result.",
   );
   await writeAccepted(
     "accepted/buy-view-app-manifest.json",

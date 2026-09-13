@@ -11,6 +11,12 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   retains source observations and leaves unknown prices unpriced. The command
   selects no site and applies no changes.
 
+### Fixed
+
+- Demo Item descriptions use neutral source wording for documentary or
+  unclassified observations. Exported catalogue error codes cover unreadable CLI
+  inputs; URL validation explicitly checks syntax, not public access.
+
 ## [3.1.0-beta.10] - 2026-09-13
 
 ### Fixed

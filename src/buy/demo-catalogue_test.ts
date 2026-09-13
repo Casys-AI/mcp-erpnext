@@ -104,6 +104,23 @@ Deno.test("demo catalogue keeps unpriced lines as Item only", () => {
   assert(!JSON.stringify(plan.calls).includes("Item Price"));
 });
 
+Deno.test("demo item descriptions do not promote documentary or unclassified sources", () => {
+  for (
+    const category of ["documentary", undefined, "public-catalogue"] as const
+  ) {
+    const input = syntheticPreparation(false);
+    if (category === undefined) {
+      delete (input.sources[0] as { category?: string }).category;
+    } else input.sources[0].category = category;
+    const plan = planDemoCatalogue(input);
+    const description = String(plan.calls[1].input.description);
+    assert(description.includes("source observation only"));
+    assert(!description.includes("public catalogue"));
+    assert(description.includes(input.lines[0].sourceRef));
+    assertEquals(plan.observations[0].priced, false);
+  }
+});
+
 Deno.test("demo catalogue refuses unknown source reference", () => {
   const input = syntheticPreparation(true);
   input.lines[0].sourceRef = "src-missing";

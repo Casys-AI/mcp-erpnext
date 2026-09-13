@@ -39,6 +39,7 @@ export const DEMO_CATALOGUE_ERROR_CODES = [
   "DEMO_CATALOGUE_AMBIGUOUS_SOURCE",
   "DEMO_CATALOGUE_DUPLICATE_CONFLICT",
   "DEMO_CATALOGUE_INVALID_ARGS",
+  "DEMO_CATALOGUE_UNREADABLE_INPUT",
 ] as const;
 
 export type DemoCatalogueErrorCode = typeof DEMO_CATALOGUE_ERROR_CODES[number];
@@ -225,14 +226,14 @@ function assertPositiveDecimal(value: string, name: string): void {
   }
 }
 
-function assertPublicUrl(value: string, name: string): string {
+function assertSourceUrl(value: string, name: string): string {
   let url: URL;
   try {
     url = new URL(value);
   } catch {
     fail(
       "DEMO_CATALOGUE_INVALID_INPUT",
-      `${name} must be a valid public http(s) URL.`,
+      `${name} must be a valid absolute http(s) URL.`,
       {},
       `Set ${name} to the public catalogue page without credentials.`,
     );
@@ -243,7 +244,7 @@ function assertPublicUrl(value: string, name: string): string {
   ) {
     fail(
       "DEMO_CATALOGUE_INVALID_INPUT",
-      `${name} must be a public http(s) URL.`,
+      `${name} must be an absolute http(s) URL without credentials, query or fragment.`,
       {},
       `Set ${name} to a public catalogue URL without credentials, query or fragment.`,
     );
@@ -269,7 +270,7 @@ function parseSource(value: unknown, index: number): DemoCatalogueSource {
       : fingerprint(root.sha256, `${name}.sha256`),
     url: root.url === undefined
       ? undefined
-      : assertPublicUrl(nonEmpty(root.url, `${name}.url`), `${name}.url`),
+      : assertSourceUrl(nonEmpty(root.url, `${name}.url`), `${name}.url`),
     retrievedAt: root.retrievedAt === undefined
       ? undefined
       : canonicalTimestamp(root.retrievedAt, `${name}.retrievedAt`),
@@ -597,7 +598,7 @@ export function planDemoCatalogue(input: unknown): DemoCataloguePlan {
         item_group: line.itemGroup,
         uom: line.stockUom,
         description:
-          `${DEMO_CATALOGUE_PREFIX} preparatory demo item; public catalogue observation only; source ${line.sourceRef}; grants none.`,
+          `${DEMO_CATALOGUE_PREFIX} preparatory demo item; source observation only; source ${line.sourceRef}; grants none.`,
       },
     });
     const priced = line.observation.amount !== null;

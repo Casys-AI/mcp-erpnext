@@ -1,4 +1,6 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
+
+import { DEMO_CATALOGUE_ERROR_CODES } from "./demo-catalogue.ts";
 
 const ROOT = new URL("../../", import.meta.url);
 const SCRIPT = new URL("scripts/buy-plan-demo-catalogue.ts", ROOT).pathname;
@@ -45,6 +47,7 @@ Deno.test("demo catalogue CLI returns plans and structured input failures", asyn
         assertEquals(decoder.decode(result.stdout), "");
         const error = JSON.parse(decoder.decode(result.stderr));
         assertEquals(error.error, code);
+        assert(DEMO_CATALOGUE_ERROR_CODES.includes(error.error));
         assertEquals(typeof error.message, "string");
         assertEquals(typeof error.context, "object");
         assertEquals(typeof error.recovery, "string");

@@ -73,14 +73,16 @@ Rules:
 - `sourceRef` must match exactly one `sources[].id`.
 - `amount` is explicit: positive decimal string or `null` (unpriced). Omission,
   zero, and negatives are refused.
-- **Priced lines** require source `category: "public-catalogue"`, `url` (public
-  `http(s)`), `retrievedAt` (canonical UTC), and `sha256` (`sha256:…`) on the
-  referenced source. Hashes are linked when authoritatively known — never
-  manufactured. URLs are parsed and refuse credentials, query strings and
-  fragments. Source categories are declared preparation metadata, not verified
-  admission; `documentary` sources and unclassified sources cannot supply an
-  Item Price. Unpriced lines may reference sources with missing metadata; the
-  parser adds each referenced source's missing fields to `unresolved`.
+- **Priced lines** require source `category: "public-catalogue"`, `url`
+  (absolute `http(s)`), `retrievedAt` (canonical UTC), and `sha256` (`sha256:…`)
+  on the referenced source. Hashes are linked when authoritatively known — never
+  manufactured. URL validation checks absolute HTTP(S) syntax; it does not
+  verify public reachability, DNS, or catalogue authenticity. URLs refuse
+  credentials, query strings and fragments. Source categories are declared
+  preparation metadata, not verified admission; `documentary` sources and
+  unclassified sources cannot supply an Item Price. Unpriced lines may reference
+  sources with missing metadata; the parser adds each referenced source's
+  missing fields to `unresolved`.
 - Duplicate `itemCode` / source `id` values are refused.
 
 Plan output preserves the `sources` entries and optional per-line `note`

@@ -16,8 +16,6 @@ export interface DocumentHeaderProps {
   title: string;
   status?: string;
   docstatus?: number;
-  /** Optional literal ERP document-state label; raw docstatus stays available. */
-  docstatusLabel?: string;
   layout: ViewerLayout;
   /** Retour ou fil d'Ariane fourni par la coque qui héberge la fiche. */
   navigation?: ComponentChildren;
@@ -69,7 +67,6 @@ export function DocumentHeader({
   title,
   status,
   docstatus,
-  docstatusLabel,
   layout,
   navigation,
   trailing,
@@ -111,14 +108,8 @@ export function DocumentHeader({
               <div class="flex flex-wrap items-center gap-[7px]">
                 {status && <StatusBadge status={status} pill />}
                 {docstatus !== undefined && (
-                  <span
-                    class="font-mono text-chip text-ink-faint"
-                    title={docstatusLabel
-                      ? t("document.docstatus", { value: docstatus })
-                      : undefined}
-                  >
-                    {docstatusLabel ??
-                      t("document.docstatus", { value: docstatus })}
+                  <span class="font-mono text-chip text-ink-faint">
+                    {t("document.docstatus", { value: docstatus })}
                   </span>
                 )}
               </div>
@@ -155,14 +146,8 @@ export function DocumentHeader({
               <div class="flex flex-wrap items-center gap-[7px]">
                 {status && <StatusBadge status={status} />}
                 {docstatus !== undefined && (
-                  <span
-                    class="font-mono text-chip text-ink-faint"
-                    title={docstatusLabel
-                      ? t("document.docstatus", { value: docstatus })
-                      : undefined}
-                  >
-                    {docstatusLabel ??
-                      t("document.docstatus", { value: docstatus })}
+                  <span class="font-mono text-chip text-ink-faint">
+                    {t("document.docstatus", { value: docstatus })}
                   </span>
                 )}
                 {live && <LiveDot />}

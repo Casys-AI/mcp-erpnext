@@ -15,12 +15,6 @@ import {
   DocumentSectionTabs,
 } from "./DocumentSectionTabs";
 import { ScalarFields } from "./ScalarFields";
-import { OperationalFields } from "./OperationalFields.tsx";
-import {
-  operationalDocstatusKey,
-  operationalProfile,
-  operationalTable,
-} from "./operational-model.ts";
 import type { ChildTableModel, DocumentModel } from "./types.ts";
 import type { ContextInteractionTarget } from "./context-interaction.ts";
 import { PurchaseInvoiceRoundingNote } from "./PurchaseInvoiceRoundingNote.tsx";
@@ -129,12 +123,6 @@ function PurchaseInvoiceSummary({
 function DocumentFields(
   { model, layout }: { model: DocumentModel; layout: ViewerLayout },
 ) {
-  const profile = operationalProfile(model.envelope.doctype);
-  if (profile) {
-    return (
-      <OperationalFields model={model} profile={profile} layout={layout} />
-    );
-  }
   return (
     <ScalarFields
       fields={model.fields}
@@ -197,9 +185,7 @@ export function DocumentSurface({
   const hasAttachments = hasSlot(attachments);
   const hasActions = hasSlot(actions);
   const hasSidebar = hasAttachments || hasActions;
-  const profile = operationalProfile(model.envelope.doctype);
-  const hasFields = Boolean(profile) || model.fields.length > 0 ||
-    model.longFields.length > 0 ||
+  const hasFields = model.fields.length > 0 || model.longFields.length > 0 ||
     model.progressFields.length > 0 || model.collections.length > 0 ||
     model.systemFields.length > 0;
   const tableSections: TableSection[] = model.childTables.map((
@@ -207,15 +193,10 @@ export function DocumentSurface({
     index,
   ) => ({
     id: `table-${slug(table.key)}-${index}`,
-    table: profile ? operationalTable(table, profile, t) : table,
+    table,
   }));
   const tabs: DocumentSectionTab[] = [
-    ...(hasFields
-      ? [{
-        id: "fields",
-        label: t(profile ? "dossier.overview" : "document.fields"),
-      }]
-      : []),
+    ...(hasFields ? [{ id: "fields", label: t("document.fields") }] : []),
     ...tableSections.map(({ id, table }) => ({
       id,
       label: table.label,
@@ -235,7 +216,6 @@ export function DocumentSurface({
     : null;
   const surfaceClass = cx(
     "flex flex-col bg-surface",
-    profile && "operational-document [&_[role=tab]]:min-h-10",
     contained && "min-h-0 flex-1",
     klass,
   );
@@ -252,9 +232,6 @@ export function DocumentSurface({
     setDisclosureState({ documentKey, row });
   }
 
-  const docstatusKey = profile
-    ? operationalDocstatusKey(model.docstatus)
-    : undefined;
   const header = (
     <DocumentHeader
       doctype={model.envelope.doctype}
@@ -262,7 +239,6 @@ export function DocumentSurface({
       title={model.title}
       status={model.status}
       docstatus={model.docstatus}
-      docstatusLabel={docstatusKey ? t(docstatusKey) : undefined}
       layout={layout}
       navigation={navigation}
       trailing={headerActions}
@@ -303,7 +279,6 @@ export function DocumentSurface({
             {hasFields && <DocumentFields model={model} layout={layout} />}
             {tableSections.map(({ id, table }) => (
               <ChildTableSection
-                wrapValues={Boolean(profile)}
                 key={id}
                 table={table}
                 layout={layout}
@@ -354,7 +329,6 @@ export function DocumentSurface({
           {hasFields && <DocumentFields model={model} layout={layout} />}
           {tableSections.map(({ id, table }) => (
             <ChildTableSection
-              wrapValues={Boolean(profile)}
               key={id}
               table={table}
               layout={layout}
@@ -416,7 +390,6 @@ export function DocumentSurface({
             aria-labelledby={`${domPrefix}-tab-${activeTable.id}`}
           >
             <ChildTableSection
-              wrapValues={Boolean(profile)}
               table={activeTable.table}
               layout={layout}
               idPrefix={domPrefix}

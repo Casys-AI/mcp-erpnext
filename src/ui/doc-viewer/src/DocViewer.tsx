@@ -62,14 +62,11 @@ import { useActiveContext } from "~/shared/useActiveContext.ts";
 import { hasAvailableTool } from "~/shared/viewer-tools.ts";
 import { canonicalReadbackSupersedesMutation } from "./canonical-readback.ts";
 import { DOC_FIXTURE, DOC_FIXTURE_FILES, isFixtureMode } from "./fixture.ts";
-import { operationalFixture } from "./operational-fixtures.ts";
-import { FixtureBar } from "./FixtureBar.tsx";
 
 const app = new App({
   name: "ERPNext Document Viewer",
   version: "1.0.0",
 });
-const EMPTY_FIXTURE_FILES: typeof DOC_FIXTURE_FILES = [];
 const REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 const CANONICAL_READBACK_DELAY_MS = 1_500;
@@ -92,9 +89,7 @@ interface DocumentContentProps {
 export function DocViewer() {
   const t = useT();
   const fixture = isFixtureMode();
-  const fixtureEnvelope = fixture
-    ? documentEnvelopeOf(operationalFixture(location.search) ?? DOC_FIXTURE)
-    : null;
+  const fixtureEnvelope = fixture ? documentEnvelopeOf(DOC_FIXTURE) : null;
   const [envelope, setEnvelope] = useState<DocumentEnvelope | null>(
     fixtureEnvelope,
   );
@@ -431,11 +426,7 @@ function DocumentContent({
     app,
     envelope,
     capabilities,
-    fixtureFiles: fixture
-      ? (operationalFixture(location.search)
-        ? EMPTY_FIXTURE_FILES
-        : DOC_FIXTURE_FILES)
-      : undefined,
+    fixtureFiles: fixture ? DOC_FIXTURE_FILES : undefined,
     onDocumentChanged: (event) => {
       reportChange(event);
       scheduleCanonicalRefresh();
@@ -445,7 +436,6 @@ function DocumentContent({
   if (!model) {
     return (
       <ViewerShell class="h-screen" containerRef={ref}>
-        {fixture && <FixtureBar />}
         <StateMessage tone="bad">{t("common.error.parse_failed")}</StateMessage>
       </ViewerShell>
     );
@@ -755,8 +745,7 @@ function DocumentContent({
       </div>
     )
     : undefined;
-  const attachmentSurface = (fixture && !operationalFixture(location.search)) ||
-      capabilities.canListAttachments
+  const attachmentSurface = fixture || capabilities.canListAttachments
     ? (
       <AttachmentsSection
         controller={attachments}
@@ -835,7 +824,6 @@ function DocumentContent({
 
   return (
     <ViewerShell class="h-screen" containerRef={ref}>
-      {fixture && <FixtureBar />}
       <PathBar
         layout={layout}
         stack={nav.stack}

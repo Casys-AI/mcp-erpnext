@@ -26,6 +26,8 @@ import {
 
 export interface ChildTableSectionProps {
   table: ChildTableModel;
+  /** Operational dossiers keep identifiers, units and details readable. */
+  wrapValues?: boolean;
   layout: ViewerLayout;
   idPrefix?: string;
   class?: string;
@@ -88,12 +90,14 @@ function cells(
   row: ChildTableRow,
   columns: readonly ChildTableColumn[],
   t: TFunction,
+  wrapValues: boolean,
 ): ComponentChildren {
   return columns.map((column) => (
     <span
       key={column.key}
       class={cx(
-        "min-w-0 truncate text-cell text-ink-2",
+        "min-w-0 text-cell text-ink-2",
+        wrapValues ? "break-words [overflow-wrap:anywhere]" : "truncate",
         column.numeric && "text-right font-mono tabular-nums",
       )}
       title={String(row[column.key] ?? "")}
@@ -104,9 +108,10 @@ function cells(
 }
 
 function HiddenRowFields(
-  { fields, layout }: {
+  { fields, layout, wrapValues }: {
     fields: readonly DocumentFieldModel[];
     layout: ViewerLayout;
+    wrapValues?: boolean;
   },
 ) {
   if (fields.length === 0) return null;
@@ -114,7 +119,9 @@ function HiddenRowFields(
     <dl
       class={cx(
         "grid gap-x-4 gap-y-2 border-b border-line-soft bg-row-selected px-3 py-2.5",
-        layout === "panel" ? "grid-cols-1" : "grid-cols-3",
+        layout === "panel" || (wrapValues && layout === "mobile")
+          ? "grid-cols-1"
+          : "grid-cols-3",
       )}
     >
       {fields.map((field) => (
@@ -122,7 +129,12 @@ function HiddenRowFields(
           <dt class="font-mono text-nano uppercase tracking-label text-ink-faint">
             {field.label}
           </dt>
-          <dd class="min-w-0 truncate text-data text-ink-2">
+          <dd
+            class={cx(
+              "min-w-0 text-data text-ink-2",
+              wrapValues ? "break-words [overflow-wrap:anywhere]" : "truncate",
+            )}
+          >
             <DocumentFieldValue field={field} />
           </dd>
         </div>
@@ -142,6 +154,7 @@ function RowDisclosurePanel({
   actions,
   layout,
   panel,
+  wrapValues,
 }: {
   id: string;
   expanded: boolean;
@@ -149,10 +162,17 @@ function RowDisclosurePanel({
   actions: ComponentChildren;
   layout: ViewerLayout;
   panel: boolean;
+  wrapValues?: boolean;
 }) {
   return (
     <div id={id} hidden={!expanded}>
-      {fields.length > 0 && <HiddenRowFields fields={fields} layout={layout} />}
+      {fields.length > 0 && (
+        <HiddenRowFields
+          fields={fields}
+          layout={layout}
+          wrapValues={wrapValues}
+        />
+      )}
       {hasContent(actions) && (
         <div
           class={cx(
@@ -169,6 +189,7 @@ function RowDisclosurePanel({
 
 export function ChildTableSection({
   table,
+  wrapValues = false,
   layout,
   idPrefix = "document-table",
   class: klass,
@@ -282,7 +303,10 @@ export function ChildTableSection({
                       </span>
                       <span
                         class={cx(
-                          "min-w-0 truncate text-right text-data text-ink-2",
+                          "min-w-0 text-right text-data text-ink-2",
+                          wrapValues
+                            ? "break-words [overflow-wrap:anywhere]"
+                            : "truncate",
                           column.numeric && "font-mono tabular-nums",
                         )}
                       >
@@ -337,6 +361,7 @@ export function ChildTableSection({
                     <RowDisclosurePanel
                       id={presentation.rowPanelId}
                       expanded={presentation.expanded}
+                      wrapValues={wrapValues}
                       fields={presentation.hidden}
                       actions={presentation.rowActions}
                       layout={layout}
@@ -362,7 +387,8 @@ export function ChildTableSection({
                     key={column.key}
                     role="columnheader"
                     class={cx(
-                      "truncate font-mono text-nano uppercase tracking-label text-ink-faint",
+                      "font-mono text-nano uppercase tracking-label text-ink-faint",
+                      wrapValues ? "break-words" : "truncate",
                       column.numeric && "text-right",
                     )}
                   >
@@ -408,7 +434,7 @@ export function ChildTableSection({
                           "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
                       )}
                     >
-                      {cells(row, columns, t)}
+                      {cells(row, columns, t, wrapValues)}
                     </div>
                     {presentation.canDisclose && (
                       <DetailToggleButton
@@ -429,6 +455,7 @@ export function ChildTableSection({
                     <RowDisclosurePanel
                       id={presentation.rowPanelId}
                       expanded={presentation.expanded}
+                      wrapValues={wrapValues}
                       fields={presentation.hidden}
                       actions={presentation.rowActions}
                       layout={layout}

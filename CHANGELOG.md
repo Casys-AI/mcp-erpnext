@@ -6,6 +6,11 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Added
 
+- Project, Task, Timesheet, BOM, Work Order and Job Card documents now show
+  module-specific dossiers with ERP-provided quantities, dates, time and costs,
+  readable line details, and explicit missing values in English, French and
+  Chinese.
+
 - Buy recorded-result `/2.0` retains bounded quantity, unit, and reason metadata
   for selected unpriced lines. The immutable Buy evidence viewer shows those
   excluded lines without assigning a monetary value or refreshing ERP.

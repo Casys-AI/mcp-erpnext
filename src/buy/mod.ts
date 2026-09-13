@@ -72,6 +72,32 @@ export { parseBuyRecordedResult } from "./result.ts";
 export type { BuyRecordedResult, BuyResultLine } from "./result.ts";
 
 export {
+  DEMO_CATALOGUE_MAX_LINES,
+  DEMO_CATALOGUE_MAX_SOURCES,
+  DEMO_CATALOGUE_PLAN_SCHEMA,
+  DEMO_CATALOGUE_PREFIX,
+  DEMO_CATALOGUE_SCHEMA,
+  DemoCatalogueError,
+  isDemoCatalogueError,
+  parseDemoCatalogueCliArgs,
+  parseDemoCatalogueInput,
+  planDemoCatalogue,
+  planDemoCatalogueFromJson,
+} from "./demo-catalogue.ts";
+export type {
+  DemoCatalogueCliArgs,
+  DemoCatalogueErrorCode,
+  DemoCatalogueInput,
+  DemoCatalogueLine,
+  DemoCatalogueObservation,
+  DemoCataloguePlan,
+  DemoCataloguePlanCall,
+  DemoCataloguePlanObservation,
+  DemoCatalogueSource,
+  DemoSourceMapping,
+} from "./demo-catalogue.ts";
+
+export {
   buyRecordedSessionFingerprint,
   parseBuyViewerSession,
   withSessionFingerprint,

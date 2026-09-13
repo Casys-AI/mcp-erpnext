@@ -2,6 +2,15 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Offline `buy:plan-demo` prepares inspectable Item and public-catalogue Item
+  Price creation calls from a closed, explicitly marked demo catalogue. It
+  retains source observations and leaves unknown prices unpriced. The command
+  selects no site and applies no changes.
+
 ## [3.1.0-beta.10] - 2026-09-13
 
 ### Fixed

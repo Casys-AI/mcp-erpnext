@@ -1,0 +1,52 @@
+{
+  "schema": "demo-catalogue/1.0",
+  "scenario": "DEMO-ID01 inspection-drone catalogue rehearsal — unpriced example, no real prices",
+  "priceList": {
+    "name": "DEMO-ID01-BUYING",
+    "currency": "EUR"
+  },
+  "sources": [
+    {
+      "id": "src-example-001",
+      "path": "operator-records/id01/source-manifest.json (illustrative — replace with the real immutable manifest path)",
+      "url": "https://example.invalid/catalogue/placeholder",
+      "retrievedAt": "2026-09-13T08:00:00.000Z"
+    }
+  ],
+  "lines": [
+    {
+      "itemCode": "DEMO-ID01-EXAMPLE-001",
+      "itemName": "Example demo fastener (placeholder — operator maps to the real ID01 part)",
+      "itemGroup": "Hardware",
+      "stockUom": "Nos",
+      "sourceRef": "src-example-001",
+      "sourceMapping": "candidate",
+      "observation": {
+        "amount": null,
+        "currency": "EUR",
+        "uom": "Nos",
+        "pack": "1 pc",
+        "taxShipping": "unknown"
+      },
+      "note": "Illustrative placeholder only: price not yet observed, source manifest not yet captured."
+    },
+    {
+      "itemCode": "DEMO-ID01-EXAMPLE-002",
+      "itemName": "Example demo spacer (placeholder — mapping unresolved)",
+      "itemGroup": "Hardware",
+      "stockUom": "Nos",
+      "sourceRef": "src-example-001",
+      "sourceMapping": "unknown",
+      "observation": {
+        "amount": null,
+        "currency": "EUR",
+        "uom": "Nos",
+        "taxShipping": "unknown"
+      }
+    }
+  ],
+  "unresolved": [
+    "Manifest hash not yet recorded; priced lines will require url, retrievedAt, and sha256 on the referenced source.",
+    "Item-to-ID01-part mapping is unresolved: the planner grants no technical compatibility."
+  ]
+}

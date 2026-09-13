@@ -51,6 +51,8 @@ async function main(): Promise<void> {
       JSON.stringify({
         error: "DEMO_CATALOGUE_UNREADABLE_INPUT",
         message: `Cannot read input file: ${inputPath}`,
+        context: { inputPath },
+        recovery: "Pass a readable preparation JSON file with --input <path>.",
       }),
     );
     exit(1);

@@ -24,9 +24,9 @@ remain text rather than being clamped into a valid progress state.
 BOM and Timesheet transaction costs use the document's `currency`. Project, Task
 and Work Order company-currency costs remain explicitly unspecified unless the
 document provides `company_currency`; transaction currency never substitutes for
-it. Quantity units likewise require the named source field. In particular, a
-standard Job Card does not provide a stock UOM, so this view does not borrow one
-from its Work Order. Child-row values remain raw; there is no unit conversion.
+it. Quantity units likewise require the named source field. A Job Card uses its
+own `stock_uom` when supplied; when absent, the view does not borrow a unit from
+its Work Order. Child-row values remain raw; there is no unit conversion.
 
 Field identities were checked against the official ERPNext version-16 schemas:
 [Project](https://github.com/frappe/erpnext/blob/version-16/erpnext/projects/doctype/project/project.json),

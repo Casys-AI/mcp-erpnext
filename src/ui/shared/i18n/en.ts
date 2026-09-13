@@ -593,10 +593,11 @@ export const en: Record<string, string> = {
   "dossier.minutes": "min",
   "dossier.modified": "Modified",
   "dossier.cost_source":
-    "Amounts supplied by ERPNext. No local cost calculation.",
+    "Amounts displayed as supplied by the document. No local cost calculation.",
   "dossier.more_fields": "All other fields & document metadata",
   "dossier.fixture": "Demo · synthetic documents and costs",
   "dossier.fixture_select": "Demo document",
+  "dossier.fixture_original_task": "Original Task example",
   "dossier.title.project": "Project delivery",
   "dossier.title.task": "Task dossier",
   "dossier.title.timesheet": "Time & billing",
@@ -645,7 +646,8 @@ export const en: Record<string, string> = {
   "dossier.field.material_rate_basis": "Material rate basis",
   "dossier.field.planned_quantity": "To manufacture",
   "dossier.field.produced_quantity": "Manufactured",
-  "dossier.field.transferred_quantity": "Material transferred for",
+  "dossier.field.transferred_quantity":
+    "Material transferred for manufacturing",
   "dossier.field.bom": "BOM",
   "dossier.field.target_warehouse": "Target warehouse",
   "dossier.field.planned_cost": "Planned operating cost",

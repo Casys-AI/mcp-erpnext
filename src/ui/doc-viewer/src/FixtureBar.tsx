@@ -18,7 +18,7 @@ export function FixtureBar() {
           location.assign(url.href);
         }}
       >
-        <option value="1">Task · legacy fixture</option>
+        <option value="1">{t("dossier.fixture_original_task")}</option>
         {Object.entries(OPERATIONAL_FIXTURES).map(([key, fixture]) => (
           <option key={key} value={key}>{String(fixture.data.doctype)}</option>
         ))}

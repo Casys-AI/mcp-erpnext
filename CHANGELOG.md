@@ -6,11 +6,6 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Added
 
-- Project, Task, Timesheet, BOM, Work Order and Job Card documents now show
-  module-specific dossiers with ERP-provided quantities, dates, time and costs,
-  readable line details, and explicit missing values in English, French and
-  Chinese.
-
 - Buy recorded-result `/2.0` retains bounded quantity, unit, and reason metadata
   for selected unpriced lines. The immutable Buy evidence viewer shows those
   excluded lines without assigning a monetary value or refreshing ERP.
@@ -22,6 +17,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Fixed
 
+- Restore the existing generic document presentation by removing the six
+  Project/Manufacturing dossier profiles introduced in PR #49. Digital Thread
+  integration needs do not establish a standalone ERPNext viewer requirement.
 - Demo Item descriptions use neutral source wording for documentary or
   unclassified observations. Exported catalogue error codes cover unreadable CLI
   inputs; URL validation explicitly checks syntax, not public access.

@@ -17,6 +17,8 @@ export {
   BUY_PROJECTION_STATUSES,
   BUY_RECORDED_RESULT_KIND,
   BUY_RECORDED_RESULT_SCHEMA,
+  BUY_RECORDED_RESULT_SCHEMA_V2,
+  BUY_RECORDED_RESULT_SCHEMAS,
   BUY_RECORDED_SESSION_SCHEMA,
   BUY_RESULT_URI_PATTERN,
   BUY_RESULT_URI_PREFIX,
@@ -69,7 +71,13 @@ export type {
 } from "./capture.ts";
 
 export { parseBuyRecordedResult } from "./result.ts";
-export type { BuyRecordedResult, BuyResultLine } from "./result.ts";
+export type {
+  BuyExcludedResultLine,
+  BuyRecordedResult,
+  BuyRecordedResultV1,
+  BuyRecordedResultV2,
+  BuyResultLine,
+} from "./result.ts";
 
 export {
   DEMO_CATALOGUE_MAX_LINES,

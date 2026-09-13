@@ -35,6 +35,12 @@ Deno.test("shared contract fixtures are synthetic, canonical, and DT-hashable", 
     );
     assertEquals(
       files.some((file) =>
+        file.path === "accepted/buy-recorded-result.partial-unpriced.json"
+      ),
+      true,
+    );
+    assertEquals(
+      files.some((file) =>
         file.path === "rejected/buy-recorded-result.complete-with-gap.json"
       ),
       true,
@@ -62,6 +68,14 @@ Deno.test("shared contract fixtures are synthetic, canonical, and DT-hashable", 
       `${root}/accepted/buy-recorded-result.partial.json`,
     )).trimEnd());
     assertEquals(parseBuyRecordedResult(partial).coverage.status, "partial");
+
+    const unpriced = JSON.parse((await Deno.readTextFile(
+      `${root}/accepted/buy-recorded-result.partial-unpriced.json`,
+    )).trimEnd());
+    assertEquals(
+      parseBuyRecordedResult(unpriced).schemaVersion,
+      "io.casys.mcp-erpnext.buy-recorded-result/2.0",
+    );
 
     const session = JSON.parse((await Deno.readTextFile(
       `${root}/accepted/buy-recorded-session.complete.json`,

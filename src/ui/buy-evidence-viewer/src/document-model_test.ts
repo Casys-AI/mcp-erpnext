@@ -1,10 +1,12 @@
 import { assertEquals } from "@std/assert";
 import { buyResultToDocumentModel } from "./document-model.ts";
 import { sealBuySourceCapture } from "../../../buy/capture.ts";
+import { parseBuyRecordedResult } from "../../../buy/result.ts";
 import {
   syntheticCapture,
   syntheticCompleteResult,
   syntheticPartialResult,
+  syntheticUnpricedResult,
 } from "../../../buy/synthetic.ts";
 import { setLangSource, t } from "../../shared/i18n.ts";
 
@@ -104,4 +106,66 @@ Deno.test("partial sealed result stays partial on the document model", async () 
     model.childTables.find((table) => table.key === "gaps")?.rows[0].code,
     "documentary",
   );
+});
+
+Deno.test("document model copies unpriced /2.0 metadata without monetary columns", async () => {
+  const capture = await sealBuySourceCapture(await syntheticCapture());
+  const result = await syntheticUnpricedResult(
+    capture.fingerprint,
+    capture.capture.sourceInstance.siteId,
+  );
+  const model = buyResultToDocumentModel(result);
+  const excluded = model.childTables.find((table) =>
+    table.key === "excluded-lines"
+  );
+  assertEquals(excluded?.rows, [{
+    lineId: "line-unpriced",
+    qty: "1",
+    uom: "Nos",
+    reason: "No admitted price source",
+  }]);
+  assertEquals(excluded?.columns.map((column) => column.key), [
+    "lineId",
+    "qty",
+    "uom",
+    "reason",
+  ]);
+  assertEquals(
+    excluded?.columns.some((column) =>
+      column.key === "amount" || column.key === "currency"
+    ),
+    false,
+  );
+  assertEquals(model.envelope.availableTools, undefined);
+  assertEquals(model.envelope.refreshRequest, undefined);
+});
+
+Deno.test("all-unpriced display keeps its sealed subtotal and unresolved label", async () => {
+  const capture = await sealBuySourceCapture(await syntheticCapture());
+  const mixed = await syntheticUnpricedResult(
+    capture.fingerprint,
+    capture.capture.sourceInstance.siteId,
+  );
+  const result = parseBuyRecordedResult({
+    ...mixed,
+    lines: [],
+    coverage: {
+      ...mixed.coverage,
+      status: "unresolved",
+      coveredLineIds: [],
+    },
+    totals: [{ kind: "covered-subtotal", currency: "EUR", amount: "0" }],
+  });
+  const model = buyResultToDocumentModel(result);
+  assertEquals(model.status, "unresolved");
+  assertEquals(
+    model.fields.find((field) => field.key === "covered-subtotal")?.value,
+    "0 EUR",
+  );
+  assertEquals(
+    model.fields.some((field) => field.key === "complete-total"),
+    false,
+  );
+  assertEquals(model.envelope.availableTools, undefined);
+  assertEquals(model.envelope.refreshRequest, undefined);
 });

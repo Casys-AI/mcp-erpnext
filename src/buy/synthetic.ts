@@ -11,6 +11,7 @@ import {
   BUY_CAPTURE_URI_PREFIX,
   BUY_RECORDED_RESULT_KIND,
   BUY_RECORDED_RESULT_SCHEMA,
+  BUY_RECORDED_RESULT_SCHEMA_V2,
   BUY_RECORDED_SESSION_SCHEMA,
   BUY_SEAL_OPERATION,
   BUY_SOURCE_CAPTURE_SCHEMA,
@@ -20,7 +21,7 @@ import {
 } from "./identities.ts";
 import { canonicalJson, sha256FingerprintOfUtf8 } from "./json.ts";
 import type { BuySourceCapture } from "./capture.ts";
-import type { BuyRecordedResult } from "./result.ts";
+import type { BuyRecordedResult, BuyRecordedResultV2 } from "./result.ts";
 import type { BuyViewerSession } from "./session.ts";
 import { withSessionFingerprint } from "./session.ts";
 
@@ -248,6 +249,36 @@ export async function syntheticCompleteResult(
     basis: {
       current: { configurationRevision: 3, capturedAt: SYNTHETIC_CAPTURED_AT },
     },
+  };
+}
+
+export async function syntheticUnpricedResult(
+  captureFingerprint: string,
+  siteId: string,
+): Promise<BuyRecordedResultV2> {
+  const complete = await syntheticCompleteResult(captureFingerprint, siteId);
+  return {
+    ...complete,
+    schemaVersion: BUY_RECORDED_RESULT_SCHEMA_V2,
+    coverage: {
+      status: "partial",
+      coveredLineIds: ["line-fastener"],
+      excludedLineIds: ["line-unpriced"],
+      quantityBasis: "BOM-SYNTHETIC-001 items qty",
+      currency: "EUR",
+    },
+    totals: [{ kind: "covered-subtotal", currency: "EUR", amount: "5.00" }],
+    gaps: [{
+      code: "price-unavailable",
+      reason: "No admitted price source for the selected configuration line",
+      lineId: "line-unpriced",
+    }],
+    excludedLines: [{
+      lineId: "line-unpriced",
+      qty: "1",
+      uom: "Nos",
+      reason: "No admitted price source",
+    }],
   };
 }
 

@@ -6,6 +6,10 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Added
 
+- Buy recorded-result `/2.0` retains bounded quantity, unit, and reason metadata
+  for selected unpriced lines. The immutable Buy evidence viewer shows those
+  excluded lines without assigning a monetary value or refreshing ERP.
+
 - Offline `buy:plan-demo` prepares inspectable Item and public-catalogue Item
   Price creation calls from a closed, explicitly marked demo catalogue. It
   retains source observations and leaves unknown prices unpriced. The command

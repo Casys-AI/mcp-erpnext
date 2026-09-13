@@ -9,6 +9,7 @@ import {
 import {
   BUY_EVIDENCE_VIEWER_URI,
   BUY_RECORDED_RESULT_SCHEMA,
+  BUY_RECORDED_RESULT_SCHEMA_V2,
   BUY_RECORDED_SESSION_SCHEMA,
   BUY_VIEW_APP_VERSION,
 } from "./identities.ts";
@@ -25,7 +26,10 @@ Deno.test("Buy View App manifest is the published whole-view contract", () => {
   assertEquals(parsed.resources[0].acceptedActions, [
     VIEWER_SESSION_APPLY_ACTION,
   ]);
-  assertEquals(parsed.resources[0].resultSchemas, [BUY_RECORDED_RESULT_SCHEMA]);
+  assertEquals(parsed.resources[0].resultSchemas, [
+    BUY_RECORDED_RESULT_SCHEMA,
+    BUY_RECORDED_RESULT_SCHEMA_V2,
+  ]);
   assertEquals(parsed.resources[0].sessionSchemas, [
     BUY_RECORDED_SESSION_SCHEMA,
   ]);

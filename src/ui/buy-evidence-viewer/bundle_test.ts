@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import {
   BUY_RECORDED_RESULT_SCHEMA,
+  BUY_RECORDED_RESULT_SCHEMA_V2,
   BUY_RECORDED_SESSION_SCHEMA,
   BUY_VIEW_APP_ID,
 } from "../../buy/identities.ts";
@@ -21,6 +22,7 @@ Deno.test({
     assertStringIncludes(html, VIEWER_SESSION_APPLY_ACTION);
     assertStringIncludes(html, BUY_RECORDED_SESSION_SCHEMA);
     assertStringIncludes(html, BUY_RECORDED_RESULT_SCHEMA);
+    assertStringIncludes(html, BUY_RECORDED_RESULT_SCHEMA_V2);
     assertStringIncludes(html, BUY_VIEW_APP_ID);
     assertStringIncludes(html, "buy.configuration-cost");
     assertStringIncludes(html, "covered-subtotal");

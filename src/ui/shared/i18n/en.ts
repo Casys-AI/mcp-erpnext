@@ -552,6 +552,7 @@ export const en: Record<string, string> = {
   "buy.field.complete_total": "Complete total",
   "buy.field.description": "Description",
   "buy.table.selected_lines": "Selected lines",
+  "buy.table.excluded_lines": "Unpriced / excluded lines",
   "buy.table.gaps": "Gaps",
   "buy.table.source_captures": "Source captures",
   "buy.col.item": "Item",

@@ -526,6 +526,7 @@ export const zh: Record<string, string> = {
   "buy.field.complete_total": "完整总计",
   "buy.field.description": "说明",
   "buy.table.selected_lines": "已选行",
+  "buy.table.excluded_lines": "未定价 / 排除行",
   "buy.table.gaps": "缺口",
   "buy.table.source_captures": "源捕获",
   "buy.col.item": "物料",

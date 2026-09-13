@@ -5,11 +5,19 @@ overview.
 
 ## Setup
 
-| Tool                     | DocType | Operations                                     |
-| ------------------------ | ------- | ---------------------------------------------- |
-| `erpnext_user_list`      | User    | List assignable users (enabled System Users)   |
-| `erpnext_company_list`   | Company | List companies                                 |
-| `erpnext_company_create` | Company | Create (name, abbr, currency, country, domain) |
+| Tool                     | DocType | Operations                                                                    |
+| ------------------------ | ------- | ----------------------------------------------------------------------------- |
+| `erpnext_user_list`      | User    | List assignable users (enabled System Users)                                  |
+| `erpnext_company_list`   | Company | List companies                                                                |
+| `erpnext_company_create` | Company | Create (name, abbr, currency, country, domain)                                |
+| `erpnext_setup_check`    | —       | Check a company for Price Lists, Warehouse, Item Group, and UOM prerequisites |
+
+`erpnext_setup_check` requires `company` and reports whether a selling and a
+buying Price List exist, at least one Warehouse exists for that company, at
+least one Item Group exists, and a given set of UOMs exist (`required_uoms`,
+defaults to `["Nos", "Kg"]`). Returns `{ ready, missing, checks }` — run it
+right after `erpnext_company_create` on a fresh instance to catch gaps before a
+transactional document create throws `MandatoryError`.
 
 ## Sales → doclist-viewer / doc-viewer / invoice-viewer
 

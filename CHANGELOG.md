@@ -80,6 +80,13 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   Billed errors include guidance to the corresponding ERPNext settings while
   preserving the original error details and existing tool inputs.
 
+### Added
+
+- `erpnext_setup_check` — checks a company for the master data transactional
+  documents need (a selling and a buying Price List, at least one Warehouse, at
+  least one Item Group, and a configurable set of UOMs) and reports what's
+  missing, with an actionable fix per gap.
+
 ### Changed
 
 - Chart legends can hide and show series while keeping at least one visible. KPI

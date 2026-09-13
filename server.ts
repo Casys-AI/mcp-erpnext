@@ -41,6 +41,11 @@ import {
 } from "./src/buy/manifest.ts";
 import { BUY_VIEW_APP_MANIFEST_URI } from "./src/buy/identities.ts";
 import {
+  RECORDED_DOCUMENT_VIEW_APP_MANIFEST,
+  RECORDED_DOCUMENT_VIEW_APP_MANIFEST_JSON,
+} from "./src/recorded-document/manifest.ts";
+import { RECORDED_DOCUMENT_VIEW_APP_MANIFEST_URI } from "./src/recorded-document/identities.ts";
+import {
   readViewerDist,
   resolveViewerDistPath,
 } from "./src/ui/viewer-resource-paths.ts";
@@ -57,6 +62,37 @@ import { resourceMetadataRoute } from "./src/auth/resource-metadata-route.ts";
 import { loadMrtrConfig } from "./src/mrtr/config.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
+
+function registerRecordedDocumentViewAppManifest(server: McpApp): void {
+  const bytes = new TextEncoder().encode(
+    RECORDED_DOCUMENT_VIEW_APP_MANIFEST_JSON,
+  );
+  server.registerResource(
+    {
+      uri: RECORDED_DOCUMENT_VIEW_APP_MANIFEST_URI,
+      name: "ERPNext Recorded Document App manifest",
+      description:
+        `Exact ${RECORDED_DOCUMENT_VIEW_APP_MANIFEST.app.id}@${RECORDED_DOCUMENT_VIEW_APP_MANIFEST.app.version} ` +
+        "whole-view and recorded-session contract.",
+      mimeType: "application/json",
+      size: bytes.byteLength,
+    },
+    (requested) => {
+      if (
+        requested.toString() !== RECORDED_DOCUMENT_VIEW_APP_MANIFEST_URI
+      ) {
+        throw new Error(
+          "Requested URI does not match the Recorded Document App manifest.",
+        );
+      }
+      return {
+        uri: RECORDED_DOCUMENT_VIEW_APP_MANIFEST_URI,
+        mimeType: "application/json",
+        text: RECORDED_DOCUMENT_VIEW_APP_MANIFEST_JSON,
+      };
+    },
+  );
+}
 
 function registerBuyViewAppManifest(server: McpApp): void {
   const bytes = new TextEncoder().encode(BUY_VIEW_APP_MANIFEST_JSON);
@@ -160,6 +196,7 @@ async function main() {
   server.registerTools(mcpTools, handlers);
 
   registerBuyViewAppManifest(server);
+  registerRecordedDocumentViewAppManifest(server);
 
   // Register UI resources (MCP Apps viewers)
   // Built by: cd lib/erpnext/src/ui && node build-all.mjs

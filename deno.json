@@ -16,6 +16,9 @@
     "ui:build:buy-evidence": "cd src/ui && node buy-evidence-viewer/build.mjs",
     "test:buy-evidence-app": "deno run -A src/ui/buy-evidence-viewer/test.ts",
     "check:buy-evidence-bundle": "deno run -A src/ui/buy-evidence-viewer/check-bundle.ts",
+    "ui:build:recorded-document": "cd src/ui && node recorded-document-viewer/build.mjs",
+    "test:recorded-document-app": "deno run -A src/ui/recorded-document-viewer/test.ts",
+    "check:recorded-document-bundle": "deno run -A src/ui/recorded-document-viewer/check-bundle.ts",
     "inspect": "deno run --allow-all server.ts --inspect",
     "buy:plan-demo": "deno run --allow-read scripts/buy-plan-demo-catalogue.ts",
     "check": "deno check mod.ts server.ts",
@@ -48,7 +51,8 @@
       "src/ui/**/*.tsx",
       "src/ui/**/*.mjs",
       "src/ui/node_modules/",
-      "src/ui/buy-evidence-viewer/src/"
+      "src/ui/buy-evidence-viewer/src/",
+      "src/ui/recorded-document-viewer/src/"
     ],
     "rules": {
       "exclude": [
@@ -68,7 +72,9 @@
       "src/ui/node_modules/",
       "src/ui/dist/",
       "src/ui/buy-evidence-viewer/src/app_test.ts",
-      "src/ui/buy-evidence-viewer/test.ts"
+      "src/ui/buy-evidence-viewer/test.ts",
+      "src/ui/recorded-document-viewer/src/app_test.ts",
+      "src/ui/recorded-document-viewer/test.ts"
     ]
   },
   "imports": {

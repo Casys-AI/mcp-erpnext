@@ -4,6 +4,15 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+- Add a passive recorded-document MCP App for Project, Task, Timesheet, BOM,
+  Work Order and Job Card, sharing the existing operational dossier profiles.
+  Closed record/session contracts retain exact identities and refuse
+  inconsistent references or live payload hints. Raw tool results and ERP
+  commands are disabled.
+- Extract the canonical JSON kernel into `src/shared` and preserve Buy
+  contracts. Build and release gates include the tenth viewer and its session
+  tests.
+
 ### Added
 
 - Project, Task, Timesheet, BOM, Work Order and Job Card documents now show

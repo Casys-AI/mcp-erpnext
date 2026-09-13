@@ -4,8 +4,10 @@ import {
   canonicalJson,
   canonicalTimestamp,
   decimalString,
+  exactRecord,
   fingerprint,
   frappeDatetime,
+  rejectForbiddenKeys,
   sha256Fingerprint,
   sha256FingerprintOfUtf8,
   utf8ByteCount,
@@ -84,4 +86,33 @@ Deno.test("Frappe revision timestamps preserve valid precision and reject invali
   ) {
     assertThrows(() => frappeDatetime(value, "modified"), TypeError);
   }
+});
+
+Deno.test("forbidden keys keep the Buy wording by default and name the owning contract otherwise", () => {
+  assertThrows(
+    () => rejectForbiddenKeys({ endpoint: "https://x.invalid" }, "sample"),
+    TypeError,
+    "must not appear in the Buy contract.",
+  );
+  assertThrows(
+    () =>
+      rejectForbiddenKeys(
+        { endpoint: "https://x.invalid" },
+        "sample",
+        "recorded-document contract",
+      ),
+    TypeError,
+    "must not appear in the recorded-document contract.",
+  );
+  assertThrows(
+    () =>
+      exactRecord(
+        { a: 1, password: "secret" },
+        ["a", "password"],
+        "sample",
+        "recorded-document contract",
+      ),
+    TypeError,
+    "recorded-document contract",
+  );
 });

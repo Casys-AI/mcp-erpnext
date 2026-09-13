@@ -8,7 +8,7 @@ import {
   canonicalJson,
   sha256FingerprintOfUtf8,
   utf8ByteCount,
-} from "./json.ts";
+} from "../shared/json.ts";
 import { sealBuySourceCapture } from "./capture.ts";
 import { syntheticCapture } from "./synthetic.ts";
 
@@ -24,7 +24,7 @@ Deno.test("Node and Deno produce the same canonicalText fingerprint and byteCoun
   const denoBytes = utf8ByteCount(denoText);
 
   const here = new URL(".", import.meta.url).pathname;
-  const jsonEntry = `${here}json.ts`;
+  const jsonEntry = `${here}../shared/json.ts`;
   const localEsbuild = `${here}../ui/node_modules/esbuild/bin/esbuild`;
   const outDir = await Deno.makeTempDir({ prefix: "buy-canonical-node-" });
   const outfile = `${outDir}/smoke.mjs`;

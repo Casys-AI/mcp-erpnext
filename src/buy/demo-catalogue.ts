@@ -26,7 +26,7 @@ import {
   oneOf,
   record,
   rejectForbiddenKeys,
-} from "./json.ts";
+} from "../shared/json.ts";
 
 export const DEMO_CATALOGUE_SCHEMA = "demo-catalogue/1.0" as const;
 export const DEMO_CATALOGUE_PLAN_SCHEMA = "demo-catalogue-plan/1.0" as const;

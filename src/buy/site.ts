@@ -8,7 +8,7 @@
 
 import type { FrappeClient } from "../api/frappe-client.ts";
 import { BUY_SOURCE_INSTANCE_KIND } from "./identities.ts";
-import { sha256FingerprintOfUtf8 } from "./json.ts";
+import { sha256FingerprintOfUtf8 } from "../shared/json.ts";
 
 export interface BuySourceInstance {
   readonly kind: typeof BUY_SOURCE_INSTANCE_KIND;

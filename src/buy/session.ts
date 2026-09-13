@@ -26,7 +26,7 @@ import {
   nonNegativeInteger,
   record,
   sha256Fingerprint,
-} from "./json.ts";
+} from "../shared/json.ts";
 import { type BuyRecordedResult, parseBuyRecordedResult } from "./result.ts";
 
 export interface BuyViewerSessionBasis {

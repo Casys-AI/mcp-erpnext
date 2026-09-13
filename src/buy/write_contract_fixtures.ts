@@ -14,7 +14,7 @@ import {
   canonicalJson,
   sha256FingerprintOfUtf8,
   utf8ByteCount,
-} from "./json.ts";
+} from "../shared/json.ts";
 import { BUY_VIEW_APP_MANIFEST } from "./manifest.ts";
 import { parseBuyRecordedResult } from "./result.ts";
 import { parseBuyViewerSession, withSessionFingerprint } from "./session.ts";

@@ -579,6 +579,17 @@ export const en: Record<string, string> = {
   "buy.col.captured_at": "Captured at",
   // ── /buy-evidence-viewer ──────────────────────────────────────────────────
 
+  // ── recorded-document-viewer ──────────────────────────────────────────────
+  "recorded.title": "Recorded document",
+  "recorded.field.doctype": "DocType",
+  "recorded.field.name": "Name",
+  "recorded.field.modified": "Modified",
+  "recorded.field.observed_at": "Observed at",
+  "recorded.field.site": "Source site",
+  "recorded.field.historical": "Historical status",
+  "recorded.historical.note": "Historical record",
+  // ── /recorded-document-viewer ─────────────────────────────────────────────
+
   // Project and Manufacturing document dossiers.
   "dossier.docstatus.draft": "Draft",
   "dossier.docstatus.submitted": "Submitted",

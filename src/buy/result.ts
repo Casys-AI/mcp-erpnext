@@ -39,7 +39,7 @@ import {
   nonNegativeInteger,
   oneOf,
   record,
-} from "./json.ts";
+} from "../shared/json.ts";
 import type { BuySourceInstance } from "./site.ts";
 
 export interface BuyArtifactRef {

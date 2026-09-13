@@ -65,6 +65,19 @@ export {
   BUY_VIEW_APP_MANIFEST_JSON,
 } from "./src/buy/mod.ts";
 
+export {
+  RECORDED_DOCUMENT_SCHEMA,
+  RECORDED_DOCUMENT_SESSION_SCHEMA,
+  RECORDED_DOCUMENT_VIEW_APP_ID,
+  RECORDED_DOCUMENT_VIEW_APP_MANIFEST_URI,
+  RECORDED_DOCUMENT_VIEW_APP_VERSION,
+  RECORDED_DOCUMENT_VIEWER_URI,
+} from "./src/recorded-document/mod.ts";
+export {
+  RECORDED_DOCUMENT_VIEW_APP_MANIFEST,
+  RECORDED_DOCUMENT_VIEW_APP_MANIFEST_JSON,
+} from "./src/recorded-document/mod.ts";
+
 // Re-export cache (for direct use or DI in tests)
 export { getCache, setCache } from "./src/cache/cache.ts";
 export { MemoryCache } from "./src/cache/memory.ts";

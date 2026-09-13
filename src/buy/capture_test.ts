@@ -8,7 +8,7 @@ import {
   runBuyCapture,
   sealBuySourceCapture,
 } from "./capture.ts";
-import { sha256Fingerprint } from "./json.ts";
+import { sha256Fingerprint } from "../shared/json.ts";
 import { sourceInstanceFromClient } from "./site.ts";
 import { SYNTHETIC_MODIFIED, syntheticCapture } from "./synthetic.ts";
 
@@ -162,7 +162,7 @@ Deno.test("capture derives sourceInstance from the actual client and uses skipCa
   assertEquals("email_id" in wrapper.capture.documents[0].fields, false);
   assertEquals(
     wrapper.fingerprint,
-    await (await import("./json.ts")).sha256FingerprintOfUtf8(
+    await (await import("../shared/json.ts")).sha256FingerprintOfUtf8(
       wrapper.canonicalText,
     ),
   );

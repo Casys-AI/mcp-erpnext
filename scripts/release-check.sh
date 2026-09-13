@@ -32,6 +32,12 @@ deno task check:buy-evidence-bundle
 echo "[release-check] immutable Buy App session tests"
 deno task test:buy-evidence-app
 
+echo "[release-check] built Recorded Document App bundle"
+deno task check:recorded-document-bundle
+
+echo "[release-check] immutable Recorded Document App session tests"
+deno task test:recorded-document-app
+
 echo "[release-check] scripts/build-node.sh"
 bash scripts/build-node.sh
 

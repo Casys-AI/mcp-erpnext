@@ -8,6 +8,7 @@ export const UI_VIEWERS = [
   "funnel-viewer",
   "kanban-viewer",
   "buy-evidence-viewer",
+  "recorded-document-viewer",
 ] as const;
 
 /**

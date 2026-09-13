@@ -48,7 +48,7 @@ export {
   sha256Fingerprint,
   sha256FingerprintOfUtf8,
   utf8ByteCount,
-} from "./json.ts";
+} from "../shared/json.ts";
 
 export { sourceInstanceFromClient } from "./site.ts";
 export type { BuySourceInstance, SiteIdentityClient } from "./site.ts";

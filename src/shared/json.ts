@@ -1,10 +1,17 @@
 /**
- * Closed JSON kernel for the Buy evidence contract.
+ * Closed JSON kernel for recorded evidence contracts.
  *
- * Canonical JSON: UTF-8, recursively sorted object keys, significant array
- * order, no undefined / non-finite / non-JSON values. Fingerprints are
- * SHA-256 of those bytes. This module is dual-runtime (Deno and Node) via
+ * Shared kernel (DDD) for the Buy and recorded-document bounded contexts:
+ * canonical JSON, structural bounds, and SHA-256 fingerprints. Canonical
+ * JSON: UTF-8, recursively sorted object keys, significant array order, no
+ * undefined / non-finite / non-JSON values. Fingerprints are SHA-256 of
+ * those bytes. This module is dual-runtime (Deno and Node) via
  * `crypto.subtle` and `TextEncoder` only.
+ *
+ * The optional `contract` label names the owning contract in refusal
+ * messages only; it never changes accept/reject decisions. Buy was the
+ * first consumer, so its wording stays the default and Buy call sites keep
+ * their literal behavior.
  */
 
 const DIGEST = /^[a-f0-9]{64}$/;
@@ -69,10 +76,11 @@ export function exactRecord(
   value: unknown,
   keys: readonly string[],
   name: string,
+  contract = "Buy contract",
 ): Record<string, unknown> {
   const root = record(value, name);
   exactKeys(root, keys, name);
-  rejectForbiddenKeys(root, name);
+  rejectForbiddenKeys(root, name, contract);
   return root;
 }
 
@@ -222,11 +230,15 @@ export function boundedArray(
   return items;
 }
 
-export function rejectForbiddenKeys(value: unknown, name: string): void {
+export function rejectForbiddenKeys(
+  value: unknown,
+  name: string,
+  contract = "Buy contract",
+): void {
   if (Array.isArray(value)) {
     const items = denseArray(value, name);
     for (let index = 0; index < items.length; index += 1) {
-      rejectForbiddenKeys(items[index], `${name}[${index}]`);
+      rejectForbiddenKeys(items[index], `${name}[${index}]`, contract);
     }
     return;
   }
@@ -235,10 +247,10 @@ export function rejectForbiddenKeys(value: unknown, name: string): void {
   for (const key of Object.keys(root)) {
     if (FORBIDDEN_KEYS.has(key)) {
       throw new TypeError(
-        `${name}.${key} is a private credential, path, or command field and must not appear in the Buy contract.`,
+        `${name}.${key} is a private credential, path, or command field and must not appear in the ${contract}.`,
       );
     }
-    rejectForbiddenKeys(root[key], `${name}.${key}`);
+    rejectForbiddenKeys(root[key], `${name}.${key}`, contract);
   }
 }
 

@@ -553,6 +553,17 @@ export const zh: Record<string, string> = {
   "buy.col.captured_at": "捕获时间",
   // ── /buy-evidence-viewer ──────────────────────────────────────────────────
 
+  // ── recorded-document-viewer ──────────────────────────────────────────────
+  "recorded.title": "已记录文档",
+  "recorded.field.doctype": "单据类型",
+  "recorded.field.name": "名称",
+  "recorded.field.modified": "修改时间",
+  "recorded.field.observed_at": "观察时间",
+  "recorded.field.site": "来源站点",
+  "recorded.field.historical": "历史状态",
+  "recorded.historical.note": "历史记录",
+  // ── /recorded-document-viewer ─────────────────────────────────────────────
+
   // Project and Manufacturing document dossiers.
   "dossier.docstatus.draft": "草稿",
   "dossier.docstatus.submitted": "已提交",

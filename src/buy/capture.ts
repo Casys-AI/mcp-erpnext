@@ -41,7 +41,7 @@ import {
   record,
   sha256FingerprintOfUtf8,
   utf8ByteCount,
-} from "./json.ts";
+} from "../shared/json.ts";
 import {
   BUY_DOCTYPE_FIELD_SPECS,
   type BuyCapturedDocument,

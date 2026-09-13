@@ -197,17 +197,18 @@ until it exists. See
 Nine interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
 viewers, registered as `ui://mcp-erpnext/{name}`:
 
-| Viewer                | Description                                                      | Interactive Features                                                                          |
-| --------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `doc-viewer`          | Generic ERPNext document with fields and child tables            | Capability-gated attachments, typed navigation, guarded Submit/Cancel, and raw JSON fallback. |
-| `doclist-viewer`      | Generic document table with sort, filter, pagination, CSV export | Inline details, typed nested navigation, Submit/Cancel, and compact status filters.           |
-| `invoice-viewer`      | Sales Orders, Sales Invoices, and Quotations with line totals    | Item, stock, party, and payment navigation plus guarded Submit/Cancel actions.                |
-| `stock-viewer`        | Stock balance table with color-coded qty badges                  | Item details, recent movements, stock charts, and stock-entry navigation.                     |
-| `chart-viewer`        | Universal chart renderer (12 types via Recharts)                 | Exact point/series navigation and active-context selection across simple and composed charts. |
-| `kanban-viewer`       | Read-write kanban for Task, Opportunity, Issue                   | Drag-and-drop, inline editing, serialized saves, and typed related-document navigation.       |
-| `kpi-viewer`          | Big number card with delta, sparkline, trend                     | Number and trend navigation with bounded active-context selection.                            |
-| `funnel-viewer`       | Trapezoid sales funnel with conversion rates                     | Period-aware stage navigation and bounded active-context selection.                           |
-| `buy-evidence-viewer` | Immutable sealed Buy evidence (recorded session only)            | Complete, partial, unresolved, and unavailable projections; no live ERP refresh or mutation.  |
+| Viewer                     | Description                                                               | Interactive Features                                                                          |
+| -------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `doc-viewer`               | Generic ERPNext document with fields and child tables                     | Capability-gated attachments, typed navigation, guarded Submit/Cancel, and raw JSON fallback. |
+| `doclist-viewer`           | Generic document table with sort, filter, pagination, CSV export          | Inline details, typed nested navigation, Submit/Cancel, and compact status filters.           |
+| `invoice-viewer`           | Sales Orders, Sales Invoices, and Quotations with line totals             | Item, stock, party, and payment navigation plus guarded Submit/Cancel actions.                |
+| `stock-viewer`             | Stock balance table with color-coded qty badges                           | Item details, recent movements, stock charts, and stock-entry navigation.                     |
+| `chart-viewer`             | Universal chart renderer (12 types via Recharts)                          | Exact point/series navigation and active-context selection across simple and composed charts. |
+| `kanban-viewer`            | Read-write kanban for Task, Opportunity, Issue                            | Drag-and-drop, inline editing, serialized saves, and typed related-document navigation.       |
+| `kpi-viewer`               | Big number card with delta, sparkline, trend                              | Number and trend navigation with bounded active-context selection.                            |
+| `funnel-viewer`            | Trapezoid sales funnel with conversion rates                              | Period-aware stage navigation and bounded active-context selection.                           |
+| `buy-evidence-viewer`      | Immutable sealed Buy evidence (recorded session only)                     | Complete, partial, unresolved, and unavailable projections; no live ERP refresh or mutation.  |
+| `recorded-document-viewer` | Preserved Project, Task, Timesheet, BOM, Work Order and Job Card dossiers | Recorded sessions only; local tabs/disclosures and inert source text.                         |
 
 ### Navigation and active context
 
@@ -377,3 +378,22 @@ MIT
 Buy result fields use the host locale (EN/FR/ZH). App-level waiting and
 rejection screens retain English labels in this beta; host-context support for
 those shared surface screens remains an upstream MCP View follow-up.
+
+### Recorded Project and Manufacturing dossiers
+
+The whole-view resource `ui://mcp-erpnext/recorded-document-viewer` reuses the
+six presentation profiles of `doc-viewer` through a passive shell. It accepts
+`viewer.session.apply` with
+`io.casys.mcp-erpnext.recorded-document-session/1.0`; raw tool results are
+refused. The recorded document keeps its exact DocType, name, literal Frappe
+`modified`, observation time and opaque site identity. Canonical hashes check
+byte/reference coherence; they do not establish ERP authenticity, a signed run
+or runtime qualification.
+
+This shell has no ERP tools, refresh, attachment, navigation or active-context
+commands. It displays retained values and keeps URLs/HTML/images as inert text.
+Its manifest is `ui://mcp-erpnext/recorded-document-manifest`. The existing live
+viewers retain their own capabilities. Capture, qualification and delivery of
+real recorded sessions by Digital Thread are separate work in
+[Digital Thread #40](https://github.com/Casys-AI/casys-digital-thread/issues/40).
+No demo ERP project or manufacturing document is created by this feature.

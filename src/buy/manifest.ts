@@ -14,11 +14,13 @@ import {
   BUY_VIEW_APP_TITLE,
   BUY_VIEW_APP_VERSION,
 } from "./identities.ts";
-import { denseArray, exactRecord, literal } from "./json.ts";
+import { denseArray, exactRecord, literal } from "../shared/json.ts";
+import {
+  VIEW_APP_MANIFEST_SCHEMA,
+  VIEWER_SESSION_APPLY_ACTION,
+} from "../shared/view-app.ts";
 
-export const VIEW_APP_MANIFEST_SCHEMA =
-  "io.casys.mcp.view-app-manifest/1.0" as const;
-export const VIEWER_SESSION_APPLY_ACTION = "viewer.session.apply" as const;
+export { VIEW_APP_MANIFEST_SCHEMA, VIEWER_SESSION_APPLY_ACTION };
 
 export interface BuyViewAppManifest {
   readonly schemaVersion: typeof VIEW_APP_MANIFEST_SCHEMA;

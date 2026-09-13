@@ -19,7 +19,7 @@ import {
   BUY_VIEWER_SESSION_KIND,
   SYNTHETIC_TEST_NOTICE,
 } from "./identities.ts";
-import { canonicalJson, sha256FingerprintOfUtf8 } from "./json.ts";
+import { canonicalJson, sha256FingerprintOfUtf8 } from "../shared/json.ts";
 import type { BuySourceCapture } from "./capture.ts";
 import type { BuyRecordedResult, BuyRecordedResultV2 } from "./result.ts";
 import type { BuyViewerSession } from "./session.ts";

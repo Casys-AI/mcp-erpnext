@@ -21,7 +21,7 @@ import {
   canonicalJson,
   frappeDatetime,
   sha256FingerprintOfUtf8,
-} from "./json.ts";
+} from "../shared/json.ts";
 
 const DECIMAL = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const CURRENCY = /^[A-Z]{3}$/;

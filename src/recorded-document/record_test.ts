@@ -267,9 +267,134 @@ Deno.test("seal input must be unsealed; fingerprints are computed, never supplie
   );
 });
 
+Deno.test("excessively nested documents are refused by the depth bound, not stack exhaustion", async () => {
+  const deep: Record<string, unknown> = {};
+  let cursor = deep;
+  for (let level = 0; level < 100000; level += 1) {
+    const next: Record<string, unknown> = {};
+    cursor.nested = next;
+    cursor = next;
+  }
+  const base = await syntheticSealedRecord("task");
+  await assertRejects(
+    () => parseRecordedDocument({ ...base, document: deep }),
+    TypeError,
+    "depth bound",
+  );
+  await assertRejects(
+    () => sealRecordedDocument(unsealedShell(base, deep)),
+    TypeError,
+    "depth bound",
+  );
+});
+
+Deno.test("cyclic documents are refused promptly by a contract error", async () => {
+  const base = await syntheticSealedRecord("task");
+  const cyclic: Record<string, unknown> = {
+    doctype: base.doctype,
+    name: base.name,
+    modified: base.modified,
+  };
+  cyclic.self = cyclic;
+  await assertRejects(
+    () => parseRecordedDocument({ ...base, document: cyclic }),
+    TypeError,
+    "cyclic references",
+  );
+  const loop: unknown[] = [];
+  loop.push(loop);
+  await assertRejects(
+    () =>
+      sealRecordedDocument(
+        unsealedShell(base, { ...syntheticTaskIdentity(base), loop }),
+      ),
+    TypeError,
+    "cyclic references",
+  );
+});
+
+Deno.test("shared subtrees cannot blow the traversal budget", async () => {
+  const base = await syntheticSealedRecord("task");
+  const shared = {
+    rows: Array.from({ length: 200 }, (_, index) => ({
+      name: `row-${index}`,
+      hours: 1,
+      note: "shared",
+      flag: true,
+      extra: null,
+    })),
+  };
+  const explosive = {
+    ...syntheticTaskIdentity(base),
+    slots: Array.from({ length: 200 }, () => shared),
+  };
+  await assertRejects(
+    () => parseRecordedDocument({ ...base, document: explosive }),
+    TypeError,
+    "traversal bound",
+  );
+  const smallShared = { x: 1 };
+  const sealed = await sealRecordedDocument(
+    unsealedShell(base, {
+      ...syntheticRecordedDocument("task"),
+      first: smallShared,
+      second: smallShared,
+    }),
+  );
+  assertEquals(sealed.doctype, "Task");
+});
+
+Deno.test("wide arrays are refused before traversal", async () => {
+  const base = await syntheticSealedRecord("task");
+  await assertRejects(
+    () =>
+      parseRecordedDocument({
+        ...base,
+        document: {
+          ...syntheticTaskIdentity(base),
+          flood: Array.from({ length: 100000 }, (_, index) => ({ index })),
+        },
+      }),
+    TypeError,
+    "entry bound",
+  );
+});
+
 function stripFingerprints<T>(record: T): Record<string, unknown> {
   const stripped = clone(record) as Record<string, unknown>;
   delete stripped.documentFingerprint;
   delete stripped.fingerprint;
   return stripped;
+}
+
+function syntheticTaskIdentity(
+  record: { doctype: unknown; name: unknown; modified: unknown },
+): Record<string, unknown> {
+  return {
+    doctype: record.doctype,
+    name: record.name,
+    modified: record.modified,
+  };
+}
+
+function unsealedShell(
+  record: {
+    schemaVersion: unknown;
+    doctype: unknown;
+    name: unknown;
+    modified: unknown;
+    observedAt: unknown;
+    sourceInstance: unknown;
+  },
+  document: unknown,
+): Record<string, unknown> {
+  return {
+    schemaVersion: record.schemaVersion,
+    doctype: record.doctype,
+    name: record.name,
+    modified: record.modified,
+    observedAt: record.observedAt,
+    sourceInstance: record.sourceInstance,
+    document,
+  };
 }

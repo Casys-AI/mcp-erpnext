@@ -24,6 +24,7 @@ import {
   RECORDED_DOCUMENT_MAX_CANONICAL_BYTES,
   RECORDED_DOCUMENT_MAX_CHILD_ROWS,
   RECORDED_DOCUMENT_MAX_DEPTH,
+  RECORDED_DOCUMENT_MAX_DOCUMENT_NODES,
   RECORDED_DOCUMENT_MAX_NAME_LENGTH,
   RECORDED_DOCUMENT_MAX_OBJECT_KEYS,
   RECORDED_DOCUMENT_MAX_STRING_LENGTH,
@@ -35,13 +36,13 @@ import {
 import {
   canonicalJson,
   canonicalTimestamp,
-  exactRecord,
+  exactRecordShallow,
   fingerprint,
   frappeDatetime,
   literal,
   nonEmpty,
   oneOf,
-  rejectForbiddenKeys,
+  rejectForbiddenKey,
   sha256FingerprintOfUtf8,
   utf8ByteCount,
 } from "../shared/json.ts";
@@ -98,7 +99,7 @@ export function recordedDocumentName(value: unknown, name: string): string {
 export async function parseRecordedDocument(
   value: unknown,
 ): Promise<RecordedDocument> {
-  const root = exactRecord(value, SEALED_KEYS, "recorded document", CONTRACT);
+  const root = exactRecordShallow(value, SEALED_KEYS, "recorded document");
   const unsealed = parseUnsignedFields(root);
   const documentFingerprint = fingerprint(
     root.documentFingerprint,
@@ -149,11 +150,10 @@ export async function parseRecordedDocument(
 export async function sealRecordedDocument(
   value: unknown,
 ): Promise<RecordedDocument> {
-  const root = exactRecord(
+  const root = exactRecordShallow(
     value,
     UNSEALED_KEYS,
     "recorded document seal input",
-    CONTRACT,
   );
   const unsealed = parseUnsignedFields(root);
   const documentFingerprint = await sha256FingerprintOfUtf8(
@@ -196,18 +196,16 @@ function parseUnsignedFields(
     root.observedAt,
     "recorded document.observedAt",
   );
-  const source = exactRecord(
+  const source = exactRecordShallow(
     root.sourceInstance,
     ["kind", "siteId"],
     "recorded document.sourceInstance",
-    CONTRACT,
   );
   literal(
     source.kind,
     RECORDED_DOCUMENT_SOURCE_INSTANCE_KIND,
     "recorded document.sourceInstance.kind",
   );
-  rejectForbiddenKeys(root.document, "recorded document.document", CONTRACT);
   const document = assertBoundedDocument(root.document, {
     doctype,
     name,
@@ -246,7 +244,10 @@ function assertBoundedDocument(
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError("recorded document.document must be an object.");
   }
-  assertBoundedValue(value, "recorded document.document", 0);
+  assertBoundedValue(value, "recorded document.document", 0, {
+    ancestors: new Set(),
+    remaining: RECORDED_DOCUMENT_MAX_DOCUMENT_NODES,
+  });
   const document = value as Record<string, unknown>;
   if (document.doctype !== identity.doctype) {
     throw new TypeError(
@@ -266,14 +267,26 @@ function assertBoundedDocument(
   return document;
 }
 
+interface DocumentTraversal {
+  readonly ancestors: Set<object>;
+  remaining: number;
+}
+
 function assertBoundedValue(
   value: unknown,
   path: string,
   depth: number,
+  traversal: DocumentTraversal,
 ): void {
   if (depth > RECORDED_DOCUMENT_MAX_DEPTH) {
     throw new TypeError(
       `${path} exceeds the ${RECORDED_DOCUMENT_MAX_DEPTH}-level depth bound.`,
+    );
+  }
+  traversal.remaining -= 1;
+  if (traversal.remaining < 0) {
+    throw new TypeError(
+      `${path} exceeds the ${RECORDED_DOCUMENT_MAX_DOCUMENT_NODES}-node traversal bound.`,
     );
   }
   if (typeof value === "string") {
@@ -296,13 +309,24 @@ function assertBoundedValue(
     return;
   }
   if (Array.isArray(value)) {
+    assertAcyclic(value, path, traversal.ancestors);
     if (value.length > RECORDED_DOCUMENT_MAX_CHILD_ROWS) {
       throw new TypeError(
         `${path} exceeds the ${RECORDED_DOCUMENT_MAX_CHILD_ROWS}-entry bound.`,
       );
     }
-    for (let index = 0; index < value.length; index += 1) {
-      assertBoundedValue(value[index], `${path}[${index}]`, depth + 1);
+    traversal.ancestors.add(value);
+    try {
+      for (let index = 0; index < value.length; index += 1) {
+        assertBoundedValue(
+          value[index],
+          `${path}[${index}]`,
+          depth + 1,
+          traversal,
+        );
+      }
+    } finally {
+      traversal.ancestors.delete(value);
     }
     Object.freeze(value);
     return;
@@ -311,6 +335,7 @@ function assertBoundedValue(
     throw new TypeError(`${path} must be safe inert JSON.`);
   }
   const root = value as Record<string, unknown>;
+  assertAcyclic(root, path, traversal.ancestors);
   const prototype = Object.getPrototypeOf(root);
   if (prototype !== Object.prototype && prototype !== null) {
     throw new TypeError(`${path} must contain only plain JSON objects.`);
@@ -321,15 +346,33 @@ function assertBoundedValue(
       `${path} exceeds the ${RECORDED_DOCUMENT_MAX_OBJECT_KEYS}-key bound.`,
     );
   }
-  for (const key of keys) {
-    if (LIVE_KEYS.has(key)) {
-      throw new TypeError(
-        `${path}.${key} is live-view metadata and must not appear in the ${CONTRACT}.`,
-      );
+  traversal.ancestors.add(root);
+  try {
+    for (const key of keys) {
+      if (LIVE_KEYS.has(key)) {
+        throw new TypeError(
+          `${path}.${key} is live-view metadata and must not appear in the ${CONTRACT}.`,
+        );
+      }
+      rejectForbiddenKey(key, `${path}.${key}`, CONTRACT);
+      assertBoundedValue(root[key], `${path}.${key}`, depth + 1, traversal);
     }
-    assertBoundedValue(root[key], `${path}.${key}`, depth + 1);
+  } finally {
+    traversal.ancestors.delete(root);
   }
   Object.freeze(root);
+}
+
+function assertAcyclic(
+  value: object,
+  path: string,
+  ancestors: Set<object>,
+): void {
+  if (ancestors.has(value)) {
+    throw new TypeError(
+      `${path} must not contain cyclic references in the ${CONTRACT}.`,
+    );
+  }
 }
 
 function freezeRecord(record: RecordedDocument): RecordedDocument {

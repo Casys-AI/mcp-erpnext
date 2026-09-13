@@ -84,6 +84,24 @@ export function exactRecord(
   return root;
 }
 
+/**
+ * Closed-record check without recursive forbidden-key scanning.
+ *
+ * Validates only the object's own enumerable keys; nested subtrees stay
+ * untouched so the caller can validate each bounded subtree itself before
+ * any deep traversal. Use this at untrusted envelope boundaries, then a
+ * bounded walk for document payloads.
+ */
+export function exactRecordShallow(
+  value: unknown,
+  keys: readonly string[],
+  name: string,
+): Record<string, unknown> {
+  const root = record(value, name);
+  exactKeys(root, keys, name);
+  return root;
+}
+
 export function denseArray(value: unknown, name: string): unknown[] {
   if (!Array.isArray(value)) throw new TypeError(`${name} must be an array.`);
   const allowed = new Set<string>(["length"]);
@@ -245,12 +263,27 @@ export function rejectForbiddenKeys(
   if (typeof value !== "object" || value === null) return;
   const root = record(value, name);
   for (const key of Object.keys(root)) {
-    if (FORBIDDEN_KEYS.has(key)) {
-      throw new TypeError(
-        `${name}.${key} is a private credential, path, or command field and must not appear in the ${contract}.`,
-      );
-    }
+    rejectForbiddenKey(key, `${name}.${key}`, contract);
     rejectForbiddenKeys(root[key], `${name}.${key}`, contract);
+  }
+}
+
+/**
+ * Single-key refusal against the credential/path/command set.
+ *
+ * Non-recursive: bounded traversals call it per key within their own
+ * depth and visit budget, so untrusted payloads are bounded before any
+ * deep scan. `name` is the full dotted path of `key`.
+ */
+export function rejectForbiddenKey(
+  key: string,
+  name: string,
+  contract = "Buy contract",
+): void {
+  if (FORBIDDEN_KEYS.has(key)) {
+    throw new TypeError(
+      `${name} is a private credential, path, or command field and must not appear in the ${contract}.`,
+    );
   }
 }
 

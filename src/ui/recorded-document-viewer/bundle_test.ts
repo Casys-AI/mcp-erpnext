@@ -25,6 +25,9 @@ Deno.test({
     assertStringIncludes(html, RECORDED_DOCUMENT_VIEW_APP_ID);
     assertStringIncludes(html, "recorded.document");
     assertStringIncludes(html, "recorded-document-viewer-state");
+    assertStringIncludes(html, 'aria-live="polite"');
+    assertStringIncludes(html, 'aria-busy="true"');
+    assertStringIncludes(html, "Loading recorded document…");
     assert(html.includes("available"));
     assert(html.includes("unavailable"));
     assert(html.includes("unresolved"));

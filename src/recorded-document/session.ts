@@ -12,13 +12,12 @@
  * Session fingerprint is SHA-256 of the canonical full document minus
  * `basis.sessionFingerprint`, like Buy. Bad digest / foreign refs / mixed
  * tuple values become parse failures; the viewer never falls back to live
- * ERP. Do not confuse the three disjoint fingerprints: the record bytes
- * fingerprint, the opaque Thread artefact fingerprint, and the session
- * fingerprint.
+ * ERP. Do not confuse the four distinct fingerprints: the document bytes
+ * `documentFingerprint`, the addressable record `fingerprint`, the opaque
+ * Thread anchor fingerprint, and the `basis.sessionFingerprint`.
  */
 
 import {
-  RECORDED_DOCUMENT_CONTRACT_LABEL,
   RECORDED_DOCUMENT_DOCTYPES,
   RECORDED_DOCUMENT_SCHEMA,
   RECORDED_DOCUMENT_SESSION_SCHEMA,
@@ -39,7 +38,7 @@ import {
   assertDigestAddress,
   canonicalTimestamp,
   exactKeys,
-  exactRecord,
+  exactRecordShallow,
   fingerprint,
   frappeDatetime,
   literal,
@@ -49,8 +48,6 @@ import {
   record,
   sha256Fingerprint,
 } from "../shared/json.ts";
-
-const CONTRACT = RECORDED_DOCUMENT_CONTRACT_LABEL;
 
 export interface RecordedViewerSessionBasis {
   readonly projectId: string;
@@ -114,7 +111,7 @@ export async function parseRecordedViewerSession(
   value: unknown,
 ): Promise<RecordedViewerSession> {
   const session = await parseRecordedViewerSessionStructure(value);
-  const actualFingerprint = await recordedSessionFingerprint(value);
+  const actualFingerprint = await recordedSessionFingerprint(session);
   if (session.basis.sessionFingerprint !== actualFingerprint) {
     throw new TypeError(
       "viewer session.basis.sessionFingerprint does not match the recorded session.",
@@ -131,11 +128,15 @@ export async function parseRecordedViewerSession(
  * `{schemaVersion, kind, basis, anchor, provenance, projection}` where basis
  * contains `{projectId, projectRevision, subjectId, thread}`. Only
  * `basis.sessionFingerprint` is omitted to avoid self-reference.
+ *
+ * The envelope is checked shallowly: callers pass a structurally parsed
+ * session (or a builder-owned session), never raw untrusted bytes, so no
+ * deep traversal precedes the bounded record validation.
  */
 export async function recordedSessionFingerprint(
   value: unknown,
 ): Promise<string> {
-  const root = exactRecord(
+  const root = exactRecordShallow(
     value,
     [
       "schemaVersion",
@@ -146,9 +147,8 @@ export async function recordedSessionFingerprint(
       "projection",
     ],
     "viewer session fingerprint input",
-    CONTRACT,
   );
-  const basis = exactRecord(
+  const basis = exactRecordShallow(
     root.basis,
     [
       "projectId",
@@ -158,7 +158,6 @@ export async function recordedSessionFingerprint(
       "sessionFingerprint",
     ],
     "viewer session fingerprint input.basis",
-    CONTRACT,
   );
   return await sha256Fingerprint({
     schemaVersion: root.schemaVersion,
@@ -197,7 +196,7 @@ export async function withRecordedSessionFingerprint(
 async function parseRecordedViewerSessionStructure(
   value: unknown,
 ): Promise<RecordedViewerSession> {
-  const root = exactRecord(
+  const root = exactRecordShallow(
     value,
     [
       "schemaVersion",
@@ -208,7 +207,6 @@ async function parseRecordedViewerSessionStructure(
       "projection",
     ],
     "viewer session",
-    CONTRACT,
   );
   literal(
     root.schemaVersion,
@@ -216,7 +214,7 @@ async function parseRecordedViewerSessionStructure(
     "schemaVersion",
   );
   literal(root.kind, RECORDED_DOCUMENT_VIEWER_SESSION_KIND, "kind");
-  const basisValue = exactRecord(
+  const basisValue = exactRecordShallow(
     root.basis,
     [
       "projectId",
@@ -226,13 +224,11 @@ async function parseRecordedViewerSessionStructure(
       "sessionFingerprint",
     ],
     "viewer session.basis",
-    CONTRACT,
   );
-  const thread = exactRecord(
+  const thread = exactRecordShallow(
     basisValue.thread,
     ["id", "revision"],
     "viewer session.basis.thread",
-    CONTRACT,
   );
   const basis: RecordedViewerSessionBasis = {
     projectId: nonEmpty(basisValue.projectId, "viewer session.basis.projectId"),
@@ -253,11 +249,10 @@ async function parseRecordedViewerSessionStructure(
       "viewer session.basis.sessionFingerprint",
     ),
   };
-  const anchorValue = exactRecord(
+  const anchorValue = exactRecordShallow(
     root.anchor,
     ["kind", "id", "uri", "fingerprint"],
     "viewer session.anchor",
-    CONTRACT,
   );
   return {
     schemaVersion: RECORDED_DOCUMENT_SESSION_SCHEMA,
@@ -278,7 +273,7 @@ async function parseRecordedViewerSessionStructure(
 }
 
 function parseProvenance(value: unknown): RecordedViewerSessionProvenance {
-  const root = exactRecord(
+  const root = exactRecordShallow(
     value,
     [
       "recordRef",
@@ -288,30 +283,26 @@ function parseProvenance(value: unknown): RecordedViewerSessionProvenance {
       "observedAt",
     ],
     "viewer session.provenance",
-    CONTRACT,
   );
-  const erpValue = exactRecord(
+  const erpValue = exactRecordShallow(
     root.erp,
     ["doctype", "name", "modified"],
     "viewer session.provenance.erp",
-    CONTRACT,
   );
-  const source = exactRecord(
+  const source = exactRecordShallow(
     root.sourceInstance,
     ["kind", "siteId"],
     "viewer session.provenance.sourceInstance",
-    CONTRACT,
   );
   literal(
     source.kind,
     RECORDED_DOCUMENT_SOURCE_INSTANCE_KIND,
     "viewer session.provenance.sourceInstance.kind",
   );
-  const threadDocumentRef = exactRecord(
+  const threadDocumentRef = exactRecordShallow(
     root.threadDocumentRef,
     ["kind", "id", "uri", "fingerprint"],
     "viewer session.provenance.threadDocumentRef",
-    CONTRACT,
   );
   return {
     recordRef: evidenceArtifact(
@@ -383,11 +374,10 @@ async function parseProjection(
       record: await parseRecordedDocument(root.record),
     };
     if (!withApplicability) return parsed;
-    const applicability = exactRecord(
+    const applicability = exactRecordShallow(
       root.applicability,
       ["status", "reason"],
       "viewer session.projection.applicability",
-      CONTRACT,
     );
     literal(
       applicability.status,
@@ -490,7 +480,7 @@ function evidenceArtifact(
   value: unknown,
   name: string,
 ): { uri: string; fingerprint: string } {
-  const root = exactRecord(value, ["uri", "fingerprint"], name, CONTRACT);
+  const root = exactRecordShallow(value, ["uri", "fingerprint"], name);
   return {
     uri: nonEmpty(root.uri, `${name}.uri`),
     fingerprint: fingerprint(root.fingerprint, `${name}.fingerprint`),

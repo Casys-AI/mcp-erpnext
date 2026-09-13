@@ -71,6 +71,8 @@ export const RECORDED_DOCUMENT_MAX_NAME_LENGTH = 140;
 export const RECORDED_DOCUMENT_MAX_STRING_LENGTH = 32768;
 export const RECORDED_DOCUMENT_MAX_OBJECT_KEYS = 200;
 export const RECORDED_DOCUMENT_MAX_DEPTH = 8;
+/** Total visited nodes per document traversal, shared expansions included. */
+export const RECORDED_DOCUMENT_MAX_DOCUMENT_NODES = 20000;
 
 export const RECORDED_DOCUMENT_CONTRACT_LABEL =
   "recorded-document contract" as const;

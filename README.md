@@ -194,8 +194,8 @@ until it exists. See
 
 ## UI Viewers
 
-Nine interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
-viewers, registered as `ui://mcp-erpnext/{name}`:
+Ten [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) viewers,
+registered as `ui://mcp-erpnext/{name}`:
 
 | Viewer                     | Description                                                               | Interactive Features                                                                          |
 | -------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |

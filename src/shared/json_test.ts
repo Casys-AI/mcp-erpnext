@@ -5,8 +5,10 @@ import {
   canonicalTimestamp,
   decimalString,
   exactRecord,
+  exactRecordShallow,
   fingerprint,
   frappeDatetime,
+  rejectForbiddenKey,
   rejectForbiddenKeys,
   sha256Fingerprint,
   sha256FingerprintOfUtf8,
@@ -115,4 +117,45 @@ Deno.test("forbidden keys keep the Buy wording by default and name the owning co
     TypeError,
     "recorded-document contract",
   );
+});
+
+Deno.test("shallow records check own keys without walking nested subtrees", () => {
+  const deep: Record<string, unknown> = {};
+  let cursor = deep;
+  for (let level = 0; level < 100000; level += 1) {
+    const next: Record<string, unknown> = {};
+    cursor.nested = next;
+    cursor = next;
+  }
+  const root = exactRecordShallow({ a: 1, deep }, ["a", "deep"], "sample");
+  assertEquals(root.a, 1);
+  assertThrows(
+    () => exactRecordShallow({ a: 1 }, ["a", "b"], "sample"),
+    TypeError,
+    "unsupported fields",
+  );
+  assertThrows(
+    () => exactRecordShallow([1], ["a"], "sample"),
+    TypeError,
+    "must be an object",
+  );
+});
+
+Deno.test("single-key refusal matches the recursive message without recursion", () => {
+  assertThrows(
+    () => rejectForbiddenKey("api_key", "sample.api_key"),
+    TypeError,
+    "sample.api_key is a private credential, path, or command field and must not appear in the Buy contract.",
+  );
+  assertThrows(
+    () =>
+      rejectForbiddenKey(
+        "endpoint",
+        "sample.endpoint",
+        "recorded-document contract",
+      ),
+    TypeError,
+    "must not appear in the recorded-document contract.",
+  );
+  rejectForbiddenKey("doctype", "sample.doctype");
 });

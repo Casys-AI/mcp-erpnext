@@ -317,3 +317,102 @@ Deno.test("session envelope stays closed and reasons stay non-empty", async () =
     "no DT operation identity may appear in the session",
   );
 });
+
+Deno.test("malicious session documents are refused by bounded record errors", async () => {
+  const record = await syntheticSealedRecord("task");
+  const session = await syntheticAvailableRecordedSession(record);
+  if (session.projection.status !== "available") {
+    throw new Error("expected an available synthetic session");
+  }
+  const available = session.projection;
+
+  const deep: Record<string, unknown> = {};
+  let cursor = deep;
+  for (let level = 0; level < 100000; level += 1) {
+    const next: Record<string, unknown> = {};
+    cursor.nested = next;
+    cursor = next;
+  }
+  await assertRejects(
+    () =>
+      parseRecordedViewerSession({
+        ...session,
+        projection: {
+          ...available,
+          record: { ...available.record, document: deep },
+        },
+      }),
+    TypeError,
+    "depth bound",
+  );
+
+  const cyclic: Record<string, unknown> = {
+    doctype: record.doctype,
+    name: record.name,
+    modified: record.modified,
+  };
+  cyclic.self = cyclic;
+  await assertRejects(
+    () =>
+      parseRecordedViewerSession({
+        ...session,
+        projection: {
+          ...available,
+          record: { ...available.record, document: cyclic },
+        },
+      }),
+    TypeError,
+    "cyclic references",
+  );
+
+  await assertRejects(
+    () =>
+      parseRecordedViewerSession({
+        ...session,
+        projection: {
+          ...available,
+          record: {
+            ...available.record,
+            document: {
+              doctype: record.doctype,
+              name: record.name,
+              modified: record.modified,
+              flood: Array.from({ length: 100000 }, () => ({ index: 0 })),
+            },
+          },
+        },
+      }),
+    TypeError,
+    "entry bound",
+  );
+});
+
+Deno.test("untrusted envelope subtrees never trigger deep traversal", async () => {
+  const record = await syntheticSealedRecord("task");
+  const session = await syntheticAvailableRecordedSession(record);
+  const deep: Record<string, unknown> = {};
+  let cursor = deep;
+  for (let level = 0; level < 100000; level += 1) {
+    const next: Record<string, unknown> = {};
+    cursor.nested = next;
+    cursor = next;
+  }
+  await assertRejects(
+    () =>
+      parseRecordedViewerSession({
+        ...session,
+        basis: { ...session.basis, thread: deep },
+      }),
+    TypeError,
+    "unsupported fields",
+  );
+  await assertRejects(
+    () =>
+      parseRecordedViewerSession({
+        ...session,
+        basis: { ...session.basis, projectId: deep },
+      }),
+    TypeError,
+    "non-empty string",
+  );
+});

@@ -78,6 +78,7 @@ export interface DemoCatalogueSource {
   readonly sha256?: string;
   readonly url?: string;
   readonly retrievedAt?: string;
+  readonly category?: "public-catalogue" | "documentary";
 }
 
 export interface DemoCatalogueObservation {
@@ -238,13 +239,13 @@ function assertPublicUrl(value: string, name: string): string {
   }
   if (
     !["http:", "https:"].includes(url.protocol) || !url.hostname ||
-    url.username || url.password
+    url.username || url.password || url.search || url.hash
   ) {
     fail(
       "DEMO_CATALOGUE_INVALID_INPUT",
       `${name} must be a public http(s) URL.`,
       {},
-      `Set ${name} to the public catalogue page without credentials.`,
+      `Set ${name} to a public catalogue URL without credentials, query or fragment.`,
     );
   }
   return value;
@@ -255,7 +256,7 @@ function parseSource(value: unknown, index: number): DemoCatalogueSource {
   const root = closedKeys(
     value,
     ["id", "path"],
-    ["sha256", "url", "retrievedAt"],
+    ["sha256", "url", "retrievedAt", "category"],
     name,
   );
   const id = nonEmpty(root.id, `${name}.id`);
@@ -272,6 +273,11 @@ function parseSource(value: unknown, index: number): DemoCatalogueSource {
     retrievedAt: root.retrievedAt === undefined
       ? undefined
       : canonicalTimestamp(root.retrievedAt, `${name}.retrievedAt`),
+    category: root.category === undefined ? undefined : oneOf(
+      root.category,
+      ["public-catalogue", "documentary"] as const,
+      `${name}.category`,
+    ),
   };
 }
 
@@ -279,6 +285,14 @@ function assertPricedSource(
   source: DemoCatalogueSource,
   line: DemoCatalogueLine,
 ): void {
+  if (source.category !== "public-catalogue") {
+    fail(
+      "DEMO_CATALOGUE_INVALID_INPUT",
+      `Priced line ${line.itemCode} requires an explicitly declared public-catalogue source.`,
+      { itemCode: line.itemCode, sourceRef: line.sourceRef },
+      "Use a sourced public catalogue observation, or leave the line unpriced. Production estimates are not catalogue prices.",
+    );
+  }
   const missing = (["url", "retrievedAt", "sha256"] as const).filter(
     (key) => source[key] === undefined,
   );
@@ -535,9 +549,10 @@ function parseDemoCatalogueInputInner(value: unknown): DemoCatalogueInput {
 
   for (const sourceId of new Set(lines.map((line) => line.sourceRef))) {
     const source = sourcesById.get(sourceId)!;
-    const missing = (["url", "retrievedAt", "sha256"] as const).filter(
-      (key) => source[key] === undefined,
-    );
+    const missing = (["url", "retrievedAt", "sha256", "category"] as const)
+      .filter(
+        (key) => source[key] === undefined,
+      );
     if (missing.length > 0) {
       unresolved.push(`Source ${sourceId} is missing ${missing.join(", ")}.`);
     }

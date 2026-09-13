@@ -35,6 +35,7 @@ Closed object; unknown keys (including any validity date) are refused.
     {
       "id": "src-001",
       "path": "<immutable manifest path>",
+      "category": "public-catalogue",
       "url": "https://<public catalogue page>",
       "retrievedAt": "2026-09-13T08:00:00.000Z",
       "sha256": "sha256:<64 hex>"
@@ -72,10 +73,13 @@ Rules:
 - `sourceRef` must match exactly one `sources[].id`.
 - `amount` is explicit: positive decimal string or `null` (unpriced). Omission,
   zero, and negatives are refused.
-- **Priced lines** require `url` (public `http(s)`), `retrievedAt` (canonical
-  UTC), and `sha256` (`sha256:…`) on the referenced source. Hashes are linked
-  when authoritatively known — never manufactured. URLs are parsed and refuse
-  credentials. Unpriced lines may reference sources with missing metadata; the
+- **Priced lines** require source `category: "public-catalogue"`, `url` (public
+  `http(s)`), `retrievedAt` (canonical UTC), and `sha256` (`sha256:…`) on the
+  referenced source. Hashes are linked when authoritatively known — never
+  manufactured. URLs are parsed and refuse credentials, query strings and
+  fragments. Source categories are declared preparation metadata, not verified
+  admission; `documentary` sources and unclassified sources cannot supply an
+  Item Price. Unpriced lines may reference sources with missing metadata; the
   parser adds each referenced source's missing fields to `unresolved`.
 - Duplicate `itemCode` / source `id` values are refused.
 

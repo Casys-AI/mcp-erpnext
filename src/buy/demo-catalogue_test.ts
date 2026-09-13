@@ -24,6 +24,7 @@ function syntheticPreparation(priced: boolean) {
         url: "https://example.invalid/synthetic",
         retrievedAt: "2026-09-13T08:00:00.000Z",
         sha256: SYNTHETIC_SOURCE_HASH,
+        category: "public-catalogue",
       },
     ],
     lines: [
@@ -183,6 +184,8 @@ Deno.test("demo catalogue refuses non-public source URL", () => {
       "ftp://example.invalid/synthetic",
       "https://?",
       "https://user:secret@example.invalid/synthetic",
+      "https://example.invalid/synthetic?api_key=secret",
+      "https://example.invalid/synthetic#token=secret",
     ]
   ) {
     const input = syntheticPreparation(false);
@@ -221,6 +224,14 @@ Deno.test("demo catalogue refuses a demo marker inside another scenario name", (
       () => planDemoCatalogue({ ...syntheticPreparation(false), scenario }),
       DemoCatalogueError,
     );
+  }
+});
+
+Deno.test("demo catalogue refuses pricing a documentary or unclassified source", () => {
+  for (const category of ["documentary", undefined, "production-estimate"]) {
+    const input = syntheticPreparation(true);
+    (input.sources[0] as Record<string, unknown>).category = category;
+    assertThrows(() => planDemoCatalogue(input), DemoCatalogueError);
   }
 });
 

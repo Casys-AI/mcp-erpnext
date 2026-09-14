@@ -29,7 +29,7 @@ export function StatusCell({ value }: { value: string }) {
   const scheme = DOC_STATUS[value];
   if (!scheme) return <span dir="auto">{statusLabel(value, t)}</span>;
   return (
-    <span style={styles.badge(scheme.color, scheme.bg)}>
+    <span dir="auto" style={styles.badge(scheme.color, scheme.bg)}>
       {statusLabel(value, t)}
     </span>
   );

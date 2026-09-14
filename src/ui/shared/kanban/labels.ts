@@ -51,6 +51,18 @@ const METRIC_KEYS: Readonly<Record<string, string>> = {
   "Resolved": "kanban.metric.resolved",
 };
 
+const BADGE_KEYS: Readonly<Record<string, string>> = {
+  Low: "kanban.select.priority.Low",
+  Medium: "kanban.select.priority.Medium",
+  High: "kanban.select.priority.High",
+  Urgent: "kanban.select.priority.Urgent",
+  Lead: "kanban.select.opportunity_from.Lead",
+  Customer: "kanban.select.opportunity_from.Customer",
+  Milestone: "kanban.card.milestone",
+  Jalon: "kanban.card.milestone",
+  "SLA breach": "kanban.badge.sla_breach",
+};
+
 function labelFromKeys(
   label: string,
   keys: Readonly<Record<string, string>>,
@@ -76,17 +88,6 @@ export function kanbanMetricLabel(label: string, t: TFunction): string {
 }
 
 export function kanbanBadgeLabel(label: string, t: TFunction): string {
-  const keys: Readonly<Record<string, string>> = {
-    Low: "kanban.select.priority.Low",
-    Medium: "kanban.select.priority.Medium",
-    High: "kanban.select.priority.High",
-    Urgent: "kanban.select.priority.Urgent",
-    Lead: "kanban.select.opportunity_from.Lead",
-    Customer: "kanban.select.opportunity_from.Customer",
-    Milestone: "kanban.card.milestone",
-    Jalon: "kanban.card.milestone",
-    "SLA breach": "kanban.badge.sla_breach",
-  };
-  const translated = labelFromKeys(label, keys, t);
+  const translated = labelFromKeys(label, BADGE_KEYS, t);
   return translated === label ? kanbanStatusLabel(label, t) : translated;
 }

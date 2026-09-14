@@ -41,6 +41,8 @@ import { extractToolResultText } from "~/shared/refresh";
 import { CardDetailModal } from "./DetailModal";
 import { horizontalScrollEdges } from "./scroll.ts";
 import { bindHostLocale, useT } from "~/shared/i18n-hook";
+import { directionForLocale } from "~/shared/i18n.ts";
+import { getHostLocale } from "~/shared/host-locale.ts";
 import {
   kanbanBadgeLabel,
   kanbanMetricLabel,
@@ -766,7 +768,7 @@ function ColumnTabs({
   onSelect: (index: number) => void;
 }) {
   const t = useT();
-  const rtl = document.documentElement.dir === "rtl";
+  const rtl = directionForLocale(getHostLocale()) === "rtl";
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);

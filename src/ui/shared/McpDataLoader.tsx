@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import { colors } from "./theme";
 import { useT } from "./i18n-hook";
 import { mergeHostLocale } from "./host-locale.ts";
+import { hostLocalePatch } from "./mcp-host-locale.ts";
 
 /** Extract data from window.mcpData */
 function getMcpData<T>(): T | null {
@@ -48,18 +49,25 @@ export function McpDataLoader<T>({ children, empty }: McpDataLoaderProps<T>) {
       if (msg.jsonrpc === "2.0") {
         // Response to our ui/initialize request
         if (msg.id === "mcp-init" && msg.result) {
-          mergeHostLocale(msg.result.hostContext);
+          if (
+            event.source !== window.parent || mcpInitialized ||
+            "error" in msg ||
+            typeof msg.result !== "object" || Array.isArray(msg.result)
+          ) return;
+          mergeHostLocale(hostLocalePatch(event, window.parent, false));
+          mcpInitialized = true;
           // Send initialized notification → host will send tool-input + tool-result
           window.parent.postMessage(
             { jsonrpc: "2.0", method: "ui/notifications/initialized" },
             "*",
           );
-          mcpInitialized = true;
           return;
         }
 
         if (msg.method === "ui/notifications/host-context-changed") {
-          mergeHostLocale(msg.params);
+          mergeHostLocale(
+            hostLocalePatch(event, window.parent, mcpInitialized),
+          );
           return;
         }
 

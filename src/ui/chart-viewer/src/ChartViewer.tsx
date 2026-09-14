@@ -2489,8 +2489,8 @@ function ChartContent(
     [],
   );
   const chartSelected = activeContext.isSelected(chartContext);
-  const chartContextActionLabel = t("chart.context.select_visible", {
-    title: data.title,
+  const chartContextActionLabel = t("context.active.toggle", {
+    label: data.title,
   });
 
   return (
@@ -2608,6 +2608,7 @@ function ChartContent(
                 aria-label={chartContextActionLabel}
                 title={chartContextActionLabel}
                 onClick={(event) => {
+                  event.stopPropagation();
                   if (event.detail > 1) return;
                   void activeContext.toggle(chartContext);
                 }}

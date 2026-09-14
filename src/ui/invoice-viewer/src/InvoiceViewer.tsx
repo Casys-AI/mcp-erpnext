@@ -803,7 +803,9 @@ function InvoiceContent({
           label: contextDocumentItem.label,
         }),
         selected: context.isSelected(contextDocumentItem),
-        onActivate: () => context.toggleReversible(contextDocumentItem),
+        onActivate: async () => {
+          await context.toggle(contextDocumentItem);
+        },
       }
       : undefined;
   const contextCandidates = [

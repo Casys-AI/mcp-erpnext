@@ -84,6 +84,10 @@ import { canCallViewerTool, hasAvailableTool } from "~/shared/viewer-tools";
 import { createSerialQueue } from "~/shared/single-flight";
 import { buildKanbanCardListHint, kanbanNavVars } from "./kanban-nav";
 import { kanbanViewerCapabilities } from "./capabilities";
+import {
+  type KanbanLiveMessage,
+  kanbanLiveMessageText,
+} from "./live-message.ts";
 import { CardDetailModal } from "./DetailModal";
 import {
   isFixtureMode,
@@ -1365,7 +1369,7 @@ export function KanbanViewer() {
     closeDetail,
     setDetailError,
   } = useKanbanBoard(fixture ? KANBAN_FIXTURE : undefined);
-  const [liveMessage, setLiveMessage] = useState("");
+  const [liveMessage, setLiveMessage] = useState<KanbanLiveMessage>("");
   const [activeDropColumn, setActiveDropColumn] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [rootFreshEvent, setRootFreshEvent] = useState(0);
@@ -1603,12 +1607,11 @@ export function KanbanViewer() {
             column.id === nextMove.toColumn
           )?.label ??
             nextMove.toColumn;
-          setLiveMessage(
-            t("kanban.live.moved", {
-              title: nextMove.cardId,
-              label: destinationLabel,
-            }),
-          );
+          setLiveMessage({
+            key: "kanban.live.moved",
+            title: nextMove.cardId,
+            destination: destinationLabel,
+          });
         }
       }
     } catch (error) {
@@ -1633,7 +1636,7 @@ export function KanbanViewer() {
     }
   }
 
-  function requestMove(card: KanbanCardData, toColumn: string, label: string) {
+  function requestMove(card: KanbanCardData, toColumn: string, _label: string) {
     const board = boardRef.current;
     if (!board || card.pending || card.columnId === toColumn) return;
     if (
@@ -1651,9 +1654,15 @@ export function KanbanViewer() {
       candidate.toColumn === toColumn
     );
 
+    const destinationLabel =
+      board.columns.find((column) => column.id === toColumn)?.label ?? toColumn;
+
     if (!transition) {
-      const message = t("kanban.live.move_not_allowed", { label });
-      setError(message);
+      const message: KanbanLiveMessage = {
+        key: "kanban.live.move_not_allowed",
+        destination: destinationLabel,
+      };
+      setError(kanbanLiveMessageText(message, t));
       setLiveMessage(message);
       return;
     }
@@ -1674,7 +1683,11 @@ export function KanbanViewer() {
         toColumn: queuedMove.toColumn,
       });
       updateBoard(reconciled);
-      setLiveMessage(t("kanban.live.moved", { title: card.title, label }));
+      setLiveMessage({
+        key: "kanban.live.moved",
+        title: card.title,
+        destination: destinationLabel,
+      });
       return;
     }
 
@@ -1691,9 +1704,17 @@ export function KanbanViewer() {
       snapshotsRef.current[queuedMove.queueId ?? queuedMove.cardId] =
         optimistic.snapshot;
       updateBoard(optimistic.board);
-      setLiveMessage(t("kanban.live.moving", { title: card.title, label }));
+      setLiveMessage({
+        key: "kanban.live.moving",
+        title: card.title,
+        destination: transition.label ?? destinationLabel,
+      });
     } else {
-      setLiveMessage(t("kanban.live.queued", { title: card.title, label }));
+      setLiveMessage({
+        key: "kanban.live.queued",
+        title: card.title,
+        destination: transition.label ?? destinationLabel,
+      });
     }
 
     queueRef.current = enqueueMove(queueRef.current, queuedMove);
@@ -2247,7 +2268,7 @@ export function KanbanViewer() {
       fixture={fixture}
       containerRef={containerRef}
       layout={layout}
-      liveMessage={liveMessage}
+      liveMessage={kanbanLiveMessageText(liveMessage, t)}
       inlineError={errorPresentation.inlineError}
       activeDropColumn={activeDropColumn}
       refreshing={refreshing}

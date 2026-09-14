@@ -16,6 +16,7 @@ import {
   type ConfirmSnapshot,
   dismissConfirm,
   type PendingConfirm,
+  pendingConfirmText,
   requestConfirm,
 } from "./confirm-state";
 import { useT } from "./i18n-hook";
@@ -51,7 +52,7 @@ export function ConfirmSheet({ confirm }: { confirm: ConfirmState }) {
   return (
     <DetailSheet
       eyebrow={pending.subject}
-      title={pending.title}
+      title={pendingConfirmText(pending, "title", t)}
       onClose={confirm.dismiss}
       footer={
         <SheetActions>
@@ -59,7 +60,7 @@ export function ConfirmSheet({ confirm }: { confirm: ConfirmState }) {
             {t("common.back")}
           </Button>
           <Button variant="danger" class="ml-auto" onClick={confirm.confirm}>
-            {pending.actionLabel}
+            {pendingConfirmText(pending, "actionLabel", t)}
           </Button>
         </SheetActions>
       }
@@ -68,7 +69,9 @@ export function ConfirmSheet({ confirm }: { confirm: ConfirmState }) {
         <span class="self-start rounded-badge border border-bad/20 bg-bad/10 px-[7px] py-0.5 font-mono text-chip uppercase tracking-label text-bad">
           {t("confirm.eyebrow")}
         </span>
-        <p class="font-sans text-body text-ink">{pending.detail}</p>
+        <p class="font-sans text-body text-ink">
+          {pendingConfirmText(pending, "detail", t)}
+        </p>
       </div>
     </DetailSheet>
   );

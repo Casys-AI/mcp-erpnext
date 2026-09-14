@@ -13,7 +13,16 @@ import { assertEquals, assertNotEquals } from "@std/assert";
 import { en } from "./i18n/en.ts";
 import { fr } from "./i18n/fr.ts";
 import { zh } from "./i18n/zh.ts";
-import { getCatalog, resolveLang, setLangSource, t } from "./i18n.ts";
+import {
+  directionForLocale,
+  getCatalog,
+  resolveLang,
+  setLangSource,
+  SUPPORTED_LANGS,
+  t,
+  translatorForLocale,
+} from "./i18n.ts";
+import { applyDocumentLocale } from "./document-locale.ts";
 
 // ── 1. Parité des catalogues ──────────────────────────────────────────────
 
@@ -58,6 +67,26 @@ Deno.test("i18n - zh conserve les paramètres d'interpolation métier", () => {
   }
 });
 
+Deno.test("i18n - chaque langue couvre les clés et les paramètres métier", () => {
+  const enKeys = Object.keys(en).sort();
+  const placeholders = (value: string): string[] =>
+    [...new Set([...value.matchAll(/\{(\w+)\}/g)].map((match) => match[1]))]
+      .filter((name) => name !== "s")
+      .sort();
+  for (const lang of SUPPORTED_LANGS) {
+    const catalog = getCatalog(lang);
+    assertEquals(Object.keys(catalog).sort(), enKeys, lang);
+    for (const key of enKeys) {
+      assertNotEquals(catalog[key].trim(), "", `${lang}: ${key}`);
+      assertEquals(
+        placeholders(catalog[key]),
+        placeholders(en[key]),
+        `${lang}: ${key}`,
+      );
+    }
+  }
+});
+
 Deno.test("i18n - les catalogues ont au moins une clé commune.*", () => {
   const hasCommon = Object.keys(en).some((k) => k.startsWith("common."));
   assertEquals(hasCommon, true);
@@ -91,14 +120,55 @@ Deno.test("resolveLang - les tags chinois utilisent le catalogue simplifié", ()
       "zh-Hans",
       "zh-Hans-CN",
       "ZH-CN",
-      "zh-TW",
-      "zh-HK",
-      "zh-Hant",
-      "zh-Hant-TW",
+      "zh-Hans-TW",
     ]
   ) {
     assertEquals(resolveLang(locale), "zh", locale);
   }
+});
+
+Deno.test("resolveLang - chinois traditionnel avec priorité au script", () => {
+  for (
+    const locale of [
+      "zh-TW",
+      "zh-HK",
+      "zh-MO",
+      "zh-Hant",
+      "zh-Hant-TW",
+      "ZH-hANT-hk",
+      "zh-Hant-CN",
+      "zh-TW-u-nu-latn",
+    ]
+  ) assertEquals(resolveLang(locale), "zh-Hant", locale);
+  assertEquals(resolveLang("zh-Hans-HK"), "zh");
+});
+
+Deno.test("resolveLang - langues indiennes et ourdou avec variantes régionales", () => {
+  for (
+    const [locale, lang] of [
+      ["hi", "hi"],
+      ["hi-IN", "hi"],
+      ["HI-Deva-IN", "hi"],
+      ["bn-BD", "bn"],
+      ["bn-IN", "bn"],
+      ["ta-IN", "ta"],
+      ["ta-LK", "ta"],
+      ["ur-PK", "ur"],
+      ["ur-IN", "ur"],
+    ]
+  ) assertEquals(resolveLang(locale), lang, locale);
+  assertEquals(resolveLang("not_a_locale"), "en");
+});
+
+Deno.test("i18n - la direction et la langue du document suivent les changements", () => {
+  const root = { lang: "en", dir: "ltr" };
+  applyDocumentLocale("ur-PK", root);
+  assertEquals(root, { lang: "ur", dir: "rtl" });
+  applyDocumentLocale("zh-TW", root);
+  assertEquals(root, { lang: "zh-Hant", dir: "ltr" });
+  applyDocumentLocale("de-DE", root);
+  assertEquals(root, { lang: "en", dir: "ltr" });
+  assertEquals(directionForLocale(undefined), "ltr");
 });
 
 Deno.test("resolveLang - tout le reste → en", () => {
@@ -227,6 +297,36 @@ Deno.test("t - une traduction absente de zh retombe sur en puis sur la clé", ()
   } finally {
     if (original === undefined) delete en[key];
     else en[key] = original;
+    setLangSource(() => undefined);
+  }
+});
+
+Deno.test("t - les nouvelles langues se mettent à jour et gardent le repli anglais", () => {
+  let locale = "hi-IN";
+  setLangSource(() => locale);
+  const fallbackKey = "test.__new_language_fallback__";
+  en[fallbackKey] = "Fallback {n}";
+  try {
+    for (const next of ["hi-IN", "bn-IN", "ta-IN", "ur-PK", "zh-TW"]) {
+      locale = next;
+      const lang = resolveLang(next);
+      assertEquals(t("common.refresh"), getCatalog(lang)["common.refresh"]);
+      assertNotEquals(t("common.refresh"), en["common.refresh"], next);
+      assertEquals(t(fallbackKey, { n: 7 }), "Fallback 7", next);
+      assertEquals(
+        t("test.__missing_everywhere__"),
+        "test.__missing_everywhere__",
+      );
+    }
+    const scoped = translatorForLocale("zh-TW");
+    locale = "ur-PK";
+    assertEquals(
+      scoped("common.refresh"),
+      getCatalog("zh-Hant")["common.refresh"],
+    );
+    assertEquals(t("common.refresh"), getCatalog("ur")["common.refresh"]);
+  } finally {
+    delete en[fallbackKey];
     setLangSource(() => undefined);
   }
 });

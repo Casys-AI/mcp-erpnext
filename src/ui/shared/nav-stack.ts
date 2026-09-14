@@ -13,6 +13,7 @@
  * pas (`stale`) ; l'origine garde la couleur de sa nature (`origin`).
  */
 
+import type { t } from "./i18n.ts";
 import type { Jump } from "./jumps.ts";
 import type { DocumentChangeEvent } from "./document-events.ts";
 
@@ -60,9 +61,14 @@ export interface NavLevel {
   id: string;
   /** Le segment du fil : « Factures », « SO-1043 ». */
   title: string;
+  titleKey?: string;
+  titleParams?: Record<string, unknown>;
+  titleSuffix?: string;
   kind: LevelKind;
   /** Note de pied : « liées à SO-1043 ». */
   subtitle?: string;
+  subtitleKey?: string;
+  subtitleParams?: Record<string, unknown>;
   /** Comment (re)charger le corps. Absent pour la racine. */
   tool?: ToolCall;
   /** La payload une fois chargée — sa forme dépend de `kind`. */
@@ -132,9 +138,31 @@ export function navRootIdentity(root: LevelInit): string {
 
 /** Garde la pile pour la même racine ; repart proprement pour une autre. */
 export function reconcileRoot(stack: NavStack, root: LevelInit): NavStack {
-  return stack.rootIdentity === navRootIdentity(root)
-    ? stack
-    : createStack(root);
+  if (stack.rootIdentity !== navRootIdentity(root)) return createStack(root);
+  const current = stack.levels[0];
+  const presentation = {
+    title: root.title,
+    titleKey: root.titleKey,
+    titleParams: root.titleParams,
+    titleSuffix: root.titleSuffix,
+    subtitle: root.subtitle,
+    subtitleKey: root.subtitleKey,
+    subtitleParams: root.subtitleParams,
+  };
+  const previous = {
+    title: current.title,
+    titleKey: current.titleKey,
+    titleParams: current.titleParams,
+    titleSuffix: current.titleSuffix,
+    subtitle: current.subtitle,
+    subtitleKey: current.subtitleKey,
+    subtitleParams: current.subtitleParams,
+  };
+  if (stableJson(presentation) === stableJson(previous)) return stack;
+  return {
+    ...stack,
+    levels: [{ ...current, ...presentation }, ...stack.levels.slice(1)],
+  };
 }
 
 export function pushLevel(stack: NavStack, level: LevelInit): NavStack {
@@ -338,5 +366,41 @@ export function crumbs(stack: NavStack): Crumbs {
     parents,
     trail: [parents[0], { elided }, parents[1]],
     current,
+  };
+}
+
+/** Only presentation changes with locale; level identities and payloads stay intact. */
+export function navLevelTitle(
+  level: Pick<NavLevel, "title" | "titleKey" | "titleParams" | "titleSuffix">,
+  translate: typeof t,
+): string {
+  if (!level.titleKey) return level.title;
+  const translated = translate(level.titleKey, level.titleParams);
+  return translated === level.titleKey
+    ? level.title
+    : translated + (level.titleSuffix ?? "");
+}
+
+export function navLevelSubtitle(
+  level: Pick<NavLevel, "subtitle" | "subtitleKey" | "subtitleParams">,
+  translate: typeof t,
+): string | undefined {
+  if (!level.subtitleKey) return level.subtitle;
+  const translated = translate(level.subtitleKey, level.subtitleParams);
+  return translated === level.subtitleKey ? level.subtitle : translated;
+}
+
+/** Keep navigation identity and payload intact while translating its chrome. */
+export function navLevelPresentation(
+  level: NavLevel,
+  translate: typeof t,
+): NavLevel {
+  const title = navLevelTitle(level, translate);
+  const subtitle = navLevelSubtitle(level, translate);
+  if (title === level.title && subtitle === level.subtitle) return level;
+  return {
+    ...level,
+    title,
+    subtitle,
   };
 }

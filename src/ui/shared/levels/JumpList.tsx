@@ -3,7 +3,8 @@
  * dessous, les questions « ~ » (pointillé, sortent vers le modèle).
  */
 
-import type { Jump } from "../jumps";
+import { type Jump, jumpLabel } from "../jumps";
+import { useT } from "../i18n-hook";
 import { cx } from "../ui";
 
 export function JumpList(
@@ -16,6 +17,7 @@ export function JumpList(
     narrow?: boolean;
   },
 ) {
+  const t = useT();
   return (
     <div class="flex flex-col gap-2">
       {jumps.map((jump) => (
@@ -29,7 +31,7 @@ export function JumpList(
             narrow && "min-h-[44px]",
           )}
         >
-          <span class="truncate">{jump.label}</span>
+          <span class="truncate">{jumpLabel(jump, t)}</span>
           <span
             aria-hidden="true"
             class={cx(

@@ -413,13 +413,29 @@ export function ProgressBar(
  * du système — sans lui, une surface flottante n'appartient à rien.
  */
 export function DetailSheet(
-  { title, eyebrow, children, footer, onClose, size = "compact", bodyClass }: {
+  {
+    title,
+    eyebrow,
+    titleContent,
+    headerMeta,
+    accent,
+    children,
+    footer,
+    onClose,
+    size = "compact",
+    dense = false,
+    bodyClass,
+  }: {
     title: string;
     eyebrow?: string;
+    titleContent?: ComponentChildren;
+    headerMeta?: ComponentChildren;
+    accent?: string;
     children: ComponentChildren;
     footer?: ComponentChildren;
     onClose: () => void;
     size?: "compact" | "wide" | "preview";
+    dense?: boolean;
     bodyClass?: string;
   },
 ) {
@@ -501,14 +517,19 @@ export function DetailSheet(
             : "max-w-[436px]",
         )}
       >
-        <div class="brand-rule" />
+        {accent
+          ? <div class="h-[3px] shrink-0" style={{ background: accent }} />
+          : <div class="brand-rule" />}
 
         <header class="flex shrink-0 items-start justify-between gap-4 border-b border-line px-4 py-[13px]">
-          <div class="flex min-w-0 flex-col gap-[3px]">
+          <div class="flex min-w-0 flex-1 flex-col gap-[3px]">
             {eyebrow && <Label>{eyebrow}</Label>}
-            <h2 class="truncate font-display text-card-title font-semibold text-ink">
-              {title}
-            </h2>
+            {titleContent ?? (
+              <h2 class="truncate font-display text-card-title font-semibold text-ink">
+                {title}
+              </h2>
+            )}
+            {headerMeta}
           </div>
           <button
             type="button"
@@ -534,7 +555,11 @@ export function DetailSheet(
         <div
           class={cx(
             "scroll-slim flex min-h-0 flex-col overflow-y-auto bg-surface",
-            size === "preview" ? "gap-0 p-0" : "gap-4 p-4",
+            size === "preview"
+              ? "gap-0 p-0"
+              : dense
+              ? "gap-3 p-3"
+              : "gap-4 p-4",
             bodyClass,
           )}
         >
@@ -560,10 +585,19 @@ export function DetailSheet(
  * générique reste utilisable par les appelants qui n'ont qu'une rangée.
  */
 export function SheetActions(
-  { children, label }: { children: ComponentChildren; label?: string },
+  { children, label, class: klass }: {
+    children: ComponentChildren;
+    label?: string;
+    class?: string;
+  },
 ) {
   return (
-    <div class="flex flex-wrap items-center gap-1.5 border-t border-line-soft px-4 py-3 first:border-t-0">
+    <div
+      class={cx(
+        "flex flex-wrap items-center gap-1.5 border-t border-line-soft px-4 first:border-t-0",
+        klass ?? "py-3",
+      )}
+    >
       {label && <Label class="mr-1">{label}</Label>}
       {children}
     </div>
@@ -572,10 +606,19 @@ export function SheetActions(
 
 /** Groupe de champs sous un micro-titre, séparé du précédent par un filet. */
 export function DetailSection(
-  { label, children }: { label?: string; children: ComponentChildren },
+  { label, children, dense = false }: {
+    label?: string;
+    children: ComponentChildren;
+    dense?: boolean;
+  },
 ) {
   return (
-    <section class="flex flex-col gap-2.5 border-t border-line-soft pt-3 first:border-t-0 first:pt-0">
+    <section
+      class={cx(
+        "flex flex-col border-t border-line-soft first:border-t-0 first:pt-0",
+        dense ? "gap-1.5 pt-2" : "gap-2.5 pt-3",
+      )}
+    >
       {label && <Label>{label}</Label>}
       {children}
     </section>

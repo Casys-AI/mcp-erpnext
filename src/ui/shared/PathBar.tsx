@@ -14,7 +14,14 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { useT } from "./i18n-hook";
 import type { ViewerLayout } from "./useViewerLayout";
 import type { TFunction } from "./i18n-hook";
-import { type Crumb, crumbs, type NavLevel, type NavStack } from "./nav-stack";
+import {
+  type Crumb,
+  crumbs,
+  type NavLevel,
+  navLevelSubtitle,
+  navLevelTitle,
+  type NavStack,
+} from "./nav-stack";
 import { cx } from "./ui";
 
 /** Ce que la pile garde d'un niveau, dit en une ligne : « tri nom ↑ · page 2 · CUST-42 active ». */
@@ -22,7 +29,8 @@ export function describeLevel(level: NavLevel, t: TFunction): string {
   const parts: string[] = [];
   if (level.kind === "record") parts.push(t("nav.kind.record"));
   if (level.kind === "chart") parts.push(t("nav.kind.chart"));
-  if (level.subtitle) parts.push(level.subtitle);
+  const subtitle = navLevelSubtitle(level, t);
+  if (subtitle) parts.push(subtitle);
   const ui = level.ui;
   if (typeof ui.sortKey === "string" && ui.sortKey) {
     parts.push(t("nav.ui.sort", {
@@ -143,7 +151,7 @@ export function PathBar(
           aria-current="page"
           class="truncate font-mono text-[11.5px] font-medium text-ink"
         >
-          {level.title}
+          {navLevelTitle(level, t)}
         </span>
         <div class="flex-1" />
         {loading
@@ -196,7 +204,7 @@ export function PathBar(
               </span>
               <span class="flex min-w-0 flex-col gap-0.5">
                 <span class="truncate font-mono text-[11.5px] text-ink">
-                  {crumb.level.title}
+                  {navLevelTitle(crumb.level, t)}
                 </span>
                 <span class="font-sans text-[11px] text-ink-dim">
                   {describeLevel(crumb.level, t)}
@@ -233,7 +241,7 @@ function Parent(
             class="mr-1.5 inline-block size-[5px] rounded-full bg-warn align-middle"
           />
         )}
-        {crumb.level.title}
+        {navLevelTitle(crumb.level, t)}
       </button>
       {SEP}
     </>

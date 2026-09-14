@@ -11,7 +11,7 @@ Deno.test("stock viewer - contexte et detail gardent des commandes exclusives", 
   );
   assertStringIncludes(
     source,
-    "? context.activateReversible(contextItem)",
+    "? context.toggleReversible(contextItem)",
   );
   assertStringIncludes(
     source,

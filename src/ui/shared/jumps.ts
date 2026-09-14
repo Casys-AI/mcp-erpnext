@@ -17,9 +17,14 @@ export type JumpKind = "list" | "record" | "chart";
 
 export interface Jump {
   label: string;
+  labelKey?: string;
+  labelParams?: Record<string, unknown>;
+  labelSuffix?: string;
   kind: JumpKind;
   tool: ToolCall;
   subtitle?: string;
+  subtitleKey?: string;
+  subtitleParams?: Record<string, unknown>;
   /** La question équivalente pour le modèle, si l'hôte ne relaie pas. */
   message?: string;
   /** Les sauts qu'offrira le niveau ouvert (une fiche : ses listes, ses graphiques). */
@@ -98,6 +103,7 @@ export function jumpFromHint(
   hint: NavHint,
   vars: Record<string, string>,
   subtitle?: string,
+  subtitleTranslation?: { key: string; params?: Record<string, unknown> },
 ): Jump | null {
   if (!hint.tool) return null;
   const filled = Object.fromEntries(
@@ -105,11 +111,19 @@ export function jumpFromHint(
   );
   const args = fillTemplate(hint.args ?? {}, filled);
   if (hasUnfilledTemplate(args)) return null;
+  const labelKey = hint.key ? `doclist.hint.${hint.key}` : undefined;
   return {
     label: hintLabel(hint),
+    ...(labelKey && t(labelKey) !== labelKey ? { labelKey } : {}),
     kind: hint.kind ?? "list",
     tool: { name: hint.tool, args },
     subtitle,
+    ...(subtitleTranslation
+      ? {
+        subtitleKey: subtitleTranslation.key,
+        subtitleParams: subtitleTranslation.params,
+      }
+      : {}),
     message: hint.message ? fillTemplate(hint.message, filled) : undefined,
   };
 }
@@ -118,9 +132,19 @@ export function jumpFromHint(
 export function levelFromJump(jump: Jump): LevelInit {
   return {
     title: jump.label,
+    ...(jump.labelKey
+      ? {
+        titleKey: jump.labelKey,
+        titleParams: jump.labelParams,
+        titleSuffix: jump.labelSuffix,
+      }
+      : {}),
     kind: jump.kind,
     tool: jump.tool,
     subtitle: jump.subtitle,
+    ...(jump.subtitleKey
+      ? { subtitleKey: jump.subtitleKey, subtitleParams: jump.subtitleParams }
+      : {}),
     loading: true,
     jumps: jump.children,
     key: levelKey(jump.tool),
@@ -177,4 +201,13 @@ export async function loadLevelBody(
         : t("common.error.tool_failed"),
     };
   }
+}
+
+/** Translate stored navigation labels when rendered; keep business labels as supplied. */
+export function jumpLabel(jump: Jump, translate: typeof t): string {
+  if (!jump.labelKey) return jump.label;
+  const translated = translate(jump.labelKey, jump.labelParams);
+  return translated === jump.labelKey
+    ? jump.label
+    : translated + (jump.labelSuffix ?? "");
 }

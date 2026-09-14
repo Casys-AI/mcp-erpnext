@@ -1,6 +1,8 @@
 import type { ContextSelectionItem } from "../../shared/active-context.ts";
 import type { StockEntry } from "./types.ts";
 
+export const STOCK_CONTEXT_RECONCILE_KEY = "stock-rows";
+
 /** Identite stable d'une ligne, distincte de son etat d'ouverture. */
 export function stockRowContextId(row: StockEntry): string {
   return `stock:${encodeURIComponent(row.item_code)}:${
@@ -21,6 +23,7 @@ export function stockRowContextItem(
   ].filter((part): part is string => Boolean(part));
   return {
     id: stockRowContextId(row),
+    reconcileKey: STOCK_CONTEXT_RECONCILE_KEY,
     view,
     label: row.item_code,
     ...(value.length > 0 ? { value: value.join(" · ") } : {}),

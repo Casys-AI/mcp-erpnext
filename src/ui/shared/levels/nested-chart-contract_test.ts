@@ -36,6 +36,6 @@ Deno.test("nested chart interaction - context is scoped and reconciled by level 
   assertStringIncludes(levelBody, "context.reconcileView");
   assertStringIncludes(levelBody, "level.key ?? level.id");
   assertStringIncludes(levelBody, "nestedChartContextCandidates(");
-  assertStringIncludes(levelBody, "activateReversible(item)");
+  assertStringIncludes(levelBody, "toggleReversible(item)");
   assertStringIncludes(levelBody, "pointJump(labelIndex, seriesIndex)");
 });

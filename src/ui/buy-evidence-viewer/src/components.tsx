@@ -9,6 +9,7 @@ import {
 import { DocumentSurface } from "../../shared/document/DocumentSurface.tsx";
 import { translatorForLocale } from "../../shared/i18n.ts";
 import { mergeHostContext } from "../../shared/host-context.ts";
+import { applyDocumentLocale } from "../../shared/document-locale.ts";
 import { ViewerShell } from "../../shared/ui.tsx";
 import { useViewerLayout } from "../../shared/useViewerLayout.ts";
 import type { BuyEvidenceViewData } from "./model.ts";
@@ -32,6 +33,7 @@ const BuyEvidenceCard = (
         : {}),
       ...(typeof host.locale === "string" ? { locale: host.locale } : {}),
     });
+    applyDocumentLocale(host.locale, document.documentElement);
   }, [host.theme, host.locale]);
   const { ref, layout, boundsStyle } = useViewerLayout<HTMLDivElement>();
   const model = buyResultToDocumentModel(

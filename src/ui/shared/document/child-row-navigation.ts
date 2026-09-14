@@ -52,20 +52,35 @@ export function childRowNavigationJumps({
   row,
   availableTools,
   subtitle,
+  subtitleKey,
+  subtitleParams,
 }: {
   hints: readonly NavHint[];
   rootVars: Record<string, string>;
   row: ChildTableRow;
   availableTools: readonly string[] | undefined;
   subtitle?: string;
+  subtitleKey?: string;
+  subtitleParams?: Record<string, unknown>;
 }): Jump[] {
   if (!availableTools) return [];
   const vars = mergedTemplateVars(rootVars, row);
+  const subtitleTranslation = subtitleKey
+    ? { key: subtitleKey, params: subtitleParams }
+    : undefined;
   return hints.flatMap((hint) => {
     if (!hint.tool || !availableTools.includes(hint.tool)) return [];
-    if (jumpFromHint(hint, rootVars, subtitle)) return [];
-    const jump = jumpFromHint(hint, vars, subtitle);
-    return jump ? [{ ...jump, label: rowActionLabel(jump.label, vars) }] : [];
+    if (jumpFromHint(hint, rootVars, subtitle, subtitleTranslation)) return [];
+    const jump = jumpFromHint(hint, vars, subtitle, subtitleTranslation);
+    return jump
+      ? [{
+        ...jump,
+        label: rowActionLabel(jump.label, vars),
+        ...(jump.labelKey && vars.item
+          ? { labelSuffix: ` · ${vars.item}` }
+          : {}),
+      }]
+      : [];
   });
 }
 

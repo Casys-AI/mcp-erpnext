@@ -6,6 +6,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Added
 
+- Viewers support Traditional Chinese, Hindi, Bengali, Tamil and Urdu from the
+  host locale, including right-to-left document direction for Urdu.
+
 - Buy recorded-result `/2.0` retains bounded quantity, unit, and reason metadata
   for selected unpriced lines. The immutable Buy evidence viewer shows those
   excluded lines without assigning a monetary value or refreshing ERP.
@@ -17,6 +20,32 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Fixed
 
+- Refreshing a Kanban board rechecks related Timesheet presence while preserving
+  open Task edits. Additional multiline detail fields retain their line breaks
+  in editing and read-only views.
+- Language changes update root navigation labels and selected KPI values without
+  changing nested chart selection identities.
+
+- Kanban status, transition, badge and metric labels follow the host language.
+  Context hints describe both selection and deselection, and navigation titles
+  and save feedback update when the language changes.
+
+- Clicking selected viewer data again, or pressing Space, removes that exact
+  context selection. Opening its detail with double-click or Enter preserves the
+  previous selection, including when the element was already selected.
+- Scalar KPIs without a displayed trend omit redundant context selection while
+  retaining drill-down navigation.
+- Kanban details use a single editable title, compact colored metadata, and an
+  inline editable project. Dates and progress share a row; description and
+  additional fields sit beside time and finances on wider views. Assignees
+  remain visible in read-only details, and unsaved edits remain visible.
+- Kanban cards retain assignees, all supplied metrics, badge colors, and
+  milestone destinations on narrow and wide views. Task previews expose the
+  milestone control and reflect its saved state on the card.
+- Task details check for related timesheets before offering navigation, with
+  distinct loading, empty, and failed checks.
+- Kanban list navigation explicitly opens only the selected document; hosts
+  without tool navigation offer a clearly labeled conversational request.
 - Restore the existing generic document presentation by removing the six
   Project/Manufacturing dossier profiles introduced in PR #49. Digital Thread
   integration needs do not establish a standalone ERPNext viewer requirement.

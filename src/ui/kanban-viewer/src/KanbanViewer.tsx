@@ -30,13 +30,21 @@ import {
 } from "~/shared/ui";
 import { useViewerLayout } from "~/shared/useViewerLayout";
 import type { ViewerLayout } from "~/shared/useViewerLayout";
-import { useT } from "~/shared/i18n-hook";
+import { type TFunction, useT } from "~/shared/i18n-hook";
+import {
+  kanbanBadgeLabel,
+  kanbanMetricLabel,
+  kanbanStatusLabel,
+  kanbanTransitionLabel,
+} from "~/shared/kanban/labels";
+
 import { t } from "~/shared/i18n";
 import {
   getErrorPresentation,
   normalizeMoveFailureMessage,
 } from "~/shared/kanban/presentation";
 import { useKanbanBoard } from "~/shared/kanban/useKanbanBoard";
+import { useTaskTimesheetAvailability } from "~/shared/kanban/useTaskTimesheetAvailability";
 import type {
   KanbanBoardData,
   KanbanCardData,
@@ -74,8 +82,13 @@ import type { CardDetailState } from "~/shared/kanban/state";
 import { sendTextMessage } from "~/shared/host-message";
 import { canCallViewerTool, hasAvailableTool } from "~/shared/viewer-tools";
 import { createSerialQueue } from "~/shared/single-flight";
-import { kanbanNavVars } from "./kanban-nav";
+import { buildKanbanCardListHint, kanbanNavVars } from "./kanban-nav";
 import { kanbanViewerCapabilities } from "./capabilities";
+import { cardDeadlinePresentation } from "./card-deadline.ts";
+import {
+  type KanbanLiveMessage,
+  kanbanLiveMessageText,
+} from "./live-message.ts";
 import { CardDetailModal } from "./DetailModal";
 import {
   isFixtureMode,
@@ -120,6 +133,7 @@ function unwrapDoc(payload: Record<string, unknown>): Record<string, unknown> {
 export function getAvailableTargets(
   board: KanbanBoardData,
   columnId: string,
+  tf?: TFunction,
 ): Array<{ columnId: string; label: string; color?: string }> {
   return board.allowedTransitions
     .filter((transition) =>
@@ -133,7 +147,12 @@ export function getAvailableTargets(
       );
       return {
         columnId: transition.toColumn,
-        label: transition.label ?? targetCol?.label ?? transition.toColumn,
+        label: tf
+          ? kanbanTransitionLabel(
+            transition.label ?? targetCol?.label ?? transition.toColumn,
+            tf,
+          )
+          : transition.label ?? targetCol?.label ?? transition.toColumn,
         color: targetCol?.color,
       };
     });
@@ -255,14 +274,6 @@ function formatDueDate(isoDate: string): string {
   return isoDate;
 }
 
-/** Calculate overdue days from dueDate (ISO string). Returns null if not overdue. */
-function calcOverdueDays(dueDate: string): number | null {
-  const due = new Date(dueDate + "T00:00:00Z").getTime();
-  const now = Date.now();
-  if (now <= due) return null;
-  return Math.floor((now - due) / 86_400_000);
-}
-
 /** Detect Milestone badge from card.badges[]. */
 function isMilestoneBadge(
   badges?: Array<{ label: string; tone?: string }>,
@@ -277,6 +288,14 @@ function parseProgressPercent(value: string): number | null {
   const n = parseInt(value, 10);
   return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
 }
+
+const BADGE_TONE_CLASS = {
+  error: "bg-bad/10 text-bad",
+  warning: "bg-warn/10 text-warn-text",
+  success: "bg-ok/10 text-ok",
+  info: "bg-accent/10 text-accent",
+  neutral: "bg-count text-ink-muted",
+};
 
 /* ────────────────────────────── KanbanCard ────────────────────────────── */
 
@@ -303,8 +322,8 @@ function KanbanCard({
   const isDraggable = enableDrag && !card.pending && !isMobile;
   const accentColor = card.accent ?? "var(--color-accent)";
   const isMilestone = isMilestoneBadge(card.badges);
-  const overdueDays = card.dueDate ? calcOverdueDays(card.dueDate) : null;
-  const isOverdue = overdueDays !== null;
+  const { isOverdue, overdueDays, needsDueDateFallback } =
+    cardDeadlinePresentation(card);
 
   // Extract Progress metric
   const progressMetric = card.metrics?.find((m) =>
@@ -313,11 +332,24 @@ function KanbanCard({
   const progressPct = progressMetric
     ? parseProgressPercent(progressMetric.value)
     : null;
+  const metrics = (card.metrics ?? []).filter((metric) =>
+    progressPct === null || metric !== progressMetric
+  );
+  if (
+    card.dueDate &&
+    needsDueDateFallback
+  ) {
+    metrics.push({
+      label: t("kanban.field.exp_end_date"),
+      value: formatDueDate(card.dueDate),
+    });
+  }
 
   // Non-progress, non-Overdue badges that remain
   const otherBadges = (card.badges ?? []).filter((b) => {
     const lc = b.label.toLowerCase();
-    return lc !== "milestone" && lc !== "jalon" && lc !== "overdue";
+    return lc !== "milestone" && lc !== "jalon" &&
+      (lc !== "overdue" || overdueDays === null);
   });
 
   // First allowed target for CTA button
@@ -345,14 +377,23 @@ function KanbanCard({
       <article
         aria-busy={card.pending}
         class={cx(
-          "rounded-chip border bg-row-hover",
+          "overflow-hidden rounded-chip border bg-row-hover",
           isMobile ? "p-[11px]" : "p-[10px]",
           isMobile ? "rounded-[5px]" : "rounded-chip",
           borderClass,
           card.pending ? "opacity-60" : undefined,
         )}
-        style={{ borderLeftWidth: 2, borderLeftColor: accentColor }}
       >
+        <div
+          aria-hidden="true"
+          class={cx(
+            "h-[3px]",
+            isMobile
+              ? "-mx-[11px] -mt-[11px] mb-[9px]"
+              : "-mx-[10px] -mt-[10px] mb-[8px]",
+          )}
+          style={{ background: accentColor }}
+        />
         {/* Title row */}
         <div
           class={cx(
@@ -360,17 +401,21 @@ function KanbanCard({
             isMobile ? "mb-[7px]" : "mb-[6px]",
           )}
         >
-          <span class="flex-1 min-w-0 text-cell text-ink leading-snug">
+          <span
+            dir="auto"
+            class="flex-1 min-w-0 text-cell text-ink leading-snug"
+          >
             {onTitleClick
               ? (
                 <button
                   type="button"
+                  dir="auto"
                   aria-label={t("interaction.detail.open", {
                     label: card.title,
                   })}
                   aria-haspopup="dialog"
                   class={cx(
-                    "group text-left text-cell text-ink transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                    "group text-start text-cell text-ink transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                     "min-h-10",
                   )}
                   onClick={(event) => {
@@ -454,21 +499,20 @@ function KanbanCard({
         {/* Subtitle */}
         {card.subtitle && (
           <span
+            dir="auto"
             class={cx(
               "block font-mono text-micro text-ink-faint",
               "mb-[8px]",
             )}
           >
             {card.subtitle}
-            {!isMobile && card.dueDate && !progressMetric &&
-              " · " +
-                t("kanban.card.due", { date: formatDueDate(card.dueDate) })}
           </span>
         )}
 
         {/* Description */}
         {card.description && (
           <span
+            dir="auto"
             class="block text-meta text-ink-muted mb-[8px]"
             style={{ lineHeight: 1.45 }}
           >
@@ -477,16 +521,33 @@ function KanbanCard({
         )}
 
         {/* Other badges (not milestone, not overdue) */}
-        {otherBadges.length > 0 && !isMobile && (
+        {otherBadges.length > 0 && (
           <div class="flex flex-wrap gap-1 mb-[8px]">
             {otherBadges.map((badge) => (
               <span
                 key={`${card.id}-${badge.label}`}
-                class="font-mono text-micro rounded-badge bg-count px-[7px] py-0.5 text-ink-muted"
+                class={cx(
+                  "font-mono text-micro rounded-badge px-[7px] py-0.5",
+                  BADGE_TONE_CLASS[badge.tone ?? "neutral"],
+                )}
               >
-                {badge.label}
+                {kanbanBadgeLabel(badge.label, t)}
               </span>
             ))}
+          </div>
+        )}
+
+        {card.assignee && (
+          <div
+            class="mb-2 flex min-w-0 items-center gap-1.5 font-mono text-micro text-ink-muted"
+            aria-label={t("common.assignees.label")}
+            title={card.assignee}
+          >
+            <span
+              aria-hidden="true"
+              class="size-1.5 shrink-0 rounded-full bg-accent"
+            />
+            <span dir="auto" class="truncate">{card.assignee}</span>
           </div>
         )}
 
@@ -505,11 +566,22 @@ function KanbanCard({
           </div>
         )}
 
-        {/* Due date (wide only, shown separately when progress bar present) */}
-        {!isMobile && card.dueDate && progressMetric && (
-          <span class="block font-mono text-micro text-ink-faint mt-[7px]">
-            {t("kanban.card.due", { date: formatDueDate(card.dueDate) })}
-          </span>
+        {metrics.length > 0 && (
+          <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-line-soft pt-1.5">
+            {metrics.map((metric) => (
+              <div
+                key={`${card.id}-${metric.label}`}
+                class="flex min-w-0 flex-col gap-0.5"
+              >
+                <span class="font-mono text-[9px] uppercase text-ink-faint">
+                  {kanbanMetricLabel(metric.label, t)}
+                </span>
+                <strong class="font-mono text-meta tabular-nums text-ink">
+                  {metric.value}
+                </strong>
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Overdue badge */}
@@ -543,6 +615,27 @@ function KanbanCard({
           >
             {ctaTarget.label}
           </button>
+        )}
+
+        {isMilestone && allowedTargets.length > 1 && (
+          <div class="mt-2 flex flex-wrap gap-1">
+            {allowedTargets.slice(1).map((target) => (
+              <Button
+                key={target.columnId}
+                disabled={card.pending}
+                onClick={() => onMove(card, target.columnId, target.label)}
+              >
+                {target.color && (
+                  <span
+                    aria-hidden="true"
+                    class="mr-1.5 inline-block size-1.5 rounded-full"
+                    style={{ background: target.color }}
+                  />
+                )}
+                {target.label}
+              </Button>
+            ))}
+          </div>
         )}
 
         {/* Non-milestone move buttons (wide only) */}
@@ -633,7 +726,7 @@ function KanbanColumn({
             style={{ width: 5, height: 5, background: column.color }}
           />
           <span class="font-mono text-chip uppercase tracking-[0.08em] text-ink-2">
-            {column.label}
+            {kanbanStatusLabel(column.label, t)}
           </span>
         </div>
         <span class="font-mono text-chip text-ink-faint">{column.count}</span>
@@ -646,7 +739,7 @@ function KanbanColumn({
             key={card.id}
             card={card}
             isMobile={false}
-            allowedTargets={getAvailableTargets(board, card.columnId)}
+            allowedTargets={getAvailableTargets(board, card.columnId, t)}
             onMove={onMove}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
@@ -656,7 +749,9 @@ function KanbanColumn({
         ))}
         {cards.length === 0 && (
           <p class="text-center text-data text-ink-faint py-4">
-            {t("kanban.column.empty", { label: column.label })}
+            {t("kanban.column.empty", {
+              label: kanbanStatusLabel(column.label, t),
+            })}
           </p>
         )}
       </div>
@@ -726,7 +821,7 @@ function MobileColumnNavWrapper({
               isMobile ? "text-meta" : "text-chip",
             )}
           >
-            {column.label}
+            {kanbanStatusLabel(column.label, t)}
           </span>
           <span class="font-mono text-meta text-ink-faint">
             {column.count}
@@ -769,14 +864,14 @@ function MobileColumnNavWrapper({
         style={{ padding: "10px 12px 12px" }}
         id={`kanban-panel-${column.id}`}
         role="tabpanel"
-        aria-label={column.label}
+        aria-label={kanbanStatusLabel(column.label, t)}
       >
         {cards.map((card) => (
           <KanbanCard
             key={card.id}
             card={card}
             isMobile={isMobile}
-            allowedTargets={getAvailableTargets(board, card.columnId)}
+            allowedTargets={getAvailableTargets(board, card.columnId, t)}
             onMove={onMove}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
@@ -786,7 +881,9 @@ function MobileColumnNavWrapper({
         ))}
         {cards.length === 0 && (
           <p class="text-center text-data text-ink-faint py-4">
-            {t("kanban.column.empty", { label: column.label })}
+            {t("kanban.column.empty", {
+              label: kanbanStatusLabel(column.label, t),
+            })}
           </p>
         )}
       </div>
@@ -916,6 +1013,8 @@ function KanbanBoardWithNav({
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -946,6 +1045,33 @@ function KanbanBoardWithNav({
     app.getHostCapabilities()?.serverTools,
     fixture,
   );
+  const { availability: timesheetAvailability, recheck: recheckTimesheets } =
+    useTaskTimesheetAvailability({
+      host: app,
+      taskId: board.doctype === "Task" && nav.isRoot && detail.cardDetail &&
+          !detail.detailLoading &&
+          (!detail.cardDetail.doctype ||
+            detail.cardDetail.doctype === "Task") &&
+          detail.cardDetail.name === detail.selectedCardId
+        ? detail.selectedCardId
+        : null,
+      serverTools: hostCapabilities?.serverTools,
+      availableTools: board._availableTools,
+      disabled: fixture,
+      revalidationKey: JSON.stringify([
+        rootFreshEvent,
+        detail.cardDetail?.modified ?? null,
+      ]),
+    });
+  const cardListHint = detail.selectedCardId
+    ? buildKanbanCardListHint(board.doctype, detail.selectedCardId)
+    : null;
+  const canViewCardList = !!cardListHint &&
+    canCallViewerTool(
+      hostCapabilities?.serverTools,
+      board._availableTools,
+      "erpnext_doc_list",
+    );
   const actionableBoard = actionCapabilities.canMove ? board : {
     ...board,
     allowedTransitions: [],
@@ -974,10 +1100,23 @@ function KanbanBoardWithNav({
       hint,
       kanbanNavVars(cardId, board.doctype),
       t("nav.linked_to", { id: cardId }),
+      { key: "nav.linked_to", params: { id: cardId } },
     );
     // La popin fait partie de l'état du niveau : on ne la ferme pas, elle
     // disparaît tant qu'on est plus bas et rouvre à l'identique au retour.
     if (jump) void nav.jump(jump);
+  }
+
+  function handleViewCardList(): void {
+    if (!canViewCardList || !cardListHint?.tool) return;
+    // This selected identity is already literal, including any braces in its ID.
+    void nav.jump({
+      label: t(`kanban.modal.nav.view_list.${board.doctype}`),
+      labelKey: `kanban.modal.nav.view_list.${board.doctype}`,
+      kind: "list",
+      tool: { name: cardListHint.tool, args: cardListHint.args ?? {} },
+      subtitle: detail.selectedCardId ?? undefined,
+    });
   }
 
   return (
@@ -1183,6 +1322,9 @@ function KanbanBoardWithNav({
           hints={hasHints ? typedBoardHints : undefined}
           onJump={hasHints ? handleModalJump : undefined}
           onNavigate={messagesEnabled ? onNavigate : undefined}
+          onViewList={canViewCardList ? handleViewCardList : undefined}
+          timesheetAvailability={timesheetAvailability}
+          onRecheckTimesheets={recheckTimesheets}
         />
       )}
     </>
@@ -1216,7 +1358,7 @@ export function KanbanViewer() {
     closeDetail,
     setDetailError,
   } = useKanbanBoard(fixture ? KANBAN_FIXTURE : undefined);
-  const [liveMessage, setLiveMessage] = useState("");
+  const [liveMessage, setLiveMessage] = useState<KanbanLiveMessage>("");
   const [activeDropColumn, setActiveDropColumn] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [rootFreshEvent, setRootFreshEvent] = useState(0);
@@ -1241,6 +1383,13 @@ export function KanbanViewer() {
   });
 
   function updateBoard(board: KanbanBoardData) {
+    const previous = boardRef.current;
+    if (
+      previous &&
+      (previous.doctype !== board.doctype || previous.boardId !== board.boardId)
+    ) {
+      detailFetchCardIdRef.current = null;
+    }
     boardRef.current = board;
     hydrateBoard(board);
   }
@@ -1447,12 +1596,11 @@ export function KanbanViewer() {
             column.id === nextMove.toColumn
           )?.label ??
             nextMove.toColumn;
-          setLiveMessage(
-            t("kanban.live.moved", {
-              title: nextMove.cardId,
-              label: destinationLabel,
-            }),
-          );
+          setLiveMessage({
+            key: "kanban.live.moved",
+            title: nextMove.cardId,
+            destination: destinationLabel,
+          });
         }
       }
     } catch (error) {
@@ -1477,7 +1625,7 @@ export function KanbanViewer() {
     }
   }
 
-  function requestMove(card: KanbanCardData, toColumn: string, label: string) {
+  function requestMove(card: KanbanCardData, toColumn: string, _label: string) {
     const board = boardRef.current;
     if (!board || card.pending || card.columnId === toColumn) return;
     if (
@@ -1495,9 +1643,15 @@ export function KanbanViewer() {
       candidate.toColumn === toColumn
     );
 
+    const destinationLabel =
+      board.columns.find((column) => column.id === toColumn)?.label ?? toColumn;
+
     if (!transition) {
-      const message = t("kanban.live.move_not_allowed", { label });
-      setError(message);
+      const message: KanbanLiveMessage = {
+        key: "kanban.live.move_not_allowed",
+        destination: destinationLabel,
+      };
+      setError(kanbanLiveMessageText(message, t));
       setLiveMessage(message);
       return;
     }
@@ -1518,7 +1672,11 @@ export function KanbanViewer() {
         toColumn: queuedMove.toColumn,
       });
       updateBoard(reconciled);
-      setLiveMessage(t("kanban.live.moved", { title: card.title, label }));
+      setLiveMessage({
+        key: "kanban.live.moved",
+        title: card.title,
+        destination: destinationLabel,
+      });
       return;
     }
 
@@ -1535,9 +1693,17 @@ export function KanbanViewer() {
       snapshotsRef.current[queuedMove.queueId ?? queuedMove.cardId] =
         optimistic.snapshot;
       updateBoard(optimistic.board);
-      setLiveMessage(t("kanban.live.moving", { title: card.title, label }));
+      setLiveMessage({
+        key: "kanban.live.moving",
+        title: card.title,
+        destination: transition.label ?? destinationLabel,
+      });
     } else {
-      setLiveMessage(t("kanban.live.queued", { title: card.title, label }));
+      setLiveMessage({
+        key: "kanban.live.queued",
+        title: card.title,
+        destination: transition.label ?? destinationLabel,
+      });
     }
 
     queueRef.current = enqueueMove(queueRef.current, queuedMove);
@@ -1774,9 +1940,29 @@ export function KanbanViewer() {
       : null;
     return await detailSaveQueueRef.current.run(async () => {
       if (fixture) {
-        const next = { ...fixtureDetailsRef.current[name], ...data, name };
+        const next: Record<string, unknown> = {
+          ...fixtureDetailsRef.current[name],
+          ...data,
+          name,
+        };
         fixtureDetailsRef.current[name] = next;
         if (detailFetchCardIdRef.current === name) hydrateDetail(next);
+        const board = boardRef.current;
+        if (board && doctype === "Task" && "is_milestone" in data) {
+          updateBoard({
+            ...board,
+            cards: board.cards.map((card) => {
+              if (card.id !== name) return card;
+              const badges = (card.badges ?? []).filter((badge) =>
+                !isMilestoneBadge([badge])
+              );
+              if (Number(next.is_milestone) === 1) {
+                badges.push({ label: "Milestone", tone: "info" });
+              }
+              return { ...card, badges };
+            }),
+          });
+        }
         return;
       }
       const capabilities = boardRef.current
@@ -2071,7 +2257,7 @@ export function KanbanViewer() {
       fixture={fixture}
       containerRef={containerRef}
       layout={layout}
-      liveMessage={liveMessage}
+      liveMessage={kanbanLiveMessageText(liveMessage, t)}
       inlineError={errorPresentation.inlineError}
       activeDropColumn={activeDropColumn}
       refreshing={refreshing}

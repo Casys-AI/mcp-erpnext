@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useLayoutEffect, useMemo, useState } from "preact/hooks";
+import { useT } from "./i18n-hook.ts";
 import type { DocumentChangeEvent } from "./document-events.ts";
 import type { Jump, ToolHost } from "./jumps.ts";
 import {
@@ -22,6 +23,9 @@ import {
   type LevelInit,
   type LevelUi,
   markStale as markStaleLevels,
+  navLevelPresentation,
+  navLevelSubtitle,
+  navLevelTitle,
   navRootIdentity,
   type NavStack,
   patchLevelUi,
@@ -39,9 +43,25 @@ export function useNavStack(host: ToolHost, root: LevelInit) {
   // gardent le parcours. Une autre ressource repart, elle, à son niveau 1.
   useLayoutEffect(() => {
     setStack((s) => reconcileRoot(s, root));
-  }, [rootIdentity]);
+  }, [
+    rootIdentity,
+    root.title,
+    root.titleKey,
+    root.titleParams,
+    root.titleSuffix,
+    root.subtitle,
+    root.subtitleKey,
+    root.subtitleParams,
+  ]);
 
-  const current = currentLevel(stack);
+  const t = useT();
+  const storedCurrent = currentLevel(stack);
+  const currentTitle = navLevelTitle(storedCurrent, t);
+  const currentSubtitle = navLevelSubtitle(storedCurrent, t);
+  const current = useMemo(
+    () => navLevelPresentation(storedCurrent, t),
+    [storedCurrent, currentTitle, currentSubtitle],
+  );
 
   // La pile vit dans l'état Preact ; l'orchestration, dans `nav-jump.ts`.
   const store = useMemo<StackStore>(() => ({

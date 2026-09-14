@@ -1,6 +1,8 @@
 /** Doclist Viewer helpers */
 
 import { formatNumber } from "~/shared/theme";
+import type { t as Translate } from "../../shared/i18n.ts";
+type TFunction = typeof Translate;
 
 export const STATUS_FIELDS = new Set(["status", "docstatus", "workflow_state"]);
 export const HIDDEN_FIELDS = new Set([
@@ -70,12 +72,14 @@ export function isStatusField(key: string): boolean {
   return STATUS_FIELDS.has(key.toLowerCase());
 }
 
-export function formatCell(value: unknown): string {
+export function formatCell(value: unknown, t?: TFunction): string {
   if (value == null) return "—";
   if (typeof value === "number") {
     return formatNumber(value, value % 1 === 0 ? 0 : 2);
   }
-  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "boolean") {
+    return t ? t(value ? "common.yes" : "common.no") : value ? "Yes" : "No";
+  }
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }

@@ -23,11 +23,14 @@ import {
   formatNumber,
   styles,
 } from "~/shared/theme";
+import { bindHostLocale, useT } from "~/shared/i18n-hook";
+
+type LocalError = { key: string } | { message: string };
+
 import { ErpNextBrandFooter, ErpNextBrandHeader } from "~/shared/ErpNextBrand";
 import {
   canRequestUiRefresh,
   extractToolResultText,
-  normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
   type UiRefreshRequestData,
@@ -103,6 +106,7 @@ function LoadingSkeleton() {
 // ============================================================================
 
 function StockEmptyState() {
+  const t = useT();
   return (
     <div
       style={{
@@ -159,9 +163,9 @@ function StockEmptyState() {
         />
       </svg>
       <div style={{ fontSize: 13, textAlign: "center" }}>
-        No stock data
+        {t("stable.stock.empty.title")}
         <div style={{ fontSize: 11, color: colors.text.faint, marginTop: 4 }}>
-          Run a stock balance query to see inventory levels
+          {t("stable.stock.empty.help")}
         </div>
       </div>
     </div>
@@ -173,6 +177,7 @@ function StockEmptyState() {
 // ============================================================================
 
 function QtyBadge({ qty }: { qty: number }) {
+  useT();
   let color: string;
   let bg: string;
   if (qty <= 0) {
@@ -208,10 +213,11 @@ function extractTextContent(result: ToolResultPayload): string | null {
 // ============================================================================
 
 export function StockViewer() {
+  const t = useT();
   const [data, setData] = useState<StockData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LocalError | null>(null);
   const dataRef = useRef<StockData | null>(null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshInFlightRef = useRef(false);
@@ -229,7 +235,7 @@ export function StockViewer() {
   function consumeToolResult(result: ToolResultPayload): boolean {
     if (result.isError) {
       const text = extractTextContent(result);
-      setError(text ?? "Tool returned an error");
+      setError(text ? { message: text } : { key: "stock.error.tool_error" });
       setLoading(false);
       return false;
     }
@@ -243,7 +249,7 @@ export function StockViewer() {
       setLoading(false);
       return true;
     } catch {
-      setError("Failed to parse stock payload");
+      setError({ key: "stable.stock.error.parse_failed" });
       setLoading(false);
       return false;
     }
@@ -284,18 +290,22 @@ export function StockViewer() {
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
 
       if (result.isError) {
-        setError("Refresh failed");
+        setError({ key: "common.error.refresh_failed" });
         return false;
       }
 
       if (!consumeToolResult(result)) {
-        setError("Refresh returned no data");
+        setError({ key: "common.error.refresh_no_data" });
         return false;
       }
 
       return true;
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
+      setError({
+        key: cause instanceof Error && /timed? out/i.test(cause.message)
+          ? "common.error.refresh_timeout"
+          : "common.error.refresh_failed",
+      });
       return false;
     } finally {
       refreshInFlightRef.current = false;
@@ -314,7 +324,7 @@ export function StockViewer() {
       }
     };
 
-    app.connect().catch(() => {});
+    app.connect().then(() => bindHostLocale(app)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -351,7 +361,9 @@ export function StockViewer() {
           : (
             <StockContent
               data={data}
-              error={error}
+              error={error
+                ? "key" in error ? t(error.key) : error.message
+                : null}
               refreshing={refreshing}
               onRefresh={() => void requestRefresh({ ignoreInterval: true })}
             />
@@ -368,13 +380,48 @@ const COLUMNS: {
   align: "left" | "right";
   width?: string;
 }[] = [
-  { key: "item_code", label: "Item Code", align: "left", width: "22%" },
-  { key: "warehouse", label: "Warehouse", align: "left", width: "22%" },
-  { key: "actual_qty", label: "Actual Qty", align: "right", width: "12%" },
-  { key: "reserved_qty", label: "Reserved", align: "right", width: "11%" },
-  { key: "projected_qty", label: "Projected", align: "right", width: "11%" },
-  { key: "valuation_rate", label: "Rate", align: "right", width: "11%" },
-  { key: "stock_value", label: "Value", align: "right", width: "11%" },
+  {
+    key: "item_code",
+    label: "stable.stock.col.item_code",
+    align: "left",
+    width: "22%",
+  },
+  {
+    key: "warehouse",
+    label: "stable.stock.col.warehouse",
+    align: "left",
+    width: "22%",
+  },
+  {
+    key: "actual_qty",
+    label: "stable.stock.col.actual_qty",
+    align: "right",
+    width: "12%",
+  },
+  {
+    key: "reserved_qty",
+    label: "stock.col.reserved",
+    align: "right",
+    width: "11%",
+  },
+  {
+    key: "projected_qty",
+    label: "stock.col.projected",
+    align: "right",
+    width: "11%",
+  },
+  {
+    key: "valuation_rate",
+    label: "stock.col.rate",
+    align: "right",
+    width: "11%",
+  },
+  {
+    key: "stock_value",
+    label: "stock.col.value",
+    align: "right",
+    width: "11%",
+  },
 ];
 
 function StockContent(
@@ -385,6 +432,7 @@ function StockContent(
     onRefresh: () => void;
   },
 ) {
+  const t = useT();
   const [sortKey, setSortKey] = useState<SortKey>("item_code");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filter, setFilter] = useState("");
@@ -452,11 +500,13 @@ function StockContent(
               color: colors.text.primary,
             }}
           >
-            Stock Balance
+            {t("stock.title")}
           </div>
           <div style={{ fontSize: 12, color: colors.text.muted }}>
-            {sorted.length}{" "}
-            entries{filter ? ` (filtered from ${data.count})` : ""}
+            {t(
+              filter ? "stable.stock.filtered_entries" : "stable.stock.entries",
+              { n: sorted.length, total: data.count },
+            )}
           </div>
           <div
             aria-live="polite"
@@ -466,13 +516,16 @@ function StockContent(
               marginTop: 4,
             }}
           >
-            {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
+            {error ?? (refreshing
+              ? t("common.refreshing")
+              : t("kpi.status.auto_refresh"))}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
             type="text"
-            placeholder="Filter items / warehouses..."
+            placeholder={t("stable.stock.filter")}
+            dir="auto"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             style={{ ...styles.input, maxWidth: 260 }}
@@ -519,7 +572,7 @@ function StockContent(
                   strokeLinejoin="round"
                 />
               </svg>
-              {refreshing ? "Refreshing" : "Refresh"}
+              {refreshing ? t("common.refreshing") : t("common.refresh")}
             </span>
           </button>
         </div>
@@ -545,7 +598,7 @@ function StockContent(
                     onClick={() => handleSort(col.key)}
                     style={{
                       ...styles.tableHeader,
-                      textAlign: col.align,
+                      textAlign: col.align === "right" ? "end" : "start",
                       width: col.width,
                       color: sortKey === col.key
                         ? colors.accent
@@ -553,10 +606,10 @@ function StockContent(
                       background: colors.bg.surface,
                     }}
                   >
-                    {col.label}
+                    {t(col.label)}
                     <span
                       style={{
-                        marginLeft: 4,
+                        marginInlineStart: 4,
                         opacity: sortKey === col.key ? 1 : 0.3,
                         fontSize: 10,
                       }}
@@ -582,7 +635,7 @@ function StockContent(
                         padding: 32,
                       }}
                     >
-                      No matching entries
+                      {t("stock.filter.no_results")}
                     </td>
                   </tr>
                 )
@@ -615,10 +668,14 @@ function StockContent(
                           }
                         }}
                       >
-                        <td style={{ ...styles.tableCell, fontWeight: 500 }}>
+                        <td
+                          dir="auto"
+                          style={{ ...styles.tableCell, fontWeight: 500 }}
+                        >
                           {entry.item_code}
                         </td>
                         <td
+                          dir="auto"
                           style={{
                             ...styles.tableCell,
                             color: colors.text.secondary,
@@ -626,7 +683,7 @@ function StockContent(
                         >
                           {entry.warehouse}
                         </td>
-                        <td style={{ ...styles.tableCell, textAlign: "right" }}>
+                        <td style={{ ...styles.tableCell, textAlign: "end" }}>
                           <QtyBadge qty={entry.actual_qty} />
                         </td>
                         <td style={numCell}>
@@ -694,7 +751,7 @@ function StockContent(
         }}
       >
         <span style={{ fontSize: 12, color: colors.text.muted }}>
-          Total Stock Value
+          {t("stock.footer.total_value")}
         </span>
         <span
           style={{
@@ -717,7 +774,7 @@ function StockContent(
 
 const numCell: CSSProperties = {
   ...styles.tableCell,
-  textAlign: "right",
+  textAlign: "end",
   fontFamily: fonts.mono,
   fontSize: 12,
   color: colors.text.secondary,

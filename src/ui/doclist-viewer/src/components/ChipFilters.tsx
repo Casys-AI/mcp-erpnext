@@ -1,5 +1,7 @@
 /** Chip-based column filters (status, category, etc.) */
 
+import { useT } from "~/shared/i18n-hook";
+import { fieldLabel, priorityLabel, statusLabel } from "../labels";
 import { Fragment } from "react";
 import { colors, styles } from "~/shared/theme";
 import { DOC_STATUS } from "./StatusCell";
@@ -18,6 +20,7 @@ export function ChipFilters({ columns, chipFilters, onFilterChange }: {
   chipFilters: Record<string, string>;
   onFilterChange: (col: string, value: string | null) => void;
 }) {
+  const t = useT();
   if (columns.length === 0) return null;
 
   return (
@@ -41,7 +44,7 @@ export function ChipFilters({ columns, chipFilters, onFilterChange }: {
               fontWeight: 700,
             }}
           >
-            {col.replace(/_/g, " ")}
+            {fieldLabel(col, t)}
           </span>
           <button
             onClick={() => onFilterChange(col, null)}
@@ -62,7 +65,7 @@ export function ChipFilters({ columns, chipFilters, onFilterChange }: {
               letterSpacing: "0.08em",
             }}
           >
-            All
+            {t("stable.doclist.chips.all")}
           </button>
           {values.map((v) => {
             const isActive = chipFilters[col] === v;
@@ -88,7 +91,13 @@ export function ChipFilters({ columns, chipFilters, onFilterChange }: {
                   letterSpacing: "0.08em",
                 }}
               >
-                {v}
+                <span dir="auto">
+                  {isStatusField(col)
+                    ? statusLabel(v, t)
+                    : col === "priority"
+                    ? priorityLabel(v, t)
+                    : v}
+                </span>
               </button>
             );
           })}

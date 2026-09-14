@@ -24,7 +24,7 @@ export type ToolResultLike = {
 
 export type SubmitArgsResult =
   | { ok: true; args: Record<string, unknown> }
-  | { ok: false; error: string; args?: undefined };
+  | { ok: false; error: string; errorKey?: string; args?: undefined };
 
 export type EffectiveTotalResult =
   | {
@@ -40,6 +40,7 @@ export type ActionFeedbackKind = "success" | "error" | "attention";
 export type ActionFeedback = {
   kind: ActionFeedbackKind;
   message: string;
+  messageKey?: string;
   refresh: boolean;
   invoice?: Record<string, unknown>;
 };
@@ -113,7 +114,11 @@ export function buildDocSubmitArguments(
   data: InvoiceSubmitSource,
 ): SubmitArgsResult {
   if (typeof data.name !== "string" || data.name.length === 0) {
-    return { ok: false, error: "Invoice name is required." };
+    return {
+      ok: false,
+      error: "Invoice name is required.",
+      errorKey: "stable.invoice.error.name_required",
+    };
   }
   return {
     ok: true,
@@ -141,18 +146,24 @@ export function interpretPurchaseInvoiceSubmitResult(
   requestedName: string,
 ): ActionFeedback {
   if (result.isError) {
+    const message = errorText(result);
     return {
       kind: "error",
-      message: errorText(result) ?? "Action failed",
+      message: message ?? "Action failed",
+      ...(message === null
+        ? { messageKey: "invoice.error.action_failed" }
+        : {}),
       refresh: false,
     };
   }
   const payload = parseActionPayload(result);
   const invoice = returnedInvoice(payload, requestedName);
   if (invoice && invoice.docstatus === 1) {
+    const message = payloadMessage(payload);
     return {
       kind: "success",
-      message: payloadMessage(payload) ?? "Submitted",
+      message: message ?? "Submitted",
+      ...(message === null ? { messageKey: "invoice.action.submitted" } : {}),
       refresh: true,
       invoice,
     };
@@ -161,6 +172,7 @@ export function interpretPurchaseInvoiceSubmitResult(
     kind: "attention",
     message:
       "Submission could not be confirmed. Inspect the same invoice before retrying.",
+    messageKey: "document.purchase_invoice.submit.unconfirmed",
     refresh: true,
     invoice,
   };
@@ -173,6 +185,7 @@ export function interpretSubmitTransportFailure(
     kind: "attention",
     message:
       "Submit response was not received. Inspect the same invoice before retrying; submission is unconfirmed.",
+    messageKey: "document.purchase_invoice.submit.transport",
     refresh: true,
   };
 }

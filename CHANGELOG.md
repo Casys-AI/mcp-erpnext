@@ -2,6 +2,17 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Viewer controls and local feedback are available in English, French,
+  Simplified Chinese, Traditional Chinese, Hindi, Bengali, Tamil, and Urdu.
+  Changing the MCP host locale updates the open viewer and numeric formats while
+  preserving filters, edits, and the existing navigation. Urdu supports
+  right-to-left text; business values and server diagnostics retain their
+  original text.
+
 ## [3.0.4] - 2026-09-07
 
 ### Fixed

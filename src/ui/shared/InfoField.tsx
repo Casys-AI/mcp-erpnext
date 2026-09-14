@@ -19,6 +19,7 @@ export function InfoField(
         {label}
       </div>
       <div
+        dir="auto"
         style={{
           fontSize: bold ? 15 : 13,
           fontWeight: bold ? 600 : 500,

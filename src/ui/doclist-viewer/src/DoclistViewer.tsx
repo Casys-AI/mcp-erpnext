@@ -23,11 +23,15 @@ import { ErpNextBrandFooter, ErpNextBrandHeader } from "~/shared/ErpNextBrand";
 import {
   canRequestUiRefresh,
   extractToolResultText,
-  normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
   type UiRefreshRequestData,
 } from "~/shared/refresh";
+
+import { bindHostLocale, useT } from "~/shared/i18n-hook";
+import { fieldLabel, priorityLabel, statusLabel } from "./labels";
+
+type LocalError = { key: string } | { message: string };
 
 import type { DoclistData, SortDir } from "./types";
 import {
@@ -59,10 +63,11 @@ const TOOL_CALL_TIMEOUT_MS = 10_000;
 // ============================================================================
 
 export function DoclistViewer() {
+  const t = useT();
   const [data, setData] = useState<DoclistData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LocalError | null>(null);
   const dataRef = useRef<DoclistData | null>(null);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshInFlightRef = useRef(false);
@@ -80,7 +85,7 @@ export function DoclistViewer() {
   function consumeToolResult(result: ToolResultPayload): boolean {
     if (result.isError) {
       const text = extractToolResultText(result);
-      setError(text ?? "Tool returned an error");
+      setError(text ? { message: text } : { key: "doclist.error.tool_error" });
       setLoading(false);
       return false;
     }
@@ -101,7 +106,7 @@ export function DoclistViewer() {
       setLoading(false);
       return true;
     } catch {
-      setError("Failed to parse doclist payload");
+      setError({ key: "doclist.error.parse_payload" });
       setLoading(false);
       return false;
     }
@@ -136,10 +141,16 @@ export function DoclistViewer() {
         { name: request.toolName, arguments: request.arguments },
         { timeout: TOOL_CALL_TIMEOUT_MS },
       );
-      if (result.isError) setError("Refresh failed");
-      else if (!consumeToolResult(result)) setError("Refresh returned no data");
+      if (result.isError) setError({ key: "common.error.refresh_failed" });
+      else if (!consumeToolResult(result)) {
+        setError({ key: "common.error.refresh_no_data" });
+      }
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
+      setError({
+        key: cause instanceof Error && /timed? out/i.test(cause.message)
+          ? "common.error.refresh_timeout"
+          : "common.error.refresh_failed",
+      });
     } finally {
       refreshInFlightRef.current = false;
       setRefreshing(false);
@@ -153,7 +164,7 @@ export function DoclistViewer() {
     app.ontoolinputpartial = () => {
       if (!dataRef.current) setLoading(true);
     };
-    app.connect().catch(() => {});
+    app.connect().then(() => bindHostLocale(app)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -185,7 +196,9 @@ export function DoclistViewer() {
           : (
             <DoclistContent
               data={data}
-              error={error}
+              error={error
+                ? "key" in error ? t(error.key) : error.message
+                : null}
               refreshing={refreshing}
               onRefresh={() => void requestRefresh({ ignoreInterval: true })}
               onError={setError}
@@ -208,8 +221,9 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
   error: string | null;
   refreshing: boolean;
   onRefresh: () => void;
-  onError: (msg: string | null) => void;
+  onError: (msg: LocalError | null) => void;
 }) {
+  const t = useT();
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filter, setFilter] = useState("");
@@ -270,12 +284,16 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
           onError(null);
         }
       } else {
-        onError("Failed to load details");
+        onError({ key: "doclist.error.load_details" });
         setExpandedId(null);
       }
     } catch (err) {
       if (pendingRowIdRef.current !== rowId) return;
-      onError(err instanceof Error ? err.message : "Failed to load details");
+      onError(
+        err instanceof Error
+          ? { message: err.message }
+          : { key: "doclist.error.load_details" },
+      );
       setExpandedId(null);
     } finally {
       if (pendingRowIdRef.current === rowId) setExpandedLoading(false);
@@ -370,11 +388,21 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
     if (filter) {
       const q = filter.toLowerCase();
       result = result.filter((row) =>
-        columns.some((col) => formatCell(row[col]).toLowerCase().includes(q))
+        columns.some((col) => {
+          const value = row[col];
+          const raw = formatCell(value);
+          const display = typeof value === "string" && isStatusField(col)
+            ? statusLabel(value, t)
+            : typeof value === "string" && col === "priority"
+            ? priorityLabel(value, t)
+            : formatCell(value, t);
+          return raw.toLowerCase().includes(q) ||
+            display.toLowerCase().includes(q);
+        })
       );
     }
     return result;
-  }, [rows, filter, columns, chipFilters]);
+  }, [rows, filter, columns, chipFilters, t]);
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
@@ -401,7 +429,7 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
     }
   }, [sortKey]);
 
-  const title = data._title ?? data.doctype ?? "Documents";
+  const title = data._title ?? data.doctype ?? t("doclist.title.default");
 
   // ── Render ───────────────────────────────────────────────
 
@@ -420,6 +448,7 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
       >
         <div>
           <div
+            dir="auto"
             style={{
               fontSize: 16,
               fontWeight: 700,
@@ -429,7 +458,10 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
             {title}
           </div>
           <div style={{ fontSize: 12, color: colors.text.muted }}>
-            {sorted.length} of {data.count ?? rows.length} records
+            {t("stable.doclist.records", {
+              n: sorted.length,
+              total: data.count ?? rows.length,
+            })}
           </div>
           <div
             aria-live="polite"
@@ -439,13 +471,16 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
               marginTop: 4,
             }}
           >
-            {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
+            {error ?? (refreshing
+              ? t("common.refreshing")
+              : t("kpi.status.auto_refresh"))}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
             type="text"
-            placeholder="Search..."
+            placeholder={t("stable.doclist.search")}
+            dir="auto"
             value={filter}
             onChange={(e) => {
               setFilter(e.target.value);
@@ -495,7 +530,7 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
                   strokeLinejoin="round"
                 />
               </svg>
-              {refreshing ? "Refreshing" : "Refresh"}
+              {refreshing ? t("common.refreshing") : t("common.refresh")}
             </span>
           </button>
           <button
@@ -577,10 +612,10 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
                         : colors.text.muted,
                     }}
                   >
-                    {col.replace(/_/g, " ")}
+                    {fieldLabel(col, t)}
                     <span
                       style={{
-                        marginLeft: 4,
+                        marginInlineStart: 4,
                         opacity: sortKey === col ? 1 : 0.3,
                         fontSize: 10,
                       }}
@@ -606,7 +641,7 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
                         padding: 32,
                       }}
                     >
-                      No matching records
+                      {t("stable.doclist.no_match")}
                     </td>
                   </tr>
                 )
@@ -653,7 +688,7 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
                                 ...styles.tableCell,
                                 ...(isNum
                                   ? {
-                                    textAlign: "right",
+                                    textAlign: "end",
                                     fontFamily: fonts.mono,
                                     fontSize: 12,
                                   }
@@ -690,7 +725,14 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
                                 )}
                                 {isStatus
                                   ? <StatusCell value={val as string} />
-                                  : formatCell(val)}
+                                  : (
+                                    <span dir="auto">
+                                      {col === "priority" &&
+                                          typeof val === "string"
+                                        ? priorityLabel(val, t)
+                                        : formatCell(val, t)}
+                                    </span>
+                                  )}
                               </span>
                             </td>
                           );
@@ -741,26 +783,26 @@ function DoclistContent({ data, error, refreshing, onRefresh, onError }: {
           }}
         >
           <div style={{ fontSize: 12, color: colors.text.muted }}>
-            Page {page + 1} of {totalPages}
+            {t("stable.doclist.page", { n: page + 1, total: totalPages })}
           </div>
           <div style={{ display: "flex", gap: 4 }}>
             <PagBtn
-              label="First"
+              label={t("stable.doclist.pagination.first")}
               disabled={page === 0}
               onClick={() => setPage(0)}
             />
             <PagBtn
-              label="Prev"
+              label={t("stable.doclist.pagination.prev")}
               disabled={page === 0}
               onClick={() => setPage((p) => p - 1)}
             />
             <PagBtn
-              label="Next"
+              label={t("stable.doclist.pagination.next")}
               disabled={page >= totalPages - 1}
               onClick={() => setPage((p) => p + 1)}
             />
             <PagBtn
-              label="Last"
+              label={t("stable.doclist.pagination.last")}
               disabled={page >= totalPages - 1}
               onClick={() => setPage(totalPages - 1)}
             />

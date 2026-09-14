@@ -1,5 +1,6 @@
 /** Inline detail panel for a stock line — shows item info, recent movements, and navigation */
 
+import { useT } from "~/shared/i18n-hook";
 import { useEffect, useState } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles } from "~/shared/theme";
@@ -15,6 +16,7 @@ export function StockDetailPanel({ app, itemCode, warehouse, onClose }: {
   warehouse: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const [itemData, setItemData] = useState<Record<string, unknown> | null>(
     null,
   );
@@ -99,6 +101,7 @@ export function StockDetailPanel({ app, itemCode, warehouse, onClose }: {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span
+            dir="auto"
             style={{
               fontSize: 14,
               fontWeight: 600,
@@ -108,12 +111,13 @@ export function StockDetailPanel({ app, itemCode, warehouse, onClose }: {
           >
             {itemCode}
           </span>
-          <span style={{ fontSize: 11, color: colors.text.muted }}>
+          <span dir="auto" style={{ fontSize: 11, color: colors.text.muted }}>
             {warehouse}
           </span>
         </div>
         <button
           onClick={onClose}
+          aria-label={t("common.close")}
           style={{ ...styles.button, padding: "2px 8px", fontSize: 11 }}
         >
           ✕
@@ -130,18 +134,27 @@ export function StockDetailPanel({ app, itemCode, warehouse, onClose }: {
             marginBottom: 10,
           }}
         >
-          {itemData.item_name && (
-            <InfoField label="Name" value={String(itemData.item_name)} />
+          {Boolean(itemData.item_name) && (
+            <InfoField
+              label={t("stable.stock.detail.name")}
+              value={String(itemData.item_name)}
+            />
           )}
-          {itemData.item_group && (
-            <InfoField label="Group" value={String(itemData.item_group)} />
+          {Boolean(itemData.item_group) && (
+            <InfoField
+              label={t("stable.stock.detail.group")}
+              value={String(itemData.item_group)}
+            />
           )}
-          {itemData.stock_uom && (
-            <InfoField label="UOM" value={String(itemData.stock_uom)} />
+          {Boolean(itemData.stock_uom) && (
+            <InfoField
+              label={t("stable.stock.detail.uom")}
+              value={String(itemData.stock_uom)}
+            />
           )}
           {itemData.standard_rate != null && (
             <InfoField
-              label="Std Rate"
+              label={t("stable.stock.detail.std_rate")}
               value={String(itemData.standard_rate)}
               bold
             />
@@ -161,7 +174,7 @@ export function StockDetailPanel({ app, itemCode, warehouse, onClose }: {
               marginBottom: 6,
             }}
           >
-            Recent Movements
+            {t("stock.detail.recent_movements")}
           </div>
           {movements.slice(0, 4).map((m, i) => (
             <div
@@ -174,7 +187,7 @@ export function StockDetailPanel({ app, itemCode, warehouse, onClose }: {
                 fontSize: 12,
               }}
             >
-              <span style={{ color: colors.text.secondary }}>
+              <span dir="auto" style={{ color: colors.text.secondary }}>
                 {String(m.stock_entry_type ?? m.name ?? "—")}
               </span>
               <span
@@ -198,42 +211,42 @@ export function StockDetailPanel({ app, itemCode, warehouse, onClose }: {
         }}
       >
         <ActionButton
-          label="Stock chart"
+          label={t("stock.detail.action.chart")}
           onClick={async () => {
             try {
               await app.sendMessage({
                 role: "user",
                 content: [{
                   type: "text",
-                  text: `Show stock chart for item ${itemCode}`,
+                  text: t("stock.nav.chart.message", { itemCode }),
                 }],
               });
             } catch {}
           }}
         />
         <ActionButton
-          label="Item details"
+          label={t("stable.stock.detail.item_details")}
           onClick={async () => {
             try {
               await app.sendMessage({
                 role: "user",
                 content: [{
                   type: "text",
-                  text: `Show me the full details of Item ${itemCode}`,
+                  text: t("stock.nav.details.message", { itemCode }),
                 }],
               });
             } catch {}
           }}
         />
         <ActionButton
-          label="Stock entries"
+          label={t("stock.detail.action.entries")}
           onClick={async () => {
             try {
               await app.sendMessage({
                 role: "user",
                 content: [{
                   type: "text",
-                  text: `Show stock entries for item ${itemCode}`,
+                  text: t("stock.nav.entries.message", { itemCode }),
                 }],
               });
             } catch {}

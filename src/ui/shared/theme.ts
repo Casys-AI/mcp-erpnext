@@ -9,6 +9,7 @@
  */
 
 import type { CSSProperties } from "react";
+export { formatCurrency, formatNumber } from "./number-format.ts";
 
 /** Read a CSS custom property at runtime */
 function cssVar(name: string): string {
@@ -103,7 +104,7 @@ export const styles = {
 
   tableHeader: {
     padding: "8px 12px",
-    textAlign: "left" as const,
+    textAlign: "start" as const,
     fontSize: "11px",
     fontWeight: 600,
     color: colors.text.muted,
@@ -128,21 +129,3 @@ export const styles = {
     fontSize: "12px",
   } as CSSProperties,
 } as const;
-
-/** Format a number with locale separators */
-export function formatNumber(n: number, decimals = 2): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-
-/** Format currency */
-export function formatCurrency(n: number, currency = "USD"): string {
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}

@@ -1,8 +1,10 @@
 /** Empty state when no data is loaded */
 
+import { useT } from "~/shared/i18n-hook";
 import { colors } from "~/shared/theme";
 
 export function DoclistEmptyState() {
+  const t = useT();
   return (
     <div
       style={{
@@ -46,9 +48,9 @@ export function DoclistEmptyState() {
         />
       </svg>
       <div style={{ fontSize: 13, textAlign: "center" }}>
-        No documents to display
+        {t("stable.doclist.empty.title")}
         <div style={{ fontSize: 11, color: colors.text.faint, marginTop: 4 }}>
-          Query a DocType to see results in this table
+          {t("stable.doclist.empty.help")}
         </div>
       </div>
     </div>

@@ -1,5 +1,13 @@
 /** Expandable detail panel shown under a clicked row */
 
+import { useT } from "~/shared/i18n-hook";
+import {
+  fieldLabel,
+  hintLabel,
+  hintMessage,
+  priorityLabel,
+  statusLabel,
+} from "../labels";
 import { useState } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles } from "~/shared/theme";
@@ -23,6 +31,7 @@ export function InlineDetailPanel(
     ) => Promise<boolean>;
   },
 ) {
+  const t = useT();
   const [actLoading, setActLoading] = useState<string | null>(null);
   const [actMsg, setActMsg] = useState<string | null>(null);
   const [actOk, setActOk] = useState(true);
@@ -52,7 +61,7 @@ export function InlineDetailPanel(
     setActMsg(null);
     const ok = await onAction(tool, args);
     setActOk(ok);
-    setActMsg(ok ? msg : "Action failed");
+    setActMsg(ok ? msg : "doclist.detail.action_failed");
     setActLoading(null);
   }
 
@@ -64,15 +73,29 @@ export function InlineDetailPanel(
     }
     if (v == null) continue;
     if (Array.isArray(v)) {
-      flatEntries.push([k, `${v.length} item${v.length > 1 ? "s" : ""}`]);
+      flatEntries.push([
+        k,
+        t("stable.doclist.array_count", {
+          n: v.length,
+          s: v.length > 1 ? "s" : "",
+        }),
+      ]);
     } else if (typeof v === "object") {
       for (const [sk, sv] of Object.entries(v as Record<string, unknown>)) {
         if (sv != null && typeof sv !== "object") {
-          flatEntries.push([`${k}.${sk}`, String(sv)]);
+          flatEntries.push([
+            `${k}.${sk}`,
+            typeof sv === "boolean" ? formatCell(sv, t) : String(sv),
+          ]);
         }
       }
     } else {
-      flatEntries.push([k, formatCell(v)]);
+      flatEntries.push([
+        k,
+        k === "priority" && typeof v === "string"
+          ? priorityLabel(v, t)
+          : formatCell(v, t),
+      ]);
     }
   }
 
@@ -85,10 +108,7 @@ export function InlineDetailPanel(
   // Build sendMessage hints — replace {id} with doc name
   const hints = sendMessageHints?.map((h) => ({
     ...h,
-    message: h.message.replace(/\{id\}/g, docName).replace(
-      /\{doctype\}/g,
-      doctype ?? "",
-    ),
+    message: hintMessage(h.message, docName, doctype ?? "", t),
   })) ?? [];
 
   return (
@@ -117,6 +137,7 @@ export function InlineDetailPanel(
           }}
         >
           <span
+            dir="auto"
             style={{
               fontSize: 14,
               fontWeight: 600,
@@ -128,17 +149,18 @@ export function InlineDetailPanel(
           </span>
           {statusScheme && (
             <span style={styles.badge(statusScheme.color, statusScheme.bg)}>
-              {status}
+              {statusLabel(status, t)}
             </span>
           )}
           {doctype && (
-            <span style={{ fontSize: 11, color: colors.text.muted }}>
+            <span dir="auto" style={{ fontSize: 11, color: colors.text.muted }}>
               {doctype}
             </span>
           )}
         </div>
         <button
           onClick={onClose}
+          aria-label={t("common.close")}
           style={{ ...styles.button, padding: "2px 8px", fontSize: 11 }}
         >
           ✕
@@ -157,7 +179,7 @@ export function InlineDetailPanel(
         {flatEntries.slice(0, 12).map(([k, v]) => (
           <InfoField
             key={k}
-            label={k.replace(/_/g, " ").replace(/\./g, " > ")}
+            label={fieldLabel(k, t)}
             value={v}
             bold={k === "grand_total" || k === "total" || k === "amount"}
           />
@@ -173,7 +195,7 @@ export function InlineDetailPanel(
             marginBottom: 8,
           }}
         >
-          {actMsg}
+          {t(actMsg)}
         </div>
       )}
 
@@ -189,7 +211,7 @@ export function InlineDetailPanel(
       >
         {isDraft && docName && (
           <ActionButton
-            label="Submit"
+            label={t("common.submit")}
             variant="success"
             loading={actLoading === "submit"}
             confirm
@@ -197,13 +219,13 @@ export function InlineDetailPanel(
               act("submit", "erpnext_doc_submit", {
                 doctype: doctype ?? "",
                 name: docName,
-              }, "Submitted")}
+              }, "doclist.detail.action.submit_ok")}
           />
         )}
 
         {isSubmitted && docName && (
           <ActionButton
-            label="Cancel"
+            label={t("common.cancel")}
             variant="error"
             loading={actLoading === "cancel"}
             confirm
@@ -211,14 +233,14 @@ export function InlineDetailPanel(
               act("cancel", "erpnext_doc_cancel", {
                 doctype: doctype ?? "",
                 name: docName,
-              }, "Cancelled")}
+              }, "doclist.detail.action.cancel_ok")}
           />
         )}
 
         {hints.map((hint, i) => (
           <ActionButton
             key={i}
-            label={hint.label}
+            label={hintLabel(hint.label, t)}
             onClick={async () => {
               try {
                 await app.sendMessage({
@@ -232,14 +254,17 @@ export function InlineDetailPanel(
 
         {docName && doctype && hints.length === 0 && (
           <ActionButton
-            label="Full details"
+            label={t("doclist.detail.full_detail")}
             onClick={async () => {
               try {
                 await app.sendMessage({
                   role: "user",
                   content: [{
                     type: "text",
-                    text: `Show me the full details of ${doctype} ${docName}`,
+                    text: t("doclist.detail.full_detail_message", {
+                      doctype,
+                      id: docName,
+                    }),
                   }],
                 });
               } catch { /* host may not support sendMessage */ }

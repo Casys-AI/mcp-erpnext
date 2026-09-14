@@ -16,11 +16,12 @@ import { useEffect, useRef, useState } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, formatCurrency, styles } from "~/shared/theme";
 import { ErpNextBrandFooter, ErpNextBrandHeader } from "~/shared/ErpNextBrand";
+import { bindHostLocale, useT } from "~/shared/i18n-hook";
+import { type InvoiceMessage, invoiceMessage } from "./messages";
 import { ActionButton } from "~/shared/ActionButton";
 import {
   canRequestUiRefresh,
   extractToolResultText,
-  normalizeUiRefreshFailureMessage,
   resolveUiRefreshRequest,
   type ToolResultPayload,
   type UiRefreshRequestData,
@@ -60,6 +61,7 @@ interface InvoiceItem {
 }
 
 interface InvoiceData {
+  [key: string]: unknown;
   name: string;
   doctype?: string;
   customer?: string;
@@ -114,6 +116,7 @@ function LoadingSkeleton() {
 }
 
 function InvoiceEmptyState() {
+  const t = useT();
   return (
     <div
       style={{
@@ -151,7 +154,7 @@ function InvoiceEmptyState() {
           opacity="0.6"
         />
       </svg>
-      <div style={{ fontSize: 13 }}>No invoice data</div>
+      <div style={{ fontSize: 13 }}>{t("invoice.no_data")}</div>
     </div>
   );
 }
@@ -163,6 +166,7 @@ function FeedbackBanner(
     onDismiss?: () => void;
   },
 ) {
+  const t = useT();
   const tone = type === "error"
     ? { fg: colors.error, bg: colors.errorDim }
     : type === "attention"
@@ -187,6 +191,7 @@ function FeedbackBanner(
       {onDismiss && (
         <button
           onClick={onDismiss}
+          aria-label={t("common.close")}
           style={{
             background: "none",
             border: "none",
@@ -217,6 +222,7 @@ function TotalRow(
     >
       <span style={{ color: colors.text.secondary }}>{label}</span>
       <span
+        dir="auto"
         style={{
           fontFamily: fonts.mono,
           fontWeight: bold ? 700 : 400,
@@ -234,12 +240,15 @@ function TotalRow(
 // ============================================================================
 
 export function InvoiceViewer() {
+  const t = useT();
   const [data, setData] = useState<InvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InvoiceMessage | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<InvoiceMessage | null>(
+    null,
+  );
   const [actionFeedbackType, setActionFeedbackType] = useState<
     ActionFeedbackKind
   >("success");
@@ -258,7 +267,7 @@ export function InvoiceViewer() {
   function consumeToolResult(result: ToolResultPayload): boolean {
     if (result.isError) {
       const text = extractToolResultText(result);
-      setError(text ?? "Tool returned an error");
+      setError(text ?? { key: "invoice.error.tool_error" });
       setLoading(false);
       return false;
     }
@@ -275,7 +284,7 @@ export function InvoiceViewer() {
       setLoading(false);
       return true;
     } catch {
-      setError("Failed to parse invoice payload");
+      setError({ key: "invoice.error.parse_failed" });
       setLoading(false);
       return false;
     }
@@ -308,9 +317,13 @@ export function InvoiceViewer() {
         arguments: request.arguments,
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
       if (!result.isError) consumeToolResult(result);
-      else setError("Refresh failed");
+      else setError({ key: "invoice.error.refresh_failed" });
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
+      setError({
+        key: cause instanceof Error && /timed? out/i.test(cause.message)
+          ? "common.error.refresh_timeout"
+          : "invoice.error.refresh_failed",
+      });
     } finally {
       refreshInFlightRef.current = false;
       setRefreshing(false);
@@ -319,7 +332,7 @@ export function InvoiceViewer() {
 
   function applyActionFeedback(
     kind: ActionFeedbackKind,
-    message: string,
+    message: InvoiceMessage,
     refresh: boolean,
     invoice?: Record<string, unknown>,
   ) {
@@ -337,7 +350,7 @@ export function InvoiceViewer() {
     key: string,
     toolName: string,
     args: Record<string, unknown>,
-    successMsg: string,
+    successMsg: InvoiceMessage,
   ) {
     if (!app.getHostCapabilities()?.serverTools) return;
     const isPiSubmit = toolName === "erpnext_doc_submit" &&
@@ -357,7 +370,7 @@ export function InvoiceViewer() {
         );
         applyActionFeedback(
           feedback.kind,
-          feedback.message,
+          feedback.messageKey ? { key: feedback.messageKey } : feedback.message,
           feedback.refresh,
           feedback.invoice,
         );
@@ -365,16 +378,28 @@ export function InvoiceViewer() {
       }
       if (result.isError) {
         const text = extractToolResultText(result);
-        applyActionFeedback("error", text ?? "Action failed", false);
+        applyActionFeedback(
+          "error",
+          text ?? { key: "invoice.error.action_failed" },
+          false,
+        );
       } else {
         applyActionFeedback("success", successMsg, true);
       }
     } catch (cause) {
       if (isPiSubmit) {
         const feedback = interpretSubmitTransportFailure(cause);
-        applyActionFeedback(feedback.kind, feedback.message, feedback.refresh);
+        applyActionFeedback(
+          feedback.kind,
+          feedback.messageKey ? { key: feedback.messageKey } : feedback.message,
+          feedback.refresh,
+        );
       } else {
-        applyActionFeedback("error", "Action failed", false);
+        applyActionFeedback(
+          "error",
+          { key: "invoice.error.action_failed" },
+          false,
+        );
       }
     } finally {
       setActionLoading(null);
@@ -399,7 +424,7 @@ export function InvoiceViewer() {
     app.ontoolinputpartial = () => {
       if (!dataRef.current) setLoading(true);
     };
-    app.connect().catch(() => {});
+    app.connect().then(() => bindHostLocale(app)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -502,9 +527,14 @@ export function InvoiceViewer() {
                 marginBottom: 4,
               }}
             >
-              {doctype}
+              {t(
+                doctype === PURCHASE_INVOICE_DOCTYPE
+                  ? "stable.invoice.doctype.purchase"
+                  : "stable.invoice.doctype.sales",
+              )}
             </div>
             <div
+              dir="auto"
               style={{
                 fontSize: 20,
                 fontWeight: 700,
@@ -525,7 +555,10 @@ export function InvoiceViewer() {
             >
               <StatusBadge status={data.status} />
               {data.company && (
-                <span style={{ fontSize: 11, color: colors.text.faint }}>
+                <span
+                  dir="auto"
+                  style={{ fontSize: 11, color: colors.text.faint }}
+                >
                   {data.company}
                 </span>
               )}
@@ -536,7 +569,7 @@ export function InvoiceViewer() {
             disabled={refreshing}
             style={styles.button}
           >
-            {refreshing ? "…" : "Refresh"}
+            {refreshing ? "…" : t("common.refresh")}
           </button>
         </div>
 
@@ -544,14 +577,14 @@ export function InvoiceViewer() {
         {error && (
           <FeedbackBanner
             type="error"
-            message={error}
+            message={invoiceMessage(error, t)}
             onDismiss={() => setError(null)}
           />
         )}
         {actionMessage && (
           <FeedbackBanner
             type={actionFeedbackType}
-            message={actionMessage}
+            message={invoiceMessage(actionMessage, t)}
           />
         )}
 
@@ -576,9 +609,14 @@ export function InvoiceViewer() {
                 marginBottom: 4,
               }}
             >
-              {isCustomer ? "Customer" : "Supplier"}
+              {t(
+                isCustomer
+                  ? "invoice.party.type.customer"
+                  : "invoice.party.type.supplier",
+              )}
             </div>
             <div
+              dir="auto"
               style={{
                 fontSize: 14,
                 fontWeight: 600,
@@ -588,7 +626,10 @@ export function InvoiceViewer() {
               {partyName}
             </div>
             {data.contact_email && (
-              <div style={{ fontSize: 11, color: colors.text.secondary }}>
+              <div
+                dir="auto"
+                style={{ fontSize: 11, color: colors.text.secondary }}
+              >
                 {data.contact_email}
               </div>
             )}
@@ -603,7 +644,7 @@ export function InvoiceViewer() {
                 marginBottom: 4,
               }}
             >
-              Outstanding
+              {t("invoice.header.outstanding")}
             </div>
             <div
               style={{
@@ -621,7 +662,7 @@ export function InvoiceViewer() {
                 color: isPaid ? colors.success : colors.error,
               }}
             >
-              {isPaid ? "Paid" : "Unpaid"}
+              {t(isPaid ? "invoice.status.paid" : "invoice.status.unpaid")}
             </div>
           </div>
         </div>
@@ -631,15 +672,25 @@ export function InvoiceViewer() {
           style={{ display: "flex", gap: 24, marginBottom: 16, fontSize: 12 }}
         >
           <span>
-            <span style={{ color: colors.text.muted }}>Date</span>
-            <span style={{ color: colors.text.primary, fontWeight: 500 }}>
+            <span style={{ color: colors.text.muted }}>
+              {t("invoice.header.date")}
+            </span>
+            <span
+              dir="auto"
+              style={{ color: colors.text.primary, fontWeight: 500 }}
+            >
               {data.posting_date}
             </span>
           </span>
           {data.due_date && (
             <span>
-              <span style={{ color: colors.text.muted }}>Due</span>
-              <span style={{ color: colors.text.primary, fontWeight: 500 }}>
+              <span style={{ color: colors.text.muted }}>
+                {t("invoice.header.due_label")}
+              </span>
+              <span
+                dir="auto"
+                style={{ color: colors.text.primary, fontWeight: 500 }}
+              >
                 {data.due_date}
               </span>
             </span>
@@ -665,34 +716,34 @@ export function InvoiceViewer() {
                       background: colors.bg.surface,
                     }}
                   >
-                    Item
+                    {t("invoice.table.col.item")}
                   </th>
                   <th
                     style={{
                       ...styles.tableHeader,
                       background: colors.bg.surface,
-                      textAlign: "right",
+                      textAlign: "end",
                     }}
                   >
-                    Qty
+                    {t("invoice.table.col.qty")}
                   </th>
                   <th
                     style={{
                       ...styles.tableHeader,
                       background: colors.bg.surface,
-                      textAlign: "right",
+                      textAlign: "end",
                     }}
                   >
-                    Rate
+                    {t("invoice.table.col.rate")}
                   </th>
                   <th
                     style={{
                       ...styles.tableHeader,
                       background: colors.bg.surface,
-                      textAlign: "right",
+                      textAlign: "end",
                     }}
                   >
-                    Amount
+                    {t("invoice.table.col.amount")}
                   </th>
                 </tr>
               </thead>
@@ -730,6 +781,7 @@ export function InvoiceViewer() {
                         >
                           <div style={styles.tableCell}>
                             <div
+                              dir="auto"
                               style={{
                                 fontWeight: 500,
                                 color: colors.text.primary,
@@ -739,6 +791,7 @@ export function InvoiceViewer() {
                             </div>
                             {item.item_name && (
                               <div
+                                dir="auto"
                                 style={{
                                   fontSize: 11,
                                   color: colors.text.faint,
@@ -752,7 +805,7 @@ export function InvoiceViewer() {
                           <div
                             style={{
                               ...styles.tableCell,
-                              textAlign: "right",
+                              textAlign: "end",
                               fontFamily: fonts.mono,
                             }}
                           >
@@ -761,7 +814,7 @@ export function InvoiceViewer() {
                           <div
                             style={{
                               ...styles.tableCell,
-                              textAlign: "right",
+                              textAlign: "end",
                               fontFamily: fonts.mono,
                               color: colors.text.secondary,
                             }}
@@ -771,7 +824,7 @@ export function InvoiceViewer() {
                           <div
                             style={{
                               ...styles.tableCell,
-                              textAlign: "right",
+                              textAlign: "end",
                               fontFamily: fonts.mono,
                               fontWeight: 500,
                             }}
@@ -814,12 +867,18 @@ export function InvoiceViewer() {
               paddingTop: 8,
             }}
           >
-            <TotalRow label="Subtotal" value={formatCurrency(netTotal, ccy)} />
+            <TotalRow
+              label={t("invoice.totals.subtotal")}
+              value={formatCurrency(netTotal, ccy)}
+            />
             {taxes !== 0 && (
-              <TotalRow label="Taxes" value={formatCurrency(taxes, ccy)} />
+              <TotalRow
+                label={t("invoice.totals.taxes")}
+                value={formatCurrency(taxes, ccy)}
+              />
             )}
             <TotalRow
-              label="Grand Total"
+              label={t("invoice.totals.grand_total")}
               value={formatCurrency(data.grand_total, ccy)}
               bold={!piGross?.ok}
             />
@@ -839,7 +898,7 @@ export function InvoiceViewer() {
             )}
             {piGross?.ok && piGross.roundingAdjustment === 0 && (
               <TotalRow
-                label="Invoice Total"
+                label={t("document.purchase_invoice.total")}
                 value={formatPurchaseInvoiceAmount(
                   piGross.amount,
                   piGross.currency,
@@ -864,34 +923,38 @@ export function InvoiceViewer() {
             {isDraft && (
               <ActionButton
                 label={piGross?.ok
-                  ? `Submit ${
-                    formatPurchaseInvoiceAmount(
+                  ? t("invoice.confirm.submit.action_with_amount", {
+                    amount: formatPurchaseInvoiceAmount(
                       piGross.amount,
                       piGross.currency,
-                    )
-                  }`
-                  : "Submit"}
+                    ),
+                  })
+                  : t("invoice.btn.submit.label")}
                 variant="success"
                 confirm
                 loading={actionLoading === "submit"}
                 onClick={() => {
                   const built = buildDocSubmitArguments(data);
                   if (!built.ok) {
-                    applyActionFeedback("error", built.error, false);
+                    applyActionFeedback(
+                      "error",
+                      built.errorKey ? { key: built.errorKey } : built.error,
+                      false,
+                    );
                     return;
                   }
                   void callAction(
                     "submit",
                     "erpnext_doc_submit",
                     built.args,
-                    "Submitted",
+                    { key: "invoice.action.submitted" },
                   );
                 }}
               />
             )}
             {isSubmitted && (
               <ActionButton
-                label="Cancel"
+                label={t("invoice.btn.cancel.label")}
                 variant="error"
                 confirm
                 loading={actionLoading === "cancel"}
@@ -899,31 +962,39 @@ export function InvoiceViewer() {
                   callAction("cancel", "erpnext_doc_cancel", {
                     doctype,
                     name: data.name,
-                  }, "Cancelled")}
+                  }, { key: "invoice.action.cancelled" })}
               />
             )}
             <ActionButton
-              label="Payments"
+              label={t("doclist.hint.payments")}
               loading={actionLoading === "nav_payments"}
               onClick={() =>
                 navigate(
                   "nav_payments",
-                  `Show payment entries for ${doctype} ${data.name}`,
+                  t("stable.invoice.navigation.payments", {
+                    doctype,
+                    name: data.name,
+                  }),
                 )}
             />
             {(data.customer ?? data.supplier) && (
               <ActionButton
-                label={isCustomer ? "Customer invoices" : "Supplier invoices"}
+                label={t(
+                  isCustomer
+                    ? "stable.invoice.navigation.customer_label"
+                    : "stable.invoice.navigation.supplier_label",
+                )}
                 loading={actionLoading === "nav_party"}
                 onClick={() => {
                   const party = data.customer ?? data.supplier;
                   navigate(
                     "nav_party",
-                    `Show all ${
-                      isCustomer ? "sales" : "purchase"
-                    } invoices for ${
-                      isCustomer ? "customer" : "supplier"
-                    } ${party}`,
+                    t(
+                      isCustomer
+                        ? "stable.invoice.navigation.customer"
+                        : "stable.invoice.navigation.supplier",
+                      { party: party ?? "" },
+                    ),
                   );
                 }}
               />

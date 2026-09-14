@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { colors, styles } from "./theme";
+import { useT } from "./i18n-hook";
 
 const VARIANT_COLORS: Record<string, { color: string; bg: string }> = {
   success: { color: colors.success, bg: colors.successDim },
@@ -20,6 +21,7 @@ export function ActionButton(
     onClick: () => void;
   },
 ) {
+  const t = useT();
   const [confirming, setConfirming] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => () => clearTimeout(timerRef.current), []);
@@ -49,7 +51,7 @@ export function ActionButton(
         padding: "4px 10px",
       }}
     >
-      {loading ? "…" : confirming ? "Confirm?" : label}
+      {loading ? "…" : confirming ? t("stable.action.confirm") : label}
     </button>
   );
 }

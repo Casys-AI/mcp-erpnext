@@ -37,6 +37,7 @@ import {
   normalizeMoveFailureMessage,
 } from "~/shared/kanban/presentation";
 import { useKanbanBoard } from "~/shared/kanban/useKanbanBoard";
+import { useTaskTimesheetAvailability } from "~/shared/kanban/useTaskTimesheetAvailability";
 import type {
   KanbanBoardData,
   KanbanCardData,
@@ -74,7 +75,7 @@ import type { CardDetailState } from "~/shared/kanban/state";
 import { sendTextMessage } from "~/shared/host-message";
 import { canCallViewerTool, hasAvailableTool } from "~/shared/viewer-tools";
 import { createSerialQueue } from "~/shared/single-flight";
-import { kanbanNavVars } from "./kanban-nav";
+import { buildKanbanCardListHint, kanbanNavVars } from "./kanban-nav";
 import { kanbanViewerCapabilities } from "./capabilities";
 import { CardDetailModal } from "./DetailModal";
 import {
@@ -278,6 +279,14 @@ function parseProgressPercent(value: string): number | null {
   return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
 }
 
+const BADGE_TONE_CLASS = {
+  error: "bg-bad/10 text-bad",
+  warning: "bg-warn/10 text-warn-text",
+  success: "bg-ok/10 text-ok",
+  info: "bg-accent/10 text-accent",
+  neutral: "bg-count text-ink-muted",
+};
+
 /* ────────────────────────────── KanbanCard ────────────────────────────── */
 
 function KanbanCard({
@@ -303,8 +312,12 @@ function KanbanCard({
   const isDraggable = enableDrag && !card.pending && !isMobile;
   const accentColor = card.accent ?? "var(--color-accent)";
   const isMilestone = isMilestoneBadge(card.badges);
-  const overdueDays = card.dueDate ? calcOverdueDays(card.dueDate) : null;
-  const isOverdue = overdueDays !== null;
+  const isOverdue =
+    card.badges?.some((badge) => badge.label.toLowerCase() === "overdue") ??
+      false;
+  const overdueDays = isOverdue && card.dueDate
+    ? calcOverdueDays(card.dueDate)
+    : null;
 
   // Extract Progress metric
   const progressMetric = card.metrics?.find((m) =>
@@ -313,11 +326,24 @@ function KanbanCard({
   const progressPct = progressMetric
     ? parseProgressPercent(progressMetric.value)
     : null;
+  const metrics = (card.metrics ?? []).filter((metric) =>
+    progressPct === null || metric !== progressMetric
+  );
+  if (
+    card.dueDate &&
+    !metrics.some((metric) => metric.label.toLowerCase() === "due")
+  ) {
+    metrics.push({
+      label: t("kanban.field.exp_end_date"),
+      value: formatDueDate(card.dueDate),
+    });
+  }
 
   // Non-progress, non-Overdue badges that remain
   const otherBadges = (card.badges ?? []).filter((b) => {
     const lc = b.label.toLowerCase();
-    return lc !== "milestone" && lc !== "jalon" && lc !== "overdue";
+    return lc !== "milestone" && lc !== "jalon" &&
+      (lc !== "overdue" || overdueDays === null);
   });
 
   // First allowed target for CTA button
@@ -345,14 +371,23 @@ function KanbanCard({
       <article
         aria-busy={card.pending}
         class={cx(
-          "rounded-chip border bg-row-hover",
+          "overflow-hidden rounded-chip border bg-row-hover",
           isMobile ? "p-[11px]" : "p-[10px]",
           isMobile ? "rounded-[5px]" : "rounded-chip",
           borderClass,
           card.pending ? "opacity-60" : undefined,
         )}
-        style={{ borderLeftWidth: 2, borderLeftColor: accentColor }}
       >
+        <div
+          aria-hidden="true"
+          class={cx(
+            "h-[3px]",
+            isMobile
+              ? "-mx-[11px] -mt-[11px] mb-[9px]"
+              : "-mx-[10px] -mt-[10px] mb-[8px]",
+          )}
+          style={{ background: accentColor }}
+        />
         {/* Title row */}
         <div
           class={cx(
@@ -460,9 +495,6 @@ function KanbanCard({
             )}
           >
             {card.subtitle}
-            {!isMobile && card.dueDate && !progressMetric &&
-              " · " +
-                t("kanban.card.due", { date: formatDueDate(card.dueDate) })}
           </span>
         )}
 
@@ -477,16 +509,33 @@ function KanbanCard({
         )}
 
         {/* Other badges (not milestone, not overdue) */}
-        {otherBadges.length > 0 && !isMobile && (
+        {otherBadges.length > 0 && (
           <div class="flex flex-wrap gap-1 mb-[8px]">
             {otherBadges.map((badge) => (
               <span
                 key={`${card.id}-${badge.label}`}
-                class="font-mono text-micro rounded-badge bg-count px-[7px] py-0.5 text-ink-muted"
+                class={cx(
+                  "font-mono text-micro rounded-badge px-[7px] py-0.5",
+                  BADGE_TONE_CLASS[badge.tone ?? "neutral"],
+                )}
               >
                 {badge.label}
               </span>
             ))}
+          </div>
+        )}
+
+        {card.assignee && (
+          <div
+            class="mb-2 flex min-w-0 items-center gap-1.5 font-mono text-micro text-ink-muted"
+            aria-label={t("common.assignees.label")}
+            title={card.assignee}
+          >
+            <span
+              aria-hidden="true"
+              class="size-1.5 shrink-0 rounded-full bg-accent"
+            />
+            <span class="truncate">{card.assignee}</span>
           </div>
         )}
 
@@ -505,11 +554,22 @@ function KanbanCard({
           </div>
         )}
 
-        {/* Due date (wide only, shown separately when progress bar present) */}
-        {!isMobile && card.dueDate && progressMetric && (
-          <span class="block font-mono text-micro text-ink-faint mt-[7px]">
-            {t("kanban.card.due", { date: formatDueDate(card.dueDate) })}
-          </span>
+        {metrics.length > 0 && (
+          <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-line-soft pt-1.5">
+            {metrics.map((metric) => (
+              <div
+                key={`${card.id}-${metric.label}`}
+                class="flex min-w-0 flex-col gap-0.5"
+              >
+                <span class="font-mono text-[9px] uppercase text-ink-faint">
+                  {metric.label}
+                </span>
+                <strong class="font-mono text-meta tabular-nums text-ink">
+                  {metric.value}
+                </strong>
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Overdue badge */}
@@ -543,6 +603,27 @@ function KanbanCard({
           >
             {ctaTarget.label}
           </button>
+        )}
+
+        {isMilestone && allowedTargets.length > 1 && (
+          <div class="mt-2 flex flex-wrap gap-1">
+            {allowedTargets.slice(1).map((target) => (
+              <Button
+                key={target.columnId}
+                disabled={card.pending}
+                onClick={() => onMove(card, target.columnId, target.label)}
+              >
+                {target.color && (
+                  <span
+                    aria-hidden="true"
+                    class="mr-1.5 inline-block size-1.5 rounded-full"
+                    style={{ background: target.color }}
+                  />
+                )}
+                {target.label}
+              </Button>
+            ))}
+          </div>
         )}
 
         {/* Non-milestone move buttons (wide only) */}
@@ -948,6 +1029,30 @@ function KanbanBoardWithNav({
     app.getHostCapabilities()?.serverTools,
     fixture,
   );
+  const { availability: timesheetAvailability, recheck: recheckTimesheets } =
+    useTaskTimesheetAvailability({
+      host: app,
+      taskId: board.doctype === "Task" && nav.isRoot && detail.cardDetail &&
+          !detail.detailLoading &&
+          (!detail.cardDetail.doctype ||
+            detail.cardDetail.doctype === "Task") &&
+          detail.cardDetail.name === detail.selectedCardId
+        ? detail.selectedCardId
+        : null,
+      serverTools: hostCapabilities?.serverTools,
+      availableTools: board._availableTools,
+      disabled: fixture,
+      revalidationKey: detail.cardDetail?.modified,
+    });
+  const cardListHint = detail.selectedCardId
+    ? buildKanbanCardListHint(board.doctype, detail.selectedCardId)
+    : null;
+  const canViewCardList = !!cardListHint &&
+    canCallViewerTool(
+      hostCapabilities?.serverTools,
+      board._availableTools,
+      "erpnext_doc_list",
+    );
   const actionableBoard = actionCapabilities.canMove ? board : {
     ...board,
     allowedTransitions: [],
@@ -980,6 +1085,17 @@ function KanbanBoardWithNav({
     // La popin fait partie de l'état du niveau : on ne la ferme pas, elle
     // disparaît tant qu'on est plus bas et rouvre à l'identique au retour.
     if (jump) void nav.jump(jump);
+  }
+
+  function handleViewCardList(): void {
+    if (!canViewCardList || !cardListHint?.tool) return;
+    // This selected identity is already literal, including any braces in its ID.
+    void nav.jump({
+      label: t(`kanban.modal.nav.view_list.${board.doctype}`),
+      kind: "list",
+      tool: { name: cardListHint.tool, args: cardListHint.args ?? {} },
+      subtitle: detail.selectedCardId ?? undefined,
+    });
   }
 
   return (
@@ -1185,6 +1301,9 @@ function KanbanBoardWithNav({
           hints={hasHints ? typedBoardHints : undefined}
           onJump={hasHints ? handleModalJump : undefined}
           onNavigate={messagesEnabled ? onNavigate : undefined}
+          onViewList={canViewCardList ? handleViewCardList : undefined}
+          timesheetAvailability={timesheetAvailability}
+          onRecheckTimesheets={recheckTimesheets}
         />
       )}
     </>
@@ -1243,6 +1362,13 @@ export function KanbanViewer() {
   });
 
   function updateBoard(board: KanbanBoardData) {
+    const previous = boardRef.current;
+    if (
+      previous &&
+      (previous.doctype !== board.doctype || previous.boardId !== board.boardId)
+    ) {
+      detailFetchCardIdRef.current = null;
+    }
     boardRef.current = board;
     hydrateBoard(board);
   }
@@ -1776,9 +1902,29 @@ export function KanbanViewer() {
       : null;
     return await detailSaveQueueRef.current.run(async () => {
       if (fixture) {
-        const next = { ...fixtureDetailsRef.current[name], ...data, name };
+        const next: Record<string, unknown> = {
+          ...fixtureDetailsRef.current[name],
+          ...data,
+          name,
+        };
         fixtureDetailsRef.current[name] = next;
         if (detailFetchCardIdRef.current === name) hydrateDetail(next);
+        const board = boardRef.current;
+        if (board && doctype === "Task" && "is_milestone" in data) {
+          updateBoard({
+            ...board,
+            cards: board.cards.map((card) => {
+              if (card.id !== name) return card;
+              const badges = (card.badges ?? []).filter((badge) =>
+                !isMilestoneBadge([badge])
+              );
+              if (Number(next.is_milestone) === 1) {
+                badges.push({ label: "Milestone", tone: "info" });
+              }
+              return { ...card, badges };
+            }),
+          });
+        }
         return;
       }
       const capabilities = boardRef.current

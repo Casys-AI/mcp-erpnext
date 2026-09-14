@@ -20,6 +20,17 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 - Clicking selected viewer data again, or pressing Space, removes that exact
   context selection. Opening its detail with double-click or Enter preserves the
   previous selection, including when the element was already selected.
+- Scalar KPIs without a displayed trend omit redundant context selection while
+  retaining drill-down navigation.
+- Kanban details use a single editable title, compact colored metadata, and
+  grouped date, progress, and time fields. Unsaved edits remain visible.
+- Kanban cards retain assignees, all supplied metrics, badge colors, and
+  milestone destinations on narrow and wide views. Task previews expose the
+  milestone control and reflect its saved state on the card.
+- Task details check for related timesheets before offering navigation, with
+  distinct loading, empty, and failed checks.
+- Kanban list navigation explicitly opens only the selected document; hosts
+  without tool navigation offer a clearly labeled conversational request.
 - Restore the existing generic document presentation by removing the six
   Project/Manufacturing dossier profiles introduced in PR #49. Digital Thread
   integration needs do not establish a standalone ERPNext viewer requirement.

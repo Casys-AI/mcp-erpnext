@@ -5,12 +5,16 @@
  */
 
 import {
+  useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "preact/hooks";
+import { createContext } from "preact";
+import { memo } from "preact/compat";
 import type { JSX, Ref } from "preact";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
@@ -35,13 +39,14 @@ import {
   ResponsiveContainer,
   Scatter,
   ScatterChart,
+  Sector,
   Tooltip,
   Treemap,
   XAxis,
   YAxis,
   ZAxis,
 } from "recharts";
-import type { BarShapeProps } from "recharts";
+import type { BarShapeProps, SectorProps } from "recharts";
 
 import {
   currentLocale,
@@ -135,6 +140,9 @@ type ChartDataClick = (
   clickCount?: number,
 ) => void;
 type ChartSelectionPredicate = (label: string, series?: string) => boolean;
+const ChartSelectionContext = createContext<
+  ChartSelectionPredicate | undefined
+>(undefined);
 
 interface ChartPointerEvent {
   target: EventTarget | null;
@@ -247,76 +255,92 @@ interface ChartDotShapeProps {
   payload?: { name?: unknown };
 }
 
-/** Une sélection garde une bordure visible après la disparition du tooltip. */
-function selectedBarShape(
-  rows: Array<Record<string, string | number>>,
-  series: string | undefined,
-  opacityAt: (index: number) => number,
-  isSelected?: ChartSelectionPredicate,
+interface SelectedBarShapeProps extends Partial<BarShapeProps> {
+  rows: Array<Record<string, string | number>>;
+  series?: string;
+  opacityAt: (index: number) => number;
+  isSelected?: ChartSelectionPredicate;
+}
+
+// Selection updates stay below Recharts' animation wrapper, which keys on props.
+function SelectedBarShape(
+  { rows, series, opacityAt, isSelected, ...props }: SelectedBarShapeProps,
 ) {
-  return (props: BarShapeProps) => {
-    const index = typeof props.index === "number" ? props.index : -1;
-    const label = String(rows[index]?.name ?? "");
-    const selected = label !== "" && isSelected?.(label, series) === true;
-    return (
-      <g data-chart-series={series}>
+  const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
+  const index = typeof props.index === "number" ? props.index : -1;
+  const label = String(rows[index]?.name ?? "");
+  const selected = label !== "" && selectedAt?.(label, series) === true;
+  return (
+    <g data-chart-series={series}>
+      <Rectangle
+        key="bar"
+        {...props}
+        data-chart-series={series}
+        opacity={selected ? 1 : opacityAt(index)}
+        stroke={selected ? "var(--color-accent)" : "none"}
+        strokeWidth={selected ? 6 : 0}
+        style={selected
+          ? { filter: "drop-shadow(0 0 2.5px var(--color-accent))" }
+          : undefined}
+      />
+      {selected && (
         <Rectangle
+          key="selection-border"
           {...props}
           data-chart-series={series}
-          opacity={selected ? 1 : opacityAt(index)}
-          stroke={selected ? "var(--color-accent)" : "none"}
-          strokeWidth={selected ? 6 : 0}
-          style={selected
-            ? { filter: "drop-shadow(0 0 2.5px var(--color-accent))" }
-            : undefined}
+          fill="none"
+          opacity={1}
+          pointerEvents="none"
+          stroke="var(--color-surface)"
+          strokeWidth={2}
         />
-        {selected && (
-          <Rectangle
-            {...props}
-            data-chart-series={series}
-            fill="none"
-            opacity={1}
-            pointerEvents="none"
-            stroke="var(--color-surface)"
-            strokeWidth={2}
-          />
-        )}
-      </g>
-    );
-  };
+      )}
+    </g>
+  );
+}
+
+interface SelectedPointShapeProps extends ChartDotShapeProps {
+  rows: Array<Record<string, string | number>>;
+  series?: string;
+  color: string;
+  showBase: boolean;
+  isSelected?: ChartSelectionPredicate;
 }
 
 /** Point persistant entouré pour les courbes et aires sélectionnées. */
-function selectedPointShape(
-  rows: Array<Record<string, string | number>>,
-  series: string | undefined,
-  color: string,
-  showBase: boolean,
-  isSelected?: ChartSelectionPredicate,
+function SelectedPointShape(
+  { rows, series, color, showBase, isSelected, ...props }:
+    SelectedPointShapeProps,
 ) {
-  return (props: ChartDotShapeProps) => {
-    const index = typeof props.index === "number" ? props.index : -1;
-    const label = String(props.payload?.name ?? rows[index]?.name ?? "");
-    const selected = label !== "" && isSelected?.(label, series) === true;
-    if (!showBase && !selected) return <g />;
-    const cx = props.cx ?? 0;
-    const cy = props.cy ?? 0;
-    return (
-      <g data-chart-series={series}>
-        {selected && (
-          <circle
-            cx={cx}
-            cy={cy}
-            r={7.5}
-            fill="var(--color-surface)"
-            stroke="var(--color-accent)"
-            strokeWidth={3}
-          />
-        )}
-        <circle cx={cx} cy={cy} r={selected ? 3.2 : 2.6} fill={color} />
-      </g>
-    );
-  };
+  const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
+  const index = typeof props.index === "number" ? props.index : -1;
+  const label = String(props.payload?.name ?? rows[index]?.name ?? "");
+  const selected = label !== "" && selectedAt?.(label, series) === true;
+  if (!showBase && !selected) return <g />;
+  const cx = props.cx ?? 0;
+  const cy = props.cy ?? 0;
+  return (
+    <g data-chart-series={series}>
+      {selected && (
+        <circle
+          key="selection-halo"
+          cx={cx}
+          cy={cy}
+          r={7.5}
+          fill="var(--color-surface)"
+          stroke="var(--color-accent)"
+          strokeWidth={3}
+        />
+      )}
+      <circle
+        key="point"
+        cx={cx}
+        cy={cy}
+        r={selected ? 3.2 : 2.6}
+        fill={color}
+      />
+    </g>
+  );
 }
 
 function fmtValue(v: number, data: ChartData, dataset?: Dataset) {
@@ -749,12 +773,15 @@ function VerticalBarChart(
                 );
               }
               : undefined}
-            shape={selectedBarShape(
-              rows,
-              ds.label || undefined,
-              (index) => single && index === rows.length - 1 ? 1 : 0.85,
-              isSelected,
-            )}
+            shape={
+              <SelectedBarShape
+                rows={rows}
+                series={ds.label || undefined}
+                opacityAt={(index) =>
+                  single && index === rows.length - 1 ? 1 : 0.85}
+                isSelected={isSelected}
+              />
+            }
           />
         ))}
       </BarChart>
@@ -832,12 +859,14 @@ function HorizontalBarChart(
                 );
               }
               : undefined}
-            shape={selectedBarShape(
-              rows,
-              ds.label || undefined,
-              () => 0.85,
-              isSelected,
-            )}
+            shape={
+              <SelectedBarShape
+                rows={rows}
+                series={ds.label || undefined}
+                opacityAt={() => 0.85}
+                isSelected={isSelected}
+              />
+            }
           />
         ))}
       </BarChart>
@@ -912,13 +941,16 @@ function LineChartView(
               stroke={dsColor(ds, i, data.datasets.length)}
               strokeWidth={2}
               strokeDasharray={ds.strokeStyle === "dashed" ? "6 3" : undefined}
-              dot={selectedPointShape(
-                rows,
-                ds.label || undefined,
-                dsColor(ds, i, data.datasets.length),
-                ds.showDots !== false && ds.strokeStyle !== "dashed",
-                isSelected,
-              )}
+              dot={
+                <SelectedPointShape
+                  rows={rows}
+                  series={ds.label || undefined}
+                  color={dsColor(ds, i, data.datasets.length)}
+                  showBase={ds.showDots !== false &&
+                    ds.strokeStyle !== "dashed"}
+                  isSelected={isSelected}
+                />
+              }
               activeDot={onDataClick
                 ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
                 : ACTIVE_DOT_BASE}
@@ -1028,13 +1060,15 @@ function AreaChartView(
                   Math.min(i, STACKED_AREA_OPACITY.length - 1)
                 ]
                 : undefined}
-              dot={selectedPointShape(
-                rows,
-                ds.label || undefined,
-                color,
-                ds.showDots === true,
-                isSelected,
-              )}
+              dot={
+                <SelectedPointShape
+                  rows={rows}
+                  series={ds.label || undefined}
+                  color={color}
+                  showBase={ds.showDots === true}
+                  isSelected={isSelected}
+                />
+              }
               activeDot={onDataClick
                 ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
                 : ACTIVE_DOT_BASE}
@@ -1121,13 +1155,16 @@ function ComposedChartView(
                 strokeDasharray={ds.strokeStyle === "dashed"
                   ? "6 3"
                   : undefined}
-                dot={selectedPointShape(
-                  rows,
-                  ds.label || undefined,
-                  color,
-                  ds.showDots !== false && ds.strokeStyle !== "dashed",
-                  isSelected,
-                )}
+                dot={
+                  <SelectedPointShape
+                    rows={rows}
+                    series={ds.label || undefined}
+                    color={color}
+                    showBase={ds.showDots !== false &&
+                      ds.strokeStyle !== "dashed"}
+                    isSelected={isSelected}
+                  />
+                }
                 activeDot={onDataClick
                   ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
                   : ACTIVE_DOT_BASE}
@@ -1148,13 +1185,15 @@ function ComposedChartView(
                 stroke={color}
                 fill={color}
                 fillOpacity={0.15}
-                dot={selectedPointShape(
-                  rows,
-                  ds.label || undefined,
-                  color,
-                  ds.showDots === true,
-                  isSelected,
-                )}
+                dot={
+                  <SelectedPointShape
+                    rows={rows}
+                    series={ds.label || undefined}
+                    color={color}
+                    showBase={ds.showDots === true}
+                    isSelected={isSelected}
+                  />
+                }
                 yAxisId={ds.yAxisId}
                 isAnimationActive={false}
                 activeDot={onDataClick
@@ -1200,17 +1239,100 @@ function ComposedChartView(
                   );
                 }
                 : undefined}
-              shape={selectedBarShape(
-                rows,
-                ds.label || undefined,
-                () => 0.7,
-                isSelected,
-              )}
+              shape={
+                <SelectedBarShape
+                  rows={rows}
+                  series={ds.label || undefined}
+                  opacityAt={() => 0.7}
+                  isSelected={isSelected}
+                />
+              }
             />
           );
         })}
       </ComposedChart>
     </ResponsiveContainer>
+  );
+}
+
+interface SelectedPieShapeProps extends SectorProps {
+  name?: string;
+  series?: string;
+  isSelected?: ChartSelectionPredicate;
+}
+
+function SelectedPieShape(
+  { series, isSelected, ...props }: SelectedPieShapeProps,
+) {
+  const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
+  const selected = selectedAt?.(String(props.name ?? ""), series) === true;
+  return (
+    <Sector
+      {...props}
+      stroke={selected ? "var(--color-accent)" : "none"}
+      strokeWidth={selected ? 4 : 0}
+      style={selected
+        ? { filter: "drop-shadow(0 0 2.5px var(--color-accent))" }
+        : undefined}
+    />
+  );
+}
+
+function PieLegend({
+  entries,
+  series,
+  total,
+  isDonut,
+  onDataClick,
+  isSelected,
+}: {
+  entries: Array<{ name: string; value: number }>;
+  series?: string;
+  total: number;
+  isDonut: boolean;
+  onDataClick?: ChartDataClick;
+  isSelected?: ChartSelectionPredicate;
+}) {
+  const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
+  return (
+    <div class="flex min-w-0 flex-col gap-[7px]">
+      {entries.map((entry, i) => (
+        <button
+          key={i}
+          type="button"
+          disabled={!onDataClick}
+          aria-pressed={selectedAt ? selectedAt(entry.name, series) : undefined}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDataClick?.(entry.name, series, "context", event.detail);
+          }}
+          onDblClick={(event) => {
+            event.stopPropagation();
+            onDataClick?.(entry.name, series, "drilldown", event.detail);
+          }}
+          class={cx(
+            "inline-flex items-center gap-1.5 rounded-[3px] font-mono text-chip text-ink-2",
+            onDataClick &&
+              "cursor-pointer hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
+            selectedAt?.(entry.name, series) &&
+              "outline outline-2 outline-offset-1 outline-accent",
+          )}
+        >
+          <span
+            class="size-[7px] shrink-0 rounded-[2px]"
+            style={{
+              background: CATEGORICAL[Math.min(i, CATEGORICAL.length - 1)],
+            }}
+          />
+          {entry.name}
+          <span class="text-ink-faint">
+            {isDonut
+              ? formatNumber(entry.value, 0)
+              : `${Math.round((entry.value / total) * 100)} %`}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -1261,6 +1383,12 @@ function PieDonutChart(
               paddingAngle={0}
               dataKey="value"
               isAnimationActive={false}
+              shape={
+                <SelectedPieShape
+                  series={ds.label || undefined}
+                  isSelected={isSelected}
+                />
+              }
               cursor={onDataClick ? "pointer" : undefined}
               onClick={onDataClick
                 ? (entry, _index, event) => {
@@ -1285,25 +1413,12 @@ function PieDonutChart(
                 }
                 : undefined}
             >
-              {pieData.map((item, i) => {
-                const selected = isSelected?.(
-                  item.name,
-                  ds.label || undefined,
-                ) === true;
-                return (
-                  <Cell
-                    key={i}
-                    fill={CATEGORICAL[Math.min(i, CATEGORICAL.length - 1)]}
-                    stroke={selected ? "var(--color-accent)" : "none"}
-                    strokeWidth={selected ? 4 : 0}
-                    style={selected
-                      ? {
-                        filter: "drop-shadow(0 0 2.5px var(--color-accent))",
-                      }
-                      : undefined}
-                  />
-                );
-              })}
+              {pieData.map((_item, i) => (
+                <Cell
+                  key={i}
+                  fill={CATEGORICAL[Math.min(i, CATEGORICAL.length - 1)]}
+                />
+              ))}
             </Pie>
             <Tooltip
               content={
@@ -1341,57 +1456,14 @@ function PieDonutChart(
         /* Légende latérale — le nom seul, comme la maquette ; la valeur est
           dans l'infobulle. Mêmes classes que ChartLegend, en colonne. */
       }
-      <div class="flex min-w-0 flex-col gap-[7px]">
-        {pieData.map((entry, i) => (
-          <button
-            key={i}
-            type="button"
-            disabled={!onDataClick}
-            aria-pressed={isSelected
-              ? isSelected(entry.name, ds.label || undefined)
-              : undefined}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDataClick?.(
-                entry.name,
-                ds.label || undefined,
-                "context",
-                event.detail,
-              );
-            }}
-            onDblClick={(event) => {
-              event.stopPropagation();
-              onDataClick?.(
-                entry.name,
-                ds.label || undefined,
-                "drilldown",
-                event.detail,
-              );
-            }}
-            class={cx(
-              "inline-flex items-center gap-1.5 rounded-[3px] font-mono text-chip text-ink-2",
-              onDataClick &&
-                "cursor-pointer hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
-              isSelected?.(entry.name, ds.label || undefined) &&
-                "outline outline-2 outline-offset-1 outline-accent",
-            )}
-          >
-            <span
-              class="size-[7px] shrink-0 rounded-[2px]"
-              style={{
-                background: CATEGORICAL[Math.min(i, CATEGORICAL.length - 1)],
-              }}
-            />
-            {entry.name}
-            {/* Pie : la part ; donut : la valeur — en estompé, comme la maquette. */}
-            <span class="text-ink-faint">
-              {isDonut
-                ? formatNumber(entry.value, 0)
-                : `${Math.round((entry.value / total) * 100)} %`}
-            </span>
-          </button>
-        ))}
-      </div>
+      <PieLegend
+        entries={pieData}
+        series={ds.label || undefined}
+        total={total}
+        isDonut={isDonut}
+        onDataClick={onDataClick}
+        isSelected={isSelected}
+      />
     </div>
   );
 }
@@ -1476,13 +1548,15 @@ function RadarChartView(
               fill={color}
               fillOpacity={0.2}
               strokeWidth={2}
-              dot={selectedPointShape(
-                rows,
-                ds.label || undefined,
-                color,
-                true,
-                isSelected,
-              )}
+              dot={
+                <SelectedPointShape
+                  rows={rows}
+                  series={ds.label || undefined}
+                  color={color}
+                  showBase={true}
+                  isSelected={isSelected}
+                />
+              }
               style={onDataClick ? { cursor: "pointer" } : undefined}
               isAnimationActive={false}
               {...marker}
@@ -1500,42 +1574,47 @@ interface ScatterShapeProps {
   payload?: { label?: unknown };
 }
 
-function scatterPointShape(
-  series: string,
-  color: string,
-  interactive: boolean,
-  isSelected?: ChartSelectionPredicate,
+interface ScatterPointShapeProps extends ScatterShapeProps {
+  series: string;
+  color: string;
+  interactive: boolean;
+  isSelected?: ChartSelectionPredicate;
+}
+
+function ScatterPointShape(
+  { series, color, interactive, isSelected, ...props }: ScatterPointShapeProps,
 ) {
-  return (props: ScatterShapeProps) => {
-    if (props.cx === undefined || props.cy === undefined) return <g />;
-    const label = chartScatterPointLabel(props.payload);
-    const selected = label !== undefined &&
-      isSelected?.(label, series) === true;
-    const cx = props.cx ?? 0;
-    const cy = props.cy ?? 0;
-    return (
-      <g data-chart-series={series}>
-        {selected && (
-          <circle
-            cx={cx}
-            cy={cy}
-            r={7.5}
-            fill="var(--color-surface)"
-            stroke="var(--color-accent)"
-            strokeWidth={3}
-          />
-        )}
+  const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
+  if (props.cx === undefined || props.cy === undefined) return <g />;
+  const label = chartScatterPointLabel(props.payload);
+  const selected = label !== undefined &&
+    selectedAt?.(label, series) === true;
+  const cx = props.cx ?? 0;
+  const cy = props.cy ?? 0;
+  return (
+    <g data-chart-series={series}>
+      {selected && (
         <circle
+          key="selection-halo"
           cx={cx}
           cy={cy}
-          r={4}
-          fill={color}
-          opacity={0.75}
-          style={{ cursor: interactive && label ? "pointer" : "default" }}
+          r={7.5}
+          fill="var(--color-surface)"
+          stroke="var(--color-accent)"
+          strokeWidth={3}
         />
-      </g>
-    );
-  };
+      )}
+      <circle
+        key="point"
+        cx={cx}
+        cy={cy}
+        r={4}
+        fill={color}
+        opacity={0.75}
+        style={{ cursor: interactive && label ? "pointer" : "default" }}
+      />
+    </g>
+  );
 }
 
 function ScatterChartView(
@@ -1608,12 +1687,14 @@ function ScatterChartView(
               data={s.points}
               fill={color}
               opacity={1}
-              shape={scatterPointShape(
-                s.label,
-                color,
-                interactive,
-                isSelected,
-              )}
+              shape={
+                <ScatterPointShape
+                  series={s.label}
+                  color={color}
+                  interactive={interactive}
+                  isSelected={isSelected}
+                />
+              }
               onClick={interactive
                 ? (entry, _index, event) => {
                   const label = chartScatterPointLabel(entry);
@@ -1666,6 +1747,7 @@ interface TreemapContentProps {
 }
 
 function TreemapContent(props: TreemapContentProps) {
+  const selectedAt = useContext(ChartSelectionContext) ?? props.isSelected;
   const {
     x,
     y,
@@ -1676,12 +1758,11 @@ function TreemapContent(props: TreemapContentProps) {
     depth,
     colors: treeColors,
     onDataClick,
-    isSelected,
   } = props;
   // Recharts passe aussi le nœud racine (profondeur 0) : une tuile de la
   // taille du tracé, le total dessus. On ne dessine que les feuilles.
   if (depth === 0) return null;
-  const selected = isSelected?.(name) === true;
+  const selected = selectedAt?.(name) === true;
   return (
     <g
       style={{ cursor: onDataClick ? "pointer" : "default" }}
@@ -2125,6 +2206,8 @@ function ChartRouter(
   }
 }
 
+const StableChartRouter = memo(ChartRouter);
+
 /**
  * Chrome Direction B v2 : gradient 2px, header avec subtitle inline, LiveDot,
  * zone chart, footer. Pas de bouton Refresh visible — le rafraîchissement reste
@@ -2182,9 +2265,13 @@ function ChartContent(
   );
   const normalizedHiddenSeries = normalizeHiddenChartSeries(data, hiddenSeries);
   const hiddenSeriesKey = normalizedHiddenSeries.join("\u0000");
-  const visibleData = filterVisibleChartSeries(
-    withStableSeriesColors(data),
-    normalizedHiddenSeries,
+  const visibleData = useMemo(
+    () =>
+      filterVisibleChartSeries(
+        withStableSeriesColors(data),
+        normalizedHiddenSeries,
+      ),
+    [data, hiddenSeriesKey],
   );
   const activeContext = useActiveContext(app, rootKey);
   const hostCapabilities = fixture ? undefined : app.getHostCapabilities();
@@ -2383,6 +2470,24 @@ function ChartContent(
       clickIntent.keyDown(pointIntent(label, series), event);
     }
     : undefined;
+  const chartHandlers = useRef({
+    onDataClick,
+    isPointSelected,
+    canDrillDownPoint,
+  });
+  chartHandlers.current = { onDataClick, isPointSelected, canDrillDownPoint };
+  const stableDataClick = useCallback<ChartDataClick>(
+    (...args) => chartHandlers.current.onDataClick?.(...args),
+    [],
+  );
+  const stableIsSelected = useCallback<ChartSelectionPredicate>(
+    (...args) => chartHandlers.current.isPointSelected(...args),
+    [],
+  );
+  const stableCanDrillDown = useCallback<ChartSelectionPredicate>(
+    (...args) => chartHandlers.current.canDrillDownPoint(...args),
+    [],
+  );
   const chartSelected = activeContext.isSelected(chartContext);
   const chartContextActionLabel = t("chart.context.select_visible", {
     title: data.title,
@@ -2530,14 +2635,18 @@ function ChartContent(
                   "outline outline-2 outline-offset-1 outline-accent",
               )}
             >
-              <ChartRouter
-                data={visibleData}
-                onDataClick={onDataClick}
-                isSelected={activeContext.supported
-                  ? isPointSelected
-                  : undefined}
-                canDrillDown={canDrillDownPoint}
-              />
+              <ChartSelectionContext.Provider
+                value={activeContext.supported ? isPointSelected : undefined}
+              >
+                <StableChartRouter
+                  data={visibleData}
+                  onDataClick={onDataClick ? stableDataClick : undefined}
+                  isSelected={activeContext.supported
+                    ? stableIsSelected
+                    : undefined}
+                  canDrillDown={stableCanDrillDown}
+                />
+              </ChartSelectionContext.Provider>
             </div>
             <ChartKeyboardNavigator
               data={visibleData}

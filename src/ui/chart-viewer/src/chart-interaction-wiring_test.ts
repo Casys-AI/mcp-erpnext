@@ -12,7 +12,7 @@ function between(start: string, end: string): string {
 }
 
 Deno.test("chart wiring - radar, named scatter points and treemap leaves expose both pointer intents", () => {
-  const pie = between("function PieDonutChart", "function RadarChartView");
+  const pie = between("function PieLegend", "function RadarChartView");
   const radar = between(
     "function RadarChartView",
     "interface ScatterShapeProps",

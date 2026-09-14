@@ -103,7 +103,11 @@ export function kanbanStateReducer(
         board: normalizeBoard(action.board),
         loading: false,
         error: null,
-        detail: state.detail,
+        detail: state.board &&
+            (state.board.boardId !== action.board.boardId ||
+              state.board.doctype !== action.board.doctype)
+          ? { ...INITIAL_DETAIL }
+          : state.detail,
       };
     case "tool-error":
       return { ...state, loading: false, error: action.message };
@@ -118,6 +122,7 @@ export function kanbanStateReducer(
         },
       };
     case "hydrate-detail":
+      if (!state.detail.selectedCardId) return state;
       return {
         ...state,
         detail: {

@@ -431,7 +431,8 @@ export const fr: Record<string, string> = {
   "common.yes": "Oui",
   "common.no": "Non",
   "kanban.error.move_timeout": "Délai dépassé, réessayez.",
-  "kanban.nav.view_list.message": "Montre-moi une vue liste de {doctype} {id}",
+  "kanban.nav.view_list.message":
+    "Affiche {doctype} {id} en liste, limité à ce document.",
   "kanban.nav.timesheets.message":
     "Affiche les feuilles de temps de la tâche {id}",
   "kanban.nav.quotations.message":
@@ -489,7 +490,21 @@ export const fr: Record<string, string> = {
   "kanban.section.financial": "finances",
   "kanban.section.people": "personnes",
   "kanban.section.details": "autres",
-  "kanban.modal.nav.view_list": "Voir dans la liste",
+  "kanban.modal.nav.view_list": "Afficher ce document en liste",
+  "kanban.modal.nav.view_list.Task": "Afficher cette tâche en liste",
+  "kanban.modal.nav.view_list.Opportunity":
+    "Afficher cette opportunité en liste",
+  "kanban.modal.nav.view_list.Issue": "Afficher ce ticket en liste",
+  "kanban.modal.nav.request_list.Task": "Demander cette tâche en liste",
+  "kanban.modal.nav.request_list.Opportunity":
+    "Demander cette opportunité en liste",
+  "kanban.modal.nav.request_list.Issue": "Demander ce ticket en liste",
+  "kanban.timesheets.loading": "Vérification des feuilles de temps…",
+  "kanban.timesheets.empty": "Aucune feuille de temps",
+  "kanban.timesheets.error": "Vérification des feuilles de temps impossible",
+  "kanban.timesheets.unavailable":
+    "Disponibilité des feuilles de temps non vérifiée",
+  "kanban.modal.nav.request_timesheets": "Demander les feuilles de temps",
   "kanban.modal.nav.timesheets": "Feuilles de temps",
   "kanban.modal.nav.quotations": "Devis",
   "kanban.modal.nav.related_tasks": "Tâches liées",

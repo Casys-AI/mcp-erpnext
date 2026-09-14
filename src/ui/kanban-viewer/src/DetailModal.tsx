@@ -33,6 +33,7 @@ import { useT } from "~/shared/i18n-hook";
 import type { TFunction } from "~/shared/i18n-hook";
 import { hintLabel, type NavHint } from "~/shared/jumps";
 import { createSingleFlightGate } from "~/shared/single-flight.ts";
+import type { TaskTimesheetAvailability } from "~/shared/kanban/task-timesheet-availability";
 
 const DETAIL_SKIP_FIELDS = new Set([
   "doctype",
@@ -323,14 +324,13 @@ function classifyFields(detail: Record<string, unknown>): ClassifiedFields {
  * le nombre réel de valeurs plutôt que de réserver des colonnes vides.
  */
 function sectionGridClass(section: ClassifiedSection): string {
-  const count = section.fields.length;
-  if (section.id === "time") {
-    if (count >= 4) return "sm:grid-cols-4";
-    if (count === 3) return "sm:grid-cols-3";
-  }
-  if (section.id === "financial" && count >= 3) return "sm:grid-cols-3";
-  if (count >= 2) return "sm:grid-cols-2";
+  if (section.fields.length >= 3) return "sm:grid-cols-3";
+  if (section.fields.length === 2) return "sm:grid-cols-2";
   return "grid-cols-1";
+}
+
+function editedControlClass(base: string, edited: boolean): string {
+  return cx(base, "min-w-0", edited && "!border-accent !bg-accent/10");
 }
 
 /* ── Primitives locales ──────────────────────────────────────────── */
@@ -410,7 +410,7 @@ function fieldControl(
       return (
         <SelectShell>
           <select
-            class={SELECT_CLASS}
+            class={editedControlClass(SELECT_CLASS, isEdited)}
             value={displayValue}
             onChange={(e) =>
               onFieldChange(
@@ -429,7 +429,7 @@ function fieldControl(
     case "date":
       return (
         <input
-          class={CONTROL_MONO_CLASS}
+          class={editedControlClass(CONTROL_MONO_CLASS, isEdited)}
           type="date"
           value={displayValue}
           onInput={(e) =>
@@ -442,7 +442,7 @@ function fieldControl(
     case "number":
       return (
         <input
-          class={CONTROL_MONO_CLASS}
+          class={editedControlClass(CONTROL_MONO_CLASS, isEdited)}
           type="number"
           value={displayValue}
           onInput={(e) =>
@@ -455,7 +455,7 @@ function fieldControl(
     default:
       return (
         <input
-          class={CONTROL_CLASS}
+          class={editedControlClass(CONTROL_CLASS, isEdited)}
           type="text"
           value={displayValue}
           onInput={(e) =>
@@ -568,7 +568,7 @@ function AssigneesSection({
   }
 
   return (
-    <div class="flex flex-col gap-2.5">
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
       <div
         class="flex flex-wrap items-center gap-1.5"
         role="group"
@@ -660,6 +660,9 @@ export function CardDetailModal({
   onNavigate,
   hints,
   onJump,
+  onViewList,
+  timesheetAvailability = { status: "unavailable" },
+  onRecheckTimesheets,
 }: {
   detail: CardDetailState;
   board: KanbanBoardData;
@@ -682,6 +685,9 @@ export function CardDetailModal({
   ) => Promise<void>;
   onLoadUsers?: () => Promise<AssignableUser[]>;
   onNavigate?: (message: string) => Promise<boolean>;
+  onViewList?: () => void;
+  timesheetAvailability?: TaskTimesheetAvailability;
+  onRecheckTimesheets?: () => void;
   /**
    * Hints de navigation du tableau (issus de `_sendMessageHints`).
    * Présents uniquement quand l'hôte relaie les outils serveur.
@@ -895,12 +901,13 @@ export function CardDetailModal({
     (hasJumpNav ? hints! : []).map((hint) => hint.key).filter(Boolean),
   );
   const hasSecondaryRow = (!!card && availableTargets.length > 0) ||
-    hasJumpNav || hasSendMessageNav;
+    hasJumpNav || hasSendMessageNav || !!onViewList || board.doctype === "Task";
+  const timesheetCanNavigate = timesheetAvailability.status === "present";
 
   const footer = (
     <>
-      {onSave && detail.cardDetail && (
-        <SheetActions>
+      {onSave && detail.cardDetail && (hasEdits || saving || saveMessage) && (
+        <SheetActions class="!py-2">
           <Button
             variant="accent"
             disabled={!hasEdits || saving}
@@ -930,6 +937,7 @@ export function CardDetailModal({
 
       {hasSecondaryRow && (
         <SheetActions
+          class="!py-2"
           label={card && availableTargets.length > 0
             ? t("kanban.modal.move_to")
             : undefined}
@@ -962,55 +970,78 @@ export function CardDetailModal({
               </Button>
             ))}
           {/* « Aller à » : les sauts, puis les phrases — sur leur propre ligne, distincts du déplacement */}
-          {(hasJumpNav || hasSendMessageNav) && (
+          {(hasJumpNav || hasSendMessageNav || onViewList) && (
             <span class="mt-1 basis-full font-mono text-[10px] uppercase tracking-[0.09em] text-ink-faint">
               {t("nav.goto")}
             </span>
           )}
-          {hasJumpNav && hints!.map((hint) => (
+          {onViewList && (
             <LocalActionButton
-              key={hint.key ?? hint.label}
-              label={`${hintLabel(hint)} ›`}
+              label={`${t(`kanban.modal.nav.view_list.${board.doctype}`)} ›`}
               variant="info"
               onClick={() =>
                 requestDiscard(
-                  () => onJump!(hint, detail.selectedCardId!),
+                  onViewList,
                   t("kanban.modal.discard.continue_action"),
                 )}
             />
-          ))}
+          )}
+          {hasJumpNav &&
+            hints!.filter((hint) =>
+              hint.key !== "timesheets" || timesheetCanNavigate
+            ).map((hint) => (
+              <LocalActionButton
+                key={hint.key ?? hint.label}
+                label={`${hintLabel(hint)} ›`}
+                variant="info"
+                onClick={() =>
+                  requestDiscard(
+                    () => onJump!(hint, detail.selectedCardId!),
+                    t("kanban.modal.discard.continue_action"),
+                  )}
+              />
+            ))}
           {/* Boutons sendMessage — comportement d'origine, sans outils */}
           {hasSendMessageNav && (
             <>
-              <LocalActionButton
-                label={t("kanban.modal.nav.view_list")}
-                variant="info"
-                disabled={navigatePendingKey !== null}
-                loading={navigatePendingKey === "view_list"}
-                onClick={() =>
-                  void handleNavigate(
-                    "view_list",
-                    t("kanban.nav.view_list.message", {
-                      doctype: board.doctype,
-                      id: detail.selectedCardId,
-                    }),
-                  )}
-              />
-              {board.doctype === "Task" && !jumpKeys.has("timesheets") && (
+              {!onViewList && (
                 <LocalActionButton
-                  label={t("kanban.modal.nav.timesheets")}
+                  label={t(`kanban.modal.nav.request_list.${board.doctype}`)}
                   variant="info"
                   disabled={navigatePendingKey !== null}
-                  loading={navigatePendingKey === "timesheets"}
+                  loading={navigatePendingKey === "view_list"}
                   onClick={() =>
                     void handleNavigate(
-                      "timesheets",
-                      t("kanban.nav.timesheets.message", {
+                      "view_list",
+                      t("kanban.nav.view_list.message", {
+                        doctype: board.doctype,
                         id: detail.selectedCardId,
                       }),
                     )}
                 />
               )}
+              {board.doctype === "Task" && !jumpKeys.has("timesheets") &&
+                (timesheetCanNavigate ||
+                  timesheetAvailability.status === "unavailable") &&
+                (
+                  <LocalActionButton
+                    label={t(
+                      timesheetCanNavigate
+                        ? "kanban.modal.nav.timesheets"
+                        : "kanban.modal.nav.request_timesheets",
+                    )}
+                    variant="info"
+                    disabled={navigatePendingKey !== null}
+                    loading={navigatePendingKey === "timesheets"}
+                    onClick={() =>
+                      void handleNavigate(
+                        "timesheets",
+                        t("kanban.nav.timesheets.message", {
+                          id: detail.selectedCardId,
+                        }),
+                      )}
+                  />
+                )}
               {board.doctype === "Opportunity" && !jumpKeys.has("quotations") &&
                 (
                   <LocalActionButton
@@ -1058,221 +1089,246 @@ export function CardDetailModal({
               )}
             </>
           )}
+          {board.doctype === "Task" && !timesheetCanNavigate && (
+            <span
+              role="status"
+              aria-live="polite"
+              class={cx(
+                "font-mono text-chip",
+                timesheetAvailability.status === "error"
+                  ? "text-bad"
+                  : "text-ink-faint",
+              )}
+            >
+              {t(`kanban.timesheets.${
+                timesheetAvailability.status === "empty"
+                  ? "empty"
+                  : timesheetAvailability.status === "loading"
+                  ? "loading"
+                  : timesheetAvailability.status === "error"
+                  ? "error"
+                  : "unavailable"
+              }`)}
+              {timesheetAvailability.status === "error" &&
+                onRecheckTimesheets && (
+                <button
+                  type="button"
+                  class="ml-2 underline focus-visible:outline-2 focus-visible:outline-accent"
+                  title={timesheetAvailability.message}
+                  onClick={onRecheckTimesheets}
+                >
+                  {t("common.retry")}
+                </button>
+              )}
+            </span>
+          )}
+          {board.doctype === "Task" && timesheetCanNavigate &&
+            !jumpKeys.has("timesheets") && !hasSendMessageNav && (
+            <span class="font-mono text-chip text-ink-muted">
+              {t("kanban.modal.nav.timesheets")}
+            </span>
+          )}
         </SheetActions>
       )}
     </>
   );
 
+  const columnColor = card
+    ? board.columns.find((column) => column.id === card.columnId)?.color
+    : undefined;
+  const priority = editedFields.priority ?? classified?.priorityValue;
+  const priorityTone = priority === "Urgent" || priority === "High"
+    ? "text-bad !border-bad/20 !bg-bad/10"
+    : priority === "Medium"
+    ? "text-warn-text !border-warn/20 !bg-warn/10"
+    : priority === "Low"
+    ? "text-ok !border-ok/20 !bg-ok/10"
+    : "text-ink-muted !bg-count";
+  const dates = classified?.sections.find((section) => section.id === "dates");
+
+  function renderSection(section: ClassifiedSection) {
+    return (
+      <DetailSection
+        dense
+        key={section.id}
+        label={t(`kanban.section.${section.id}`)}
+      >
+        <div
+          class={cx(
+            "grid grid-cols-1 gap-x-3 gap-y-2",
+            sectionGridClass(section),
+          )}
+        >
+          {section.fields.map((field) => (
+            <Field key={field.key} label={fieldLabel(field.key, t)}>
+              {fieldControl(
+                field.key,
+                field.value,
+                editedFields,
+                handleFieldChange,
+                t,
+                canEdit,
+              )}
+            </Field>
+          ))}
+        </div>
+      </DetailSection>
+    );
+  }
+
   return (
     <DetailSheet
       title={sheetTitle}
       eyebrow={classified?.idValue ?? selectedCardId}
+      titleContent={classified?.titleField
+        ? (canEdit
+          ? (
+            <input
+              type="text"
+              aria-label={fieldLabel(classified.titleField.key, t)}
+              class={editedControlClass(
+                "w-full min-w-0 rounded-control border border-transparent bg-transparent px-1 py-0.5 font-display text-card-title font-semibold text-ink hover:border-line focus:border-accent focus:outline-none",
+                classified.titleField.key in editedFields,
+              )}
+              value={sheetTitle}
+              onInput={(event) =>
+                handleFieldChange(
+                  classified.titleField!.key,
+                  event.currentTarget.value,
+                )}
+            />
+          )
+          : (
+            <h2 class="break-words font-display text-card-title font-semibold text-ink">
+              {sheetTitle}
+            </h2>
+          ))
+        : undefined}
+      headerMeta={classified && (
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          {classified.statusValue && (
+            <span
+              class="rounded-badge border px-2 py-1 font-mono text-chip"
+              style={columnColor
+                ? { color: columnColor, borderColor: columnColor }
+                : undefined}
+            >
+              {classified.statusValue}
+            </span>
+          )}
+          {priority != null && (canEdit
+            ? (
+              <SelectShell>
+                <select
+                  aria-label={t("kanban.field.priority")}
+                  class={cx(
+                    editedControlClass(
+                      SELECT_CLASS,
+                      "priority" in editedFields,
+                    ),
+                    "!w-auto !py-1 font-mono text-chip",
+                    !("priority" in editedFields) && priorityTone,
+                  )}
+                  value={priority}
+                  onChange={(event) =>
+                    handleFieldChange("priority", event.currentTarget.value)}
+                >
+                  {SELECT_OPTIONS.priority.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {t(`kanban.select.priority.${option.value}`)}
+                    </option>
+                  ))}
+                </select>
+              </SelectShell>
+            )
+            : (
+              <Badge
+                tone={priority === "Urgent" || priority === "High"
+                  ? "danger"
+                  : priority === "Medium"
+                  ? "warning"
+                  : priority === "Low"
+                  ? "success"
+                  : undefined}
+              >
+                {priority}
+              </Badge>
+            ))}
+          {classified.milestoneValue !== null && (
+            <button
+              type="button"
+              aria-label={t("kanban.field.is_milestone")}
+              aria-pressed={milestoneOn}
+              title={t(
+                milestoneOn
+                  ? "kanban.modal.milestone.remove_title"
+                  : "kanban.modal.milestone.set_title",
+              )}
+              disabled={!canEdit}
+              class={cx(
+                "rounded-control border px-2 py-1 font-mono text-chip focus-visible:outline-2 focus-visible:outline-accent",
+                milestoneOn
+                  ? "border-accent-edge bg-brand/12 text-brand-text"
+                  : "border-line text-ink-faint",
+                "is_milestone" in editedFields && "!border-accent",
+              )}
+              onClick={() =>
+                handleFieldChange("is_milestone", milestoneOn ? "0" : "1")}
+            >
+              ◆ {t("kanban.field.is_milestone")}
+            </button>
+          )}
+        </div>
+      )}
+      accent={columnColor}
+      dense
       onClose={requestClose}
       footer={footer}
       size="wide"
     >
-      {/* ── États de chargement / erreur ── */}
       {detail.detailLoading && (
         <StateMessage>{t("common.loading")}</StateMessage>
       )}
       {detail.detailError && (
         <StateMessage tone="bad">{detail.detailError}</StateMessage>
       )}
-
       {classified && (
         <>
-          {/* ── Général : titre, statut, priorité, projet, jalon ── */}
-          <DetailSection label={t("kanban.modal.section.general")}>
-            <div class="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
-              {/* Titre éditable — l'identifiant est dans l'eyebrow de DetailSheet. */}
-              {classified.titleField && (
-                <div class="sm:col-span-2">
-                  <Field label={fieldLabel(classified.titleField.key, t)}>
-                    {canEdit
-                      ? (
-                        <input
-                          type="text"
-                          class={CONTROL_CLASS}
-                          value={editedFields[classified.titleField.key] ??
-                            String(classified.titleField.value)}
-                          onInput={(e) =>
-                            handleFieldChange(
-                              classified.titleField!.key,
-                              (e.currentTarget as HTMLInputElement).value,
-                            )}
-                        />
-                      )
-                      : (
-                        <span class="text-data text-ink-2">
-                          {String(classified.titleField.value)}
-                        </span>
-                      )}
-                  </Field>
-                </div>
-              )}
-
-              {classified.statusValue && (
-                <Field label={t("kanban.field.status")}>
-                  <span class="text-data text-ink-2">
-                    {classified.statusValue}
-                  </span>
-                </Field>
-              )}
-
-              {classified.priorityValue !== null &&
-                classified.priorityValue !== undefined && (
-                <Field label={t("kanban.field.priority")}>
-                  {canEdit
-                    ? (
-                      <SelectShell>
-                        <select
-                          class={SELECT_CLASS}
-                          value={editedFields.priority ??
-                            classified.priorityValue}
-                          onChange={(e) =>
-                            handleFieldChange(
-                              "priority",
-                              (e.currentTarget as HTMLSelectElement).value,
-                            )}
-                        >
-                          {SELECT_OPTIONS.priority.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {t(`kanban.select.priority.${opt.value}`)}
-                            </option>
-                          ))}
-                        </select>
-                      </SelectShell>
-                    )
-                    : (
-                      <span class="text-data text-ink-2">
-                        {classified.priorityValue}
-                      </span>
-                    )}
-                </Field>
-              )}
-
-              {classified.projectValue !== null &&
-                classified.projectValue !== undefined && (
-                <Field label={t("kanban.field.project")}>
-                  {canEdit
-                    ? (
-                      <input
-                        type="text"
-                        class={CONTROL_CLASS}
-                        value={editedFields.project ?? classified.projectValue}
-                        onInput={(e) =>
-                          handleFieldChange(
-                            "project",
-                            (e.currentTarget as HTMLInputElement).value,
-                          )}
-                      />
-                    )
-                    : (
-                      <span class="text-data text-ink-2">
-                        {classified.projectValue}
-                      </span>
-                    )}
-                </Field>
-              )}
-
-              {classified.milestoneValue !== null &&
-                classified.milestoneValue !== undefined && (
-                <Field label={t("kanban.field.is_milestone")}>
-                  {canEdit
-                    ? (
-                      <button
-                        type="button"
-                        aria-pressed={milestoneOn}
-                        title={milestoneOn
-                          ? t("kanban.modal.milestone.remove_title")
-                          : t("kanban.modal.milestone.set_title")}
-                        class={cx(
-                          "self-start rounded-control border px-3 py-[5px] font-mono text-chip transition-colors",
-                          milestoneOn
-                            ? "bg-brand/12 dark:bg-brand/16 border-accent-edge text-brand-text"
-                            : "bg-control border-line text-ink-muted hover:text-ink",
-                        )}
-                        onClick={() =>
-                          handleFieldChange(
-                            "is_milestone",
-                            milestoneOn ? "0" : "1",
-                          )}
-                      >
-                        {milestoneOn
-                          ? t("kanban.modal.bool.yes")
-                          : t("kanban.modal.bool.no")}
-                      </button>
-                    )
-                    : (
-                      <span class="text-data text-ink-2">
-                        {milestoneOn
-                          ? t("kanban.modal.bool.yes")
-                          : t("kanban.modal.bool.no")}
-                      </span>
-                    )}
-                </Field>
-              )}
-            </div>
-          </DetailSection>
-
-          {/* ── Description ── */}
-          {classified.descriptionField && (
-            <DetailSection
-              label={fieldLabel(classified.descriptionField.key, t)}
-            >
+          {classified.projectValue !== null && (
+            <div class="flex min-w-0 items-center gap-2">
+              <label
+                for="kanban-detail-project"
+                class="shrink-0 font-mono text-chip text-ink-faint"
+              >
+                {t("kanban.field.project")}
+              </label>
               {canEdit
                 ? (
-                  <textarea
-                    class={cx(CONTROL_CLASS, "resize-y")}
-                    value={editedFields[classified.descriptionField.key] !==
-                        undefined
-                      ? editedFields[classified.descriptionField.key]
-                      : String(classified.descriptionField.value)}
-                    rows={3}
-                    onInput={(e) =>
-                      handleFieldChange(
-                        classified.descriptionField!.key,
-                        (e.currentTarget as HTMLTextAreaElement).value,
-                      )}
+                  <input
+                    id="kanban-detail-project"
+                    type="text"
+                    class={editedControlClass(
+                      CONTROL_CLASS,
+                      "project" in editedFields,
+                    )}
+                    value={editedFields.project ?? classified.projectValue}
+                    onInput={(event) =>
+                      handleFieldChange("project", event.currentTarget.value)}
                   />
                 )
                 : (
-                  <p class="m-0 whitespace-pre-wrap text-data text-ink-2">
-                    {String(classified.descriptionField.value)}
-                  </p>
+                  <span
+                    id="kanban-detail-project"
+                    class="min-w-0 break-words text-data text-ink-2"
+                  >
+                    {classified.projectValue}
+                  </span>
                 )}
-            </DetailSection>
+            </div>
           )}
-
-          {/* ── Progression ── */}
-          {classified.progressValue !== null && (
-            <DetailSection label={t("kanban.modal.section.progress")}>
-              <div class="flex items-center gap-3">
-                {canEdit && (
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={currentProgress}
-                    class={cx(RANGE_CLASS, "flex-1")}
-                    aria-label={t("common.progress.label")}
-                    onInput={(e) =>
-                      handleFieldChange(
-                        "progress",
-                        (e.currentTarget as HTMLInputElement).value,
-                      )}
-                  />
-                )}
-                <strong class="w-10 shrink-0 text-right font-mono text-data tabular-nums text-ink">
-                  {currentProgress}%
-                </strong>
-              </div>
-            </DetailSection>
-          )}
-
           {/* ── Responsables ── */}
           {((onAssign && onLoadUsers) || onUnassign) && (
-            <DetailSection label={t("kanban.modal.section.assignees")}>
+            <DetailSection dense label={t("kanban.modal.section.assignees")}>
               <AssigneesSection
                 assignees={(() => {
                   const raw = detail.cardDetail?._assign;
@@ -1298,23 +1354,22 @@ export function CardDetailModal({
             </DetailSection>
           )}
 
-          {/* ── Sections dynamiques (dates, temps, finances, personnes, autres) ── */}
-          {classified.sections.map((section) => (
-            <DetailSection
-              key={section.id}
-              label={t(`kanban.section.${section.id}`)}
-            >
+          {(dates || classified.progressValue !== null) && (
+            <DetailSection dense>
               <div
                 class={cx(
-                  "grid grid-cols-1 gap-x-3 gap-y-2.5",
-                  sectionGridClass(section),
+                  "grid grid-cols-1 gap-x-3 gap-y-2",
+                  (dates?.fields.length ?? 0) +
+                        (classified.progressValue !== null ? 1 : 0) >= 3
+                    ? "sm:grid-cols-3"
+                    : "sm:grid-cols-2",
                 )}
               >
-                {section.fields.map((f) => (
-                  <Field key={f.key} label={fieldLabel(f.key, t)}>
+                {dates?.fields.map((field) => (
+                  <Field key={field.key} label={fieldLabel(field.key, t)}>
                     {fieldControl(
-                      f.key,
-                      f.value,
+                      field.key,
+                      field.value,
                       editedFields,
                       handleFieldChange,
                       t,
@@ -1322,9 +1377,85 @@ export function CardDetailModal({
                     )}
                   </Field>
                 ))}
+                {classified.progressValue !== null && (
+                  <Field label={t("kanban.modal.section.progress")}>
+                    <div
+                      class={cx(
+                        "flex min-h-8 items-center gap-2 rounded-control px-1",
+                        "progress" in editedFields && "bg-accent/10",
+                      )}
+                    >
+                      {canEdit && (
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={currentProgress}
+                          class={cx(RANGE_CLASS, "min-w-0 flex-1")}
+                          aria-label={t("common.progress.label")}
+                          onInput={(event) =>
+                            handleFieldChange(
+                              "progress",
+                              event.currentTarget.value,
+                            )}
+                        />
+                      )}
+                      <strong
+                        class={cx(
+                          "shrink-0 font-mono text-data tabular-nums",
+                          currentProgress >= 100 ? "text-ok" : "text-ink",
+                        )}
+                      >
+                        {currentProgress}%
+                      </strong>
+                    </div>
+                  </Field>
+                )}
               </div>
             </DetailSection>
-          ))}
+          )}
+          {classified.sections.filter((section) => section.id === "time").map(
+            renderSection,
+          )}
+          {/* ── Description ── */}
+          {classified.descriptionField && (
+            <DetailSection
+              dense
+              label={fieldLabel(classified.descriptionField.key, t)}
+            >
+              {canEdit
+                ? (
+                  <textarea
+                    class={cx(
+                      editedControlClass(
+                        CONTROL_CLASS,
+                        classified.descriptionField.key in editedFields,
+                      ),
+                      "resize-y",
+                    )}
+                    value={editedFields[classified.descriptionField.key] !==
+                        undefined
+                      ? editedFields[classified.descriptionField.key]
+                      : String(classified.descriptionField.value)}
+                    rows={3}
+                    onInput={(e) =>
+                      handleFieldChange(
+                        classified.descriptionField!.key,
+                        (e.currentTarget as HTMLTextAreaElement).value,
+                      )}
+                  />
+                )
+                : (
+                  <p class="m-0 whitespace-pre-wrap text-data text-ink-2">
+                    {String(classified.descriptionField.value)}
+                  </p>
+                )}
+            </DetailSection>
+          )}
+
+          {classified.sections.filter((section) =>
+            section.id !== "dates" && section.id !== "time"
+          ).map(renderSection)}
         </>
       )}
     </DetailSheet>

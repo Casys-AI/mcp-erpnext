@@ -192,6 +192,14 @@ viewers, registered as `ui://mcp-erpnext/{name}`:
 
 ### Cross-viewer navigation
 
+Viewer controls follow the MCP host locale: English, French, Simplified Chinese,
+Traditional Chinese, Hindi, Bengali, Tamil, and Urdu. Language changes update
+the open viewer without resetting filters or edits. Urdu uses right-to-left
+text; document IDs and business values keep their own direction. Number and
+currency formatting follows the host's region. Unsupported or invalid language
+tags use English. Business data and server diagnostics retain their original
+text.
+
 Viewers communicate via `app.sendMessage()` — clicking a button in one viewer
 injects a message into the conversation, which triggers the AI to call the right
 tool and open the appropriate viewer.

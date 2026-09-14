@@ -1,5 +1,7 @@
 /** Status badge for ERPNext document statuses */
 
+import { useT } from "~/shared/i18n-hook";
+import { statusLabel } from "../labels";
 import { colors, styles } from "~/shared/theme";
 
 export const DOC_STATUS: Record<string, { color: string; bg: string }> = {
@@ -23,7 +25,12 @@ export const DOC_STATUS: Record<string, { color: string; bg: string }> = {
 };
 
 export function StatusCell({ value }: { value: string }) {
+  const t = useT();
   const scheme = DOC_STATUS[value];
-  if (!scheme) return <span>{value}</span>;
-  return <span style={styles.badge(scheme.color, scheme.bg)}>{value}</span>;
+  if (!scheme) return <span dir="auto">{statusLabel(value, t)}</span>;
+  return (
+    <span style={styles.badge(scheme.color, scheme.bg)}>
+      {statusLabel(value, t)}
+    </span>
+  );
 }

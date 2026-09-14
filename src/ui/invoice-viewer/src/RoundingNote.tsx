@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "~/shared/i18n-hook";
+import type { t as Translate } from "../../shared/i18n.ts";
 import { colors, fonts } from "~/shared/theme";
 import {
   formatPurchaseInvoiceAmount,
@@ -24,6 +26,7 @@ export function RoundingNote({
   onToggle: () => void;
   panelId: string;
 }) {
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -50,10 +53,15 @@ export function RoundingNote({
     roundingAdjustment,
     invoiceTotal,
     currency,
+    t,
   );
   const hint = isDraft
-    ? "To keep the calculated total, enable “Disable Rounded Total” on the draft invoice, then save and review its total."
-    : "“Disable Rounded Total” applies before submission. Enable it on future invoices to keep the calculated total.";
+    ? t("document.purchase_invoice.hint.draft", {
+      label: t("document.purchase_invoice.disable_rounded_total"),
+    })
+    : t("document.purchase_invoice.hint.submitted", {
+      label: t("document.purchase_invoice.disable_rounded_total"),
+    });
 
   return (
     <div
@@ -88,7 +96,9 @@ export function RoundingNote({
           fontSize: 14,
         }}
       >
-        <span style={{ color: colors.text.secondary }}>Invoice Total</span>
+        <span style={{ color: colors.text.secondary }}>
+          {t("document.purchase_invoice.total")}
+        </span>
         <div
           style={{
             display: "flex",
@@ -101,6 +111,7 @@ export function RoundingNote({
           }}
         >
           <span
+            dir="auto"
             style={{
               fontFamily: fonts.mono,
               fontWeight: 700,
@@ -171,12 +182,12 @@ export function RoundingNote({
         id={panelId}
         hidden={!visible}
         role="region"
-        aria-label="Rounding details"
+        aria-label={t("document.purchase_invoice.details")}
         style={{
           display: visible ? "block" : "none",
           position: "absolute",
           top: "100%",
-          right: 0,
+          insetInlineEnd: 0,
           zIndex: 10,
           width: "100%",
           boxSizing: "border-box",
@@ -192,12 +203,15 @@ export function RoundingNote({
         }}
       >
         <PanelRow
-          label="Calculated"
+          label={t("document.purchase_invoice.calculated")}
           value={formatPurchaseInvoiceAmount(calculatedTotal, currency)}
         />
-        <PanelRow label="Rounding" value={signed} />
         <PanelRow
-          label="Invoice Total"
+          label={t("document.purchase_invoice.rounding")}
+          value={signed}
+        />
+        <PanelRow
+          label={t("document.purchase_invoice.total")}
           value={formatPurchaseInvoiceAmount(invoiceTotal, currency)}
           bold
         />
@@ -211,19 +225,20 @@ function roundingAccessibleName(
   adjustment: number,
   invoiceTotal: number,
   currency: string,
+  t: typeof Translate,
 ): string {
   const signed = formatSignedPurchaseInvoiceAmount(adjustment, currency);
   if (invoiceTotal < 0) {
-    return `Rounding adjustment ${signed}`;
+    return t("document.purchase_invoice.aria.adjustment", { signed });
   }
   if (adjustment > 0) {
-    return `Rounding adds ${
-      formatPurchaseInvoiceAmount(adjustment, currency)
-    } to the invoice total`;
+    return t("document.purchase_invoice.aria.adds", {
+      amount: formatPurchaseInvoiceAmount(adjustment, currency),
+    });
   }
-  return `Rounding reduces the invoice total by ${
-    formatPurchaseInvoiceAmount(Math.abs(adjustment), currency)
-  }`;
+  return t("document.purchase_invoice.aria.reduces", {
+    amount: formatPurchaseInvoiceAmount(Math.abs(adjustment), currency),
+  });
 }
 
 function PanelRow(
@@ -240,6 +255,7 @@ function PanelRow(
     >
       <span>{label}</span>
       <span
+        dir="auto"
         style={{
           fontFamily: fonts.mono,
           fontWeight: bold ? 700 : 500,

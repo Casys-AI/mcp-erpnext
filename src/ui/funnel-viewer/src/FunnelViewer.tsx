@@ -10,6 +10,7 @@
 
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
+import { bindHostLocale, useT } from "~/shared/i18n-hook";
 import {
   colors,
   fonts,
@@ -102,6 +103,7 @@ function LoadingSkeleton() {
 // ============================================================================
 
 function FunnelEmptyState() {
+  const t = useT();
   return (
     <div
       style={{
@@ -158,9 +160,9 @@ function FunnelEmptyState() {
         />
       </svg>
       <div style={{ fontSize: 13, textAlign: "center" }}>
-        No funnel data
+        {t("funnel.empty.title")}
         <div style={{ fontSize: 11, color: colors.text.faint, marginTop: 4 }}>
-          Run the sales funnel tool to visualize your pipeline
+          {t("funnel.empty.hint")}
         </div>
       </div>
     </div>
@@ -200,6 +202,7 @@ function FunnelStageBar({
   currency: string;
   onClick?: () => void;
 }) {
+  const t = useT();
   const isEmpty = stage.count === 0;
   const clipPath = CLIP_PATHS[Math.min(stageIndex, CLIP_PATHS.length - 1)];
   const bg = isEmpty
@@ -234,9 +237,12 @@ function FunnelStageBar({
         (e.currentTarget as HTMLElement).style.transform = "scale(1)";
         (e.currentTarget as HTMLElement).style.boxShadow = "none";
       }}
-      title={onClick ? `Click to see ${stage.label}` : undefined}
+      title={onClick
+        ? t("funnel.stage.click_to_see", { label: stage.label })
+        : undefined}
     >
       <span
+        dir="auto"
         style={{
           fontSize: 24,
           fontWeight: 700,
@@ -249,6 +255,7 @@ function FunnelStageBar({
         {formatNumber(stage.count, 0)}
       </span>
       <span
+        dir="auto"
         style={{
           fontSize: 10,
           fontWeight: 700,
@@ -261,6 +268,7 @@ function FunnelStageBar({
       </span>
       {stage.value != null && stage.value > 0 && (
         <span
+          dir="auto"
           style={{
             fontSize: 11,
             fontFamily: fonts.mono,
@@ -360,7 +368,7 @@ export function FunnelViewer() {
       return true;
     } catch (cause) {
       console.error("Parse error:", cause);
-      setError("Failed to parse funnel payload");
+      setError("funnel.error.parse_failed");
       setLoading(false);
       return false;
     }
@@ -401,18 +409,22 @@ export function FunnelViewer() {
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
 
       if (result.isError) {
-        setError("Refresh failed");
+        setError("common.error.refresh_failed");
         return false;
       }
 
       if (!consumeToolResult(result)) {
-        setError("Refresh returned no data");
+        setError("common.error.refresh_no_data");
         return false;
       }
 
       return true;
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
+      setError(
+        normalizeUiRefreshFailureMessage(cause) === "Refresh timed out"
+          ? "common.error.refresh_timeout"
+          : "common.error.refresh_failed",
+      );
       return false;
     } finally {
       refreshInFlightRef.current = false;
@@ -431,7 +443,7 @@ export function FunnelViewer() {
       }
     };
 
-    app.connect().catch(() => {});
+    app.connect().then(() => bindHostLocale(app)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -490,6 +502,7 @@ function FunnelContent(
     onRefresh: () => void;
   },
 ) {
+  const t = useT();
   const currency = data.currency ?? "EUR";
   const stages = data.stages ?? [];
   const hasServerTools = app.getHostCapabilities()?.serverTools;
@@ -546,6 +559,7 @@ function FunnelContent(
       >
         <div>
           <div
+            dir="auto"
             style={{
               fontSize: 18,
               fontWeight: 700,
@@ -556,6 +570,7 @@ function FunnelContent(
           </div>
           {data.subtitle && (
             <div
+              dir="auto"
               style={{ fontSize: 12, color: colors.text.muted, marginTop: 2 }}
             >
               {data.subtitle}
@@ -569,7 +584,9 @@ function FunnelContent(
               marginTop: 6,
             }}
           >
-            {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
+            {error
+              ? t(error)
+              : (refreshing ? t("common.refreshing") : t("funnel.autorefresh"))}
           </div>
         </div>
         <button
@@ -589,7 +606,9 @@ function FunnelContent(
               colors.text.secondary;
           }}
         >
-          {refreshing ? "Refreshing" : "Refresh"}
+          {refreshing
+            ? t("stable.funnel.refreshing_button")
+            : t("common.refresh")}
         </button>
       </div>
 
@@ -630,9 +649,10 @@ function FunnelContent(
         }}
       >
         <span style={{ fontSize: 12, color: colors.text.muted }}>
-          Overall Conversion
+          {t("funnel.conversion.overall")}
         </span>
         <span
+          dir="auto"
           style={{
             fontSize: 11,
             color: colors.text.faint,
@@ -652,7 +672,7 @@ function FunnelContent(
               : colors.error,
           }}
         >
-          {totalConversion}%
+          {formatNumber(totalConversion, 0)}%
         </span>
       </div>
 
@@ -690,7 +710,7 @@ function FunnelContent(
                   colors.text.secondary;
               }}
             >
-              {stage.label}
+              <span dir="auto">{stage.label}</span>
             </button>
           ))}
         </div>

@@ -5,17 +5,14 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles } from "~/shared/theme";
 import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
-import {
-  formatBoardSummary,
-  getErrorPresentation,
-  normalizeMoveFailureMessage,
-} from "~/shared/kanban/presentation";
+import { getErrorPresentation } from "~/shared/kanban/presentation";
 import { useKanbanBoard } from "~/shared/kanban/useKanbanBoard";
 import type {
   KanbanBoardData,
@@ -42,6 +39,21 @@ import {
 } from "~/shared/kanban/layout";
 import { extractToolResultText } from "~/shared/refresh";
 import { CardDetailModal } from "./DetailModal";
+import { horizontalScrollEdges } from "./scroll.ts";
+import { bindHostLocale, useT } from "~/shared/i18n-hook";
+import {
+  kanbanBadgeLabel,
+  kanbanMetricLabel,
+  kanbanStatusLabel,
+  kanbanTransitionLabel,
+} from "~/shared/kanban/labels";
+import {
+  errorMessage,
+  messageText,
+  messageValue,
+  UiError,
+  type UiMessage,
+} from "./messages";
 
 const app = new App({ name: "Kanban Viewer", version: "1.0.0" });
 const AUTO_REFRESH_INTERVAL_MS = 15_000;
@@ -100,10 +112,12 @@ export function getAvailableTargets(
 function DragScrollContainer({
   children,
   style,
+  onScroll,
   ...rest
 }:
   & { children: ReactNode; style?: CSSProperties }
   & HTMLAttributes<HTMLDivElement>) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const dragState = useRef({ active: false, startX: 0, scrollLeft: 0 });
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -112,9 +126,15 @@ function DragScrollContainer({
   const updateFades = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 0);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
-  }, []);
+    const edges = horizontalScrollEdges(
+      el.scrollLeft,
+      el.scrollWidth,
+      el.clientWidth,
+      getComputedStyle(el).direction === "rtl",
+    );
+    setCanScrollLeft(edges.left);
+    setCanScrollRight(edges.right);
+  }, [t]);
 
   useEffect(() => {
     const el = ref.current;
@@ -178,7 +198,10 @@ function DragScrollContainer({
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
-      onScroll={updateFades}
+      onScroll={(event) => {
+        updateFades();
+        onScroll?.(event);
+      }}
       className="drag-scroll"
       {...rest}
     >
@@ -224,6 +247,7 @@ function LoadingSkeleton() {
 }
 
 function EmptyState() {
+  const t = useT();
   return (
     <div
       style={{
@@ -234,7 +258,7 @@ function EmptyState() {
         fontSize: 13,
       }}
     >
-      No kanban data available
+      {t("kanban.no_data")}
     </div>
   );
 }
@@ -242,6 +266,7 @@ function EmptyState() {
 function ErrorState({ message }: { message: string }) {
   return (
     <div
+      dir="auto"
       style={{
         margin: 16,
         ...styles.card,
@@ -275,7 +300,10 @@ function AssigneeBadge({ email }: { email: string }) {
   const atIndex = email.indexOf("@");
   const displayName = atIndex > 0 ? email.slice(0, atIndex) : email;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+    <span
+      dir="auto"
+      style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+    >
       <span
         style={{
           width: 14,
@@ -325,6 +353,7 @@ function KanbanCard({
   onTitleClick?: (card: KanbanCardData) => void;
   enableDrag?: boolean;
 }) {
+  const t = useT();
   const isDraggable = enableDrag && !card.pending;
   const accentColor = card.accent ?? colors.accent;
 
@@ -396,6 +425,7 @@ function KanbanCard({
             {onTitleClick
               ? (
                 <span
+                  dir="auto"
                   className="kanban-card-title-link"
                   role="button"
                   tabIndex={0}
@@ -412,12 +442,13 @@ function KanbanCard({
                 </span>
               )
               : (
-                <div style={titleStyle}>
+                <div dir="auto" style={titleStyle}>
                   {card.title}
                 </div>
               )}
             {card.subtitle && (
               <div
+                dir="auto"
                 style={{
                   fontSize: 11,
                   color: colors.text.muted,
@@ -455,7 +486,7 @@ function KanbanCard({
                       textTransform: "uppercase" as const,
                     }}
                   >
-                    {badge.label}
+                    {kanbanBadgeLabel(badge.label, t)}
                   </span>
                 );
               })}
@@ -466,6 +497,7 @@ function KanbanCard({
         {/* Description */}
         {card.description && (
           <div
+            dir="auto"
             style={{
               fontSize: 11,
               fontStyle: "italic",
@@ -516,9 +548,10 @@ function KanbanCard({
                     letterSpacing: "0.06em",
                   }}
                 >
-                  {metric.label}
+                  {kanbanMetricLabel(metric.label, t)}
                 </span>
                 <span
+                  dir="auto"
                   style={{
                     fontSize: 13,
                     fontWeight: 700,
@@ -562,7 +595,7 @@ function KanbanCard({
                 color: colors.text.muted,
                 background: "transparent",
                 border: "none",
-                borderRight: index < allowedTargets.length - 1
+                borderInlineEnd: index < allowedTargets.length - 1
                   ? `1px solid ${colors.borderSubtle}`
                   : "none",
                 cursor: card.pending ? "default" : "pointer",
@@ -577,7 +610,10 @@ function KanbanCard({
                 justifyContent: "center",
                 gap: 5,
               }}
-              aria-label={`Move ${card.title} to ${target.label}`}
+              aria-label={t("kanban.card.aria_move", {
+                title: card.title,
+                label: kanbanTransitionLabel(target.label, t),
+              })}
             >
               {target.color && (
                 <span
@@ -591,7 +627,7 @@ function KanbanCard({
                   }}
                 />
               )}
-              {target.label}
+              {kanbanTransitionLabel(target.label, t)}
             </button>
           ))}
         </div>
@@ -623,6 +659,7 @@ function KanbanColumn({
   onDragOverColumn: (columnId: string, event: DragEvent<HTMLElement>) => void;
   onTitleClick?: (card: KanbanCardData) => void;
 }) {
+  const t = useT();
   return (
     <section
       style={{
@@ -668,7 +705,7 @@ function KanbanColumn({
             flex: 1,
           }}
         >
-          {column.label}
+          {kanbanStatusLabel(column.label, t)}
         </span>
         <span style={{ ...styles.badge(column.color, `${column.color}20`) }}>
           {column.count}
@@ -694,11 +731,16 @@ function KanbanColumn({
 function ScrollArrow(
   { direction, onClick }: { direction: "left" | "right"; onClick: () => void },
 ) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`Scroll ${direction}`}
+      aria-label={t(
+        direction === "left"
+          ? "stable.kanban.scroll.left"
+          : "stable.kanban.scroll.right",
+      )}
       style={{
         ...styles.button,
         padding: "6px 4px",
@@ -723,6 +765,8 @@ function ColumnTabs({
   focusIndex: number;
   onSelect: (index: number) => void;
 }) {
+  const t = useT();
+  const rtl = document.documentElement.dir === "rtl";
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
@@ -732,35 +776,60 @@ function ColumnTabs({
     const last = tabRefs.current[columns.length - 1];
     const container = first?.parentElement;
     if (!container || !first || !last) return;
-    setShowLeft(container.scrollLeft > 0);
-    setShowRight(
-      container.scrollLeft < container.scrollWidth - container.clientWidth - 1,
+    const edges = horizontalScrollEdges(
+      container.scrollLeft,
+      container.scrollWidth,
+      container.clientWidth,
+      getComputedStyle(container).direction === "rtl",
     );
-  }, [columns.length]);
+    setShowLeft(edges.left);
+    setShowRight(edges.right);
+  }, [columns.length, t]);
 
   useEffect(updateArrows, [updateArrows]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const btn = tabRefs.current[focusIndex];
     if (!btn) return;
     const container = btn.parentElement;
     if (!container) return;
-    container.scrollTo({ left: btn.offsetLeft - 40, behavior: "smooth" });
+    const bounds = container.getBoundingClientRect();
+    const tab = btn.getBoundingClientRect();
+    const delta = tab.left < bounds.left + 24
+      ? tab.left - bounds.left - 24
+      : tab.right > bounds.right - 24
+      ? tab.right - bounds.right + 24
+      : 0;
+    // Locale and arrow reflows must settle before the selected tab is painted.
+    if (delta) container.scrollBy({ left: delta, behavior: "auto" });
     requestAnimationFrame(updateArrows);
-  }, [focusIndex, updateArrows]);
+  }, [focusIndex, updateArrows, showLeft, showRight]);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        minWidth: 0,
+        direction: "ltr",
+      }}
+    >
       {showLeft && (
         <ScrollArrow
           direction="left"
-          onClick={() => onSelect(Math.max(0, focusIndex - 1))}
+          onClick={() =>
+            onSelect(clampKanbanFocusIndex(
+              focusIndex + (rtl ? 1 : -1),
+              columns.length,
+            ))}
         />
       )}
       <DragScrollContainer
         onScroll={updateArrows}
         style={{
           display: "flex",
+          direction: rtl ? "rtl" : "ltr",
           gap: 4,
           overflowX: "auto",
           minWidth: 0,
@@ -768,7 +837,7 @@ function ColumnTabs({
           cursor: "grab",
         }}
         role="tablist"
-        aria-label="Kanban columns"
+        aria-label={t("stable.kanban.columns_aria")}
       >
         {columns.map((column, index) => {
           const isActive = index === focusIndex;
@@ -811,7 +880,7 @@ function ColumnTabs({
                   flexShrink: 0,
                 }}
               />
-              {column.label}
+              {kanbanStatusLabel(column.label, t)}
               <span
                 style={{
                   ...styles.badge(
@@ -830,7 +899,11 @@ function ColumnTabs({
       {showRight && (
         <ScrollArrow
           direction="right"
-          onClick={() => onSelect(Math.min(columns.length - 1, focusIndex + 1))}
+          onClick={() =>
+            onSelect(clampKanbanFocusIndex(
+              focusIndex + (rtl ? -1 : 1),
+              columns.length,
+            ))}
         />
       )}
     </div>
@@ -864,6 +937,7 @@ function BoardView({
   ) => void;
   onTitleClick?: (card: KanbanCardData) => void;
 }) {
+  const t = useT();
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1200,
   );
@@ -910,6 +984,7 @@ function BoardView({
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div
+            dir="auto"
             style={{
               fontSize: 14,
               fontWeight: 700,
@@ -919,7 +994,15 @@ function BoardView({
             {board.title}
           </div>
           <div style={{ fontSize: 11, color: colors.text.muted }}>
-            {formatBoardSummary(board)}
+            {t(
+              board.pagination.total !== undefined
+                ? "stable.kanban.summary.cards"
+                : board.pagination.hasMore
+                ? "stable.kanban.summary.loaded"
+                : "stable.kanban.summary.cards",
+              { n: board.pagination.total ?? board.pagination.loadedCount },
+            )} · {board.doctype} ·{" "}
+            {t("stable.kanban.summary.move_tool", { name: board.moveToolName })}
           </div>
         </div>
 
@@ -937,7 +1020,7 @@ function BoardView({
                 <div
                   id={`kanban-panel-${focusedColumn.id}`}
                   role="tabpanel"
-                  aria-label={focusedColumn.label}
+                  aria-label={kanbanStatusLabel(focusedColumn.label, t)}
                   style={{
                     display: "flex",
                     flexDirection: "column",
@@ -973,7 +1056,9 @@ function BoardView({
                         color: colors.text.muted,
                       }}
                     >
-                      No cards in {focusedColumn.label}
+                      {t("kanban.column.empty", {
+                        label: kanbanStatusLabel(focusedColumn.label, t),
+                      })}
                     </div>
                   )}
                 </div>
@@ -1024,6 +1109,7 @@ type ToolResultPayload = {
 };
 
 export function KanbanViewer() {
+  const t = useT();
   const {
     state,
     hydrateBoard,
@@ -1034,7 +1120,9 @@ export function KanbanViewer() {
     closeDetail,
     setDetailError,
   } = useKanbanBoard();
-  const [liveMessage, setLiveMessage] = useState("");
+  const [liveMessage, setLiveMessage] = useState<UiMessage | null>(null);
+  const boardErrorRef = useRef<UiMessage | null>(null);
+  const detailErrorRef = useRef<UiMessage | null>(null);
   const [activeDropColumn, setActiveDropColumn] = useState<string | null>(null);
   const queueRef = useRef<QueuedKanbanMove[]>([]);
   const snapshotsRef = useRef<Record<string, KanbanBoardData>>({});
@@ -1048,6 +1136,16 @@ export function KanbanViewer() {
   const lastRefreshStartedAtRef = useRef(0);
   const detailFetchCardIdRef = useRef<string | null>(null);
 
+  function showError(message: UiMessage) {
+    boardErrorRef.current = message;
+    setError(messageValue(message));
+  }
+
+  function showDetailError(message: UiMessage) {
+    detailErrorRef.current = message;
+    setDetailError(messageValue(message));
+  }
+
   function updateBoard(board: KanbanBoardData) {
     boardRef.current = board;
     hydrateBoard(board);
@@ -1058,14 +1156,14 @@ export function KanbanViewer() {
   ): Record<string, unknown> {
     const text = extractTextContent(result);
     if (!text) {
-      throw new Error("No text payload returned by tool call");
+      throw new UiError("common.error.no_payload");
     }
     return JSON.parse(text) as Record<string, unknown>;
   }
 
   function extractToolError(result: ToolResultPayload): string {
     const text = extractTextContent(result);
-    if (!text) return "Tool call failed";
+    if (!text) throw new UiError("common.error.tool_failed");
     try {
       const parsed = JSON.parse(text) as Record<string, unknown>;
       return String(parsed.errorMessage ?? parsed.message ?? text);
@@ -1155,7 +1253,7 @@ export function KanbanViewer() {
 
     try {
       if (!app.getHostCapabilities()?.serverTools) {
-        throw new Error("Host does not support proxied server tool calls");
+        throw new UiError("common.error.no_proxy");
       }
 
       const result = await app.callServerTool({
@@ -1170,26 +1268,32 @@ export function KanbanViewer() {
 
       if (result.isError) {
         const snapshot = snapshotsRef.current[queueId];
-        const message = normalizeMoveFailureMessage(extractToolError(result));
+        const message: UiMessage = { text: extractToolError(result) };
         if (snapshot) {
-          updateBoard(rollbackMoveFailure(snapshot, { errorMessage: message }));
+          updateBoard(
+            rollbackMoveFailure(snapshot, {
+              errorMessage: messageValue(message),
+            }),
+          );
         }
-        setError(message);
+        showError(message);
         setLiveMessage(message);
       } else {
         const parsed = parseToolCallResult(result);
         const ok = parsed.ok !== false;
         if (!ok) {
           const snapshot = snapshotsRef.current[queueId];
-          const message = normalizeMoveFailureMessage(
-            String(parsed.errorMessage ?? "Move failed"),
-          );
+          const message: UiMessage = parsed.errorMessage === undefined
+            ? { key: "kanban.error.move_failed" }
+            : { text: String(parsed.errorMessage) };
           if (snapshot) {
             updateBoard(
-              rollbackMoveFailure(snapshot, { errorMessage: message }),
+              rollbackMoveFailure(snapshot, {
+                errorMessage: messageValue(message),
+              }),
             );
           }
-          setError(message);
+          showError(message);
           setLiveMessage(message);
         } else if (boardRef.current) {
           const reconciled = reconcileMoveSuccess(boardRef.current, {
@@ -1203,18 +1307,25 @@ export function KanbanViewer() {
             column.id === nextMove.toColumn
           )?.label ??
             nextMove.toColumn;
-          setLiveMessage(`Moved ${nextMove.cardId} to ${destinationLabel}`);
+          setLiveMessage({
+            key: "kanban.live.moved",
+            params: { title: nextMove.cardId },
+            destination: destinationLabel,
+          });
         }
       }
     } catch (error) {
       const snapshot = snapshotsRef.current[queueId];
-      const message = normalizeMoveFailureMessage(error);
+      const message =
+        error instanceof Error && /timeout|timed out/i.test(error.message)
+          ? { key: "kanban.error.move_timeout" }
+          : errorMessage(error, "kanban.error.move_failed");
       if (snapshot) {
         updateBoard(rollbackMoveFailure(snapshot, {
-          errorMessage: message,
+          errorMessage: messageValue(message),
         }));
       }
-      setError(message);
+      showError(message);
       setLiveMessage(message);
     } finally {
       delete snapshotsRef.current[queueId];
@@ -1239,8 +1350,11 @@ export function KanbanViewer() {
     );
 
     if (!transition) {
-      const message = `Move to ${label} is not allowed`;
-      setError(message);
+      const message: UiMessage = {
+        key: "kanban.live.move_not_allowed",
+        destination: label,
+      };
+      showError(message);
       setLiveMessage(message);
       return;
     }
@@ -1261,9 +1375,17 @@ export function KanbanViewer() {
       snapshotsRef.current[queuedMove.queueId ?? queuedMove.cardId] =
         optimistic.snapshot;
       updateBoard(optimistic.board);
-      setLiveMessage(`Moving ${card.title} to ${label}`);
+      setLiveMessage({
+        key: "kanban.live.moving",
+        params: { title: card.title },
+        destination: label,
+      });
     } else {
-      setLiveMessage(`${card.title} queued for ${label}`);
+      setLiveMessage({
+        key: "kanban.live.queued",
+        params: { title: card.title },
+        destination: label,
+      });
     }
 
     queueRef.current = enqueueMove(queueRef.current, queuedMove);
@@ -1288,18 +1410,14 @@ export function KanbanViewer() {
     app.ontoolresult = (result: ToolResultPayload) => {
       const text = extractTextContent(result);
       if (!text) {
-        setError("No kanban payload received from tool result");
+        showError({ key: "kanban.error.no_payload" });
         return;
       }
 
       try {
         updateBoard(parseBoard(text));
       } catch (error) {
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Failed to parse kanban payload",
-        );
+        showError(errorMessage(error, "kanban.error.parse_failed"));
       }
     };
 
@@ -1309,8 +1427,8 @@ export function KanbanViewer() {
       }
     };
 
-    app.connect().catch(() => {
-      setError("Failed to connect MCP App host");
+    app.connect().then(() => bindHostLocale(app)).catch(() => {
+      showError({ key: "kanban.error.connect_failed" });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1404,7 +1522,7 @@ export function KanbanViewer() {
         requestMove(card, toColumn, label);
       }
     } catch {
-      setError("Failed to read dragged kanban card");
+      showError({ key: "kanban.error.drag_drop" });
     }
   }
 
@@ -1424,21 +1542,21 @@ export function KanbanViewer() {
         if (detailFetchCardIdRef.current !== cardId) return;
 
         if (result.isError) {
-          setDetailError(extractToolError(result));
+          showDetailError({ text: extractToolError(result) });
           return;
         }
 
         const text = extractTextContent(result);
         if (!text) {
-          setDetailError("No detail payload returned");
+          showDetailError({ key: "kanban.error.detail_no_payload" });
           return;
         }
 
         hydrateDetail(unwrapDoc(JSON.parse(text) as Record<string, unknown>));
       } catch (error) {
         if (detailFetchCardIdRef.current !== cardId) return;
-        setDetailError(
-          error instanceof Error ? error.message : "Failed to fetch detail",
+        showDetailError(
+          errorMessage(error, "kanban.error.detail_fetch_failed"),
         );
       }
     })();
@@ -1461,7 +1579,7 @@ export function KanbanViewer() {
     data: Record<string, string>,
   ) {
     if (!app.getHostCapabilities()?.serverTools) {
-      throw new Error("Host does not support proxied server tool calls");
+      throw new UiError("common.error.no_proxy");
     }
 
     // Coerce types: if original value was a number, convert back
@@ -1507,7 +1625,7 @@ export function KanbanViewer() {
     Array<{ name: string; full_name?: string }>
   > {
     if (!app.getHostCapabilities()?.serverTools) {
-      throw new Error("Host does not support proxied server tool calls");
+      throw new UiError("common.error.no_proxy");
     }
     const result = await app.callServerTool({
       name: "erpnext_user_list",
@@ -1522,7 +1640,7 @@ export function KanbanViewer() {
     try {
       payload = JSON.parse(text);
     } catch {
-      throw new Error("Could not read the user list returned by the server");
+      throw new UiError("kanban.error.user_list");
     }
     return payload.data ?? [];
   }
@@ -1533,7 +1651,7 @@ export function KanbanViewer() {
     assignTo: string,
   ) {
     if (!app.getHostCapabilities()?.serverTools) {
-      throw new Error("Host does not support proxied server tool calls");
+      throw new UiError("common.error.no_proxy");
     }
     const result = await app.callServerTool({
       name: "erpnext_doc_assign",
@@ -1578,7 +1696,7 @@ export function KanbanViewer() {
     assignee: string,
   ) {
     if (!app.getHostCapabilities()?.serverTools) {
-      throw new Error("Host does not support proxied server tool calls");
+      throw new UiError("common.error.no_proxy");
     }
     const result = await app.callServerTool({
       name: "erpnext_doc_unassign",
@@ -1625,7 +1743,12 @@ export function KanbanViewer() {
     );
   }
 
-  const errorPresentation = getErrorPresentation(state);
+  const errorPresentation = getErrorPresentation({
+    ...state,
+    error: state.error
+      ? messageText(boardErrorRef.current ?? { text: state.error }, t)
+      : null,
+  });
 
   if (errorPresentation.blockingError) {
     return (
@@ -1648,7 +1771,7 @@ export function KanbanViewer() {
   return (
     <>
       <div aria-live="polite" style={hiddenLiveRegionStyle()}>
-        {liveMessage}
+        {liveMessage ? messageText(liveMessage, t) : ""}
       </div>
       <BoardView
         board={state.board}
@@ -1663,7 +1786,15 @@ export function KanbanViewer() {
       />
       {state.detail.selectedCardId && state.board && (
         <CardDetailModal
-          detail={state.detail}
+          detail={{
+            ...state.detail,
+            detailError: state.detail.detailError
+              ? messageText(
+                detailErrorRef.current ?? { text: state.detail.detailError },
+                t,
+              )
+              : null,
+          }}
           board={state.board}
           onClose={closeDetail}
           onMove={requestMove}

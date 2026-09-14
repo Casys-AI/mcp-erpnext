@@ -5,8 +5,9 @@
  * Casys design: surface background + accent text, consistent with mcp-einvoice.
  */
 
-import { CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import { colors, fonts } from "./theme";
+import { useT } from "./i18n-hook";
 
 function ErpNextIcon() {
   return (
@@ -58,6 +59,7 @@ function ErpNextIcon() {
 }
 
 export function ErpNextBrandHeader() {
+  const t = useT();
   const headerStyle: CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -102,7 +104,7 @@ export function ErpNextBrandHeader() {
       </div>
       <span style={wordmarkStyle}>ERPNext</span>
       <div style={dotStyle} />
-      <span style={taglineStyle}>gestion ERP</span>
+      <span style={taglineStyle}>{t("stable.brand.tagline")}</span>
     </div>
   );
 }

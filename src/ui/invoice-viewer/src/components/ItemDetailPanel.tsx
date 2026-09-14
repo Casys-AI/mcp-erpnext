@@ -5,6 +5,8 @@ import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles } from "~/shared/theme";
 import { InfoField } from "~/shared/InfoField";
 import { ActionButton } from "~/shared/ActionButton";
+import { useT } from "~/shared/i18n-hook";
+import { type InvoiceMessage, invoiceMessage } from "../messages";
 import { extractToolResultText } from "~/shared/refresh";
 
 const TOOL_CALL_TIMEOUT_MS = 10_000;
@@ -14,6 +16,7 @@ export function ItemDetailPanel({ app, itemCode, onClose }: {
   itemCode: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const [itemData, setItemData] = useState<Record<string, unknown> | null>(
     null,
   );
@@ -21,7 +24,7 @@ export function ItemDetailPanel({ app, itemCode, onClose }: {
     Array<Record<string, unknown>> | null
   >(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InvoiceMessage | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,12 +59,18 @@ export function ItemDetailPanel({ app, itemCode, onClose }: {
         }
 
         if (itemResult.isError && stockResult.isError) {
-          setError("Failed to load item details");
+          setError(
+            extractToolResultText(itemResult) ??
+              extractToolResultText(stockResult) ??
+              { key: "stable.invoice.item.error.load_failed" },
+          );
         }
       } catch (e) {
         if (!cancelled) {
           setError(
-            e instanceof Error ? e.message : "Failed to load item details",
+            e instanceof Error && !(e instanceof SyntaxError)
+              ? e.message
+              : { key: "stable.invoice.item.error.load_failed" },
           );
         }
       } finally {
@@ -111,6 +120,7 @@ export function ItemDetailPanel({ app, itemCode, onClose }: {
         }}
       >
         <span
+          dir="auto"
           style={{
             fontSize: 14,
             fontWeight: 600,
@@ -122,6 +132,7 @@ export function ItemDetailPanel({ app, itemCode, onClose }: {
         </span>
         <button
           onClick={onClose}
+          aria-label={t("invoice.item.close.aria_label")}
           style={{ ...styles.button, padding: "2px 8px", fontSize: 11 }}
         >
           ✕
@@ -130,7 +141,7 @@ export function ItemDetailPanel({ app, itemCode, onClose }: {
 
       {error && (
         <div style={{ fontSize: 11, color: colors.error, marginBottom: 8 }}>
-          {error}
+          {invoiceMessage(error, t)}
         </div>
       )}
 
@@ -144,18 +155,27 @@ export function ItemDetailPanel({ app, itemCode, onClose }: {
             marginBottom: 10,
           }}
         >
-          {itemData.item_name && (
-            <InfoField label="Name" value={String(itemData.item_name)} />
+          {Boolean(itemData.item_name) && (
+            <InfoField
+              label={t("invoice.item.label.name")}
+              value={String(itemData.item_name)}
+            />
           )}
-          {itemData.item_group && (
-            <InfoField label="Group" value={String(itemData.item_group)} />
+          {Boolean(itemData.item_group) && (
+            <InfoField
+              label={t("invoice.item.label.group")}
+              value={String(itemData.item_group)}
+            />
           )}
-          {itemData.stock_uom && (
-            <InfoField label="UOM" value={String(itemData.stock_uom)} />
+          {Boolean(itemData.stock_uom) && (
+            <InfoField
+              label={t("invoice.item.label.uom")}
+              value={String(itemData.stock_uom)}
+            />
           )}
           {itemData.standard_rate != null && (
             <InfoField
-              label="Std Rate"
+              label={t("invoice.item.label.std_rate")}
               value={String(itemData.standard_rate)}
               bold
             />
@@ -175,7 +195,7 @@ export function ItemDetailPanel({ app, itemCode, onClose }: {
               marginBottom: 6,
             }}
           >
-            Stock
+            {t("invoice.item.label.stock")}
           </div>
           {stockData.slice(0, 5).map((s, i) => (
             <div
@@ -187,7 +207,10 @@ export function ItemDetailPanel({ app, itemCode, onClose }: {
                 borderBottom: `1px solid ${colors.borderSubtle}`,
               }}
             >
-              <span style={{ fontSize: 12, color: colors.text.secondary }}>
+              <span
+                dir="auto"
+                style={{ fontSize: 12, color: colors.text.secondary }}
+              >
                 {String(s.warehouse ?? "—")}
               </span>
               <span
@@ -218,28 +241,30 @@ export function ItemDetailPanel({ app, itemCode, onClose }: {
         }}
       >
         <ActionButton
-          label="Full stock view"
+          label={t("invoice.item.btn.stock.label")}
           onClick={async () => {
             try {
               await app.sendMessage({
                 role: "user",
                 content: [{
                   type: "text",
-                  text: `Show stock balance for item ${itemCode}`,
+                  text: t("stable.invoice.item.navigation.stock", { itemCode }),
                 }],
               });
             } catch {}
           }}
         />
         <ActionButton
-          label="Item details"
+          label={t("invoice.item.btn.details.label")}
           onClick={async () => {
             try {
               await app.sendMessage({
                 role: "user",
                 content: [{
                   type: "text",
-                  text: `Show me the full details of Item ${itemCode}`,
+                  text: t("stable.invoice.item.navigation.details", {
+                    itemCode,
+                  }),
                 }],
               });
             } catch {}

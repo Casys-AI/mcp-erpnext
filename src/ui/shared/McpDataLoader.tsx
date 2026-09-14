@@ -8,8 +8,11 @@
  * Shows loading skeleton or empty state while waiting.
  */
 
-import { ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { colors } from "./theme";
+import { useT } from "./i18n-hook";
+import { mergeHostLocale } from "./host-locale.ts";
 
 /** Extract data from window.mcpData */
 function getMcpData<T>(): T | null {
@@ -45,12 +48,18 @@ export function McpDataLoader<T>({ children, empty }: McpDataLoaderProps<T>) {
       if (msg.jsonrpc === "2.0") {
         // Response to our ui/initialize request
         if (msg.id === "mcp-init" && msg.result) {
+          mergeHostLocale(msg.result.hostContext);
           // Send initialized notification → host will send tool-input + tool-result
           window.parent.postMessage(
             { jsonrpc: "2.0", method: "ui/notifications/initialized" },
             "*",
           );
           mcpInitialized = true;
+          return;
+        }
+
+        if (msg.method === "ui/notifications/host-context-changed") {
+          mergeHostLocale(msg.params);
           return;
         }
 
@@ -149,6 +158,7 @@ function LoadingSkeleton() {
 }
 
 function DefaultEmptyState() {
+  const t = useT();
   return (
     <div
       style={{
@@ -201,9 +211,9 @@ function DefaultEmptyState() {
         />
       </svg>
       <div style={{ fontSize: 13, textAlign: "center" }}>
-        No data available
+        {t("stable.common.no_data")}
         <div style={{ fontSize: 11, color: colors.text.faint, marginTop: 4 }}>
-          Waiting for MCP tool result...
+          {t("stable.common.waiting_tool")}
         </div>
       </div>
     </div>

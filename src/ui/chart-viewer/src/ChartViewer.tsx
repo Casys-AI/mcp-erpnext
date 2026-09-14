@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
+import { bindHostLocale, useT } from "~/shared/i18n-hook";
 import {
   Area,
   AreaChart,
@@ -276,6 +277,7 @@ function ChartTooltip({ active, payload, label, data }: {
   label?: string;
   data: ChartData;
 }) {
+  useT();
   if (!active || !payload?.length) return null;
   return (
     <div
@@ -291,6 +293,7 @@ function ChartTooltip({ active, payload, label, data }: {
     >
       {label && (
         <div
+          dir="auto"
           style={{ color: "var(--text-muted)", marginBottom: 4, fontSize: 11 }}
         >
           {label}
@@ -315,8 +318,11 @@ function ChartTooltip({ active, payload, label, data }: {
               flexShrink: 0,
             }}
           />
-          <span style={{ color: "var(--text-secondary)" }}>{p.name}:</span>
+          <span dir="auto" style={{ color: "var(--text-secondary)" }}>
+            {p.name}:
+          </span>
           <span
+            dir="auto"
             style={{
               color: "var(--text-primary)",
               fontFamily: fonts.mono,
@@ -338,6 +344,7 @@ function ChartTooltip({ active, payload, label, data }: {
 function SharedXAxis(
   { data, isVerticalLayout }: { data: ChartData; isVerticalLayout?: boolean },
 ) {
+  useT();
   if (isVerticalLayout) {
     return (
       <XAxis
@@ -345,7 +352,7 @@ function SharedXAxis(
         tick={TICK_Y}
         axisLine={false}
         tickLine={false}
-        tickFormatter={fmtTick}
+        tickFormatter={(value: number) => fmtTick(value)}
         label={data.xAxisLabel
           ? {
             value: data.xAxisLabel,
@@ -384,6 +391,7 @@ function SharedYAxis(
     orientation?: "left" | "right";
   },
 ) {
+  useT();
   return (
     <YAxis
       yAxisId={yAxisId}
@@ -391,7 +399,7 @@ function SharedYAxis(
       tick={TICK_Y}
       axisLine={false}
       tickLine={false}
-      tickFormatter={fmtTick}
+      tickFormatter={(value: number) => fmtTick(value)}
       label={data.yAxisLabel
         ? {
           value: data.yAxisLabel,
@@ -726,13 +734,14 @@ function PieDonutChart(
     onDataClick?: (label: string) => void;
   },
 ) {
+  const t = useT();
   const ds = data.datasets[0];
   if (!ds || ds.values.length === 0 || data.labels.length === 0) {
-    return <EmptyChart message="No data for chart" />;
+    return <EmptyChart message={t("stable.chart.pie.no_data")} />;
   }
 
   const total = ds.values.reduce((s, v) => s + v, 0);
-  if (total === 0) return <EmptyChart message="All values are zero" />;
+  if (total === 0) return <EmptyChart message={t("chart.pie.all_zero")} />;
 
   const pieData = data.labels.map((label, i) => ({
     name: label,
@@ -786,7 +795,7 @@ function PieDonutChart(
               fill="var(--text-muted)"
               fontFamily={fonts.sans}
             >
-              Total
+              {t("chart.donut.total_label")}
             </text>
             <text
               x="50%"
@@ -942,6 +951,7 @@ interface TreemapContentProps {
 }
 
 function TreemapContent(props: TreemapContentProps) {
+  useT();
   const { x, y, width, height, name, index, colors: treeColors } = props;
   if (width < 30 || height < 20) return null;
   return (
@@ -1133,6 +1143,7 @@ function ChartContent(
     onRefresh: () => void;
   },
 ) {
+  const t = useT();
   // Header ~36px + title ~40px + padding ~24px = ~100px overhead
   const chartHeight = "calc(100vh - 100px)";
 
@@ -1157,6 +1168,7 @@ function ChartContent(
       >
         <div style={{ minWidth: 0 }}>
           <div
+            dir="auto"
             style={{
               fontSize: 13,
               fontWeight: 600,
@@ -1167,6 +1179,7 @@ function ChartContent(
           </div>
           {data.subtitle && (
             <div
+              dir="auto"
               style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}
             >
               {data.subtitle}
@@ -1184,7 +1197,11 @@ function ChartContent(
               marginTop: 4,
             }}
           >
-            {error ?? (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
+            {error
+              ? t(error)
+              : (refreshing
+                ? t("common.refreshing")
+                : t("kpi.status.auto_refresh"))}
           </div>
         </div>
         <button
@@ -1202,7 +1219,9 @@ function ChartContent(
             flexShrink: 0,
           }}
         >
-          {refreshing ? "Refreshing" : "Refresh"}
+          {refreshing
+            ? t("stable.chart.refreshing_button")
+            : t("common.refresh")}
         </button>
       </div>
       <div style={{ height: chartHeight, padding: "4px 8px 8px" }}>
@@ -1213,6 +1232,7 @@ function ChartContent(
 }
 
 export function ChartViewer() {
+  const t = useT();
   const [data, setData] = useState<ChartData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -1243,7 +1263,7 @@ export function ChartViewer() {
       return true;
     } catch (cause) {
       console.error("Parse error:", cause);
-      setError("Failed to parse chart payload");
+      setError("stable.chart.error.parse_failed");
       setLoading(false);
       return false;
     }
@@ -1284,18 +1304,22 @@ export function ChartViewer() {
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
 
       if (result.isError) {
-        setError("Refresh failed");
+        setError("common.error.refresh_failed");
         return false;
       }
 
       if (!consumeToolResult(result)) {
-        setError("Refresh returned no data");
+        setError("common.error.refresh_no_data");
         return false;
       }
 
       return true;
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
+      setError(
+        normalizeUiRefreshFailureMessage(cause) === "Refresh timed out"
+          ? "common.error.refresh_timeout"
+          : "common.error.refresh_failed",
+      );
       return false;
     } finally {
       refreshInFlightRef.current = false;
@@ -1314,7 +1338,7 @@ export function ChartViewer() {
       }
     };
 
-    app.connect().catch(() => {});
+    app.connect().then(() => bindHostLocale(app)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1350,8 +1374,7 @@ export function ChartViewer() {
           fontFamily: fonts.sans,
         }}
       >
-        No chart data — run an analytics tool or PML workflow that returns
-        ChartData
+        {t("stable.chart.empty")}
       </div>
     );
   }

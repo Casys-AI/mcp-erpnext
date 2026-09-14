@@ -4,6 +4,13 @@ import type { KanbanBoardData, KanbanCardData } from "~/shared/kanban/types";
 import type { CardDetailState } from "~/shared/kanban/state";
 import { badgeToneColors, getAvailableTargets } from "./KanbanViewer";
 import { ActionButton } from "~/shared/ActionButton";
+import { type TFunction, useT } from "~/shared/i18n-hook";
+import {
+  kanbanBadgeLabel,
+  kanbanStatusLabel,
+  kanbanTransitionLabel,
+} from "~/shared/kanban/labels";
+import { errorMessage, messageText, type UiMessage } from "./messages";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -195,7 +202,12 @@ interface ClassifiedFields {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fieldLabel(key: string): string {
+function fieldLabel(key: string, t: TFunction): string {
+  const translationKey = `kanban.field.${key}`;
+  const translated = t(translationKey);
+  if (translated !== translationKey) {
+    return key === "progress" ? `${translated} (%)` : translated;
+  }
   return FIELD_LABELS[key] ??
     key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -306,6 +318,7 @@ function InlinePriorityBadge({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const tone = badgeToneColors(PRIORITY_TONE[value]);
 
@@ -329,7 +342,7 @@ function InlinePriorityBadge({
         }}
       >
         {SELECT_OPTIONS.priority.map((opt) => (
-          <option key={opt} value={opt}>{opt}</option>
+          <option key={opt} value={opt}>{kanbanBadgeLabel(opt, t)}</option>
         ))}
       </select>
     );
@@ -356,9 +369,9 @@ function InlinePriorityBadge({
         textTransform: "uppercase" as const,
         cursor: "pointer",
       }}
-      title="Click to change priority"
+      title={t("stable.kanban.priority.change_title")}
     >
-      {value}
+      {kanbanBadgeLabel(value, t)}
     </span>
   );
 }
@@ -372,6 +385,7 @@ function ProgressBar({
   editedFields: Record<string, string>;
   onFieldChange: (key: string, value: string) => void;
 }) {
+  const t = useT();
   if (progressValue === null) return null;
 
   const currentProgress = editedFields.progress !== undefined
@@ -398,7 +412,7 @@ function ProgressBar({
             flexShrink: 0,
           }}
         >
-          Progress
+          {t("common.progress.label")}
         </span>
         <div
           style={{
@@ -459,7 +473,7 @@ function ProgressBar({
               : colors.text.primary,
             flexShrink: 0,
             minWidth: 32,
-            textAlign: "right" as const,
+            textAlign: "end" as const,
           }}
         >
           {currentProgress}%
@@ -478,6 +492,7 @@ function DetailDescription({
   editedFields: Record<string, string>;
   onFieldChange: (key: string, value: string) => void;
 }) {
+  const t = useT();
   const isEdited = field.key in editedFields;
   const displayValue = isEdited ? editedFields[field.key] : String(field.value);
 
@@ -493,9 +508,10 @@ function DetailDescription({
           marginBottom: 4,
         }}
       >
-        {fieldLabel(field.key)}
+        {fieldLabel(field.key, t)}
       </div>
       <textarea
+        dir="auto"
         value={displayValue}
         onChange={(e) => onFieldChange(field.key, e.target.value)}
         rows={3}
@@ -523,6 +539,7 @@ function DetailFieldCell({
   editedFields: Record<string, string>;
   onFieldChange: (key: string, value: string) => void;
 }) {
+  const t = useT();
   const isReadonly = READONLY_FIELDS.has(fieldKey);
   const isEdited = fieldKey in editedFields;
   const displayValue = isEdited ? editedFields[fieldKey] : String(value);
@@ -546,6 +563,7 @@ function DetailFieldCell({
     if (isReadonly) {
       return (
         <span
+          dir="auto"
           style={{
             fontSize: 13,
             color: colors.text.primary,
@@ -553,7 +571,9 @@ function DetailFieldCell({
             fontWeight: fieldKey === "name" ? 500 : 400,
           }}
         >
-          {String(value)}
+          {fieldKey === "status" || fieldKey === "workflow_state"
+            ? kanbanStatusLabel(String(value), t)
+            : String(value)}
         </span>
       );
     }
@@ -582,7 +602,11 @@ function DetailFieldCell({
               }}
             />
             <span style={{ fontSize: 12, color: colors.text.secondary }}>
-              {(isEdited ? displayValue === "1" : value === 1) ? "Yes" : "No"}
+              {t(
+                (isEdited ? displayValue === "1" : value === 1)
+                  ? "common.yes"
+                  : "common.no",
+              )}
             </span>
           </label>
         );
@@ -599,7 +623,7 @@ function DetailFieldCell({
             }}
           >
             {SELECT_OPTIONS[fieldKey]?.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
+              <option key={opt} value={opt}>{kanbanBadgeLabel(opt, t)}</option>
             ))}
           </select>
         );
@@ -624,6 +648,7 @@ function DetailFieldCell({
       default:
         return (
           <input
+            dir="auto"
             type="text"
             value={displayValue}
             onChange={(e) => onFieldChange(fieldKey, e.target.value)}
@@ -652,7 +677,7 @@ function DetailFieldCell({
           letterSpacing: "0.05em",
         }}
       >
-        {fieldLabel(fieldKey)}
+        {fieldLabel(fieldKey, t)}
       </span>
       {renderControl()}
     </div>
@@ -668,6 +693,7 @@ function DetailMetadataGrid({
   editedFields: Record<string, string>;
   onFieldChange: (key: string, value: string) => void;
 }) {
+  const t = useT();
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       {sections.map((section) => (
@@ -683,7 +709,7 @@ function DetailMetadataGrid({
               borderBottom: `1px solid ${colors.borderSubtle}`,
             }}
           >
-            {section.label}
+            {t(`kanban.section.${section.id}`)}
           </div>
           <div
             style={{
@@ -751,12 +777,13 @@ function AssigneesSection({
   onUnassign?: (assignee: string) => Promise<void>;
   onLoadUsers: () => Promise<AssignableUser[]>;
 }) {
+  const t = useT();
   const [users, setUsers] = useState<AssignableUser[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<UiMessage | null>(null);
   const [selected, setSelected] = useState("");
   const [assigning, setAssigning] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
-  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState<UiMessage | null>(null);
 
   // Mount-only: the assignable-user list is card-independent, and onLoadUsers
   // gets a fresh identity on every parent render (board auto-refresh).
@@ -769,7 +796,7 @@ function AssigneesSection({
       .catch((error) => {
         if (!cancelled) {
           setLoadError(
-            error instanceof Error ? error.message : "Failed to load users",
+            errorMessage(error, "kanban.assignees.error.load_users"),
           );
         }
       });
@@ -791,9 +818,7 @@ function AssigneesSection({
       await onAssign(selected);
       setSelected("");
     } catch (error) {
-      setAssignError(
-        error instanceof Error ? error.message : "Assignment failed",
-      );
+      setAssignError(errorMessage(error, "kanban.assignees.error.assign"));
     } finally {
       setAssigning(false);
     }
@@ -806,9 +831,7 @@ function AssigneesSection({
     try {
       await onUnassign(assignee);
     } catch (error) {
-      setAssignError(
-        error instanceof Error ? error.message : "Unassignment failed",
-      );
+      setAssignError(errorMessage(error, "kanban.assignees.error.unassign"));
     } finally {
       setRemoving(null);
     }
@@ -833,7 +856,7 @@ function AssigneesSection({
           letterSpacing: "0.08em",
         }}
       >
-        Assigned to
+        {t("stable.kanban.assignees.assigned_to")}
       </div>
       <div
         style={{
@@ -845,12 +868,13 @@ function AssigneesSection({
       >
         {assignees.length === 0 && (
           <span style={{ fontSize: 11, color: colors.text.faint }}>
-            Unassigned
+            {t("stable.kanban.assignees.unassigned")}
           </span>
         )}
         {assignees.map((email) => (
           <span
             key={email}
+            dir="auto"
             style={{
               ...styles.badge(colors.accent, colors.accentDim),
               fontSize: 10,
@@ -863,8 +887,8 @@ function AssigneesSection({
             {onUnassign && (
               <button
                 type="button"
-                aria-label={`Unassign ${email}`}
-                title={`Unassign ${email}`}
+                aria-label={t("stable.kanban.assignees.unassign", { email })}
+                title={t("stable.kanban.assignees.unassign", { email })}
                 onClick={() => handleUnassign(email)}
                 disabled={removing !== null}
                 style={{
@@ -884,7 +908,7 @@ function AssigneesSection({
           </span>
         ))}
         <select
-          aria-label="Assign to user"
+          aria-label={t("kanban.assignees.select_label")}
           value={selected}
           onChange={(e) => setSelected(e.target.value)}
           disabled={assigning || (users === null && !loadError)}
@@ -899,11 +923,13 @@ function AssigneesSection({
         >
           <option value="">
             {users === null
-              ? (loadError ? "Users unavailable" : "Loading users…")
-              : "Assign to…"}
+              ? (loadError
+                ? t("kanban.assignees.placeholder_error")
+                : t("stable.kanban.assignees.loading"))
+              : t("kanban.assignees.placeholder_select")}
           </option>
           {options.map((user) => (
-            <option key={user.name} value={user.name}>
+            <option key={user.name} value={user.name} dir="auto">
               {user.full_name ? `${user.full_name} (${user.name})` : user.name}
             </option>
           ))}
@@ -925,13 +951,17 @@ function AssigneesSection({
               borderRadius: 5,
             }}
           >
-            {assigning ? "Assigning…" : "Assign"}
+            {t(
+              assigning
+                ? "kanban.assignees.assigning"
+                : "kanban.assignees.assign_btn",
+            )}
           </button>
         )}
       </div>
       {(assignError ?? loadError) && (
-        <div style={{ fontSize: 10, color: colors.error }}>
-          {assignError ?? loadError}
+        <div dir="auto" style={{ fontSize: 10, color: colors.error }}>
+          {messageText((assignError ?? loadError)!, t)}
         </div>
       )}
     </div>
@@ -975,10 +1005,11 @@ export function CardDetailModal({
   onLoadUsers?: () => Promise<AssignableUser[]>;
   onNavigate?: (message: string) => void;
 }) {
+  const t = useT();
   const [editedFields, setEditedFields] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<
-    { text: string; isError: boolean } | null
+    { message: UiMessage; isError: boolean } | null
   >(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -1028,11 +1059,14 @@ export function CardDetailModal({
     setSaveMessage(null);
     try {
       await onSave(board.doctype, detail.selectedCardId, editedFields);
-      setSaveMessage({ text: "Saved", isError: false });
+      setSaveMessage({
+        message: { key: "kanban.modal.saved" },
+        isError: false,
+      });
       setEditedFields({});
     } catch (error) {
       setSaveMessage({
-        text: error instanceof Error ? error.message : "Save failed",
+        message: errorMessage(error, "kanban.modal.save_error"),
         isError: true,
       });
     } finally {
@@ -1058,7 +1092,7 @@ export function CardDetailModal({
         className="kanban-detail-panel"
         role="dialog"
         aria-modal="true"
-        aria-label={`Detail: ${cardTitle}`}
+        aria-label={t("stable.kanban.modal.aria_detail", { title: cardTitle })}
       >
         {/* Color accent bar */}
         {columnColor && (
@@ -1087,8 +1121,9 @@ export function CardDetailModal({
             {classified?.titleField
               ? (
                 <input
+                  dir="auto"
                   type="text"
-                  aria-label={fieldLabel(classified.titleField.key)}
+                  aria-label={fieldLabel(classified.titleField.key, t)}
                   value={editedFields[classified.titleField.key] ??
                     String(classified.titleField.value)}
                   onChange={(e) =>
@@ -1115,6 +1150,7 @@ export function CardDetailModal({
               )
               : (
                 <div
+                  dir="auto"
                   style={{
                     fontSize: 15,
                     fontWeight: 700,
@@ -1135,6 +1171,7 @@ export function CardDetailModal({
               }}
             >
               <span
+                dir="auto"
                 style={{
                   fontFamily: fonts.mono,
                   fontSize: 11,
@@ -1153,7 +1190,7 @@ export function CardDetailModal({
                     fontSize: 10,
                   }}
                 >
-                  {classified.statusValue}
+                  {kanbanStatusLabel(classified.statusValue, t)}
                 </span>
               )}
               {classified?.priorityValue && (
@@ -1163,7 +1200,10 @@ export function CardDetailModal({
                 />
               )}
               {classified?.projectValue && (
-                <span style={{ fontSize: 11, color: colors.text.muted }}>
+                <span
+                  dir="auto"
+                  style={{ fontSize: 11, color: colors.text.muted }}
+                >
                   {classified.projectValue}
                 </span>
               )}
@@ -1176,7 +1216,7 @@ export function CardDetailModal({
                     <span
                       role="switch"
                       aria-checked={cm}
-                      aria-label="Milestone"
+                      aria-label={t("kanban.field.is_milestone")}
                       tabIndex={0}
                       onClick={() =>
                         handleFieldChange("is_milestone", cm ? "0" : "1")}
@@ -1186,9 +1226,11 @@ export function CardDetailModal({
                           handleFieldChange("is_milestone", cm ? "0" : "1");
                         }
                       }}
-                      title={cm
-                        ? "Milestone (click to unset)"
-                        : "Set as milestone"}
+                      title={t(
+                        cm
+                          ? "kanban.modal.milestone.remove_title"
+                          : "kanban.modal.milestone.set_title",
+                      )}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -1223,7 +1265,7 @@ export function CardDetailModal({
                           transition: "color 0.2s",
                         }}
                       >
-                        Milestone
+                        {t("kanban.field.is_milestone")}
                       </span>
                     </span>
                   );
@@ -1234,7 +1276,7 @@ export function CardDetailModal({
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            aria-label="Close detail"
+            aria-label={t("stable.kanban.modal.close_detail")}
             style={{
               background: "transparent",
               border: "none",
@@ -1279,6 +1321,7 @@ export function CardDetailModal({
 
           {detail.detailError && (
             <div
+              dir="auto"
               style={{
                 margin: 16,
                 padding: "10px 14px",
@@ -1374,7 +1417,7 @@ export function CardDetailModal({
                   borderRadius: 5,
                 }}
               >
-                {saving ? "Saving\u2026" : "Save"}
+                {t(saving ? "kanban.modal.saving" : "kanban.modal.save")}
               </button>
               {hasEdits && (
                 <button
@@ -1389,11 +1432,12 @@ export function CardDetailModal({
                     fontSize: 11,
                   }}
                 >
-                  Discard
+                  {t("stable.kanban.modal.discard")}
                 </button>
               )}
               {saveMessage && (
                 <span
+                  dir="auto"
                   style={{
                     fontSize: 10,
                     fontWeight: 500,
@@ -1405,7 +1449,7 @@ export function CardDetailModal({
                       : colors.successDim,
                   }}
                 >
-                  {saveMessage.text}
+                  {messageText(saveMessage.message, t)}
                 </span>
               )}
               <span
@@ -1429,7 +1473,7 @@ export function CardDetailModal({
                   letterSpacing: "0.06em",
                 }}
               >
-                Move to
+                {t("kanban.modal.move_to")}
               </span>
               {availableTargets.map((target) => (
                 <button
@@ -1460,7 +1504,7 @@ export function CardDetailModal({
                       }}
                     />
                   )}
-                  {target.label}
+                  {kanbanTransitionLabel(target.label, t)}
                 </button>
               ))}
             </>
@@ -1480,40 +1524,49 @@ export function CardDetailModal({
           {onNavigate && detail.selectedCardId && (
             <>
               <ActionButton
-                label="Open in doclist"
+                label={t("stable.kanban.modal.open_doclist")}
                 variant="info"
                 onClick={() =>
                   onNavigate(
-                    `Show me a list view of ${board.doctype} ${detail.selectedCardId}`,
+                    t("stable.kanban.nav.view_list.message", {
+                      doctype: board.doctype,
+                      id: detail.selectedCardId,
+                    }),
                   )}
               />
               {board.doctype === "Task" && (
                 <ActionButton
-                  label="Timesheets"
+                  label={t("kanban.modal.nav.timesheets")}
                   variant="info"
                   onClick={() =>
                     onNavigate(
-                      `Show timesheets for task ${detail.selectedCardId}`,
+                      t("kanban.nav.timesheets.message", {
+                        id: detail.selectedCardId,
+                      }),
                     )}
                 />
               )}
               {board.doctype === "Opportunity" && (
                 <ActionButton
-                  label="Quotations"
+                  label={t("kanban.modal.nav.quotations")}
                   variant="info"
                   onClick={() =>
                     onNavigate(
-                      `Show quotations linked to opportunity ${detail.selectedCardId}`,
+                      t("kanban.nav.quotations.message", {
+                        id: detail.selectedCardId,
+                      }),
                     )}
                 />
               )}
               {board.doctype === "Issue" && (
                 <ActionButton
-                  label="Related tasks"
+                  label={t("kanban.modal.nav.related_tasks")}
                   variant="info"
                   onClick={() =>
                     onNavigate(
-                      `Show tasks related to issue ${detail.selectedCardId}`,
+                      t("kanban.nav.tasks.message", {
+                        id: detail.selectedCardId,
+                      }),
                     )}
                 />
               )}

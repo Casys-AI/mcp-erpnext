@@ -14,6 +14,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
+import { bindHostLocale, useT } from "~/shared/i18n-hook";
 import { fonts, formatCurrency, formatNumber } from "~/shared/theme";
 import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
 import {
@@ -110,6 +111,7 @@ function DeltaBadge({ delta, deltaLabel, trend, trendIsGood }: {
   trend?: "up" | "down" | "flat";
   trendIsGood?: boolean;
 }) {
+  useT();
   const direction = trend ?? (delta > 0 ? "up" : delta < 0 ? "down" : "flat");
   const arrow = direction === "up"
     ? "\u25B2"
@@ -141,6 +143,7 @@ function DeltaBadge({ delta, deltaLabel, trend, trendIsGood }: {
 
   return (
     <span
+      dir="auto"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -159,11 +162,12 @@ function DeltaBadge({ delta, deltaLabel, trend, trendIsGood }: {
       {formatted}%
       {deltaLabel && (
         <span
+          dir="auto"
           style={{
             fontWeight: 400,
             fontFamily: fonts.sans,
             opacity: 0.75,
-            marginLeft: 2,
+            marginInlineStart: 2,
           }}
         >
           {deltaLabel}
@@ -201,6 +205,7 @@ function KpiContent(
     onRefresh: () => void;
   },
 ) {
+  const t = useT();
   const accentColor = data.color ?? "var(--accent)";
   const hasServerTools = app.getHostCapabilities()?.serverTools;
 
@@ -254,6 +259,7 @@ function KpiContent(
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Label */}
             <div
+              dir="auto"
               style={{
                 fontSize: 11,
                 fontWeight: 600,
@@ -287,7 +293,9 @@ function KpiContent(
                   cursor: refreshing ? "default" : "pointer",
                 }}
               >
-                {refreshing ? "Refreshing" : "Refresh"}
+                {refreshing
+                  ? t("stable.kpi.refreshing_button")
+                  : t("common.refresh")}
               </button>
               <div
                 aria-live="polite"
@@ -300,13 +308,17 @@ function KpiContent(
                     : "var(--text-faint)",
                 }}
               >
-                {error ??
-                  (refreshing ? "Refreshing…" : "Auto-refresh on focus")}
+                {error
+                  ? t(error)
+                  : (refreshing
+                    ? t("common.refreshing")
+                    : t("kpi.status.auto_refresh"))}
               </div>
             </div>
 
             {/* Big number — clickable for drill-down */}
             <div
+              dir="auto"
               onClick={hasServerTools && data._drillDown
                 ? () => drillDown(data._drillDown!)
                 : undefined}
@@ -329,7 +341,9 @@ function KpiContent(
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLElement).style.opacity = "1";
               }}
-              title={data._drillDown ? "Click to drill down" : undefined}
+              title={data._drillDown
+                ? t("kpi.drilldown.title_detail")
+                : undefined}
             >
               {displayValue}
             </div>
@@ -350,7 +364,7 @@ function KpiContent(
             <div
               style={{
                 paddingTop: 20,
-                paddingLeft: 12,
+                paddingInlineStart: 12,
                 cursor: hasServerTools && data._trendDrillDown
                   ? "pointer"
                   : "default",
@@ -359,7 +373,7 @@ function KpiContent(
                 ? () => drillDown(data._trendDrillDown!)
                 : undefined}
               title={data._trendDrillDown
-                ? "Click to see trend details"
+                ? t("kpi.drilldown.title_trend")
                 : undefined}
             >
               <Sparkline data={data.sparkline} color={sparklineColor} />
@@ -376,6 +390,7 @@ function KpiContent(
 // ============================================================================
 
 export function KpiViewer() {
+  const t = useT();
   const [data, setData] = useState<KpiData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -406,7 +421,7 @@ export function KpiViewer() {
       return true;
     } catch (cause) {
       console.error("Parse error:", cause);
-      setError("Failed to parse KPI payload");
+      setError("stable.kpi.error.parse_failed");
       setLoading(false);
       return false;
     }
@@ -447,18 +462,22 @@ export function KpiViewer() {
       }, { timeout: TOOL_CALL_TIMEOUT_MS });
 
       if (result.isError) {
-        setError("Refresh failed");
+        setError("common.error.refresh_failed");
         return false;
       }
 
       if (!consumeToolResult(result)) {
-        setError("Refresh returned no data");
+        setError("common.error.refresh_no_data");
         return false;
       }
 
       return true;
     } catch (cause) {
-      setError(normalizeUiRefreshFailureMessage(cause));
+      setError(
+        normalizeUiRefreshFailureMessage(cause) === "Refresh timed out"
+          ? "common.error.refresh_timeout"
+          : "common.error.refresh_failed",
+      );
       return false;
     } finally {
       refreshInFlightRef.current = false;
@@ -477,7 +496,7 @@ export function KpiViewer() {
       }
     };
 
-    app.connect().catch(() => {});
+    app.connect().then(() => bindHostLocale(app)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -513,7 +532,7 @@ export function KpiViewer() {
           fontFamily: fonts.sans,
         }}
       >
-        No KPI data — run an analytics KPI tool
+        {t("stable.kpi.empty")}
       </div>
     );
   }

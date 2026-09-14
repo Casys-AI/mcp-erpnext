@@ -360,3 +360,39 @@ Deno.test("interpretSubmitTransportFailure - unconfirmed, refresh, no proof subm
   assertEquals(feedback.message.toLowerCase().includes("never"), false);
   assertEquals(feedback.message.toLowerCase().includes("rollback"), false);
 });
+
+Deno.test("invoice local submit feedback carries translation keys while server messages stay verbatim", () => {
+  const submittedInvoice = {
+    name: "PINV-001",
+    doctype: "Purchase Invoice",
+    docstatus: 1,
+  };
+  const localSuccess = interpretPurchaseInvoiceSubmitResult({
+    structuredContent: { data: submittedInvoice },
+  }, "PINV-001");
+  assertEquals(localSuccess.messageKey, "invoice.action.submitted");
+  const serverSuccess = interpretPurchaseInvoiceSubmitResult({
+    structuredContent: { data: submittedInvoice, message: "Submitted" },
+  }, "PINV-001");
+  assertEquals(serverSuccess.message, "Submitted");
+  assertEquals(serverSuccess.messageKey, undefined);
+  const localError = interpretPurchaseInvoiceSubmitResult(
+    { isError: true },
+    "PINV-001",
+  );
+  assertEquals(localError.messageKey, "invoice.error.action_failed");
+  const serverError = interpretPurchaseInvoiceSubmitResult({
+    isError: true,
+    structuredContent: { message: "Action failed" },
+  }, "PINV-001");
+  assertEquals(serverError.message, "Action failed");
+  assertEquals(serverError.messageKey, undefined);
+  assertEquals(
+    interpretPurchaseInvoiceSubmitResult({}, "PINV-001").messageKey,
+    "document.purchase_invoice.submit.unconfirmed",
+  );
+  assertEquals(
+    interpretSubmitTransportFailure(new Error("network")).messageKey,
+    "document.purchase_invoice.submit.transport",
+  );
+});

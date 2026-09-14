@@ -374,6 +374,11 @@ started, and [AGENTS.md](AGENTS.md) for the full architecture and conventions.
 
 MIT
 
-Buy result fields use the host locale (EN/FR/ZH). App-level waiting and
-rejection screens retain English labels in this beta; host-context support for
-those shared surface screens remains an upstream MCP View follow-up.
+Viewers and Buy result fields use the host locale: English, French, Simplified
+Chinese, Traditional Chinese, Hindi, Bengali, Tamil and Urdu. Chinese script
+tags take precedence over region tags; `zh-TW`, `zh-HK` and `zh-MO` select
+Traditional Chinese when no script is specified. Urdu uses right-to-left
+document direction, and a later host locale change updates the language and
+direction without reloading the viewer. App-level waiting and rejection screens
+retain English labels in this beta; host-context support for those shared
+surface screens remains an upstream MCP View follow-up.

@@ -33,7 +33,17 @@ import { useT } from "~/shared/i18n-hook";
 import type { TFunction } from "~/shared/i18n-hook";
 import { hintLabel, type NavHint } from "~/shared/jumps";
 import { createSingleFlightGate } from "~/shared/single-flight.ts";
-import type { TaskTimesheetAvailability } from "~/shared/kanban/task-timesheet-availability";
+import {
+  type TaskTimesheetAvailability,
+  taskTimesheetAvailabilityErrorMessage,
+} from "~/shared/kanban/task-timesheet-availability";
+import { kanbanBadgeLabel, kanbanStatusLabel } from "~/shared/kanban/labels";
+
+type LocalizedMessage = string | { key: string };
+
+function localizedMessageText(message: LocalizedMessage, t: TFunction): string {
+  return typeof message === "string" ? message : t(message.key);
+}
 
 const DETAIL_SKIP_FIELDS = new Set([
   "doctype",
@@ -382,8 +392,12 @@ function fieldControl(
 
   if (isReadonly || !editable) {
     return (
-      <span class="min-w-0 break-words text-data text-ink-2">
-        {String(value)}
+      <span dir="auto" class="min-w-0 break-words text-data text-ink-2">
+        {fieldKey === "status" || fieldKey === "workflow_state"
+          ? kanbanStatusLabel(String(value), t)
+          : type === "select"
+          ? kanbanBadgeLabel(String(value), t)
+          : String(value)}
       </span>
     );
   }
@@ -433,6 +447,7 @@ function fieldControl(
     case "date":
       return (
         <input
+          dir="auto"
           class={editedControlClass(CONTROL_MONO_CLASS, isEdited)}
           type="date"
           value={displayValue}
@@ -446,6 +461,7 @@ function fieldControl(
     case "number":
       return (
         <input
+          dir="auto"
           class={editedControlClass(CONTROL_MONO_CLASS, isEdited)}
           type="number"
           value={displayValue}
@@ -459,6 +475,7 @@ function fieldControl(
     default:
       return (
         <input
+          dir="auto"
           class={editedControlClass(CONTROL_CLASS, isEdited)}
           type="text"
           value={displayValue}
@@ -502,11 +519,11 @@ function AssigneesSection({
 }) {
   const t = useT();
   const [users, setUsers] = useState<AssignableUser[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<LocalizedMessage | null>(null);
   const [selected, setSelected] = useState("");
   const [assigning, setAssigning] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
-  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState<LocalizedMessage | null>(null);
 
   useEffect(() => {
     if (!onLoadUsers) {
@@ -523,7 +540,7 @@ function AssigneesSection({
           setLoadError(
             error instanceof Error
               ? error.message
-              : t("kanban.assignees.error.load_users"),
+              : { key: "kanban.assignees.error.load_users" },
           );
         }
       });
@@ -547,7 +564,7 @@ function AssigneesSection({
       setAssignError(
         error instanceof Error
           ? error.message
-          : t("kanban.assignees.error.assign"),
+          : { key: "kanban.assignees.error.assign" },
       );
     } finally {
       setAssigning(false);
@@ -564,7 +581,7 @@ function AssigneesSection({
       setAssignError(
         error instanceof Error
           ? error.message
-          : t("kanban.assignees.error.unassign"),
+          : { key: "kanban.assignees.error.unassign" },
       );
     } finally {
       setRemoving(null);
@@ -588,14 +605,16 @@ function AssigneesSection({
         )}
         {assignees.map((email) => (
           <Badge key={email} tone="info">
-            <span class="min-w-0 break-all" title={email}>{email}</span>
+            <span dir="auto" class="min-w-0 break-all" title={email}>
+              {email}
+            </span>
             {onUnassign && (
               <button
                 type="button"
                 aria-label={t("kanban.assignees.remove_aria", { email })}
                 title={t("kanban.assignees.remove_aria", { email })}
                 disabled={removing !== null}
-                class="ml-1 text-chip text-accent hover:text-bad transition-colors disabled:opacity-50"
+                class="ms-1 text-chip text-accent hover:text-bad transition-colors disabled:opacity-50"
                 onClick={() => void handleUnassign(email)}
               >
                 {removing === email ? "…" : "×"}
@@ -645,8 +664,8 @@ function AssigneesSection({
       )}
       {(assignError ?? loadError) && (
         /* Erreur inline : des données sont déjà affichées — pas de StateMessage tone="bad". */
-        <p class="border-l-2 border-bad pl-2.5 text-chip text-bad">
-          {assignError ?? loadError}
+        <p class="border-s-2 border-bad ps-2.5 text-chip text-bad">
+          {localizedMessageText((assignError ?? loadError)!, t)}
         </p>
       )}
     </div>
@@ -716,7 +735,7 @@ export function CardDetailModal({
   const cardDetailRef = useRef(detail.cardDetail);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<
-    { text: string; isError: boolean } | null
+    { text: LocalizedMessage; isError: boolean } | null
   >(null);
   const [navigatePendingKey, setNavigatePendingKey] = useState<string | null>(
     null,
@@ -749,14 +768,14 @@ export function CardDetailModal({
   const card = board.cards.find((c) => c.id === detail.selectedCardId);
   const cardTitle = card?.title ?? detail.selectedCardId;
   const availableTargets = card
-    ? getAvailableTargets(board, card.columnId)
+    ? getAvailableTargets(board, card.columnId, t)
     : [];
   const hasEdits = Object.keys(editedFields).length > 0;
   const canEdit = Boolean(onSave);
 
   function requestDiscard(
     onConfirm: () => void,
-    actionLabel: string,
+    actionLabelKey: string,
   ) {
     if (resolveCardDetailCloseIntent(editedFields) === "close") {
       onConfirm();
@@ -765,14 +784,17 @@ export function CardDetailModal({
     discardConfirm.request({
       subject: selectedCardId,
       title: t("kanban.modal.discard.title"),
+      titleKey: "kanban.modal.discard.title",
       detail: t("kanban.modal.discard.detail"),
-      actionLabel,
+      detailKey: "kanban.modal.discard.detail",
+      actionLabel: t(actionLabelKey),
+      actionLabelKey,
       onConfirm,
     });
   }
 
   function requestClose() {
-    requestDiscard(onClose, t("kanban.modal.discard.action"));
+    requestDiscard(onClose, "kanban.modal.discard.action");
   }
 
   function handleFieldChange(key: string, value: string) {
@@ -818,7 +840,7 @@ export function CardDetailModal({
         : { ...originalDetail, ...submittedFields };
       setSaveMessage(
         editRevisionRef.current === submittedRevision
-          ? { text: t("kanban.modal.saved"), isError: false }
+          ? { text: { key: "kanban.modal.saved" }, isError: false }
           : null,
       );
       setEditedFields((current) => rebaseCardEdits(current, canonical));
@@ -831,7 +853,7 @@ export function CardDetailModal({
       setSaveMessage({
         text: error instanceof Error
           ? error.message
-          : t("kanban.modal.save_error"),
+          : { key: "kanban.modal.save_error" },
         isError: true,
       });
     } finally {
@@ -937,7 +959,7 @@ export function CardDetailModal({
           )}
           {saveMessage && (
             <Badge tone={saveMessage.isError ? "danger" : "success"}>
-              {saveMessage.text}
+              {localizedMessageText(saveMessage.text, t)}
             </Badge>
           )}
         </SheetActions>
@@ -959,13 +981,13 @@ export function CardDetailModal({
                   requestDiscard(() => {
                     onMove(card, target.columnId, target.label);
                     onClose();
-                  }, t("kanban.modal.discard.move_action"));
+                  }, "kanban.modal.discard.move_action");
                 }}
               >
                 {target.color && (
                   <span
                     aria-hidden="true"
-                    class="inline-block mr-1.5 rounded-full"
+                    class="inline-block me-1.5 rounded-full"
                     style={{
                       width: 6,
                       height: 6,
@@ -990,7 +1012,7 @@ export function CardDetailModal({
               onClick={() =>
                 requestDiscard(
                   onViewList,
-                  t("kanban.modal.discard.continue_action"),
+                  "kanban.modal.discard.continue_action",
                 )}
             />
           )}
@@ -1005,7 +1027,7 @@ export function CardDetailModal({
                 onClick={() =>
                   requestDiscard(
                     () => onJump!(hint, detail.selectedCardId!),
-                    t("kanban.modal.discard.continue_action"),
+                    "kanban.modal.discard.continue_action",
                   )}
               />
             ))}
@@ -1121,8 +1143,11 @@ export function CardDetailModal({
                 onRecheckTimesheets && (
                 <button
                   type="button"
-                  class="ml-2 underline focus-visible:outline-2 focus-visible:outline-accent"
-                  title={timesheetAvailability.message}
+                  class="ms-2 underline focus-visible:outline-2 focus-visible:outline-accent"
+                  title={taskTimesheetAvailabilityErrorMessage(
+                    timesheetAvailability,
+                    t,
+                  )}
                   onClick={onRecheckTimesheets}
                 >
                   {t("common.retry")}
@@ -1214,6 +1239,7 @@ export function CardDetailModal({
           ? (
             <input
               type="text"
+              dir="auto"
               aria-label={fieldLabel(classified.titleField.key, t)}
               class={editedControlClass(
                 "w-full min-w-0 rounded-control border border-transparent bg-transparent px-1 py-0.5 font-display text-card-title font-semibold text-ink hover:border-line focus:border-accent focus:outline-none",
@@ -1228,7 +1254,10 @@ export function CardDetailModal({
             />
           )
           : (
-            <h2 class="break-words font-display text-card-title font-semibold text-ink">
+            <h2
+              dir="auto"
+              class="break-words font-display text-card-title font-semibold text-ink"
+            >
               {sheetTitle}
             </h2>
           ))
@@ -1236,6 +1265,7 @@ export function CardDetailModal({
       headerMeta={classified && (
         <div class="mt-1 flex flex-wrap items-center gap-2">
           <span
+            dir="auto"
             class="max-w-[9rem] truncate font-mono text-chip text-ink-faint"
             title={classified.idValue ?? selectedCardId}
           >
@@ -1248,7 +1278,7 @@ export function CardDetailModal({
                 ? { color: columnColor, borderColor: columnColor }
                 : undefined}
             >
-              {classified.statusValue}
+              {kanbanStatusLabel(classified.statusValue, t)}
             </span>
           )}
           {priority != null && (canEdit
@@ -1286,7 +1316,7 @@ export function CardDetailModal({
                   ? "success"
                   : undefined}
               >
-                {priority}
+                {kanbanBadgeLabel(priority, t)}
               </Badge>
             ))}
           {classified.milestoneValue !== null && (
@@ -1325,6 +1355,7 @@ export function CardDetailModal({
                 ? (
                   <input
                     id="kanban-detail-project"
+                    dir="auto"
                     type="text"
                     title={project}
                     size={Math.min(24, Math.max(6, project.length + 1))}
@@ -1340,6 +1371,7 @@ export function CardDetailModal({
                 : (
                   <span
                     id="kanban-detail-project"
+                    dir="auto"
                     class="min-w-0 max-w-[13rem] truncate font-mono text-chip text-ink-2"
                     title={project}
                   >
@@ -1370,7 +1402,9 @@ export function CardDetailModal({
           )}
           {saveMessage && !saveMessage.isError && !hasEdits && !saving && (
             <span role="status" aria-live="polite">
-              <Badge tone="success">{saveMessage.text}</Badge>
+              <Badge tone="success">
+                {localizedMessageText(saveMessage.text, t)}
+              </Badge>
             </span>
           )}
         </div>
@@ -1481,6 +1515,7 @@ export function CardDetailModal({
                       {canEdit
                         ? (
                           <textarea
+                            dir="auto"
                             class={cx(
                               editedControlClass(
                                 CONTROL_CLASS,
@@ -1503,7 +1538,10 @@ export function CardDetailModal({
                           />
                         )
                         : (
-                          <p class="m-0 whitespace-pre-wrap text-data text-ink-2">
+                          <p
+                            dir="auto"
+                            class="m-0 whitespace-pre-wrap text-data text-ink-2"
+                          >
                             {String(classified.descriptionField.value)}
                           </p>
                         )}
@@ -1519,7 +1557,7 @@ export function CardDetailModal({
                 <div
                   class={cx(
                     "flex min-w-0 flex-col gap-2",
-                    hasPrimary && "sm:border-l sm:border-line-soft sm:pl-4",
+                    hasPrimary && "sm:border-s sm:border-line-soft sm:ps-4",
                   )}
                 >
                   {relatedSections.map((section) =>

@@ -453,6 +453,7 @@ function DocumentContent({
         hint,
         { id: envelope.name, doctype: envelope.doctype },
         t("nav.linked_to", { id: envelope.name }),
+        { key: "nav.linked_to", params: { id: envelope.name } },
       );
       return jump ? [jump] : [];
     })
@@ -485,6 +486,8 @@ function DocumentContent({
         row,
         availableTools: envelope.availableTools,
         subtitle: t("nav.linked_to", { id: envelope.name }),
+        subtitleKey: "nav.linked_to",
+        subtitleParams: { id: envelope.name },
       })
       : [];
     const rowAsks = viewerNav.ask
@@ -523,7 +526,7 @@ function DocumentContent({
   const rootContextTarget: ContextInteractionTarget | undefined =
     context.supported && contextDocumentItem
       ? {
-        label: t("context.active.select", {
+        label: t("context.active.toggle", {
           label: contextDocumentItem.label,
         }),
         selected: context.isSelected(contextDocumentItem),
@@ -539,7 +542,7 @@ function DocumentContent({
     const item = childRowContextItem(envelope, table, row, rowIndex);
     return item
       ? {
-        label: t("context.active.select", { label: item.label }),
+        label: t("context.active.toggle", { label: item.label }),
         detailLabel: item.label,
         selected: context.isSelected(item),
         onActivate: () => context.toggleReversible(item),

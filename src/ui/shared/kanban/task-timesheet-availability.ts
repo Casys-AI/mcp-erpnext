@@ -5,7 +5,7 @@ import { canCallViewerTool } from "../viewer-tools.ts";
 
 export type TaskTimesheetAvailability =
   | { status: "unavailable" | "loading" | "present" | "empty" }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; messageKey?: string };
 
 export function canCheckTaskTimesheets(
   taskId: string | null,
@@ -42,10 +42,15 @@ export async function loadTaskTimesheetAvailability(
       return {
         status: "error",
         message: text ?? t("common.error.tool_failed"),
+        ...(text ? {} : { messageKey: "common.error.tool_failed" }),
       };
     }
     if (!text) {
-      return { status: "error", message: t("common.error.no_payload") };
+      return {
+        status: "error",
+        message: t("common.error.no_payload"),
+        messageKey: "common.error.no_payload",
+      };
     }
     const payload: unknown = JSON.parse(text);
     if (
@@ -57,7 +62,11 @@ export async function loadTaskTimesheetAvailability(
         typeof doc.name === "string" && doc.name.length > 0
       )
     ) {
-      return { status: "error", message: t("common.error.parse_failed") };
+      return {
+        status: "error",
+        message: t("common.error.parse_failed"),
+        messageKey: "common.error.parse_failed",
+      };
     }
     // The child-table join can repeat a parent; one row proves presence only.
     return { status: payload.data.length > 0 ? "present" : "empty" };
@@ -67,6 +76,9 @@ export async function loadTaskTimesheetAvailability(
       message: cause instanceof Error
         ? cause.message
         : t("common.error.tool_failed"),
+      ...(cause instanceof Error
+        ? {}
+        : { messageKey: "common.error.tool_failed" }),
     };
   }
 }
@@ -89,4 +101,14 @@ export function startTaskTimesheetAvailabilityCheck(
       cancelled = true;
     },
   };
+}
+
+/** Host errors stay verbatim; viewer fallback messages follow later locale changes. */
+export function taskTimesheetAvailabilityErrorMessage(
+  availability: Extract<TaskTimesheetAvailability, { status: "error" }>,
+  translate: typeof t,
+): string {
+  return availability.messageKey
+    ? translate(availability.messageKey)
+    : availability.message;
 }

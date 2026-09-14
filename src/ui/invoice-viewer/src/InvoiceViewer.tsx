@@ -799,7 +799,7 @@ function InvoiceContent({
   const rootContextTarget: ContextInteractionTarget | undefined =
     nav.isRoot && context.supported
       ? {
-        label: t("context.active.select", {
+        label: t("context.active.toggle", {
           label: contextDocumentItem.label,
         }),
         selected: context.isSelected(contextDocumentItem),
@@ -856,7 +856,7 @@ function InvoiceContent({
               : "document.row.open_detail_only"),
           { label },
         )
-        : t("context.active.select", { label }),
+        : t("context.active.toggle", { label }),
       selected,
       expanded: canExpand ? expandedIdx === row.idx : undefined,
       detailLabel: label,

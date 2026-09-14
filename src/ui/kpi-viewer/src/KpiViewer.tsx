@@ -695,12 +695,12 @@ function KpiCard({
   );
   const numberAriaLabel = numberInteractive
     ? contextEnabled
-      ? t("context.active.select", { label: numberContext.label })
+      ? t("context.active.toggle", { label: numberContext.label })
       : t("kpi.drilldown.aria_detail", { label: data.label })
     : undefined;
   const trendAriaLabel = trendInteractive
     ? contextEnabled
-      ? t("context.active.select", { label: trendContext.label })
+      ? t("context.active.toggle", { label: trendContext.label })
       : t("kpi.drilldown.aria_trend", { label: data.label })
     : undefined;
   const numberKeyShortcuts = numberHasDetail

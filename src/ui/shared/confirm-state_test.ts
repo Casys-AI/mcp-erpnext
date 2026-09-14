@@ -1,7 +1,9 @@
+import { translatorForLocale } from "./i18n.ts";
 import { assertEquals } from "@std/assert";
 import {
   confirmPending,
   dismissConfirm,
+  pendingConfirmText,
   requestConfirm,
 } from "./confirm-state.ts";
 
@@ -48,4 +50,33 @@ Deno.test("confirm-state : une nouvelle demande remplace la précédente sans l'
   const second = requestConfirm(first, pending(calls, "B"));
   confirmPending(second).run?.();
   assertEquals(calls, ["B"]);
+});
+
+Deno.test("stored confirmation copy follows locale while preserving the pending action and legacy strings", () => {
+  const calls: string[] = [];
+  const state = requestConfirm(null, {
+    ...pending(calls),
+    titleKey: "kanban.modal.discard.title",
+    detailKey: "kanban.modal.discard.detail",
+    actionLabelKey: "kanban.modal.discard.action",
+  })!;
+  assertEquals(
+    pendingConfirmText(state, "title", translatorForLocale("fr")),
+    "Abandonner les modifications ?",
+  );
+  assertEquals(
+    pendingConfirmText(state, "title", translatorForLocale("en")),
+    "Discard unsaved changes?",
+  );
+  assertEquals(
+    pendingConfirmText(state, "actionLabel", translatorForLocale("en")),
+    "Discard and close",
+  );
+  assertEquals(calls, []);
+  confirmPending(state).run?.();
+  assertEquals(calls, ["A"]);
+  assertEquals(
+    pendingConfirmText(pending([]), "title", translatorForLocale("en")),
+    "Annuler ?",
+  );
 });

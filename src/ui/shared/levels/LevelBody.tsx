@@ -37,7 +37,7 @@ import {
   type Jump,
   jumpFromHint,
 } from "../jumps";
-import type { NavLevel } from "../nav-stack";
+import { type NavLevel, navLevelSubtitle } from "../nav-stack";
 import { useT } from "../i18n-hook";
 import { Button, Label, StateMessage } from "../ui";
 import type { ViewerLayout } from "../useViewerLayout";
@@ -158,7 +158,7 @@ export function LevelBody(
       list={list}
       layout={layout}
       fixture={fixture}
-      subtitle={level.subtitle}
+      subtitle={navLevelSubtitle(level, t)}
       onError={onError}
       onJump={onJump}
       onAsk={onAsk}
@@ -217,6 +217,7 @@ function ChartLevel({
         hint,
         {},
         t("nav.linked_to", { id: target }),
+        { key: "nav.linked_to", params: { id: target } },
       )
       : null;
   };
@@ -340,6 +341,7 @@ function RecordDocumentLevel({
       hint,
       vars,
       t("nav.linked_to", { id: envelope.name }),
+      { key: "nav.linked_to", params: { id: envelope.name } },
     );
   };
   const hintJumps = hints
@@ -409,7 +411,7 @@ function RecordDocumentLevel({
     : undefined;
   const contextTarget: ContextInteractionTarget | undefined = context?.supported
     ? {
-      label: t("context.active.select", { label: contextItem.label }),
+      label: t("context.active.toggle", { label: contextItem.label }),
       selected: context.isSelected(contextItem),
       onActivate: () => void context.toggle(contextItem),
     }
@@ -425,6 +427,8 @@ function RecordDocumentLevel({
         row,
         availableTools: exactTools,
         subtitle: t("nav.linked_to", { id: envelope.name }),
+        subtitleKey: "nav.linked_to",
+        subtitleParams: { id: envelope.name },
       })
       : [];
     const rowAsks = onAsk
@@ -475,7 +479,7 @@ function RecordDocumentLevel({
     );
     return item
       ? {
-        label: t("context.active.select", { label: item.label }),
+        label: t("context.active.toggle", { label: item.label }),
         detailLabel: item.label,
         selected: context.isSelected(item),
         onActivate: () => context.toggleReversible(item),

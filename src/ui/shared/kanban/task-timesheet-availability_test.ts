@@ -1,4 +1,5 @@
 import { assertEquals, assertExists } from "@std/assert";
+import { translatorForLocale } from "../i18n.ts";
 import type { ToolHost } from "../jumps.ts";
 import type { ToolResultPayload } from "../refresh.ts";
 import {
@@ -6,6 +7,7 @@ import {
   loadTaskTimesheetAvailability,
   startTaskTimesheetAvailabilityCheck,
   type TaskTimesheetAvailability,
+  taskTimesheetAvailabilityErrorMessage,
 } from "./task-timesheet-availability.ts";
 
 function result(data: unknown[], count = data.length): ToolResultPayload {
@@ -187,4 +189,33 @@ Deno.test("cancelled checks swallow their delayed errors while a retry publishes
     { status: "loading" },
     { status: "empty" },
   ]);
+});
+
+Deno.test("task timesheet viewer errors translate again after a locale change while host diagnostics stay verbatim", async () => {
+  const availability = await loadTaskTimesheetAvailability({
+    callServerTool: () => Promise.resolve({}),
+  }, "TASK-001");
+  assertEquals(availability.status, "error");
+  if (availability.status !== "error") return;
+  assertEquals(
+    taskTimesheetAvailabilityErrorMessage(
+      availability,
+      translatorForLocale("fr"),
+    ),
+    "Aucun contenu renvoyé par l'outil",
+  );
+  assertEquals(
+    taskTimesheetAvailabilityErrorMessage(
+      availability,
+      translatorForLocale("en"),
+    ),
+    "No text payload returned by tool call",
+  );
+  assertEquals(
+    taskTimesheetAvailabilityErrorMessage({
+      status: "error",
+      message: "Permission denied",
+    }, translatorForLocale("fr")),
+    "Permission denied",
+  );
 });

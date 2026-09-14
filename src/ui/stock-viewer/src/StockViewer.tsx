@@ -758,7 +758,7 @@ function StockContent(
                     : "document.row.open_detail_only"),
                 { label: row.item_code },
               )
-              : t("context.active.select", { label: row.item_code });
+              : t("context.active.toggle", { label: row.item_code });
             const intent = {
               key: contextItem.id,
               doublePolicy: "local" as const,

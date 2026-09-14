@@ -6,6 +6,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Added
 
+- Viewers support Traditional Chinese, Hindi, Bengali, Tamil and Urdu from the
+  host locale, including right-to-left document direction for Urdu.
+
 - Buy recorded-result `/2.0` retains bounded quantity, unit, and reason metadata
   for selected unpriced lines. The immutable Buy evidence viewer shows those
   excluded lines without assigning a monetary value or refreshing ERP.
@@ -16,6 +19,10 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   selects no site and applies no changes.
 
 ### Fixed
+
+- Kanban status, transition, badge and metric labels follow the host language.
+  Context hints describe both selection and deselection, and navigation titles
+  and save feedback update when the language changes.
 
 - Clicking selected viewer data again, or pressing Space, removes that exact
   context selection. Opening its detail with double-click or Enter preserves the

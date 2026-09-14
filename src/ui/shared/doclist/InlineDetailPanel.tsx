@@ -274,6 +274,7 @@ function InlineDocument({
       hint,
       vars,
       t("nav.linked_to", { id: envelope.name }),
+      { key: "nav.linked_to", params: { id: envelope.name } },
     );
   };
   const jumps = hints
@@ -470,6 +471,8 @@ function InlineDocument({
         subtitle: t("nav.linked_to", {
           id: item?.label ?? envelope.name,
         }),
+        subtitleKey: "nav.linked_to",
+        subtitleParams: { id: item?.label ?? envelope.name },
       })
       : [];
     const rowAsks = onAsk
@@ -522,7 +525,7 @@ function InlineDocument({
     : undefined;
   const contextTarget: ContextInteractionTarget | undefined = context?.supported
     ? {
-      label: t("context.active.select", { label: contextItem.label }),
+      label: t("context.active.toggle", { label: contextItem.label }),
       selected: context.isSelected(contextItem),
       onActivate: () => void context.toggle(contextItem),
     }
@@ -536,7 +539,7 @@ function InlineDocument({
       const { item } = childRowInteraction(table, row, rowIndex);
       return item && context?.supported
         ? {
-          label: t("context.active.select", { label: item.label }),
+          label: t("context.active.toggle", { label: item.label }),
           detailLabel: item.label,
           selected: context.isSelected(item),
           onActivate: () => context.toggleReversible(item),

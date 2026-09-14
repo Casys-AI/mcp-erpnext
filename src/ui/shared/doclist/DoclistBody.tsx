@@ -323,7 +323,7 @@ export function DoclistBody(
               : "document.row.open_detail_only"),
           { label },
         )
-        : t("context.active.select", { label }),
+        : t("context.active.toggle", { label }),
       selected,
       expanded: isInspectable ? expandedId === rowId : undefined,
       detailLabel: label,

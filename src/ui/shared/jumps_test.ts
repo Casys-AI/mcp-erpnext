@@ -6,10 +6,12 @@ import {
   hasUnfilledTemplate,
   hintLabel,
   jumpFromHint,
+  jumpLabel,
   levelFromJump,
   loadLevelBody,
 } from "./jumps.ts";
-import { setLangSource } from "./i18n.ts";
+import { setLangSource, translatorForLocale } from "./i18n.ts";
+import { navLevelSubtitle, navLevelTitle } from "./nav-stack.ts";
 
 const HINT = {
   key: "payments",
@@ -146,4 +148,88 @@ Deno.test("hasUnfilledTemplate - cherche dans les chaînes, tableaux et objets",
   assertEquals(hasUnfilledTemplate({ filters: [["a", "=", "{id}"]] }), true);
   assertEquals(hasUnfilledTemplate({ limit: 20, name: "SO-1" }), false);
   assertEquals(hasUnfilledTemplate(null), false);
+});
+
+Deno.test("stored timesheet navigation translates after opening without changing the task query", () => {
+  setLangSource(() => "fr");
+  const jump = jumpFromHint({
+    key: "timesheets",
+    label: "Timesheets",
+    tool: "erpnext_doc_list",
+    args: {
+      doctype: "Timesheet",
+      filters: [["Timesheet Detail", "task", "=", "{id}"]],
+    },
+  }, { id: "TASK-001" })!;
+  const before = JSON.stringify(jump.tool);
+  const level = levelFromJump(jump);
+  assertEquals(jumpLabel(jump, translatorForLocale("en")), "Timesheets");
+  assertEquals(navLevelTitle(level, translatorForLocale("en")), "Timesheets");
+  assertEquals(
+    navLevelTitle(level, translatorForLocale("fr")),
+    "Feuilles de temps",
+  );
+  assertEquals(JSON.stringify(jump.tool), before);
+  assertEquals(level.title, "Feuilles de temps");
+});
+
+Deno.test("stored navigation localization preserves custom labels and parameters", () => {
+  const english = translatorForLocale("en");
+  assertEquals(
+    jumpLabel({
+      label: "Casys Industries",
+      kind: "record",
+      tool: { name: "erpnext_doc_get", args: {} },
+    }, english),
+    "Casys Industries",
+  );
+  assertEquals(
+    navLevelTitle({ title: "Custom", titleKey: "absent.key" }, english),
+    "Custom",
+  );
+  assertEquals(
+    navLevelTitle({
+      title: "Old title",
+      titleKey: "nav.linked_to",
+      titleParams: { id: "TASK-{literal}" },
+    }, english),
+    "linked to TASK-{literal}",
+  );
+});
+
+Deno.test("stored timesheet navigation subtitle follows locale and preserves a literal document identity", () => {
+  const taskId = "TASK-{literal}-001";
+  const jump = jumpFromHint(
+    {
+      key: "timesheets",
+      label: "Timesheets",
+      tool: "erpnext_doc_list",
+      args: { doctype: "Timesheet" },
+    },
+    {},
+    "liées à " + taskId,
+    { key: "nav.linked_to", params: { id: taskId } },
+  )!;
+  const level = levelFromJump(jump);
+  const original = JSON.stringify(level);
+  assertEquals(
+    navLevelSubtitle(level, translatorForLocale("fr")),
+    "liées à " + taskId,
+  );
+  assertEquals(
+    navLevelSubtitle(level, translatorForLocale("en")),
+    "linked to " + taskId,
+  );
+  assertEquals(JSON.stringify(level), original);
+  assertEquals(
+    navLevelSubtitle({ subtitle: taskId }, translatorForLocale("fr")),
+    taskId,
+  );
+  assertEquals(
+    navLevelSubtitle(
+      { subtitle: taskId, subtitleKey: "absent.key" },
+      translatorForLocale("en"),
+    ),
+    taskId,
+  );
 });

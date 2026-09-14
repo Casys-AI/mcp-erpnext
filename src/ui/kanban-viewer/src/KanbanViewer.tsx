@@ -30,7 +30,14 @@ import {
 } from "~/shared/ui";
 import { useViewerLayout } from "~/shared/useViewerLayout";
 import type { ViewerLayout } from "~/shared/useViewerLayout";
-import { useT } from "~/shared/i18n-hook";
+import { type TFunction, useT } from "~/shared/i18n-hook";
+import {
+  kanbanBadgeLabel,
+  kanbanMetricLabel,
+  kanbanStatusLabel,
+  kanbanTransitionLabel,
+} from "~/shared/kanban/labels";
+
 import { t } from "~/shared/i18n";
 import {
   getErrorPresentation,
@@ -121,6 +128,7 @@ function unwrapDoc(payload: Record<string, unknown>): Record<string, unknown> {
 export function getAvailableTargets(
   board: KanbanBoardData,
   columnId: string,
+  tf?: TFunction,
 ): Array<{ columnId: string; label: string; color?: string }> {
   return board.allowedTransitions
     .filter((transition) =>
@@ -134,7 +142,12 @@ export function getAvailableTargets(
       );
       return {
         columnId: transition.toColumn,
-        label: transition.label ?? targetCol?.label ?? transition.toColumn,
+        label: tf
+          ? kanbanTransitionLabel(
+            transition.label ?? targetCol?.label ?? transition.toColumn,
+            tf,
+          )
+          : transition.label ?? targetCol?.label ?? transition.toColumn,
         color: targetCol?.color,
       };
     });
@@ -395,17 +408,21 @@ function KanbanCard({
             isMobile ? "mb-[7px]" : "mb-[6px]",
           )}
         >
-          <span class="flex-1 min-w-0 text-cell text-ink leading-snug">
+          <span
+            dir="auto"
+            class="flex-1 min-w-0 text-cell text-ink leading-snug"
+          >
             {onTitleClick
               ? (
                 <button
                   type="button"
+                  dir="auto"
                   aria-label={t("interaction.detail.open", {
                     label: card.title,
                   })}
                   aria-haspopup="dialog"
                   class={cx(
-                    "group text-left text-cell text-ink transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                    "group text-start text-cell text-ink transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                     "min-h-10",
                   )}
                   onClick={(event) => {
@@ -489,6 +506,7 @@ function KanbanCard({
         {/* Subtitle */}
         {card.subtitle && (
           <span
+            dir="auto"
             class={cx(
               "block font-mono text-micro text-ink-faint",
               "mb-[8px]",
@@ -501,6 +519,7 @@ function KanbanCard({
         {/* Description */}
         {card.description && (
           <span
+            dir="auto"
             class="block text-meta text-ink-muted mb-[8px]"
             style={{ lineHeight: 1.45 }}
           >
@@ -519,7 +538,7 @@ function KanbanCard({
                   BADGE_TONE_CLASS[badge.tone ?? "neutral"],
                 )}
               >
-                {badge.label}
+                {kanbanBadgeLabel(badge.label, t)}
               </span>
             ))}
           </div>
@@ -535,7 +554,7 @@ function KanbanCard({
               aria-hidden="true"
               class="size-1.5 shrink-0 rounded-full bg-accent"
             />
-            <span class="truncate">{card.assignee}</span>
+            <span dir="auto" class="truncate">{card.assignee}</span>
           </div>
         )}
 
@@ -562,7 +581,7 @@ function KanbanCard({
                 class="flex min-w-0 flex-col gap-0.5"
               >
                 <span class="font-mono text-[9px] uppercase text-ink-faint">
-                  {metric.label}
+                  {kanbanMetricLabel(metric.label, t)}
                 </span>
                 <strong class="font-mono text-meta tabular-nums text-ink">
                   {metric.value}
@@ -714,7 +733,7 @@ function KanbanColumn({
             style={{ width: 5, height: 5, background: column.color }}
           />
           <span class="font-mono text-chip uppercase tracking-[0.08em] text-ink-2">
-            {column.label}
+            {kanbanStatusLabel(column.label, t)}
           </span>
         </div>
         <span class="font-mono text-chip text-ink-faint">{column.count}</span>
@@ -727,7 +746,7 @@ function KanbanColumn({
             key={card.id}
             card={card}
             isMobile={false}
-            allowedTargets={getAvailableTargets(board, card.columnId)}
+            allowedTargets={getAvailableTargets(board, card.columnId, t)}
             onMove={onMove}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
@@ -737,7 +756,9 @@ function KanbanColumn({
         ))}
         {cards.length === 0 && (
           <p class="text-center text-data text-ink-faint py-4">
-            {t("kanban.column.empty", { label: column.label })}
+            {t("kanban.column.empty", {
+              label: kanbanStatusLabel(column.label, t),
+            })}
           </p>
         )}
       </div>
@@ -807,7 +828,7 @@ function MobileColumnNavWrapper({
               isMobile ? "text-meta" : "text-chip",
             )}
           >
-            {column.label}
+            {kanbanStatusLabel(column.label, t)}
           </span>
           <span class="font-mono text-meta text-ink-faint">
             {column.count}
@@ -850,14 +871,14 @@ function MobileColumnNavWrapper({
         style={{ padding: "10px 12px 12px" }}
         id={`kanban-panel-${column.id}`}
         role="tabpanel"
-        aria-label={column.label}
+        aria-label={kanbanStatusLabel(column.label, t)}
       >
         {cards.map((card) => (
           <KanbanCard
             key={card.id}
             card={card}
             isMobile={isMobile}
-            allowedTargets={getAvailableTargets(board, card.columnId)}
+            allowedTargets={getAvailableTargets(board, card.columnId, t)}
             onMove={onMove}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
@@ -867,7 +888,9 @@ function MobileColumnNavWrapper({
         ))}
         {cards.length === 0 && (
           <p class="text-center text-data text-ink-faint py-4">
-            {t("kanban.column.empty", { label: column.label })}
+            {t("kanban.column.empty", {
+              label: kanbanStatusLabel(column.label, t),
+            })}
           </p>
         )}
       </div>
@@ -1081,6 +1104,7 @@ function KanbanBoardWithNav({
       hint,
       kanbanNavVars(cardId, board.doctype),
       t("nav.linked_to", { id: cardId }),
+      { key: "nav.linked_to", params: { id: cardId } },
     );
     // La popin fait partie de l'état du niveau : on ne la ferme pas, elle
     // disparaît tant qu'on est plus bas et rouvre à l'identique au retour.
@@ -1092,6 +1116,7 @@ function KanbanBoardWithNav({
     // This selected identity is already literal, including any braces in its ID.
     void nav.jump({
       label: t(`kanban.modal.nav.view_list.${board.doctype}`),
+      labelKey: `kanban.modal.nav.view_list.${board.doctype}`,
       kind: "list",
       tool: { name: cardListHint.tool, args: cardListHint.args ?? {} },
       subtitle: detail.selectedCardId ?? undefined,

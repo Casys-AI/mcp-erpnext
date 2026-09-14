@@ -392,7 +392,13 @@ function fieldControl(
 
   if (isReadonly || !editable) {
     return (
-      <span dir="auto" class="min-w-0 break-words text-data text-ink-2">
+      <span
+        dir="auto"
+        class={cx(
+          "min-w-0 break-words text-data text-ink-2",
+          type === "textarea" && "whitespace-pre-wrap",
+        )}
+      >
         {fieldKey === "status" || fieldKey === "workflow_state"
           ? kanbanStatusLabel(String(value), t)
           : type === "select"
@@ -469,6 +475,21 @@ function fieldControl(
             onFieldChange(
               fieldKey,
               (e.currentTarget as HTMLInputElement).value,
+            )}
+        />
+      );
+    case "textarea":
+      return (
+        <textarea
+          dir="auto"
+          aria-label={fieldLabel(fieldKey, t)}
+          class={cx(editedControlClass(CONTROL_CLASS, isEdited), "resize-y")}
+          rows={3}
+          value={displayValue}
+          onInput={(e) =>
+            onFieldChange(
+              fieldKey,
+              (e.currentTarget as HTMLTextAreaElement).value,
             )}
         />
       );

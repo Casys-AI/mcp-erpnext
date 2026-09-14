@@ -26,6 +26,7 @@ import { DocumentSurface } from "../document/DocumentSurface.tsx";
 import type { DocumentEnvelope } from "../document/types.ts";
 import { useAttachments } from "../document/useAttachments.ts";
 import type { DocumentChangeEvent } from "../document-events.ts";
+import { currentLocale } from "../format.ts";
 import { DoclistBody } from "../doclist/DoclistBody";
 import { LoadingSkeleton } from "../doclist/LoadingSkeleton";
 import type { DoclistData } from "../doclist/types";
@@ -190,7 +191,8 @@ function ChartLevel({
 }) {
   const t = useT();
   const view = level.title;
-  const chartId = nestedChartContextId(level.key ?? level.id, level.title);
+  const locale = currentLocale();
+  const chartId = nestedChartContextId(level.key ?? level.id);
   const reconcileView = context?.supported ? context.reconcileView : undefined;
 
   useEffect(() => {
@@ -199,7 +201,7 @@ function ChartLevel({
       chartId,
       nestedChartContextCandidates(chart, chartId, view),
     );
-  }, [chart, chartId, reconcileView, view]);
+  }, [chart, chartId, reconcileView, view, locale]);
 
   // Le segment exact prime sur le saut générique du libellé. Une série
   // dérivée sans hint (Net Profit) reste lisible mais n'invente aucun saut.

@@ -1,5 +1,10 @@
-import { assertEquals, assertNotStrictEquals } from "@std/assert";
+import {
+  assertEquals,
+  assertNotStrictEquals,
+  assertStrictEquals,
+} from "@std/assert";
 import type { DocumentChangeEvent } from "./document-events.ts";
+import { translatorForLocale } from "./i18n.ts";
 import {
   clearStale,
   createStack,
@@ -8,6 +13,8 @@ import {
   findLevelByKey,
   levelKey,
   markStale,
+  navLevelPresentation,
+  navLevelTitle,
   navRootIdentity,
   patchLevel,
   patchLevelUi,
@@ -120,6 +127,88 @@ Deno.test("viewerRootKey - canonicalise la requête et ignore les données rafra
       { doctype: "Bin" },
     ) === first,
     false,
+  );
+});
+
+Deno.test("reconcileRoot - un titre racine prétraduit change de langue sans perdre le parcours ni ses brouillons", () => {
+  const english = translatorForLocale("en");
+  const french = translatorForLocale("fr");
+  const key = viewerRootKey("stock", {
+    toolName: "erpnext_stock_balance",
+    arguments: { warehouse: "Stores - C" },
+  });
+  const initial = {
+    title: english("stock.title"),
+    kind: "root" as const,
+    key,
+    body: { stock: [1, 2] },
+    subtitle: english("nav.linked_to", { id: "Stores - C" }),
+  };
+  let stack = createStack(initial);
+  stack = patchLevelUi(stack, stack.levels[0].id, {
+    filter: "Laptop",
+    page: 2,
+  });
+  stack = pushLevel(stack, {
+    title: "ITEM-001",
+    kind: "record",
+    body: { unsavedDraft: "Preserve me" },
+  });
+  stack = patchLevelUi(stack, currentLevel(stack).id, { expandedId: "row-7" });
+  stack = markStale(stack, "14:02", "ITEM-001");
+  const previousRoot = stack.levels[0];
+  const previousChild = currentLevel(stack);
+
+  const translated = reconcileRoot(stack, {
+    ...initial,
+    title: french("stock.title"),
+    subtitle: french("nav.linked_to", { id: "Stores - C" }),
+    body: { stock: [99] },
+  });
+  assertEquals(translated.levels[0].title, "Solde de stock");
+  assertEquals(crumbs(translated).parents[0].level.title, "Solde de stock");
+  assertEquals(translated.levels[0].id, previousRoot.id);
+  assertEquals(translated.rootIdentity, stack.rootIdentity);
+  assertEquals(translated.nextId, stack.nextId);
+  assertStrictEquals(translated.levels[0].ui, previousRoot.ui);
+  assertStrictEquals(translated.levels[0].body, previousRoot.body);
+  assertStrictEquals(translated.levels[0].stale, previousRoot.stale);
+  assertStrictEquals(currentLevel(translated), previousChild);
+  assertEquals(currentLevel(popLevel(translated)).title, "Solde de stock");
+  assertStrictEquals(
+    reconcileRoot(translated, {
+      ...initial,
+      title: french("stock.title"),
+      subtitle: french("nav.linked_to", { id: "Stores - C" }),
+    }),
+    translated,
+  );
+});
+
+Deno.test("reconcileRoot - actualise aussi les clés et paramètres de présentation sans remplacer l'identité", () => {
+  const initial = {
+    title: "Stock",
+    kind: "root" as const,
+    key: "stock:stable",
+  };
+  const stack = createStack(initial);
+  const translated = reconcileRoot(stack, {
+    ...initial,
+    titleKey: "stock.title",
+    subtitleKey: "nav.linked_to",
+    subtitleParams: { id: "Stores - C" },
+  });
+  const root = translated.levels[0];
+  const french = navLevelPresentation(root, translatorForLocale("fr"));
+  assertEquals(french.title, "Solde de stock");
+  assertEquals(french.subtitle, "liées à Stores - C");
+  assertEquals(french.id, root.id);
+  assertStrictEquals(french.body, root.body);
+  assertStrictEquals(french.ui, root.ui);
+  assertEquals(navLevelTitle(root, translatorForLocale("en")), "Stock Balance");
+  assertEquals(
+    reconcileRoot(translated, initial).levels[0].titleKey,
+    undefined,
   );
 });
 

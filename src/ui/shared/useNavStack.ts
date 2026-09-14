@@ -23,6 +23,7 @@ import {
   type LevelInit,
   type LevelUi,
   markStale as markStaleLevels,
+  navLevelPresentation,
   navLevelSubtitle,
   navLevelTitle,
   navRootIdentity,
@@ -42,18 +43,23 @@ export function useNavStack(host: ToolHost, root: LevelInit) {
   // gardent le parcours. Une autre ressource repart, elle, à son niveau 1.
   useLayoutEffect(() => {
     setStack((s) => reconcileRoot(s, root));
-  }, [rootIdentity]);
+  }, [
+    rootIdentity,
+    root.title,
+    root.titleKey,
+    root.titleParams,
+    root.titleSuffix,
+    root.subtitle,
+    root.subtitleKey,
+    root.subtitleParams,
+  ]);
 
   const t = useT();
   const storedCurrent = currentLevel(stack);
   const currentTitle = navLevelTitle(storedCurrent, t);
   const currentSubtitle = navLevelSubtitle(storedCurrent, t);
   const current = useMemo(
-    () =>
-      currentTitle === storedCurrent.title &&
-        currentSubtitle === storedCurrent.subtitle
-        ? storedCurrent
-        : { ...storedCurrent, title: currentTitle, subtitle: currentSubtitle },
+    () => navLevelPresentation(storedCurrent, t),
     [storedCurrent, currentTitle, currentSubtitle],
   );
 

@@ -138,9 +138,31 @@ export function navRootIdentity(root: LevelInit): string {
 
 /** Garde la pile pour la même racine ; repart proprement pour une autre. */
 export function reconcileRoot(stack: NavStack, root: LevelInit): NavStack {
-  return stack.rootIdentity === navRootIdentity(root)
-    ? stack
-    : createStack(root);
+  if (stack.rootIdentity !== navRootIdentity(root)) return createStack(root);
+  const current = stack.levels[0];
+  const presentation = {
+    title: root.title,
+    titleKey: root.titleKey,
+    titleParams: root.titleParams,
+    titleSuffix: root.titleSuffix,
+    subtitle: root.subtitle,
+    subtitleKey: root.subtitleKey,
+    subtitleParams: root.subtitleParams,
+  };
+  const previous = {
+    title: current.title,
+    titleKey: current.titleKey,
+    titleParams: current.titleParams,
+    titleSuffix: current.titleSuffix,
+    subtitle: current.subtitle,
+    subtitleKey: current.subtitleKey,
+    subtitleParams: current.subtitleParams,
+  };
+  if (stableJson(presentation) === stableJson(previous)) return stack;
+  return {
+    ...stack,
+    levels: [{ ...current, ...presentation }, ...stack.levels.slice(1)],
+  };
 }
 
 export function pushLevel(stack: NavStack, level: LevelInit): NavStack {
@@ -366,4 +388,19 @@ export function navLevelSubtitle(
   if (!level.subtitleKey) return level.subtitle;
   const translated = translate(level.subtitleKey, level.subtitleParams);
   return translated === level.subtitleKey ? level.subtitle : translated;
+}
+
+/** Keep navigation identity and payload intact while translating its chrome. */
+export function navLevelPresentation(
+  level: NavLevel,
+  translate: typeof t,
+): NavLevel {
+  const title = navLevelTitle(level, translate);
+  const subtitle = navLevelSubtitle(level, translate);
+  if (title === level.title && subtitle === level.subtitle) return level;
+  return {
+    ...level,
+    title,
+    subtitle,
+  };
 }

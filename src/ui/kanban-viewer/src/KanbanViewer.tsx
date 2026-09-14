@@ -1065,7 +1065,10 @@ function KanbanBoardWithNav({
       serverTools: hostCapabilities?.serverTools,
       availableTools: board._availableTools,
       disabled: fixture,
-      revalidationKey: detail.cardDetail?.modified,
+      revalidationKey: JSON.stringify([
+        rootFreshEvent,
+        detail.cardDetail?.modified ?? null,
+      ]),
     });
   const cardListHint = detail.selectedCardId
     ? buildKanbanCardListHint(board.doctype, detail.selectedCardId)

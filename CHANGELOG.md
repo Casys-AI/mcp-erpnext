@@ -20,6 +20,12 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Fixed
 
+- Refreshing a Kanban board rechecks related Timesheet presence while preserving
+  open Task edits. Additional multiline detail fields retain their line breaks
+  in editing and read-only views.
+- Language changes update root navigation labels and selected KPI values without
+  changing nested chart selection identities.
+
 - Kanban status, transition, badge and metric labels follow the host language.
   Context hints describe both selection and deselection, and navigation titles
   and save feedback update when the language changes.

@@ -1082,6 +1082,7 @@ function KpiViewerContent({
     HTMLDivElement
   >();
   const t = useT();
+  const locale = currentLocale();
   const rootKey = viewerRootKey("kpi", rootRefreshRequest ?? undefined, {
     label: data.label,
   });
@@ -1101,7 +1102,7 @@ function KpiViewerContent({
   };
   useEffect(() => {
     void activeContext.reconcileView("KPI", kpiContextCandidates(data, t));
-  }, [data, activeContext.reconcileView]);
+  }, [data, locale, activeContext.reconcileView]);
   const viewerNav = useViewerNav(app, {
     title: data.label,
     kind: "root",

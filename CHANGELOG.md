@@ -22,8 +22,10 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   previous selection, including when the element was already selected.
 - Scalar KPIs without a displayed trend omit redundant context selection while
   retaining drill-down navigation.
-- Kanban details use a single editable title, compact colored metadata, and
-  grouped date, progress, and time fields. Unsaved edits remain visible.
+- Kanban details use a single editable title, compact colored metadata, and an
+  inline editable project. Dates and progress share a row; description and
+  additional fields sit beside time and finances on wider views. Assignees
+  remain visible in read-only details, and unsaved edits remain visible.
 - Kanban cards retain assignees, all supplied metrics, badge colors, and
   milestone destinations on narrow and wide views. Task previews expose the
   milestone control and reflect its saved state on the card.

@@ -381,7 +381,11 @@ function fieldControl(
   const type = getFieldType(fieldKey, value);
 
   if (isReadonly || !editable) {
-    return <span class="text-data text-ink-2">{String(value)}</span>;
+    return (
+      <span class="min-w-0 break-words text-data text-ink-2">
+        {String(value)}
+      </span>
+    );
   }
 
   switch (type) {
@@ -568,9 +572,12 @@ function AssigneesSection({
   }
 
   return (
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
+      <span class="shrink-0 font-mono text-chip text-ink-faint">
+        {t("kanban.modal.section.assignees")}
+      </span>
       <div
-        class="flex flex-wrap items-center gap-1.5"
+        class="flex min-w-0 max-w-full flex-wrap items-center gap-1.5"
         role="group"
         aria-label={t("kanban.modal.section.assignees")}
       >
@@ -581,7 +588,7 @@ function AssigneesSection({
         )}
         {assignees.map((email) => (
           <Badge key={email} tone="info">
-            {email}
+            <span class="min-w-0 break-all" title={email}>{email}</span>
             {onUnassign && (
               <button
                 type="button"
@@ -598,11 +605,11 @@ function AssigneesSection({
         ))}
       </div>
       {onAssign && onLoadUsers && (
-        <div class="flex flex-wrap items-center gap-1.5">
+        <div class="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
           <SelectShell>
             <select
               aria-label={t("kanban.assignees.select_label")}
-              class={cx(SELECT_CLASS, "w-auto")}
+              class={cx(SELECT_CLASS, "!w-auto min-w-0 max-w-full")}
               value={selected}
               onChange={(e) =>
                 setSelected((e.currentTarget as HTMLSelectElement).value)}
@@ -906,7 +913,8 @@ export function CardDetailModal({
 
   const footer = (
     <>
-      {onSave && detail.cardDetail && (hasEdits || saving || saveMessage) && (
+      {onSave && detail.cardDetail &&
+        (hasEdits || saving || saveMessage?.isError) && (
         <SheetActions class="!py-2">
           <Button
             variant="accent"
@@ -1145,8 +1153,27 @@ export function CardDetailModal({
     ? "text-ok !border-ok/20 !bg-ok/10"
     : "text-ink-muted !bg-count";
   const dates = classified?.sections.find((section) => section.id === "dates");
+  const project = editedFields.project ?? classified?.projectValue;
+  const assignees = (() => {
+    const raw = detail.cardDetail?._assign;
+    const fromDetail = parseAssignees(raw);
+    if (fromDetail.length) return fromDetail;
+    if (typeof raw === "string" && raw) return [];
+    return card?.assignee ? [card.assignee] : [];
+  })();
+  const relatedSections =
+    classified?.sections.filter((section) =>
+      section.id === "time" || section.id === "financial"
+    ) ?? [];
+  const primarySections =
+    classified?.sections.filter((section) =>
+      section.id !== "dates" && section.id !== "time" &&
+      section.id !== "financial"
+    ) ?? [];
+  const hasPrimary = !!classified?.descriptionField ||
+    primarySections.length > 0;
 
-  function renderSection(section: ClassifiedSection) {
+  function renderSection(section: ClassifiedSection, compact = false) {
     return (
       <DetailSection
         dense
@@ -1156,7 +1183,9 @@ export function CardDetailModal({
         <div
           class={cx(
             "grid grid-cols-1 gap-x-3 gap-y-2",
-            sectionGridClass(section),
+            compact && section.fields.length >= 2
+              ? "grid-cols-2"
+              : sectionGridClass(section),
           )}
         >
           {section.fields.map((field) => (
@@ -1179,7 +1208,7 @@ export function CardDetailModal({
   return (
     <DetailSheet
       title={sheetTitle}
-      eyebrow={classified?.idValue ?? selectedCardId}
+      eyebrow={classified ? undefined : selectedCardId}
       titleContent={classified?.titleField
         ? (canEdit
           ? (
@@ -1206,6 +1235,12 @@ export function CardDetailModal({
         : undefined}
       headerMeta={classified && (
         <div class="mt-1 flex flex-wrap items-center gap-2">
+          <span
+            class="max-w-[9rem] truncate font-mono text-chip text-ink-faint"
+            title={classified.idValue ?? selectedCardId}
+          >
+            {classified.idValue ?? selectedCardId}
+          </span>
           {classified.statusValue && (
             <span
               class="rounded-badge border px-2 py-1 font-mono text-chip"
@@ -1278,6 +1313,66 @@ export function CardDetailModal({
               ◆ {t("kanban.field.is_milestone")}
             </button>
           )}
+          {project != null && (
+            <label
+              class="inline-flex min-w-0 max-w-full items-center gap-1.5"
+              for="kanban-detail-project"
+            >
+              <span class="shrink-0 font-mono text-chip text-ink-faint">
+                {t("kanban.field.project")}
+              </span>
+              {canEdit
+                ? (
+                  <input
+                    id="kanban-detail-project"
+                    type="text"
+                    title={project}
+                    size={Math.min(24, Math.max(6, project.length + 1))}
+                    class={editedControlClass(
+                      "min-w-0 max-w-[13rem] rounded-control border border-transparent bg-transparent px-1 py-1 font-mono text-chip text-ink-2 hover:border-line focus:border-accent focus:bg-surface focus:outline-none",
+                      "project" in editedFields,
+                    )}
+                    value={project}
+                    onInput={(event) =>
+                      handleFieldChange("project", event.currentTarget.value)}
+                  />
+                )
+                : (
+                  <span
+                    id="kanban-detail-project"
+                    class="min-w-0 max-w-[13rem] truncate font-mono text-chip text-ink-2"
+                    title={project}
+                  >
+                    {project}
+                  </span>
+                )}
+              {canEdit && (
+                <svg
+                  aria-hidden="true"
+                  class="size-2.5 shrink-0 text-ink-faint"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                >
+                  <path
+                    d="m10.5 2.5 3 3-7.5 7.5-3.5.5.5-3.5 7.5-7.5Z"
+                    stroke="currentColor"
+                    stroke-width="1.2"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="m8.5 4.5 3 3"
+                    stroke="currentColor"
+                    stroke-width="1.2"
+                  />
+                </svg>
+              )}
+            </label>
+          )}
+          {saveMessage && !saveMessage.isError && !hasEdits && !saving && (
+            <span role="status" aria-live="polite">
+              <Badge tone="success">{saveMessage.text}</Badge>
+            </span>
+          )}
         </div>
       )}
       accent={columnColor}
@@ -1294,65 +1389,18 @@ export function CardDetailModal({
       )}
       {classified && (
         <>
-          {classified.projectValue !== null && (
-            <div class="flex min-w-0 items-center gap-2">
-              <label
-                for="kanban-detail-project"
-                class="shrink-0 font-mono text-chip text-ink-faint"
-              >
-                {t("kanban.field.project")}
-              </label>
-              {canEdit
-                ? (
-                  <input
-                    id="kanban-detail-project"
-                    type="text"
-                    class={editedControlClass(
-                      CONTROL_CLASS,
-                      "project" in editedFields,
-                    )}
-                    value={editedFields.project ?? classified.projectValue}
-                    onInput={(event) =>
-                      handleFieldChange("project", event.currentTarget.value)}
-                  />
-                )
-                : (
-                  <span
-                    id="kanban-detail-project"
-                    class="min-w-0 break-words text-data text-ink-2"
-                  >
-                    {classified.projectValue}
-                  </span>
-                )}
-            </div>
-          )}
           {/* ── Responsables ── */}
-          {((onAssign && onLoadUsers) || onUnassign) && (
-            <DetailSection dense label={t("kanban.modal.section.assignees")}>
-              <AssigneesSection
-                assignees={(() => {
-                  const raw = detail.cardDetail?._assign;
-                  const fromDetail = parseAssignees(raw);
-                  if (fromDetail.length) {
-                    return fromDetail;
-                  }
-                  if (typeof raw === "string" && raw) {
-                    return [];
-                  }
-                  return card?.assignee ? [card.assignee] : [];
-                })()}
-                onAssign={onAssign
-                  ? (assignTo) =>
-                    onAssign(board.doctype, selectedCardId, assignTo)
-                  : undefined}
-                onUnassign={onUnassign
-                  ? (assignee) =>
-                    onUnassign(board.doctype, selectedCardId, assignee)
-                  : undefined}
-                onLoadUsers={onLoadUsers}
-              />
-            </DetailSection>
-          )}
+          <AssigneesSection
+            assignees={assignees}
+            onAssign={onAssign
+              ? (assignTo) => onAssign(board.doctype, selectedCardId, assignTo)
+              : undefined}
+            onUnassign={onUnassign
+              ? (assignee) =>
+                onUnassign(board.doctype, selectedCardId, assignee)
+              : undefined}
+            onLoadUsers={onLoadUsers}
+          />
 
           {(dates || classified.progressValue !== null) && (
             <DetailSection dense>
@@ -1414,48 +1462,73 @@ export function CardDetailModal({
               </div>
             </DetailSection>
           )}
-          {classified.sections.filter((section) => section.id === "time").map(
-            renderSection,
-          )}
-          {/* ── Description ── */}
-          {classified.descriptionField && (
-            <DetailSection
-              dense
-              label={fieldLabel(classified.descriptionField.key, t)}
+          {(hasPrimary || relatedSections.length > 0) && (
+            <div
+              class={cx(
+                "grid min-w-0 grid-cols-1 gap-3 border-t border-line-soft pt-2",
+                hasPrimary && relatedSections.length > 0 &&
+                  "sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]",
+              )}
             >
-              {canEdit
-                ? (
-                  <textarea
-                    class={cx(
-                      editedControlClass(
-                        CONTROL_CLASS,
-                        classified.descriptionField.key in editedFields,
-                      ),
-                      "resize-y",
-                    )}
-                    value={editedFields[classified.descriptionField.key] !==
-                        undefined
-                      ? editedFields[classified.descriptionField.key]
-                      : String(classified.descriptionField.value)}
-                    rows={3}
-                    onInput={(e) =>
-                      handleFieldChange(
-                        classified.descriptionField!.key,
-                        (e.currentTarget as HTMLTextAreaElement).value,
-                      )}
-                  />
-                )
-                : (
-                  <p class="m-0 whitespace-pre-wrap text-data text-ink-2">
-                    {String(classified.descriptionField.value)}
-                  </p>
-                )}
-            </DetailSection>
-          )}
+              {hasPrimary && (
+                <div class="flex min-w-0 flex-col gap-2">
+                  {/* ── Description ── */}
+                  {classified.descriptionField && (
+                    <DetailSection
+                      dense
+                      label={fieldLabel(classified.descriptionField.key, t)}
+                    >
+                      {canEdit
+                        ? (
+                          <textarea
+                            class={cx(
+                              editedControlClass(
+                                CONTROL_CLASS,
+                                classified.descriptionField.key in editedFields,
+                              ),
+                              "resize-y",
+                            )}
+                            value={editedFields[
+                                classified.descriptionField.key
+                              ] !==
+                                undefined
+                              ? editedFields[classified.descriptionField.key]
+                              : String(classified.descriptionField.value)}
+                            rows={3}
+                            onInput={(e) =>
+                              handleFieldChange(
+                                classified.descriptionField!.key,
+                                (e.currentTarget as HTMLTextAreaElement).value,
+                              )}
+                          />
+                        )
+                        : (
+                          <p class="m-0 whitespace-pre-wrap text-data text-ink-2">
+                            {String(classified.descriptionField.value)}
+                          </p>
+                        )}
+                    </DetailSection>
+                  )}
 
-          {classified.sections.filter((section) =>
-            section.id !== "dates" && section.id !== "time"
-          ).map(renderSection)}
+                  {primarySections.map((section) =>
+                    renderSection(section, true)
+                  )}
+                </div>
+              )}
+              {relatedSections.length > 0 && (
+                <div
+                  class={cx(
+                    "flex min-w-0 flex-col gap-2",
+                    hasPrimary && "sm:border-l sm:border-line-soft sm:pl-4",
+                  )}
+                >
+                  {relatedSections.map((section) =>
+                    renderSection(section, hasPrimary)
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </DetailSheet>

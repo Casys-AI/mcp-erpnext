@@ -84,6 +84,7 @@ import { canCallViewerTool, hasAvailableTool } from "~/shared/viewer-tools";
 import { createSerialQueue } from "~/shared/single-flight";
 import { buildKanbanCardListHint, kanbanNavVars } from "./kanban-nav";
 import { kanbanViewerCapabilities } from "./capabilities";
+import { cardDeadlinePresentation } from "./card-deadline.ts";
 import {
   type KanbanLiveMessage,
   kanbanLiveMessageText,
@@ -273,14 +274,6 @@ function formatDueDate(isoDate: string): string {
   return isoDate;
 }
 
-/** Calculate overdue days from dueDate (ISO string). Returns null if not overdue. */
-function calcOverdueDays(dueDate: string): number | null {
-  const due = new Date(dueDate + "T00:00:00Z").getTime();
-  const now = Date.now();
-  if (now <= due) return null;
-  return Math.floor((now - due) / 86_400_000);
-}
-
 /** Detect Milestone badge from card.badges[]. */
 function isMilestoneBadge(
   badges?: Array<{ label: string; tone?: string }>,
@@ -329,12 +322,8 @@ function KanbanCard({
   const isDraggable = enableDrag && !card.pending && !isMobile;
   const accentColor = card.accent ?? "var(--color-accent)";
   const isMilestone = isMilestoneBadge(card.badges);
-  const isOverdue =
-    card.badges?.some((badge) => badge.label.toLowerCase() === "overdue") ??
-      false;
-  const overdueDays = isOverdue && card.dueDate
-    ? calcOverdueDays(card.dueDate)
-    : null;
+  const { isOverdue, overdueDays, needsDueDateFallback } =
+    cardDeadlinePresentation(card);
 
   // Extract Progress metric
   const progressMetric = card.metrics?.find((m) =>
@@ -348,7 +337,7 @@ function KanbanCard({
   );
   if (
     card.dueDate &&
-    !metrics.some((metric) => metric.label.toLowerCase() === "due")
+    needsDueDateFallback
   ) {
     metrics.push({
       label: t("kanban.field.exp_end_date"),

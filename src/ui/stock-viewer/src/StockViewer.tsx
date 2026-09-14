@@ -420,6 +420,8 @@ function StockContent(
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -762,7 +764,7 @@ function StockContent(
               doublePolicy: "local" as const,
               onSingle: () =>
                 context.supported
-                  ? context.activateReversible(contextItem)
+                  ? context.toggleReversible(contextItem)
                   : undefined,
               onDouble: () => {
                 if (canDrill) toggleRowDetail(row, jump);

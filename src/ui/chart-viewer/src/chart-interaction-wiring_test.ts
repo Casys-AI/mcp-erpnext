@@ -64,7 +64,7 @@ Deno.test("chart wiring - full chart and legend expose the visible subset", () =
   assertStringIncludes(content, "[data, rootKey, contextLocale]");
   assertStringIncludes(content, "pointIndex.get(label, series)");
   assertStringIncludes(content, "[chartContext, ...pointIndex.values()]");
-  assertStringIncludes(content, "activeContext.activate(chartContext)");
+  assertStringIncludes(content, "activeContext.toggle(chartContext)");
   assertStringIncludes(
     content,
     "data-chart-context-control",

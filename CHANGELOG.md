@@ -17,6 +17,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Fixed
 
+- Clicking selected viewer data again, or pressing Space, removes that exact
+  context selection. Opening its detail with double-click or Enter preserves the
+  previous selection, including when the element was already selected.
 - Restore the existing generic document presentation by removing the six
   Project/Manufacturing dossier profiles introduced in PR #49. Digital Thread
   integration needs do not establish a standalone ERPNext viewer requirement.

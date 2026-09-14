@@ -330,8 +330,8 @@ export function DoclistBody(
       controls: isInspectable ? doclistDetailPanelId(rowId) : undefined,
       onActivate: () => {
         if (!item) return;
-        if (isInspectable) return context?.activateReversible(item);
-        void context?.activate(item);
+        if (isInspectable) return context?.toggleReversible(item);
+        void context?.toggle(item);
       },
       doublePolicy: "local",
       onDoubleActivate: isInspectable

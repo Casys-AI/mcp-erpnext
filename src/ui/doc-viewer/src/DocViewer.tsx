@@ -338,6 +338,8 @@ function DocumentContent({
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -525,7 +527,7 @@ function DocumentContent({
           label: contextDocumentItem.label,
         }),
         selected: context.isSelected(contextDocumentItem),
-        onActivate: () => void context.activate(contextDocumentItem),
+        onActivate: () => void context.toggle(contextDocumentItem),
       }
       : undefined;
   const renderChildRowContextTarget = (
@@ -540,7 +542,7 @@ function DocumentContent({
         label: t("context.active.select", { label: item.label }),
         detailLabel: item.label,
         selected: context.isSelected(item),
-        onActivate: () => context.activateReversible(item),
+        onActivate: () => context.toggleReversible(item),
       }
       : undefined;
   };

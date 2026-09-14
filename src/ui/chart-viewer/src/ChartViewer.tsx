@@ -2192,6 +2192,8 @@ function ChartContent(
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -2275,9 +2277,7 @@ function ChartContent(
   }
 
   function isPointSelected(label: string, series?: string): boolean {
-    return activeContext.isSelected(pointContext(label, series)) ||
-      (series !== undefined &&
-        activeContext.isSelected(pointContext(label)));
+    return activeContext.isSelected(pointContext(label, series));
   }
 
   function pointExpansionState(
@@ -2325,7 +2325,7 @@ function ChartContent(
     );
 
     if (plan.updateContext) {
-      void activeContext.activate(context);
+      void activeContext.toggle(context);
     }
     if (plan.toggleLevel && jump) {
       void nav.toggleRootChild(jump, context.id);
@@ -2343,7 +2343,7 @@ function ChartContent(
       key: context.id,
       onSingle: () =>
         activeContext.supported
-          ? activeContext.activateReversible(context)
+          ? activeContext.toggleReversible(context)
           : undefined,
       onDouble: () => activatePoint(label, series, "drilldown"),
       runConversation: activeContext.runConversation,
@@ -2502,7 +2502,10 @@ function ChartContent(
                 aria-pressed={chartSelected}
                 aria-label={chartContextActionLabel}
                 title={chartContextActionLabel}
-                onClick={() => void activeContext.activate(chartContext)}
+                onClick={(event) => {
+                  if (event.detail > 1) return;
+                  void activeContext.toggle(chartContext);
+                }}
                 class="pointer-events-none absolute right-1 top-1 z-10 max-w-[calc(100%_-_0.5rem)] truncate rounded-[3px] border border-line bg-surface px-2 py-1 font-mono text-[10px] text-ink opacity-0 shadow-sm transition-opacity focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
               >
                 {chartContextActionLabel}
@@ -2516,7 +2519,7 @@ function ChartContent(
               onClick={activeContext.supported
                 ? (event) => {
                   if (event.detail > 1) return;
-                  void activeContext.activate(chartContext);
+                  void activeContext.toggle(chartContext);
                 }
                 : undefined}
               class={cx(

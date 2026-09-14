@@ -524,7 +524,7 @@ function InlineDocument({
     ? {
       label: t("context.active.select", { label: contextItem.label }),
       selected: context.isSelected(contextItem),
-      onActivate: () => void context.activate(contextItem),
+      onActivate: () => void context.toggle(contextItem),
     }
     : undefined;
   const renderChildRowContextTarget = embedded
@@ -539,7 +539,7 @@ function InlineDocument({
           label: t("context.active.select", { label: item.label }),
           detailLabel: item.label,
           selected: context.isSelected(item),
-          onActivate: () => context.activateReversible(item),
+          onActivate: () => context.toggleReversible(item),
         }
         : undefined;
     }

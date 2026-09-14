@@ -754,6 +754,8 @@ function FunnelContent(
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -798,7 +800,7 @@ function FunnelContent(
       false,
     );
     if (!plan.updateContext) return;
-    return activeContext.activateReversible(funnelStageContext(data, stage));
+    return activeContext.toggleReversible(funnelStageContext(data, stage));
   }
 
   async function openStageDetail(

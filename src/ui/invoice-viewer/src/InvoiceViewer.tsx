@@ -676,6 +676,8 @@ function InvoiceContent({
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -801,7 +803,7 @@ function InvoiceContent({
           label: contextDocumentItem.label,
         }),
         selected: context.isSelected(contextDocumentItem),
-        onActivate: () => context.activateReversible(contextDocumentItem),
+        onActivate: () => context.toggleReversible(contextDocumentItem),
       }
       : undefined;
   const contextCandidates = [
@@ -861,8 +863,8 @@ function InvoiceContent({
       controls: canExpand ? lineDetailId(rowIndex) : undefined,
       onActivate: () => {
         if (!item) return;
-        if (canExpand) return context.activateReversible(item);
-        void context.activate(item);
+        if (canExpand) return context.toggleReversible(item);
+        void context.toggle(item);
       },
       doublePolicy: "local",
       onDoubleActivate: canExpand

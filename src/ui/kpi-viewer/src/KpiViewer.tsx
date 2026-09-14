@@ -603,7 +603,7 @@ function KpiCard({
       false,
     );
     if (!plan.updateContext) return;
-    return activeContext.activateReversible(selection);
+    return activeContext.toggleReversible(selection);
   }
 
   function canOpenDetail(action: ReturnType<typeof kpiNumberAction>): boolean {
@@ -653,7 +653,7 @@ function KpiCard({
     if (canOpenDetail(action)) {
       clickIntent.click(interactionIntent(selection, action), clickCount);
     } else if (activeContext.supported && clickCount < 2) {
-      void activeContext.activate(selection);
+      void activeContext.toggle(selection);
     }
   }
 
@@ -680,7 +680,7 @@ function KpiCard({
       (event.key !== " " && event.key !== "Enter")
     ) return;
     event.preventDefault();
-    void activeContext.activate(selection);
+    void activeContext.toggle(selection);
   }
 
   const numberHasDetail = canOpenDetail(numberAction);
@@ -1098,6 +1098,8 @@ function KpiViewerContent({
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,

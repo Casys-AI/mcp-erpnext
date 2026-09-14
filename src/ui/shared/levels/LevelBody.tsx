@@ -262,7 +262,7 @@ function ChartLevel({
       onPointContext={contextEnabled
         ? (labelIndex, seriesIndex) => {
           const item = itemAt(labelIndex, seriesIndex);
-          return item ? context!.activateReversible(item) : undefined;
+          return item ? context!.toggleReversible(item) : undefined;
         }
         : undefined}
       onPointDetail={detailEnabled
@@ -411,7 +411,7 @@ function RecordDocumentLevel({
     ? {
       label: t("context.active.select", { label: contextItem.label }),
       selected: context.isSelected(contextItem),
-      onActivate: () => void context.activate(contextItem),
+      onActivate: () => void context.toggle(contextItem),
     }
     : undefined;
   const renderChildRowActions = (
@@ -478,7 +478,7 @@ function RecordDocumentLevel({
         label: t("context.active.select", { label: item.label }),
         detailLabel: item.label,
         selected: context.isSelected(item),
-        onActivate: () => context.activateReversible(item),
+        onActivate: () => context.toggleReversible(item),
       }
       : undefined;
   };

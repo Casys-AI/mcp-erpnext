@@ -177,6 +177,10 @@ function dueValue(row: Record<string, unknown>, amountKey?: string) {
   return amountKey === "outstanding_amount" && amount === 0 ? null : amount;
 }
 
+function columnLabel(columns: DoclistColumn[], key?: string): string {
+  return columns.find((column) => column.id === key)?.label ?? "";
+}
+
 /**
  * Le langage de ligne.
  *
@@ -419,14 +423,16 @@ function WideTable(
 /* ── Mobile ───────────────────────────────────────────────────────── */
 
 /**
- * Grille fixe : l'identifiant et le montant ont une largeur arrêtée, le tiers
- * prend ce qui reste et s'ellipse. Écrite en dur plutôt que calculée — Tailwind
- * scanne du texte source, une classe composée à l'exécution ne produirait rien.
+ * Grilles fixes : l'identifiant et l'éventuelle valeur terminale ont une
+ * largeur arrêtée, le libellé prend ce qui reste et s'ellipse. Les classes sont
+ * écrites en dur — Tailwind scanne le texte source et ne verrait pas une classe
+ * composée à l'exécution.
  */
 const MOBILE_GRID = "grid-cols-[92px_1fr_78px]";
+const MOBILE_GRID_WITHOUT_TRAILING = "grid-cols-[92px_1fr]";
 
 const MOBILE_HEAD =
-  "font-mono text-nano uppercase tracking-label text-ink-faint";
+  "truncate font-mono text-nano uppercase tracking-label text-ink-faint";
 
 /**
  * Le tableau compact du mobile.
@@ -447,21 +453,36 @@ function CompactTable(
   }: ModeProps,
 ) {
   const t = useT();
-  const { idKey, labelKey } = pickNarrowColumns(
+  const { idKey, labelKey, trailingKey } = pickNarrowColumns(
     columns,
     amountKey,
     isStatusField,
   );
+  const trailingIsAmount = trailingKey !== undefined &&
+    trailingKey === amountKey;
+  const mobileGrid = trailingKey ? MOBILE_GRID : MOBILE_GRID_WITHOUT_TRAILING;
 
   return (
     <div>
       <div class="flex border-y border-line bg-sunken">
-        <div class={`grid ${MOBILE_GRID} min-w-0 flex-1 px-3 py-1.5`}>
-          <span class={MOBILE_HEAD}>{t("doclist.table.header.id")}</span>
-          <span class={MOBILE_HEAD}>{t("doclist.table.header.party")}</span>
-          <span class={`${MOBILE_HEAD} text-right`}>
-            {t("doclist.table.header.due")}
+        <div class={`grid ${mobileGrid} min-w-0 flex-1 px-3 py-1.5`}>
+          <span class={MOBILE_HEAD}>
+            {amountKey
+              ? t("doclist.table.header.id")
+              : columnLabel(columns, idKey)}
           </span>
+          <span class={MOBILE_HEAD}>
+            {amountKey
+              ? t("doclist.table.header.party")
+              : columnLabel(columns, labelKey)}
+          </span>
+          {trailingKey && (
+            <span class={`${MOBILE_HEAD} text-right`}>
+              {amountKey
+                ? t("doclist.table.header.due")
+                : columnLabel(columns, trailingKey)}
+            </span>
+          )}
         </div>
         {hasDetailControls && <span aria-hidden="true" class="w-10" />}
       </div>
@@ -474,7 +495,11 @@ function CompactTable(
           );
           const active = selected || Boolean(interactionTarget?.selected);
           const interactive = Boolean(interactionTarget);
-          const due = dueValue(row, amountKey);
+          const trailingValue = trailingIsAmount
+            ? dueValue(row, amountKey)
+            : trailingKey
+            ? row[trailingKey]
+            : undefined;
 
           return (
             <li key={id}>
@@ -491,7 +516,7 @@ function CompactTable(
                 ].join(" ")}
               >
                 <div
-                  class={`grid ${MOBILE_GRID} min-w-0 flex-1 items-center px-3 ${
+                  class={`grid ${mobileGrid} min-w-0 flex-1 items-center px-3 ${
                     rowClasses(active, interactive, struck)
                   }`}
                   {...contextInteractionProps(interactionTarget, {
@@ -500,7 +525,7 @@ function CompactTable(
                   })}
                 >
                   <span
-                    class={`font-mono text-data ${
+                    class={`min-w-0 truncate font-mono text-data ${
                       active ? "text-accent-text" : "text-ink-2"
                     }`}
                   >
@@ -509,15 +534,21 @@ function CompactTable(
                   <span class="truncate pr-2 text-data text-ink-muted">
                     {labelKey ? formatCell(row[labelKey]) : ""}
                   </span>
-                  <span
-                    class={`text-right font-mono text-data tabular-nums ${
-                      due == null
-                        ? "text-ink-dim"
-                        : `font-medium ${TONE_AMOUNT[tone]}`
-                    }`}
-                  >
-                    {due == null ? "—" : formatCell(due)}
-                  </span>
+                  {trailingKey && (
+                    <span
+                      class={`truncate text-right font-mono text-data ${
+                        trailingIsAmount ? "tabular-nums" : ""
+                      } ${
+                        trailingValue == null
+                          ? "text-ink-dim"
+                          : trailingIsAmount
+                          ? `font-medium ${TONE_AMOUNT[tone]}`
+                          : "text-ink-muted"
+                      }`}
+                    >
+                      {trailingValue == null ? "—" : formatCell(trailingValue)}
+                    </span>
+                  )}
                 </div>
                 {hasDetailControls && (
                   <RowDetailToggle target={interactionTarget} touch />
@@ -552,11 +583,13 @@ function StackedList(
     hasDetailControls,
   }: ModeProps,
 ) {
-  const { idKey, labelKey } = pickNarrowColumns(
+  const { idKey, labelKey, trailingKey } = pickNarrowColumns(
     columns,
     amountKey,
     isStatusField,
   );
+  const trailingIsAmount = trailingKey !== undefined &&
+    trailingKey === amountKey;
 
   return (
     <ul class="flex flex-col">
@@ -567,7 +600,11 @@ function StackedList(
         );
         const active = selected || Boolean(interactionTarget?.selected);
         const interactive = Boolean(interactionTarget);
-        const due = dueValue(row, amountKey);
+        const trailingValue = trailingIsAmount
+          ? dueValue(row, amountKey)
+          : trailingKey
+          ? row[trailingKey]
+          : undefined;
 
         return (
           <li key={id}>
@@ -605,15 +642,21 @@ function StackedList(
                     </span>
                   )}
                 </div>
-                <span
-                  class={`shrink-0 font-mono text-cell tabular-nums ${
-                    due == null
-                      ? "text-ink-ghost"
-                      : `font-medium ${TONE_AMOUNT[tone]}`
-                  }`}
-                >
-                  {due == null ? "—" : formatCell(due)}
-                </span>
+                {trailingKey && (
+                  <span
+                    class={`max-w-[45%] shrink-0 truncate font-mono text-cell ${
+                      trailingIsAmount ? "tabular-nums" : ""
+                    } ${
+                      trailingValue == null
+                        ? "text-ink-ghost"
+                        : trailingIsAmount
+                        ? `font-medium ${TONE_AMOUNT[tone]}`
+                        : "text-ink-muted"
+                    }`}
+                  >
+                    {trailingValue == null ? "—" : formatCell(trailingValue)}
+                  </span>
+                )}
               </div>
               {hasDetailControls && (
                 <RowDetailToggle target={interactionTarget} touch />

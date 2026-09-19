@@ -46,6 +46,10 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   distinct loading, empty, and failed checks.
 - Kanban list navigation explicitly opens only the selected document; hosts
   without tool navigation offer a clearly labeled conversational request.
+- Generic document lists such as Company use their actual fields in narrow
+  layouts instead of showing financial `Party` / `Due` labels and an empty
+  amount. Inline details no longer manufacture a `Full detail` conversation
+  message when the server supplied no relationship action.
 - Restore the existing generic document presentation by removing the six
   Project/Manufacturing dossier profiles introduced in PR #49. Digital Thread
   integration needs do not establish a standalone ERPNext viewer requirement.

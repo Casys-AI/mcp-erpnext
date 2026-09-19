@@ -291,15 +291,6 @@ function InlineDocument({
       }];
     })
     : [];
-  if (onAsk && asks.length === 0 && jumps.length === 0) {
-    asks.push({
-      label: t("doclist.detail.full_detail"),
-      message: t("doclist.detail.full_detail_message", {
-        doctype: envelope.doctype,
-        id: envelope.name,
-      }),
-    });
-  }
 
   const isDraft = model.status === "Draft" || model.docstatus === 0;
   const isSubmitted = model.docstatus === 1;

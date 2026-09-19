@@ -338,6 +338,8 @@ function DocumentContent({
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -451,6 +453,7 @@ function DocumentContent({
         hint,
         { id: envelope.name, doctype: envelope.doctype },
         t("nav.linked_to", { id: envelope.name }),
+        { key: "nav.linked_to", params: { id: envelope.name } },
       );
       return jump ? [jump] : [];
     })
@@ -483,6 +486,8 @@ function DocumentContent({
         row,
         availableTools: envelope.availableTools,
         subtitle: t("nav.linked_to", { id: envelope.name }),
+        subtitleKey: "nav.linked_to",
+        subtitleParams: { id: envelope.name },
       })
       : [];
     const rowAsks = viewerNav.ask
@@ -521,11 +526,11 @@ function DocumentContent({
   const rootContextTarget: ContextInteractionTarget | undefined =
     context.supported && contextDocumentItem
       ? {
-        label: t("context.active.select", {
+        label: t("context.active.toggle", {
           label: contextDocumentItem.label,
         }),
         selected: context.isSelected(contextDocumentItem),
-        onActivate: () => void context.activate(contextDocumentItem),
+        onActivate: () => void context.toggle(contextDocumentItem),
       }
       : undefined;
   const renderChildRowContextTarget = (
@@ -537,10 +542,10 @@ function DocumentContent({
     const item = childRowContextItem(envelope, table, row, rowIndex);
     return item
       ? {
-        label: t("context.active.select", { label: item.label }),
+        label: t("context.active.toggle", { label: item.label }),
         detailLabel: item.label,
         selected: context.isSelected(item),
-        onActivate: () => context.activateReversible(item),
+        onActivate: () => context.toggleReversible(item),
       }
       : undefined;
   };

@@ -129,3 +129,15 @@ Deno.test("funnel detail navigation is an action, not a mounted disclosure", asy
   assertStringIncludes(source, "onOpenDetail");
   assertStringIncludes(source, "await nav.jump(jump)");
 });
+
+Deno.test("funnel context-only stages forward a fast second click", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./FunnelViewer.tsx", import.meta.url),
+  );
+
+  assertEquals(source.includes("detailAvailable || event.detail < 2"), false);
+  assertEquals(
+    source.match(/clickIntent\.click\(intent, event\.detail\)/g)?.length,
+    2,
+  );
+});

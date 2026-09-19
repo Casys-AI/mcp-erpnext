@@ -166,15 +166,9 @@ export function BarsLevel(
   ) => {
     if (!canUsePoint(labelIndex, seriesIndex)) return;
     focusPoint(labelIndex, seriesIndex);
-    if (
-      canSharePoint(labelIndex, seriesIndex) &&
-      canOpenPoint(labelIndex, seriesIndex)
-    ) {
+    if (canSharePoint(labelIndex, seriesIndex)) {
       clickIntent.click(pointIntent(labelIndex, seriesIndex), clickCount);
       return;
-    }
-    if (clickCount < 2 && canSharePoint(labelIndex, seriesIndex)) {
-      void onPointContext?.(labelIndex, seriesIndex);
     }
   };
 

@@ -87,3 +87,52 @@ Deno.test("doclist wires every layout chevron to the real inline panel", async (
     3,
   );
 });
+
+Deno.test("generic doclist detail only exposes explicit relation asks", async () => {
+  const detail = await Deno.readTextFile(
+    new URL("./InlineDetailPanel.tsx", import.meta.url),
+  );
+
+  assertStringIncludes(
+    detail,
+    "const hints = envelope.sendMessageHints ?? [];",
+  );
+  assertStringIncludes(detail, "? hints.flatMap((hint) => {");
+  assertStringIncludes(
+    detail,
+    "if (!hint.message || rootJumpForHint(hint)) return [];",
+  );
+  assertStringIncludes(
+    detail,
+    "const message = fillTemplate(hint.message, vars);",
+  );
+  assertEquals(
+    detail.includes("asks.push("),
+    false,
+    "a generic detail must not manufacture a prompt-producing fallback",
+  );
+  assertEquals(
+    detail.includes('t("doclist.detail.full_detail_message"'),
+    false,
+    "Company and other generic details stay local when no relation hint exists",
+  );
+});
+
+Deno.test("non-financial narrow lists use real columns without a fake due field", async () => {
+  const table = await Deno.readTextFile(
+    new URL("./DoclistTable.tsx", import.meta.url),
+  );
+
+  assertStringIncludes(
+    table,
+    "const mobileGrid = trailingKey ? MOBILE_GRID : MOBILE_GRID_WITHOUT_TRAILING;",
+  );
+  assertStringIncludes(table, ": columnLabel(columns, idKey)");
+  assertStringIncludes(table, ": columnLabel(columns, labelKey)");
+  assertStringIncludes(table, ": columnLabel(columns, trailingKey)");
+  assertStringIncludes(
+    table,
+    "const trailingIsAmount = trailingKey !== undefined &&",
+  );
+  assertStringIncludes(table, "{trailingKey && (");
+});

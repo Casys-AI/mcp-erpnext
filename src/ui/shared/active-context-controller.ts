@@ -145,34 +145,63 @@ export function createActiveContextController(
           next,
         ).selections;
     }
+    function selectionMutation(next: ContextSelectionItem, toggling: boolean) {
+      const selected = toggling &&
+        state.selections.find((selection) =>
+          selection.scopeKey === actionScope && selection.item.id === next.id
+        );
+      if (selected) {
+        const apply: ActiveContextMutation["apply"] = (items) =>
+          removeActiveContextSelection(items, selected);
+        return {
+          selections: apply(state.selections),
+          evicted: null,
+          removing: true,
+          apply,
+        };
+      }
+      return {
+        ...addActiveContextSelectionWithEviction(
+          activeContextSelectionsForScope(state.selections, actionScope),
+          actionScope,
+          next,
+        ),
+        removing: false,
+        apply: addMutation(next),
+      };
+    }
     function activate(
       next: ContextSelectionItem,
       fallbackMessage?: string,
+      toggling = false,
     ): Promise<ActiveContextActivation> {
       const finish = beginOperation(actionGeneration);
       return queue.run(async () => {
         try {
           if (!current()) return "superseded";
-          const addition = addActiveContextSelectionWithEviction(
-            activeContextSelectionsForScope(state.selections, actionScope),
-            actionScope,
-            next,
-          );
-          const result = await activateContextWithFallback(
-            app,
-            addition.selections.map((selection) => selection.item),
-            contextFallbackForConfirmedContext(
-              fallbackMessage,
-              state.selections.length > 0,
-              remoteEmpty,
-            ),
-            current,
-          );
+          // Decide from acknowledged state inside the queue. Replay keeps the
+          // chosen add/remove intent when an earlier gesture is compensated.
+          const mutation = selectionMutation(next, toggling);
+          const removal = mutation.removing
+            ? await replace(mutation.selections)
+            : undefined;
+          const result: ActiveContextActivation = mutation.removing
+            ? removal === "shared" || removal === "cleared" ? "context" : "none"
+            : await activateContextWithFallback(
+              app,
+              mutation.selections.map((selection) => selection.item),
+              contextFallbackForConfirmedContext(
+                fallbackMessage,
+                state.selections.length > 0,
+                remoteEmpty,
+              ),
+              current,
+            );
           if (result === "context") {
-            record(addMutation(next));
-            commit(addition.selections);
-            if (current() && addition.evicted) {
-              publish({ evictedLabel: addition.evicted.item.label });
+            record(mutation.apply);
+            commit(mutation.selections);
+            if (current() && (mutation.removing || mutation.evicted)) {
+              publish({ evictedLabel: mutation.evicted?.item.label ?? null });
             }
           }
           finish(result === "context");
@@ -182,30 +211,26 @@ export function createActiveContextController(
         }
       });
     }
-    function activateReversible(next: ContextSelectionItem): ClickIntentCommit {
+    function activateReversible(
+      next: ContextSelectionItem,
+      toggling = false,
+    ): ClickIntentCommit {
       const finish = beginOperation(actionGeneration);
       let undoPresentation = finish.id;
       const committed = queue.run(async (): Promise<ClickIntentRevert> => {
         try {
           if (!current()) return () => false;
-          const addition = addActiveContextSelectionWithEviction(
-            activeContextSelectionsForScope(state.selections, actionScope),
-            actionScope,
-            next,
-          );
-          const result = await replaceActiveContext(
-            app,
-            addition.selections.map((selection) => selection.item),
-          );
-          if (result !== "shared") {
+          const change = selectionMutation(next, toggling);
+          const result = await replace(change.selections);
+          if (result !== "shared" && result !== "cleared") {
             finish(false);
             // A failed context must not unlock a conversation fallback.
             return () => false;
           }
-          const mutation = record(addMutation(next), true);
-          commit(addition.selections);
-          if (current() && addition.evicted) {
-            publish({ evictedLabel: addition.evicted.item.label });
+          const mutation = record(change.apply, true);
+          commit(change.selections);
+          if (current() && (change.removing || change.evicted)) {
+            publish({ evictedLabel: change.evicted?.item.label ?? null });
           }
           finish(true);
           const revert: ClickIntentRevert = () => {
@@ -344,6 +369,9 @@ export function createActiveContextController(
     return {
       activate,
       activateReversible,
+      toggle: (next: ContextSelectionItem) => activate(next, undefined, true),
+      toggleReversible: (next: ContextSelectionItem) =>
+        activateReversible(next, true),
       remove,
       clear,
       runConversation,

@@ -39,7 +39,7 @@ import { useViewerNav } from "~/shared/useViewerNav";
 import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody, levelListData } from "~/shared/levels/LevelBody";
-import { DOCLIST_FIXTURE, isFixtureMode } from "./fixture.ts";
+import { doclistFixtureFromSearch, isFixtureMode } from "./fixture.ts";
 import { canRefreshDoclistRoot } from "./capabilities.ts";
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
 import { canShareActiveContextResource } from "~/shared/active-context.ts";
@@ -53,8 +53,9 @@ const TOOL_CALL_TIMEOUT_MS = 10_000;
 export function DoclistViewer() {
   const t = useT();
   const fixture = isFixtureMode();
+  const fixtureData = fixture ? doclistFixtureFromSearch() : null;
   const [data, setData] = useState<DoclistData | null>(
-    fixture ? DOCLIST_FIXTURE : null,
+    fixtureData,
   );
   const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
@@ -62,7 +63,7 @@ export function DoclistViewer() {
   const [rootFreshEvent, setRootFreshEvent] = useState(0);
   const [rootMutationEvent, setRootMutationEvent] = useState(0);
   const rootEventRef = useRef(0);
-  const dataRef = useRef<DoclistData | null>(fixture ? DOCLIST_FIXTURE : null);
+  const dataRef = useRef<DoclistData | null>(fixtureData);
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshSequenceRef = useRef(createUiRefreshSequence());
   const lastRefreshStartedAtRef = useRef(0);
@@ -319,6 +320,8 @@ function DoclistContent({
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,

@@ -47,7 +47,7 @@ function harness() {
     policy: ClickIntent["doublePolicy"] = "local",
   ): ClickIntent => ({
     key: id,
-    onSingle: () => actions.activateReversible(item(id)),
+    onSingle: () => actions.toggleReversible(item(id)),
     onDouble: () => {
       opened++;
     },
@@ -60,6 +60,15 @@ function harness() {
     else requests[index].response.reject(new Error("host rejected context"));
     await flush();
   }
+  async function seed(...ids: string[]) {
+    for (const id of ids) {
+      const index = requests.length;
+      const added = actions.activate(item(id));
+      await flush();
+      await ack(index);
+      await added;
+    }
+  }
   return {
     controller,
     actions,
@@ -67,6 +76,7 @@ function harness() {
     requests,
     intent,
     ack,
+    seed,
     opened: () => opened,
     ids: () =>
       controller.getSnapshot().selections.map((selection) => selection.item.id),
@@ -407,4 +417,200 @@ Deno.test("context controller - obsolete root cancels waiting conversation", asy
   await clear;
   assertEquals(h.opened(), 0);
   assertEquals(h.ids(), []);
+});
+
+Deno.test("context controller - queued toggles choose add or remove from acknowledged state", async () => {
+  const h = harness();
+  await h.seed("A", "B");
+  const remove = h.actions.toggle(item("A"));
+  const add = h.actions.toggle(item("A", "new"));
+  await flush();
+  assertEquals(h.requests[2].ids, ["B"]);
+  assertEquals(h.ids(), ["A", "B"]);
+  await h.ack(2);
+  assertEquals(h.ids(), ["B"]);
+  assertEquals(h.requests[3].ids, ["B", "A"]);
+  await h.ack(3);
+  assertEquals(await remove, "context");
+  assertEquals(await add, "context");
+  assertEquals(h.ids(), ["B", "A"]);
+  assertEquals(h.controller.getSnapshot().selections[1].item.value, "new");
+});
+
+Deno.test("context controller - selected double opens immediately and restores removal after slow ACK", async () => {
+  const h = harness();
+  await h.seed("A", "Z");
+  const pending: boolean[] = [];
+  h.controller.subscribe((state) => pending.push(state.pending));
+  const target = h.intent();
+  h.arbiter.click(target, 1);
+  h.arbiter.click(target, 2);
+  h.arbiter.doubleClick(target);
+  h.arbiter.cancelAll();
+  assertEquals(h.opened(), 1);
+  assertEquals(h.ids(), ["A", "Z"]);
+  await flush();
+  assertEquals(h.requests[2].ids, ["Z"]);
+  await h.ack(2);
+  assertEquals(h.ids(), ["Z"]);
+  assertEquals(h.requests[3].ids, ["A", "Z"]);
+  assertEquals(pending.includes(false), false);
+  await h.ack(3);
+  assertEquals(h.ids(), ["A", "Z"]);
+  assertEquals(h.controller.getSnapshot().pending, false);
+  assertEquals(h.controller.getSnapshot().failed, false);
+});
+
+Deno.test("context controller - rejected removal or restoration never sends a conversation", async () => {
+  for (const rejected of ["removal", "restoration"] as const) {
+    const h = harness();
+    await h.seed("A");
+    const target = h.intent("A", "after-context");
+    h.arbiter.click(target, 1);
+    h.arbiter.click(target, 2);
+    h.arbiter.doubleClick(target);
+    await flush();
+    assertEquals(h.requests[1].ids, []);
+    await h.ack(1, rejected !== "removal");
+    if (rejected === "restoration") await h.ack(2, false);
+    assertEquals(h.ids(), rejected === "removal" ? ["A"] : []);
+    assertEquals(h.opened(), 0);
+    assertEquals(h.controller.getSnapshot().failed, true);
+    assertEquals(h.controller.getSnapshot().pending, false);
+    assertEquals(h.requests.length, rejected === "removal" ? 2 : 3);
+  }
+});
+
+Deno.test("context controller - rejected direct toggle keeps the confirmed selection", async () => {
+  const h = harness();
+  await h.seed("A", "B");
+  const removal = h.actions.toggle(item("A"));
+  await flush();
+  await h.ack(2, false);
+  assertEquals(await removal, "none");
+  assertEquals(h.ids(), ["A", "B"]);
+  assertEquals(h.controller.getSnapshot().failed, true);
+  assertEquals(h.controller.getSnapshot().pending, false);
+});
+
+Deno.test("context controller - refresh while a selection is removed survives its compensation", async () => {
+  for (const stillExists of [true, false]) {
+    const h = harness();
+    await h.seed("A");
+    const committed = h.actions.toggleReversible(item("A"));
+    await flush();
+    await h.ack(1);
+    const revert = await committed;
+    assertExists(revert);
+    assertEquals(h.ids(), []);
+    assertEquals(
+      await h.actions.reconcile(stillExists ? [item("A", "fresh")] : []),
+      "unchanged",
+    );
+    const restored = revert();
+    await flush();
+    if (stillExists) await h.ack(2);
+    assertEquals(await restored, true);
+    revert.release?.();
+    assertEquals(h.ids(), stillExists ? ["A"] : []);
+    if (stillExists) {
+      assertEquals(
+        h.controller.getSnapshot().selections[0].item.value,
+        "fresh",
+      );
+    }
+    assertEquals(h.requests.length, stillExists ? 3 : 2);
+  }
+});
+
+Deno.test("context controller - undo of removal preserves later selection and upsert intent", async () => {
+  for (const laterId of ["A", "B"]) {
+    const h = harness();
+    await h.seed("A", "Z");
+    const committed = h.actions.toggleReversible(item("A"));
+    await flush();
+    await h.ack(2);
+    const revert = await committed;
+    assertExists(revert);
+    const later = h.actions.activate(item(laterId, "later"));
+    await flush();
+    await h.ack(3);
+    await later;
+    const restored = revert();
+    await flush();
+    if (laterId === "B") await h.ack(4);
+    assertEquals(await restored, true);
+    revert.release?.();
+    assertEquals(h.ids(), laterId === "A" ? ["Z", "A"] : ["A", "Z", "B"]);
+    assertEquals(
+      h.controller.getSnapshot().selections.find((s) => s.item.id === laterId)
+        ?.item.value,
+      "later",
+    );
+  }
+});
+
+Deno.test("context controller - explicit or root clear prevents removed selection resurrection", async () => {
+  for (const rootChange of [false, true]) {
+    const h = harness();
+    await h.seed("A", "Z");
+    const committed = h.actions.toggleReversible(item("A"));
+    await flush();
+    await h.ack(2);
+    const revert = await committed;
+    assertExists(revert);
+    if (rootChange) h.controller.setScope("root-2");
+    const clear = rootChange
+      ? h.controller.clearPreviousScope()
+      : h.actions.clear();
+    await flush();
+    await h.ack(3);
+    await clear;
+    assertEquals(await revert(), true);
+    revert.release?.();
+    assertEquals(h.ids(), []);
+    assertEquals(h.requests.length, 4);
+  }
+});
+
+Deno.test("context controller - rejected root clear still allows old removal compensation", async () => {
+  const h = harness();
+  await h.seed("A", "Z");
+  const committed = h.actions.toggleReversible(item("A"));
+  await flush();
+  await h.ack(2);
+  const revert = await committed;
+  assertExists(revert);
+  h.controller.setScope("root-2");
+  const clear = h.controller.clearPreviousScope();
+  await flush();
+  await h.ack(3, false);
+  await clear;
+  const restored = revert();
+  await flush();
+  await h.ack(4);
+  assertEquals(await restored, true);
+  revert.release?.();
+  assertEquals(h.ids(), ["A", "Z"]);
+  assertEquals(h.controller.getSnapshot().failed, true);
+  assertEquals(h.controller.getSnapshot().pending, false);
+});
+
+Deno.test("context controller - Space toggles without undo and Enter leaves context unchanged", async () => {
+  const h = harness();
+  const target = h.intent();
+  h.arbiter.keyDown(target, { key: " ", preventDefault() {} });
+  await flush();
+  await h.ack(0);
+  h.arbiter.keyDown(target, { key: "Enter", preventDefault() {} });
+  assertEquals(h.opened(), 1);
+  assertEquals(h.ids(), ["A"]);
+  assertEquals(h.requests.length, 1);
+  h.arbiter.keyDown(target, { key: " ", preventDefault() {} });
+  await flush();
+  await h.ack(1);
+  assertEquals(h.ids(), []);
+  h.arbiter.doubleClick(target);
+  await flush();
+  assertEquals(h.requests.length, 2);
 });

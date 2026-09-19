@@ -323,15 +323,15 @@ export function DoclistBody(
               : "document.row.open_detail_only"),
           { label },
         )
-        : t("context.active.select", { label }),
+        : t("context.active.toggle", { label }),
       selected,
       expanded: isInspectable ? expandedId === rowId : undefined,
       detailLabel: label,
       controls: isInspectable ? doclistDetailPanelId(rowId) : undefined,
       onActivate: () => {
         if (!item) return;
-        if (isInspectable) return context?.activateReversible(item);
-        void context?.activate(item);
+        if (isInspectable) return context?.toggleReversible(item);
+        void context?.toggle(item);
       },
       doublePolicy: "local",
       onDoubleActivate: isInspectable

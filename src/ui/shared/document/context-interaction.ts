@@ -5,6 +5,7 @@ import type {
 import type {
   ClickIntent,
   ClickIntentArbiter,
+  ClickIntentCommit,
   ClickIntentKeyEvent,
   ClickIntentRevert,
   ClickIntentSingleResult,
@@ -16,6 +17,8 @@ export interface DocumentContextController {
   activateReversible: (
     item: ContextSelectionItem,
   ) => Promise<ClickIntentRevert | undefined>;
+  toggle: (item: ContextSelectionItem) => Promise<unknown>;
+  toggleReversible: (item: ContextSelectionItem) => ClickIntentCommit;
   reconcileDocument: (
     documentId: string,
     candidates: readonly ContextSelectionItem[],
@@ -106,7 +109,7 @@ export function contextInteractionProps(
     title: target.label,
     onClick: clickIntent
       ? (event) => intent!.arbiter.click(clickIntent, event?.detail ?? 1)
-      : target.onActivate,
+      : () => target.onActivate(),
     ...(clickIntent && target.onDoubleActivate
       ? {
         onDblClick: () => intent!.arbiter.doubleClick(clickIntent),
@@ -117,7 +120,7 @@ export function contextInteractionProps(
         intent!.arbiter.keyDown(clickIntent, event);
         return;
       }
-      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
       event.preventDefault();
       target.onActivate();
     },

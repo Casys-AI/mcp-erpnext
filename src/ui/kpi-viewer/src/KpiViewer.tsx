@@ -167,14 +167,13 @@ function kpiContextCandidates(
   data: KpiData,
   tf: TFunction,
 ): ContextSelectionItem[] {
+  if (!data.sparkline || data.sparkline.length < 2) return [];
   const pointContexts = kpiSparklinePoints(data).map((point) =>
     kpiTrendPointContext(data, point)
   );
   return [
     kpiNumberContext(data),
-    ...(data.sparkline && data.sparkline.length >= 2
-      ? [kpiTrendContext(data, tf)]
-      : []),
+    kpiTrendContext(data, tf),
     ...pointContexts,
   ];
 }
@@ -560,6 +559,7 @@ function KpiCard({
   const sparkline = data.sparkline && data.sparkline.length >= 2
     ? data.sparkline
     : undefined;
+  const contextEnabled = activeContext.supported && sparkline !== undefined;
   const sparklinePoints = kpiSparklinePoints(data);
   const sparklineLabels = sparklinePoints.length > 0
     ? sparklinePoints.map((point) => point.label)
@@ -599,11 +599,11 @@ function KpiCard({
     const plan = kpiInteractionPlan(
       "context",
       false,
-      activeContext.supported,
+      contextEnabled,
       false,
     );
     if (!plan.updateContext) return;
-    return activeContext.activateReversible(selection);
+    return activeContext.toggleReversible(selection);
   }
 
   function canOpenDetail(action: ReturnType<typeof kpiNumberAction>): boolean {
@@ -620,7 +620,7 @@ function KpiCard({
     const plan = kpiInteractionPlan(
       "detail",
       hasJump,
-      activeContext.supported,
+      contextEnabled,
       hasMessage,
     );
     if (plan.toggleLevel && action?.kind === "jump") {
@@ -652,8 +652,8 @@ function KpiCard({
   ) {
     if (canOpenDetail(action)) {
       clickIntent.click(interactionIntent(selection, action), clickCount);
-    } else if (activeContext.supported && clickCount < 2) {
-      void activeContext.activate(selection);
+    } else if (contextEnabled) {
+      clickIntent.click(interactionIntent(selection, action), clickCount);
     }
   }
 
@@ -676,40 +676,41 @@ function KpiCard({
       return;
     }
     if (
-      !activeContext.supported || event.repeat ||
+      !contextEnabled || event.repeat ||
       (event.key !== " " && event.key !== "Enter")
     ) return;
     event.preventDefault();
-    void activeContext.activate(selection);
+    void activeContext.toggle(selection);
   }
 
   const numberHasDetail = canOpenDetail(numberAction);
   const trendHasDetail = canOpenDetail(trendAction);
-  const numberInteractive = activeContext.supported || numberHasDetail;
-  const trendInteractive = activeContext.supported || trendHasDetail;
-  const numberSelected = activeContext.isSelected(numberContext);
+  const numberInteractive = contextEnabled || numberHasDetail;
+  const trendInteractive = contextEnabled || trendHasDetail;
+  const numberSelected = contextEnabled &&
+    activeContext.isSelected(numberContext);
   const trendSelected = activeContext.isSelected(trendContext);
   const trendPointAriaLabels = trendPointContexts.map((selection) =>
     [selection.label, selection.value].filter(Boolean).join(" · ")
   );
   const numberAriaLabel = numberInteractive
-    ? activeContext.supported
-      ? t("context.active.select", { label: numberContext.label })
+    ? contextEnabled
+      ? t("context.active.toggle", { label: numberContext.label })
       : t("kpi.drilldown.aria_detail", { label: data.label })
     : undefined;
   const trendAriaLabel = trendInteractive
-    ? activeContext.supported
-      ? t("context.active.select", { label: trendContext.label })
+    ? contextEnabled
+      ? t("context.active.toggle", { label: trendContext.label })
       : t("kpi.drilldown.aria_trend", { label: data.label })
     : undefined;
   const numberKeyShortcuts = numberHasDetail
-    ? activeContext.supported ? "Space Enter" : "Enter"
-    : activeContext.supported
+    ? contextEnabled ? "Space Enter" : "Enter"
+    : contextEnabled
     ? "Space Enter"
     : undefined;
   const trendKeyShortcuts = trendHasDetail
-    ? activeContext.supported ? "Space Enter" : "Enter"
-    : activeContext.supported
+    ? contextEnabled ? "Space Enter" : "Enter"
+    : contextEnabled
     ? "Space Enter"
     : undefined;
   const compact = layout !== "wide";
@@ -753,9 +754,7 @@ function KpiCard({
               role={numberInteractive ? "button" : undefined}
               tabIndex={numberInteractive ? 0 : undefined}
               aria-label={numberAriaLabel}
-              aria-pressed={activeContext.supported
-                ? numberSelected
-                : undefined}
+              aria-pressed={contextEnabled ? numberSelected : undefined}
               aria-keyshortcuts={numberKeyShortcuts}
               onClick={numberInteractive
                 ? (event) =>
@@ -813,9 +812,7 @@ function KpiCard({
                   type="button"
                   class="absolute inset-x-0 bottom-0 top-1.5 z-0 rounded-[4px] border-0 bg-transparent p-0 hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
                   aria-label={trendAriaLabel}
-                  aria-pressed={activeContext.supported
-                    ? trendSelected
-                    : undefined}
+                  aria-pressed={contextEnabled ? trendSelected : undefined}
                   aria-keyshortcuts={trendKeyShortcuts}
                   onClick={(event) =>
                     pointerClick(trendContext, trendAction, event.detail)}
@@ -833,7 +830,7 @@ function KpiCard({
                   ariaLabels={trendPointAriaLabels}
                   height={44}
                   gap={4}
-                  contextEnabled={activeContext.supported}
+                  contextEnabled={contextEnabled}
                   isSelected={(index) =>
                     activeContext.isSelected(trendPointContexts[index])}
                   ariaKeyShortcuts={trendKeyShortcuts}
@@ -920,9 +917,7 @@ function KpiCard({
               role={numberInteractive ? "button" : undefined}
               tabIndex={numberInteractive ? 0 : undefined}
               aria-label={numberAriaLabel}
-              aria-pressed={activeContext.supported
-                ? numberSelected
-                : undefined}
+              aria-pressed={contextEnabled ? numberSelected : undefined}
               aria-keyshortcuts={numberKeyShortcuts}
               onClick={numberInteractive
                 ? (event) =>
@@ -979,9 +974,7 @@ function KpiCard({
                   type="button"
                   class="absolute inset-0 z-0 rounded-[4px] border-0 bg-transparent p-0 hover:outline hover:outline-1 hover:outline-accent-edge focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
                   aria-label={trendAriaLabel}
-                  aria-pressed={activeContext.supported
-                    ? trendSelected
-                    : undefined}
+                  aria-pressed={contextEnabled ? trendSelected : undefined}
                   aria-keyshortcuts={trendKeyShortcuts}
                   onClick={(event) =>
                     pointerClick(trendContext, trendAction, event.detail)}
@@ -1010,7 +1003,7 @@ function KpiCard({
                   ariaLabels={trendPointAriaLabels}
                   height={56}
                   gap={5}
-                  contextEnabled={activeContext.supported}
+                  contextEnabled={contextEnabled}
                   isSelected={(index) =>
                     activeContext.isSelected(trendPointContexts[index])}
                   ariaKeyShortcuts={trendKeyShortcuts}
@@ -1089,6 +1082,7 @@ function KpiViewerContent({
     HTMLDivElement
   >();
   const t = useT();
+  const locale = currentLocale();
   const rootKey = viewerRootKey("kpi", rootRefreshRequest ?? undefined, {
     label: data.label,
   });
@@ -1098,6 +1092,8 @@ function KpiViewerContent({
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -1106,7 +1102,7 @@ function KpiViewerContent({
   };
   useEffect(() => {
     void activeContext.reconcileView("KPI", kpiContextCandidates(data, t));
-  }, [data, activeContext.reconcileView]);
+  }, [data, locale, activeContext.reconcileView]);
   const viewerNav = useViewerNav(app, {
     title: data.label,
     kind: "root",

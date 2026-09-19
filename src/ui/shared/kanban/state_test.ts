@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertStrictEquals } from "@std/assert";
 import {
   createKanbanInitialState,
   kanbanStateReducer,
@@ -100,6 +100,107 @@ Deno.test("kanban state - close-detail resets detail state", () => {
   assertEquals(state.detail.selectedCardId, null);
   assertEquals(state.detail.cardDetail, null);
   assertEquals(state.detail.detailLoading, false);
+});
+
+Deno.test("kanban state - switching DocType closes the previous card even when board ID is reused", () => {
+  const opportunityBoard = {
+    ...makeBoard(),
+    doctype: "Opportunity",
+    cards: [{ id: "OP-0001", title: "Sales opportunity", columnId: "open" }],
+  };
+  const hydrated = kanbanStateReducer(createKanbanInitialState(), {
+    type: "hydrate-board",
+    board: opportunityBoard,
+  });
+  const selected = kanbanStateReducer(hydrated, {
+    type: "select-card",
+    cardId: "OP-0001",
+  });
+  const opened = kanbanStateReducer(selected, {
+    type: "hydrate-detail",
+    detail: { doctype: "Opportunity", name: "OP-0001", status: "Open" },
+  });
+  const taskBoard = kanbanStateReducer(opened, {
+    type: "hydrate-board",
+    board: makeBoard(),
+  });
+
+  assertEquals(taskBoard.board?.doctype, "Task");
+  assertEquals(taskBoard.detail, createKanbanInitialState().detail);
+  // No old card identity remains to initiate a Task relation read.
+  assertEquals(taskBoard.detail.selectedCardId, null);
+});
+
+Deno.test("kanban state - switching board ID closes a detail within the same DocType", () => {
+  const hydrated = kanbanStateReducer(createKanbanInitialState(), {
+    type: "hydrate-board",
+    board: makeBoard(),
+  });
+  const selected = kanbanStateReducer(hydrated, {
+    type: "select-card",
+    cardId: "TASK-0001",
+  });
+  const next = kanbanStateReducer(selected, {
+    type: "hydrate-board",
+    board: { ...makeBoard(), boardId: "another-task-board" },
+  });
+
+  assertEquals(next.detail, createKanbanInitialState().detail);
+});
+
+Deno.test("kanban state - refreshing the same board preserves the open canonical detail", () => {
+  const hydrated = kanbanStateReducer(createKanbanInitialState(), {
+    type: "hydrate-board",
+    board: makeBoard(),
+  });
+  const selected = kanbanStateReducer(hydrated, {
+    type: "select-card",
+    cardId: "TASK-0001",
+  });
+  const canonical = {
+    name: "TASK-0001",
+    subject: "Original title",
+    modified: "2026-03-06T00:00:00.000Z",
+  };
+  const opened = kanbanStateReducer(selected, {
+    type: "hydrate-detail",
+    detail: canonical,
+  });
+  const refreshed = kanbanStateReducer(opened, {
+    type: "hydrate-board",
+    board: {
+      ...makeBoard(),
+      generatedAt: "2026-03-06T00:05:00.000Z",
+      cards: [{ id: "TASK-0001", title: "Refreshed card", columnId: "open" }],
+    },
+  });
+
+  assertStrictEquals(refreshed.detail, opened.detail);
+  assertStrictEquals(refreshed.detail.cardDetail, canonical);
+});
+
+Deno.test("kanban state - late detail responses do not revive a closed or switched card", () => {
+  const hydrated = kanbanStateReducer(createKanbanInitialState(), {
+    type: "hydrate-board",
+    board: makeBoard(),
+  });
+  const selected = kanbanStateReducer(hydrated, {
+    type: "select-card",
+    cardId: "TASK-0001",
+  });
+  const closed = kanbanStateReducer(selected, { type: "close-detail" });
+  const switched = kanbanStateReducer(selected, {
+    type: "hydrate-board",
+    board: { ...makeBoard(), boardId: "another-task-board" },
+  });
+  for (const state of [closed, switched]) {
+    const late = kanbanStateReducer(state, {
+      type: "hydrate-detail",
+      detail: { name: "TASK-0001", subject: "Delayed response" },
+    });
+    assertStrictEquals(late, state);
+    assertEquals(late.detail.cardDetail, null);
+  }
 });
 
 Deno.test("kanban state - closes detail immediately when nothing changed", () => {

@@ -35,7 +35,12 @@ import { useViewerLayout } from "~/shared/useViewerLayout";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
 import { useClickIntent } from "~/shared/useClickIntent.ts";
 import { type Tone, TONE_RULE } from "~/shared/status";
-import { formatCurrency, formatInteger, formatNumber } from "~/shared/format";
+import {
+  currentLocale,
+  formatCurrency,
+  formatInteger,
+  formatNumber,
+} from "~/shared/format";
 import {
   beginUiRefresh,
   canRequestUiRefresh,
@@ -64,7 +69,11 @@ import {
 } from "./capabilities.ts";
 import { isFixtureMode, STOCK_FIXTURE } from "./fixture.ts";
 import { buildStockRowJump } from "./stockJumps.ts";
-import { stockRowContextItem, stockRowDetailId } from "./stock-interactions.ts";
+import {
+  STOCK_CONTEXT_RECONCILE_KEY,
+  stockRowContextItem,
+  stockRowDetailId,
+} from "./stock-interactions.ts";
 import type { StockData, StockEntry } from "./types.ts";
 
 const app = new App({ name: "Stock Viewer", version: "2.0.0" });
@@ -420,6 +429,8 @@ function StockContent(
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -450,6 +461,7 @@ function StockContent(
   });
 
   const contextView = t("stock.title");
+  const locale = currentLocale();
   const contextItemFor = (row: StockEntry): ContextSelectionItem =>
     stockRowContextItem(
       row,
@@ -461,10 +473,17 @@ function StockContent(
   useEffect(() => {
     if (!context.supported) return;
     void activeContext.reconcileView(
-      contextView,
+      STOCK_CONTEXT_RECONCILE_KEY,
       data.data.map(contextItemFor),
     );
-  }, [data, rootKey, context.supported, activeContext.reconcileView]);
+  }, [
+    data,
+    rootKey,
+    locale,
+    contextView,
+    context.supported,
+    activeContext.reconcileView,
+  ]);
 
   const filtered = useMemo(() => {
     if (!filter) return data.data;
@@ -756,13 +775,13 @@ function StockContent(
                     : "document.row.open_detail_only"),
                 { label: row.item_code },
               )
-              : t("context.active.select", { label: row.item_code });
+              : t("context.active.toggle", { label: row.item_code });
             const intent = {
               key: contextItem.id,
               doublePolicy: "local" as const,
               onSingle: () =>
                 context.supported
-                  ? context.activateReversible(contextItem)
+                  ? context.toggleReversible(contextItem)
                   : undefined,
               onDouble: () => {
                 if (canDrill) toggleRowDetail(row, jump);
@@ -812,9 +831,7 @@ function StockContent(
                           ? "Space Enter"
                           : (context.supported ? "Space" : "Enter"),
                         onClick: (event: MouseEvent) => {
-                          if (canDrill || event.detail < 2) {
-                            clickIntent.click(intent, event.detail);
-                          }
+                          clickIntent.click(intent, event.detail);
                         },
                         onDblClick: canDrill
                           ? () => clickIntent.doubleClick(intent)

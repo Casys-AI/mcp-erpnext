@@ -26,6 +26,7 @@ import { DocumentSurface } from "../document/DocumentSurface.tsx";
 import type { DocumentEnvelope } from "../document/types.ts";
 import { useAttachments } from "../document/useAttachments.ts";
 import type { DocumentChangeEvent } from "../document-events.ts";
+import { currentLocale } from "../format.ts";
 import { DoclistBody } from "../doclist/DoclistBody";
 import { LoadingSkeleton } from "../doclist/LoadingSkeleton";
 import type { DoclistData } from "../doclist/types";
@@ -37,7 +38,7 @@ import {
   type Jump,
   jumpFromHint,
 } from "../jumps";
-import type { NavLevel } from "../nav-stack";
+import { type NavLevel, navLevelSubtitle } from "../nav-stack";
 import { useT } from "../i18n-hook";
 import { Button, Label, StateMessage } from "../ui";
 import type { ViewerLayout } from "../useViewerLayout";
@@ -158,7 +159,7 @@ export function LevelBody(
       list={list}
       layout={layout}
       fixture={fixture}
-      subtitle={level.subtitle}
+      subtitle={navLevelSubtitle(level, t)}
       onError={onError}
       onJump={onJump}
       onAsk={onAsk}
@@ -190,7 +191,8 @@ function ChartLevel({
 }) {
   const t = useT();
   const view = level.title;
-  const chartId = nestedChartContextId(level.key ?? level.id, level.title);
+  const locale = currentLocale();
+  const chartId = nestedChartContextId(level.key ?? level.id);
   const reconcileView = context?.supported ? context.reconcileView : undefined;
 
   useEffect(() => {
@@ -199,7 +201,7 @@ function ChartLevel({
       chartId,
       nestedChartContextCandidates(chart, chartId, view),
     );
-  }, [chart, chartId, reconcileView, view]);
+  }, [chart, chartId, reconcileView, view, locale]);
 
   // Le segment exact prime sur le saut générique du libellé. Une série
   // dérivée sans hint (Net Profit) reste lisible mais n'invente aucun saut.
@@ -217,6 +219,7 @@ function ChartLevel({
         hint,
         {},
         t("nav.linked_to", { id: target }),
+        { key: "nav.linked_to", params: { id: target } },
       )
       : null;
   };
@@ -262,7 +265,7 @@ function ChartLevel({
       onPointContext={contextEnabled
         ? (labelIndex, seriesIndex) => {
           const item = itemAt(labelIndex, seriesIndex);
-          return item ? context!.activateReversible(item) : undefined;
+          return item ? context!.toggleReversible(item) : undefined;
         }
         : undefined}
       onPointDetail={detailEnabled
@@ -340,6 +343,7 @@ function RecordDocumentLevel({
       hint,
       vars,
       t("nav.linked_to", { id: envelope.name }),
+      { key: "nav.linked_to", params: { id: envelope.name } },
     );
   };
   const hintJumps = hints
@@ -409,9 +413,9 @@ function RecordDocumentLevel({
     : undefined;
   const contextTarget: ContextInteractionTarget | undefined = context?.supported
     ? {
-      label: t("context.active.select", { label: contextItem.label }),
+      label: t("context.active.toggle", { label: contextItem.label }),
       selected: context.isSelected(contextItem),
-      onActivate: () => void context.activate(contextItem),
+      onActivate: () => void context.toggle(contextItem),
     }
     : undefined;
   const renderChildRowActions = (
@@ -425,6 +429,8 @@ function RecordDocumentLevel({
         row,
         availableTools: exactTools,
         subtitle: t("nav.linked_to", { id: envelope.name }),
+        subtitleKey: "nav.linked_to",
+        subtitleParams: { id: envelope.name },
       })
       : [];
     const rowAsks = onAsk
@@ -475,10 +481,10 @@ function RecordDocumentLevel({
     );
     return item
       ? {
-        label: t("context.active.select", { label: item.label }),
+        label: t("context.active.toggle", { label: item.label }),
         detailLabel: item.label,
         selected: context.isSelected(item),
-        onActivate: () => context.activateReversible(item),
+        onActivate: () => context.toggleReversible(item),
       }
       : undefined;
   };

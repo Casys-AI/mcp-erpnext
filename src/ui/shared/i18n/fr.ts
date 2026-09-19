@@ -145,9 +145,9 @@ export const fr: Record<string, string> = {
   "chart.keyboard.target": "{label} · {series} · {value}",
   "chart.keyboard.target_single": "{label} · {value}",
   "chart.keyboard.help":
-    "Gauche et droite changent le point ; haut et bas changent la série ; Espace l'ajoute au contexte ; Entrée ouvre ou ferme le détail disponible.",
+    "Gauche et droite changent le point ; haut et bas changent la série ; Espace l’ajoute ou le retire du contexte ; Entrée ouvre ou ferme le détail disponible.",
   "chart.keyboard.help_context":
-    "Gauche et droite changent le point ; haut et bas changent la série ; Espace l'ajoute au contexte.",
+    "Gauche et droite changent le point ; haut et bas changent la série ; Espace l’ajoute ou le retire du contexte.",
   "chart.keyboard.help_detail":
     "Gauche et droite changent le point ; haut et bas changent la série ; Entrée ouvre ou ferme le détail disponible.",
   "chart.keyboard.help_navigation":
@@ -264,7 +264,8 @@ export const fr: Record<string, string> = {
   "funnel.autorefresh": "Actualisation auto au focus",
   "funnel.stage.click_to_see": "Cliquer pour voir {label}",
   "funnel.stage.aria_open": "Ouvrir {label}, {count}",
-  "funnel.stage.aria_context": "Ajouter {label}, {count}, au contexte actif",
+  "funnel.stage.aria_context":
+    "Ajouter ou retirer {label}, {count}, du contexte actif",
   "funnel.stage.aria_ask": "Demander le détail de {label}, {count}",
   "funnel.error.parse_failed": "Impossible de lire la réponse du funnel",
   "funnel.drill_down.leads": "Afficher tous les leads",
@@ -325,23 +326,25 @@ export const fr: Record<string, string> = {
   "interaction.detail.open_hint": "Détail · double-clic",
   "interaction.detail.close_hint": "Fermer · double-clic",
   "document.row.open_actions":
-    "Clic ou Espace pour ajouter {label} au contexte · double-clic ou Entrée pour afficher ses actions",
+    "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour afficher ses actions",
   "document.row.close_actions":
-    "Clic ou Espace pour ajouter {label} au contexte · double-clic ou Entrée pour fermer ses actions",
+    "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour fermer ses actions",
   "document.row.open_actions_only":
     "Double-clic ou Entrée pour afficher les actions de {label}",
   "document.row.close_actions_only":
     "Double-clic ou Entrée pour fermer les actions de {label}",
   "document.row.open_detail":
-    "Clic ou Espace pour ajouter {label} au contexte · double-clic ou Entrée pour ouvrir son détail",
+    "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour ouvrir son détail",
   "document.row.close_detail":
-    "Clic ou Espace pour ajouter {label} au contexte · double-clic ou Entrée pour fermer son détail",
+    "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour fermer son détail",
   "document.row.open_detail_only":
     "Double-clic ou Entrée pour ouvrir le détail de {label}",
   "document.row.close_detail_only":
     "Double-clic ou Entrée pour fermer le détail de {label}",
-  "chart.tooltip.click_action_context": "clic + contexte · 2× détail",
-  "chart.tooltip.click_action_context_only": "clic + contexte",
+  "chart.tooltip.click_action_context":
+    "clic : ajouter/retirer du contexte · 2× détail",
+  "chart.tooltip.click_action_context_only":
+    "clic : ajouter/retirer du contexte",
   "chart.tooltip.click_action_fallback": "2× détail",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Retour",
@@ -431,7 +434,8 @@ export const fr: Record<string, string> = {
   "common.yes": "Oui",
   "common.no": "Non",
   "kanban.error.move_timeout": "Délai dépassé, réessayez.",
-  "kanban.nav.view_list.message": "Montre-moi une vue liste de {doctype} {id}",
+  "kanban.nav.view_list.message":
+    "Affiche {doctype} {id} en liste, limité à ce document.",
   "kanban.nav.timesheets.message":
     "Affiche les feuilles de temps de la tâche {id}",
   "kanban.nav.quotations.message":
@@ -489,7 +493,24 @@ export const fr: Record<string, string> = {
   "kanban.section.financial": "finances",
   "kanban.section.people": "personnes",
   "kanban.section.details": "autres",
-  "kanban.modal.nav.view_list": "Voir dans la liste",
+  "kanban.modal.nav.view_list": "Afficher ce document en liste",
+  "kanban.modal.nav.view_list.Task": "Afficher cette tâche en liste",
+  "kanban.modal.nav.view_list.Opportunity":
+    "Afficher cette opportunité en liste",
+  "kanban.modal.nav.view_list.Issue": "Afficher ce ticket en liste",
+  "kanban.modal.nav.request_list.Task": "Demander cette tâche en liste",
+  "kanban.modal.nav.request_list.Opportunity":
+    "Demander cette opportunité en liste",
+  "kanban.modal.nav.request_list.Issue": "Demander ce ticket en liste",
+  "kanban.timesheets.loading": "Vérification des feuilles de temps…",
+  "kanban.timesheets.count": "Feuilles de temps · {count}",
+  "kanban.timesheets.empty": "Aucune feuille de temps",
+  "kanban.timesheets.error": "Vérification des feuilles de temps impossible",
+  "kanban.timesheets.error.too_many":
+    "Trop de feuilles de temps liées pour les compter exactement",
+  "kanban.timesheets.unavailable":
+    "Disponibilité des feuilles de temps non vérifiée",
+  "kanban.modal.nav.request_timesheets": "Demander les feuilles de temps",
   "kanban.modal.nav.timesheets": "Feuilles de temps",
   "kanban.modal.nav.quotations": "Devis",
   "kanban.modal.nav.related_tasks": "Tâches liées",
@@ -587,4 +608,50 @@ export const fr: Record<string, string> = {
   "buy.col.line": "Ligne",
   "buy.col.captured_at": "Capturé le",
   // ── /buy-evidence-viewer ──────────────────────────────────────────────────
+  // Kanban canonical labels and context toggle gestures.
+  "kanban.status.open": "Ouvert",
+  "kanban.status.working": "En cours",
+  "kanban.status.pending_review": "À valider",
+  "kanban.status.overdue": "En retard",
+  "kanban.status.completed": "Terminé",
+  "kanban.status.cancelled": "Annulé",
+  "kanban.status.replied": "Répondu",
+  "kanban.status.quotation": "Devis",
+  "kanban.status.converted": "Converti",
+  "kanban.status.closed": "Fermé",
+  "kanban.status.lost": "Perdu",
+  "kanban.status.on_hold": "En attente",
+  "kanban.status.resolved": "Résolu",
+  "kanban.transition.start_work": "Démarrer",
+  "kanban.transition.request_review": "Demander validation",
+  "kanban.transition.resume_work": "Reprendre",
+  "kanban.transition.approve": "Valider",
+  "kanban.transition.reopen": "Rouvrir",
+  "kanban.transition.reply": "Répondre",
+  "kanban.transition.send_quotation": "Envoyer un devis",
+  "kanban.transition.convert": "Convertir",
+  "kanban.transition.close": "Fermer",
+  "kanban.transition.mark_lost": "Marquer perdu",
+  "kanban.transition.resume_conversation": "Reprendre la discussion",
+  "kanban.transition.resume": "Reprendre",
+  "kanban.transition.put_on_hold": "Mettre en attente",
+  "kanban.transition.resolve": "Résoudre",
+  "kanban.metric.progress": "Progression",
+  "kanban.metric.due": "Échéance",
+  "kanban.metric.start": "Début",
+  "kanban.metric.estimated": "Estimé",
+  "kanban.metric.actual": "Réel",
+  "kanban.metric.amount": "Montant",
+  "kanban.metric.probability": "Probabilité",
+  "kanban.metric.closing": "Clôture",
+  "kanban.metric.created": "Création",
+  "kanban.metric.raised_by": "Créé par",
+  "kanban.metric.sla": "SLA",
+  "kanban.metric.opened": "Ouverture",
+  "kanban.metric.resolved": "Résolution",
+  "kanban.badge.sla_breach": "SLA dépassé",
+  "kanban.field.company": "société",
+  "kanban.field.notes": "notes",
+  "kanban.field.resolution_details": "détails de résolution",
+  "context.active.toggle": "Ajouter ou retirer {label} du contexte actif",
 };

@@ -70,7 +70,54 @@ export const DOCLIST_FIXTURE: DoclistData = {
   data: rows,
 };
 
-export function isFixtureMode(): boolean {
-  if (typeof window === "undefined") return false;
-  return new URLSearchParams(globalThis.location.search).has("fixture");
+const companyRows = [
+  {
+    name: "Casys Taiwan",
+    abbr: "CTW",
+    default_currency: "TWD",
+    country: "Taiwan",
+    domain: "Manufacturing",
+  },
+  {
+    name: "Casys Europe",
+    abbr: "CEU",
+    default_currency: "EUR",
+    country: "France",
+    domain: "Services",
+  },
+].map((company) => ({
+  ...company,
+  _detail: { doctype: "Company", ...company },
+}));
+
+/** Régression #61 : référentiel sans statut, tiers ni montant. */
+export const COMPANY_DOCLIST_FIXTURE: DoclistData = {
+  doctype: "Company",
+  _title: "Companies",
+  count: companyRows.length,
+  refreshRequest: {
+    toolName: "erpnext_company_list",
+    arguments: { limit: 20 },
+  },
+  _rowAction: {
+    toolName: "erpnext_doc_get",
+    idField: "name",
+    argName: "name",
+    extraArgs: { doctype: "Company" },
+  },
+  data: companyRows,
+};
+
+export function doclistFixtureFromSearch(
+  search = typeof window === "undefined" ? "" : globalThis.location.search,
+): DoclistData {
+  return new URLSearchParams(search).get("fixture") === "company"
+    ? COMPANY_DOCLIST_FIXTURE
+    : DOCLIST_FIXTURE;
+}
+
+export function isFixtureMode(
+  search = typeof window === "undefined" ? "" : globalThis.location.search,
+): boolean {
+  return new URLSearchParams(search).has("fixture");
 }

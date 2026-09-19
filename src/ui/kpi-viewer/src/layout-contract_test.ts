@@ -17,3 +17,11 @@ Deno.test("KPI layout - host bounds replace viewport locking and the level body 
   );
   assertEquals(content.includes("h-screen"), false);
 });
+
+Deno.test("KPI interaction - context-only values forward a fast second click", () => {
+  assertEquals(source.includes("clickCount < 2"), false);
+  assertStringIncludes(
+    source,
+    "clickIntent.click(interactionIntent(selection, action), clickCount)",
+  );
+});

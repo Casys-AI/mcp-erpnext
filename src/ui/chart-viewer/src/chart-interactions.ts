@@ -610,15 +610,16 @@ export function chartPointActionPlan(
 }
 
 /**
- * Sans detail disponible, le second click natif et `dblclick` sont inertes :
- * le premier click reste ainsi selectionne au lieu d'etre compense en vain.
+ * Chaque clic de contexte atteint l'arbitre, y compris le second clic natif :
+ * il peut ainsi compenser la premiere bascule. Le geste de detail reste borne
+ * aux points qui exposent reellement une navigation.
  */
 export function shouldHandleChartPointActivation(
   activation: ChartPointActivation,
-  clickCount: number,
+  _clickCount: number,
   detailEnabled: boolean,
 ): boolean {
-  return detailEnabled || (activation === "context" && clickCount < 2);
+  return activation === "context" || detailEnabled;
 }
 
 /** Un fallback conversationnel est une action, jamais un disclosure ARIA. */

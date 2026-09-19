@@ -106,6 +106,26 @@ Deno.test("ui refresh - injects _rowAction fallback to erpnext_doc_get for unkno
   });
 });
 
+Deno.test("ui refresh - Company detail stays a typed erpnext_doc_get call", () => {
+  const result = withUiRefreshRequest(
+    {
+      doctype: "Company",
+      data: [{ name: "Casys Industries", abbr: "CI" }],
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    },
+    "erpnext_company_list",
+    {},
+  ) as Record<string, unknown>;
+
+  assertEquals(result._rowAction, {
+    toolName: "erpnext_doc_get",
+    idField: "name",
+    argName: "name",
+    extraArgs: { doctype: "Company" },
+  });
+  assertEquals(result._sendMessageHints, undefined);
+});
+
 Deno.test("ui refresh - does not inject _rowAction for non-doclist viewers", () => {
   const result = withUiRefreshRequest(
     {

@@ -198,6 +198,7 @@ export const KANBAN_FIXTURE_DETAILS: Record<string, Record<string, unknown>> = {
   "TASK-0002": {
     name: "TASK-0002",
     subject: "Collect supplier quotes",
+    is_milestone: 0,
     status: "Open",
     priority: "Medium",
     project: "Alpha",
@@ -222,6 +223,7 @@ export const KANBAN_FIXTURE_DETAILS: Record<string, Record<string, unknown>> = {
   "TASK-0004": {
     name: "TASK-0004",
     subject: "QA review",
+    is_milestone: 0,
     status: "Pending Review",
     priority: "Low",
     project: "Alpha",
@@ -231,6 +233,7 @@ export const KANBAN_FIXTURE_DETAILS: Record<string, Record<string, unknown>> = {
   "TASK-0005": {
     name: "TASK-0005",
     subject: "Close Q1 books",
+    is_milestone: 0,
     status: "Completed",
     priority: "Medium",
     project: "Finance",

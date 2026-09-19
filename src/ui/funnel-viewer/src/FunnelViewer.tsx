@@ -291,11 +291,7 @@ function WideFunnelChart(
                       "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                   )}
                   onClick={interactive
-                    ? (event) => {
-                      if (detailAvailable || event.detail < 2) {
-                        clickIntent.click(intent, event.detail);
-                      }
-                    }
+                    ? (event) => clickIntent.click(intent, event.detail)
                     : undefined}
                   onDblClick={detailAvailable
                     ? () => clickIntent.doubleClick(intent)
@@ -563,11 +559,7 @@ function MobileFunnelChart(
                   minHeight: touch ? 40 : undefined,
                 }}
                 onClick={interactive
-                  ? (event) => {
-                    if (detailAvailable || event.detail < 2) {
-                      clickIntent.click(intent, event.detail);
-                    }
-                  }
+                  ? (event) => clickIntent.click(intent, event.detail)
                   : undefined}
                 onDblClick={detailAvailable
                   ? () => clickIntent.doubleClick(intent)
@@ -754,6 +746,8 @@ function FunnelContent(
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -798,7 +792,7 @@ function FunnelContent(
       false,
     );
     if (!plan.updateContext) return;
-    return activeContext.activateReversible(funnelStageContext(data, stage));
+    return activeContext.toggleReversible(funnelStageContext(data, stage));
   }
 
   async function openStageDetail(

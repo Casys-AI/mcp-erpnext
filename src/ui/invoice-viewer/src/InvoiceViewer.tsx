@@ -676,6 +676,8 @@ function InvoiceContent({
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
     activateReversible: activeContext.activateReversible,
+    toggle: activeContext.toggle,
+    toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
@@ -797,11 +799,13 @@ function InvoiceContent({
   const rootContextTarget: ContextInteractionTarget | undefined =
     nav.isRoot && context.supported
       ? {
-        label: t("context.active.select", {
+        label: t("context.active.toggle", {
           label: contextDocumentItem.label,
         }),
         selected: context.isSelected(contextDocumentItem),
-        onActivate: () => context.activateReversible(contextDocumentItem),
+        onActivate: async () => {
+          await context.toggle(contextDocumentItem);
+        },
       }
       : undefined;
   const contextCandidates = [
@@ -854,15 +858,15 @@ function InvoiceContent({
               : "document.row.open_detail_only"),
           { label },
         )
-        : t("context.active.select", { label }),
+        : t("context.active.toggle", { label }),
       selected,
       expanded: canExpand ? expandedIdx === row.idx : undefined,
       detailLabel: label,
       controls: canExpand ? lineDetailId(rowIndex) : undefined,
       onActivate: () => {
         if (!item) return;
-        if (canExpand) return context.activateReversible(item);
-        void context.activate(item);
+        if (canExpand) return context.toggleReversible(item);
+        void context.toggle(item);
       },
       doublePolicy: "local",
       onDoubleActivate: canExpand

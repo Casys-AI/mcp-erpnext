@@ -80,12 +80,20 @@ export function shortenId(value: string, max = 14, keepSegments = 2): string {
   return `…${segments.slice(-keepSegments).join("-")}`;
 }
 
+const NARROW_TRAILING_FIELDS = [
+  "default_currency",
+  "currency",
+  "country",
+];
+
 /**
- * Les trois colonnes que gardent les mises en page étroites : pièce, tiers, dû.
+ * Les trois colonnes que gardent les mises en page étroites.
  *
  * La maquette mobile fixe la grille à `92px 1fr 78px` — l'identifiant et le
- * montant ont une largeur arrêtée, le tiers prend ce qui reste. Choisir les
- * colonnes est donc un préalable à la grille, pas une conséquence.
+ * dernier champ ont une largeur arrêtée, le libellé prend ce qui reste.
+ * Une liste comptable garde son montant à droite. Une liste de référentiel
+ * sans montant y place plutôt une valeur courte et utile (la devise d'une
+ * Company, par exemple), au lieu d'afficher un faux « dû » vide.
  *
  * Le statut est délibérément absent : en étroit il ne s'affiche plus en badge,
  * il ne subsiste que dans le liseré de 2 px au bord de la ligne.
@@ -94,7 +102,12 @@ export function pickNarrowColumns(
   columns: { id: string; numeric: boolean }[],
   amountKey: string | undefined,
   isStatus: (key: string) => boolean,
-): { idKey?: string; labelKey?: string; amountKey?: string } {
+): {
+  idKey?: string;
+  labelKey?: string;
+  trailingKey?: string;
+  amountKey?: string;
+} {
   const idKey = columns[0]?.id;
   const labelKey = columns.find((column) =>
     column.id !== idKey &&
@@ -102,5 +115,16 @@ export function pickNarrowColumns(
     !column.numeric &&
     !isStatus(column.id)
   )?.id;
-  return { idKey, labelKey, amountKey };
+  const trailingCandidates = columns.filter((column) =>
+    column.id !== idKey &&
+    column.id !== labelKey &&
+    !column.numeric &&
+    !isStatus(column.id)
+  );
+  const trailingKey = amountKey ??
+    NARROW_TRAILING_FIELDS
+      .map((field) => trailingCandidates.find((column) => column.id === field))
+      .find((column) => column !== undefined)?.id ??
+    trailingCandidates[0]?.id;
+  return { idKey, labelKey, trailingKey, amountKey };
 }

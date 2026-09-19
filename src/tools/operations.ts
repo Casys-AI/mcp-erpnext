@@ -33,6 +33,9 @@ import {
   withPurchaseInvoiceAccountHints,
 } from "./purchase-invoice-hints.ts";
 
+const DOC_LIST_MAX_LIMIT = 5_000;
+const DOC_LIST_MAX_OFFSET = 100_000;
+
 function bytesToBase64(bytes: Uint8Array): string {
   const chunkSize = 32 * 1024;
   let binary = "";
@@ -639,7 +642,8 @@ export const operationsTools: ErpNextTool[] = [
     _meta: DOCLIST_META,
     description:
       "List any ERPNext documents by DocType. Useful for DocTypes not covered " +
-      "by dedicated tools. Supports field selection, filters (as JSON array), and limit.",
+      "by dedicated tools. Supports field selection, filters (as JSON array), " +
+      "bounded pagination, and an optional fresh read.",
     category: "operations",
     inputSchema: {
       type: "object",
@@ -709,7 +713,23 @@ export const operationsTools: ErpNextTool[] = [
             ],
           },
         },
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: DOC_LIST_MAX_LIMIT,
+          description: "Max results (default 20, maximum 5000)",
+        },
+        offset: {
+          type: "integer",
+          minimum: 0,
+          maximum: DOC_LIST_MAX_OFFSET,
+          description: "Pagination offset (default 0, maximum 100000)",
+        },
+        skip_cache: {
+          type: "boolean",
+          description:
+            "Force a fresh ERPNext read instead of using the short-lived list cache",
+        },
         order_by: {
           type: "string",
           description: "Order by clause (e.g. 'modified desc', 'name asc')",
@@ -721,18 +741,48 @@ export const operationsTools: ErpNextTool[] = [
       if (!input.doctype) {
         throw new Error("[erpnext_doc_list] 'doctype' is required");
       }
+      if (
+        input.limit !== undefined &&
+        (typeof input.limit !== "number" || !Number.isInteger(input.limit) ||
+          input.limit < 1 || input.limit > DOC_LIST_MAX_LIMIT)
+      ) {
+        throw new Error(
+          `[erpnext_doc_list] 'limit' must be an integer between 1 and ${DOC_LIST_MAX_LIMIT}`,
+        );
+      }
+      if (
+        input.offset !== undefined &&
+        (typeof input.offset !== "number" ||
+          !Number.isInteger(input.offset) || input.offset < 0 ||
+          input.offset > DOC_LIST_MAX_OFFSET)
+      ) {
+        throw new Error(
+          `[erpnext_doc_list] 'offset' must be an integer between 0 and ${DOC_LIST_MAX_OFFSET}`,
+        );
+      }
+      if (
+        input.skip_cache !== undefined && typeof input.skip_cache !== "boolean"
+      ) {
+        throw new Error("[erpnext_doc_list] 'skip_cache' must be a boolean");
+      }
 
       const limit = (input.limit as number) ?? 20;
       const fields = (input.fields as string[]) ?? ["name", "modified"];
       const filters = (input.filters as FrappeFilter[]) ?? [];
       const order_by = (input.order_by as string) ?? "modified desc";
-
-      const docs = await ctx.client.list(input.doctype as string, {
+      const offset = input.offset as number | undefined;
+      const listOptions = {
         fields,
         filters,
         limit,
+        ...(offset !== undefined ? { limit_start: offset } : {}),
         order_by,
-      });
+      };
+      const docs = input.skip_cache === true
+        ? await ctx.client.list(input.doctype as string, listOptions, {
+          skipCache: true,
+        })
+        : await ctx.client.list(input.doctype as string, listOptions);
 
       return {
         doctype: input.doctype as string,

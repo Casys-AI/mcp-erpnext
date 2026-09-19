@@ -20,10 +20,25 @@
 import { en } from "./i18n/en.ts";
 import { fr } from "./i18n/fr.ts";
 import { zh } from "./i18n/zh.ts";
+import { zhHant } from "./i18n/zh-Hant.ts";
+import { hi } from "./i18n/hi.ts";
+import { bn } from "./i18n/bn.ts";
+import { ta } from "./i18n/ta.ts";
+import { ur } from "./i18n/ur.ts";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type Lang = "fr" | "en" | "zh";
+export const SUPPORTED_LANGS = [
+  "en",
+  "fr",
+  "zh",
+  "zh-Hant",
+  "hi",
+  "bn",
+  "ta",
+  "ur",
+] as const;
+export type Lang = typeof SUPPORTED_LANGS[number];
 
 // ── Source de langue (injection) ───────────────────────────────────────────
 
@@ -44,18 +59,33 @@ export function setLangSource(source: () => string | undefined): void {
 // ── resolveLang ────────────────────────────────────────────────────────────
 
 /**
- * Réduit un BCP 47 arbitraire en "fr" | "en" | "zh".
- *
- * fr, fr-FR, fr-CA, fr-BE → "fr"
- * zh, zh-CN, zh-Hans, zh-TW, zh-HK, zh-Hant → "zh"
- * Tout le reste (en, de, ja, undefined, "") → "en"
+ * Réduit un BCP 47 au catalogue disponible. Le script chinois explicite
+ * prime sur la région ; sans script, TW/HK/MO utilisent le traditionnel.
+ * Les langues inconnues ou les tags invalides retombent sur l'anglais.
  */
 export function resolveLang(locale?: string): Lang {
   if (typeof locale !== "string" || locale.length === 0) return "en";
-  const tag = locale.toLowerCase();
-  if (tag === "fr" || tag.startsWith("fr-")) return "fr";
-  if (tag === "zh" || tag.startsWith("zh-")) return "zh";
+  let parsed: Intl.Locale;
+  try {
+    parsed = new Intl.Locale(locale.trim());
+  } catch {
+    return "en";
+  }
+  const { language, script, region } = parsed;
+  if (language === "zh") {
+    if (script === "Hant") return "zh-Hant";
+    if (script === "Hans") return "zh";
+    return region && ["TW", "HK", "MO"].includes(region) ? "zh-Hant" : "zh";
+  }
+  if (
+    language === "fr" || language === "hi" || language === "bn" ||
+    language === "ta" || language === "ur"
+  ) return language;
   return "en";
+}
+
+export function directionForLocale(locale?: string): "ltr" | "rtl" {
+  return resolveLang(locale) === "ur" ? "rtl" : "ltr";
 }
 
 // ── currentLang ────────────────────────────────────────────────────────────
@@ -67,7 +97,16 @@ export function currentLang(): Lang {
 
 // ── Catalogues ─────────────────────────────────────────────────────────────
 
-const CATALOGS: Record<Lang, Record<string, string>> = { en, fr, zh };
+const CATALOGS: Record<Lang, Record<string, string>> = {
+  en,
+  fr,
+  zh,
+  "zh-Hant": zhHant,
+  hi,
+  bn,
+  ta,
+  ur,
+};
 
 // ── t ─────────────────────────────────────────────────────────────────────
 

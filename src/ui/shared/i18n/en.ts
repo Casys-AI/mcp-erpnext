@@ -146,9 +146,9 @@ export const en: Record<string, string> = {
   "chart.keyboard.target": "{label} · {series} · {value}",
   "chart.keyboard.target_single": "{label} · {value}",
   "chart.keyboard.help":
-    "Left and right change the point; up and down change the series; Space adds it to context; Enter opens or closes available details.",
+    "Left and right change the point; up and down change the series; Space adds or removes it from context; Enter opens or closes available details.",
   "chart.keyboard.help_context":
-    "Left and right change the point; up and down change the series; Space adds it to context.",
+    "Left and right change the point; up and down change the series; Space adds or removes it from context.",
   "chart.keyboard.help_detail":
     "Left and right change the point; up and down change the series; Enter opens or closes available details.",
   "chart.keyboard.help_navigation":
@@ -262,7 +262,8 @@ export const en: Record<string, string> = {
   "funnel.autorefresh": "Auto-refresh on focus",
   "funnel.stage.click_to_see": "Click to see {label}",
   "funnel.stage.aria_open": "Open {label}, {count}",
-  "funnel.stage.aria_context": "Add {label}, {count}, to active context",
+  "funnel.stage.aria_context":
+    "Add or remove {label}, {count}, from active context",
   "funnel.stage.aria_ask": "Ask about {label}, {count}",
   "funnel.error.parse_failed": "Failed to parse funnel payload",
   "funnel.drill_down.leads": "Show all leads",
@@ -321,23 +322,24 @@ export const en: Record<string, string> = {
   "interaction.detail.open_hint": "Details · double-click",
   "interaction.detail.close_hint": "Close · double-click",
   "document.row.open_actions":
-    "Click or Space to add {label} to context · double-click or Enter to show its actions",
+    "Click or Space to add or remove {label} from context · double-click or Enter to show its actions",
   "document.row.close_actions":
-    "Click or Space to add {label} to context · double-click or Enter to close its actions",
+    "Click or Space to add or remove {label} from context · double-click or Enter to close its actions",
   "document.row.open_actions_only":
     "Double-click or press Enter to show actions for {label}",
   "document.row.close_actions_only":
     "Double-click or press Enter to close actions for {label}",
   "document.row.open_detail":
-    "Click or Space to add {label} to context · double-click or Enter to open its details",
+    "Click or Space to add or remove {label} from context · double-click or Enter to open its details",
   "document.row.close_detail":
-    "Click or Space to add {label} to context · double-click or Enter to close its details",
+    "Click or Space to add or remove {label} from context · double-click or Enter to close its details",
   "document.row.open_detail_only":
     "Double-click or press Enter to open details for {label}",
   "document.row.close_detail_only":
     "Double-click or press Enter to close details for {label}",
-  "chart.tooltip.click_action_context": "click + context · 2× details",
-  "chart.tooltip.click_action_context_only": "click + context",
+  "chart.tooltip.click_action_context":
+    "click: add/remove context · 2× details",
+  "chart.tooltip.click_action_context_only": "click: add/remove context",
   "chart.tooltip.click_action_fallback": "2× details",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Back",
@@ -428,7 +430,8 @@ export const en: Record<string, string> = {
   "common.yes": "Yes",
   "common.no": "No",
   "kanban.error.move_timeout": "Move timed out, please retry.",
-  "kanban.nav.view_list.message": "Show me a list view of {doctype} {id}",
+  "kanban.nav.view_list.message":
+    "Show {doctype} {id} in a list limited to this document.",
   "kanban.nav.timesheets.message": "Show timesheets for task {id}",
   "kanban.nav.quotations.message": "Show quotations linked to opportunity {id}",
   "kanban.nav.tasks.message": "Show tasks related to issue {id}",
@@ -480,7 +483,22 @@ export const en: Record<string, string> = {
   "kanban.section.financial": "financial",
   "kanban.section.people": "people",
   "kanban.section.details": "other",
-  "kanban.modal.nav.view_list": "View in list",
+  "kanban.modal.nav.view_list": "Show this document in a list",
+  "kanban.modal.nav.view_list.Task": "Show this task in a list",
+  "kanban.modal.nav.view_list.Opportunity": "Show this opportunity in a list",
+  "kanban.modal.nav.view_list.Issue": "Show this issue in a list",
+  "kanban.modal.nav.request_list.Task": "Request this task in a list",
+  "kanban.modal.nav.request_list.Opportunity":
+    "Request this opportunity in a list",
+  "kanban.modal.nav.request_list.Issue": "Request this issue in a list",
+  "kanban.timesheets.loading": "Checking timesheets…",
+  "kanban.timesheets.count": "Timesheets · {count}",
+  "kanban.timesheets.empty": "No timesheets",
+  "kanban.timesheets.error": "Could not check timesheets",
+  "kanban.timesheets.error.too_many":
+    "Too many related timesheets to count exactly",
+  "kanban.timesheets.unavailable": "Timesheet availability not checked",
+  "kanban.modal.nav.request_timesheets": "Request timesheets",
   "kanban.modal.nav.timesheets": "Timesheets",
   "kanban.modal.nav.quotations": "Quotations",
   "kanban.modal.nav.related_tasks": "Related tasks",
@@ -578,4 +596,50 @@ export const en: Record<string, string> = {
   "buy.col.line": "Line",
   "buy.col.captured_at": "Captured at",
   // ── /buy-evidence-viewer ──────────────────────────────────────────────────
+  // Kanban canonical labels and context toggle gestures.
+  "kanban.status.open": "Open",
+  "kanban.status.working": "Working",
+  "kanban.status.pending_review": "Pending Review",
+  "kanban.status.overdue": "Overdue",
+  "kanban.status.completed": "Completed",
+  "kanban.status.cancelled": "Cancelled",
+  "kanban.status.replied": "Replied",
+  "kanban.status.quotation": "Quotation",
+  "kanban.status.converted": "Converted",
+  "kanban.status.closed": "Closed",
+  "kanban.status.lost": "Lost",
+  "kanban.status.on_hold": "On Hold",
+  "kanban.status.resolved": "Resolved",
+  "kanban.transition.start_work": "Start work",
+  "kanban.transition.request_review": "Request review",
+  "kanban.transition.resume_work": "Resume work",
+  "kanban.transition.approve": "Approve",
+  "kanban.transition.reopen": "Reopen",
+  "kanban.transition.reply": "Reply",
+  "kanban.transition.send_quotation": "Send quotation",
+  "kanban.transition.convert": "Convert",
+  "kanban.transition.close": "Close",
+  "kanban.transition.mark_lost": "Mark lost",
+  "kanban.transition.resume_conversation": "Resume conversation",
+  "kanban.transition.resume": "Resume",
+  "kanban.transition.put_on_hold": "Put on hold",
+  "kanban.transition.resolve": "Resolve",
+  "kanban.metric.progress": "Progress",
+  "kanban.metric.due": "Due",
+  "kanban.metric.start": "Start",
+  "kanban.metric.estimated": "Est.",
+  "kanban.metric.actual": "Actual",
+  "kanban.metric.amount": "Amount",
+  "kanban.metric.probability": "Probability",
+  "kanban.metric.closing": "Closing",
+  "kanban.metric.created": "Created",
+  "kanban.metric.raised_by": "Raised By",
+  "kanban.metric.sla": "SLA",
+  "kanban.metric.opened": "Opened",
+  "kanban.metric.resolved": "Resolved",
+  "kanban.badge.sla_breach": "SLA breach",
+  "kanban.field.company": "company",
+  "kanban.field.notes": "notes",
+  "kanban.field.resolution_details": "resolution details",
+  "context.active.toggle": "Add or remove {label} from active context",
 };

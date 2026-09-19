@@ -75,7 +75,12 @@ Deno.test("pickNarrowColumns garde pièce, tiers et montant", () => {
   const isStatus = (k: string) => k === "status";
   assertEquals(
     pickNarrowColumns(columns, "outstanding_amount", isStatus),
-    { idKey: "name", labelKey: "customer", amountKey: "outstanding_amount" },
+    {
+      idKey: "name",
+      labelKey: "customer",
+      trailingKey: "outstanding_amount",
+      amountKey: "outstanding_amount",
+    },
   );
 });
 
@@ -90,6 +95,44 @@ Deno.test("pickNarrowColumns saute le statut, porté par le liseré", () => {
   assertEquals(
     pickNarrowColumns(columns, undefined, isStatus).labelKey,
     "supplier",
+  );
+});
+
+Deno.test("pickNarrowColumns montre la devise d'une Company sans faux montant", () => {
+  const columns = [
+    { id: "name", numeric: false },
+    { id: "abbr", numeric: false },
+    { id: "country", numeric: false },
+    { id: "default_currency", numeric: false },
+    { id: "domain", numeric: false },
+  ];
+  assertEquals(
+    pickNarrowColumns(columns, undefined, () => false),
+    {
+      idKey: "name",
+      labelKey: "abbr",
+      trailingKey: "default_currency",
+      amountKey: undefined,
+    },
+  );
+});
+
+Deno.test("pickNarrowColumns omet la troisième valeur quand elle n'existe pas", () => {
+  assertEquals(
+    pickNarrowColumns(
+      [
+        { id: "name", numeric: false },
+        { id: "subject", numeric: false },
+      ],
+      undefined,
+      () => false,
+    ),
+    {
+      idKey: "name",
+      labelKey: "subject",
+      trailingKey: undefined,
+      amountKey: undefined,
+    },
   );
 });
 

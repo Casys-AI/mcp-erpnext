@@ -1,3 +1,6 @@
+import { jumpLabel, levelFromJump } from "../jumps.ts";
+import { navLevelTitle } from "../nav-stack.ts";
+import { translatorForLocale } from "../i18n.ts";
 import { assertEquals } from "@std/assert";
 import {
   childRowNavigationAsks,
@@ -129,4 +132,23 @@ Deno.test("child row navigation - resolves only row-level conversational hints",
     label: "Explain item · ITEM-1",
     message: "Explain ITEM-1 from SINV-1",
   }]);
+});
+
+Deno.test("translated stored child-row navigation preserves its exact item suffix", () => {
+  const jump = childRowNavigationJumps({
+    hints,
+    rootVars: { id: "SINV-1" },
+    row: { item_code: "ITEM-001" },
+    availableTools: ["erpnext_stock_balance"],
+  })[0];
+  assertEquals(jumpLabel(jump, translatorForLocale("fr")), "Stock · ITEM-001");
+  assertEquals(
+    navLevelTitle(levelFromJump(jump), translatorForLocale("en")),
+    "Stock · ITEM-001",
+  );
+  assertEquals(
+    jumpLabel(jump, translatorForLocale("zh-CN")),
+    "库存 · ITEM-001",
+  );
+  assertEquals(jump.tool.args.item_code, "ITEM-001");
 });

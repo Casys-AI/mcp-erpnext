@@ -611,6 +611,107 @@ Deno.test("erpnext_doc_list - schema still rejects unsupported filter values", (
   }
 });
 
+Deno.test("erpnext_doc_list - forwards bounded pagination and fresh-read options", async () => {
+  let capturedOptions: Record<string, unknown> = {};
+  let capturedReadOptions: Record<string, unknown> = {};
+  const result = await getTool("erpnext_doc_list").handler(
+    {
+      doctype: "Timesheet",
+      fields: ["name"],
+      filters: [["Timesheet Detail", "task", "=", "TASK-001"]],
+      limit: 200,
+      offset: 400,
+      order_by: "name asc",
+      skip_cache: true,
+    },
+    makeCtx(makeMockClient({
+      list: async (
+        _doctype: string,
+        options: Record<string, unknown>,
+        readOptions: Record<string, unknown>,
+      ) => {
+        capturedOptions = options;
+        capturedReadOptions = readOptions;
+        return [{ name: "TS-401" }];
+      },
+    })),
+  ) as Record<string, unknown>;
+
+  assertEquals(capturedOptions, {
+    fields: ["name"],
+    filters: [["Timesheet Detail", "task", "=", "TASK-001"]],
+    limit: 200,
+    limit_start: 400,
+    order_by: "name asc",
+  });
+  assertEquals(capturedReadOptions, { skipCache: true });
+  assertEquals(result.count, 1);
+});
+
+Deno.test("erpnext_doc_list - preserves defaults when pagination and cache options are absent", async () => {
+  let capturedArgs: unknown[] = [];
+  await getTool("erpnext_doc_list").handler(
+    { doctype: "Task" },
+    makeCtx(makeMockClient({
+      list: async (...args: unknown[]) => {
+        capturedArgs = args;
+        return [];
+      },
+    })),
+  );
+
+  assertEquals(capturedArgs, [
+    "Task",
+    {
+      fields: ["name", "modified"],
+      filters: [],
+      limit: 20,
+      order_by: "modified desc",
+    },
+  ]);
+});
+
+Deno.test("erpnext_doc_list - rejects invalid direct-handler pagination and cache inputs", async () => {
+  let listCalls = 0;
+  const ctx = makeCtx(makeMockClient({
+    list: async () => {
+      listCalls++;
+      return [];
+    },
+  }));
+  const invalid: Array<{
+    value: Record<string, unknown>;
+    message: string;
+  }> = [
+    { value: { limit: 0 }, message: "'limit' must be an integer" },
+    { value: { limit: 1.5 }, message: "'limit' must be an integer" },
+    { value: { limit: 5_001 }, message: "'limit' must be an integer" },
+    { value: { limit: "20" }, message: "'limit' must be an integer" },
+    { value: { offset: -1 }, message: "'offset' must be an integer" },
+    { value: { offset: 1.5 }, message: "'offset' must be an integer" },
+    { value: { offset: 100_001 }, message: "'offset' must be an integer" },
+    { value: { offset: "0" }, message: "'offset' must be an integer" },
+    {
+      value: { skip_cache: "true" },
+      message: "'skip_cache' must be a boolean",
+    },
+    { value: { skip_cache: 1 }, message: "'skip_cache' must be a boolean" },
+  ];
+
+  for (const { value, message } of invalid) {
+    await assertRejects(
+      () =>
+        getTool("erpnext_doc_list").handler(
+          { doctype: "Task", ...value },
+          ctx,
+        ),
+      Error,
+      message,
+    );
+  }
+  assertEquals(listCalls, 0);
+});
+
 // ── erpnext_doc_update ──────────────────────────────────────────────────────
 
 Deno.test("erpnext_doc_update - throws if doctype missing", async () => {

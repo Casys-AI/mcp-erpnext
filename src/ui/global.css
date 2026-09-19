@@ -110,7 +110,7 @@
    */
   .select-chevron {
     appearance: none;
-    padding-right: 2rem;
+    padding-inline-end: 2rem;
     background-image: none;
   }
 
@@ -127,7 +127,7 @@
     content: "";
     position: absolute;
     top: 50%;
-    right: 0.7rem;
+    inset-inline-end: 0.7rem;
     width: 11px;
     height: 11px;
     transform: translateY(-50%);

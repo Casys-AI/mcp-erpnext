@@ -24,9 +24,8 @@ function pointValue(
 /** Identité stable du sous-ensemble réconcilié par un mini-graphe. */
 export function nestedChartContextId(
   levelKey: string,
-  chartTitle: string,
 ): string {
-  return `chart:${encoded(levelKey)}:${encoded(chartTitle)}`;
+  return `chart:${encoded(levelKey)}`;
 }
 
 /**

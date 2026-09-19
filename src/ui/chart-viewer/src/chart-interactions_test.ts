@@ -1,4 +1,5 @@
 import { assert, assertEquals, assertStrictEquals } from "@std/assert";
+import { createActiveContextController } from "../../shared/active-context-controller.ts";
 import {
   activeContextSnapshot,
   reconcileActiveContextViewSelections,
@@ -253,9 +254,9 @@ Deno.test("chart activation - double click toggles detail or uses its explicit f
   assertEquals(chartPointExpansionState(false, false), undefined);
 });
 
-Deno.test("chart activation - a context-only double click preserves the first click", () => {
+Deno.test("chart activation - a context-only second click reaches compensation", () => {
   assertEquals(shouldHandleChartPointActivation("context", 1, false), true);
-  assertEquals(shouldHandleChartPointActivation("context", 2, false), false);
+  assertEquals(shouldHandleChartPointActivation("context", 2, false), true);
   assertEquals(shouldHandleChartPointActivation("drilldown", 2, false), false);
   assertEquals(shouldHandleChartPointActivation("context", 2, true), true);
   assertEquals(shouldHandleChartPointActivation("drilldown", 2, true), true);
@@ -833,4 +834,68 @@ Deno.test("chart point index - literal all series cannot collide with generic se
     chartViewContextCandidates(data, [], "Visible", "root").length,
     5,
   );
+});
+
+Deno.test("chart point toggle - exact targets preserve independent category and whole selections", async () => {
+  const types: NonNullable<ChartData["type"]>[] = [
+    "bar",
+    "horizontal-bar",
+    "stacked-bar",
+    "line",
+    "area",
+    "stacked-area",
+    "composed",
+    "pie",
+    "donut",
+    "radar",
+    "scatter",
+    "treemap",
+  ];
+  for (const type of types) {
+    const data: ChartData = {
+      title: "Same label",
+      type,
+      labels: ["July"],
+      datasets: [{ label: "Revenue", values: [10] }],
+      scatterData: [{
+        label: "Revenue",
+        points: [{ label: "July", x: 1, y: 10 }],
+      }],
+      treeData: [{ name: "July", value: 10 }],
+    };
+    const controller = createActiveContextController({
+      getHostCapabilities: () => ({
+        updateModelContext: { structuredContent: {} },
+      }),
+      updateModelContext: () => Promise.resolve({}),
+      sendMessage: () => Promise.resolve({}),
+    }, "root");
+    const actions = controller.actionsForScope("root");
+    const index = createChartPointContextIndex(data, "root");
+    const selection = chartSelectionAt(data, {
+      labelIndex: 0,
+      seriesIndex: 0,
+    });
+    assert(selection);
+    const target = index.get(selection.label, selection.series);
+    const category = index.get(selection.label);
+    const whole = chartContextSelection(data, [], "Visible", "root");
+    await actions.activate(whole);
+    await actions.activate(category);
+
+    if (selection.series !== undefined) {
+      assertEquals(actions.isSelected(target), false, type);
+      await actions.toggle(target);
+      assertEquals(actions.isSelected(target), true, type);
+    }
+    await actions.toggle(target);
+
+    assertEquals(actions.isSelected(target), false, type);
+    assertEquals(actions.isSelected(whole), true, type);
+    assertEquals(
+      actions.isSelected(category),
+      selection.series !== undefined,
+      type,
+    );
+  }
 });

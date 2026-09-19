@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "preact/hooks";
 import type { App } from "@modelcontextprotocol/ext-apps";
+import { applyDocumentLocale } from "./document-locale";
 import {
   getHostContext,
   type HostContext,
@@ -27,10 +28,16 @@ export { getHostContext, mergeHostContext, subscribeHostContext };
  * les deux.
  */
 export function bindHostContext(app: App): void {
+  const applyLocale = () => {
+    const { locale } = getHostContext();
+    applyDocumentLocale(locale, document.documentElement);
+  };
   app.onhostcontextchanged = (patch) => {
     mergeHostContext(patch as HostContext);
+    applyLocale();
   };
   mergeHostContext(app.getHostContext() as HostContext | undefined);
+  applyLocale();
 }
 
 /** Le contexte hôte courant, réactif. */

@@ -12,7 +12,7 @@ function between(start: string, end: string): string {
 }
 
 Deno.test("chart wiring - radar, named scatter points and treemap leaves expose both pointer intents", () => {
-  const pie = between("function PieDonutChart", "function RadarChartView");
+  const pie = between("function PieLegend", "function RadarChartView");
   const radar = between(
     "function RadarChartView",
     "interface ScatterShapeProps",
@@ -36,6 +36,20 @@ Deno.test("chart wiring - radar, named scatter points and treemap leaves expose 
   assertStringIncludes(pie, "event.stopPropagation();");
   assertStringIncludes(pie, '"context"');
   assertStringIncludes(pie, '"drilldown"');
+});
+
+Deno.test("chart wiring - pie legend keeps keyboard detail and context exclusive", () => {
+  const pie = between("function PieLegend", "function PieDonutChart");
+
+  assertStringIncludes(pie, "onDataKeyDown?.(entry.name, series, event)");
+  assertStringIncludes(pie, '(event.key === " " && contextEnabled)');
+  assertStringIncludes(pie, '(event.key === "Enter" && detailEnabled)');
+  assertStringIncludes(pie, "if (event.detail === 0) return;");
+  assertStringIncludes(
+    pie,
+    "formatPercent((entry.value / total) * 100, 0)",
+  );
+  assertEquals(pie.includes("Math.round((entry.value / total) * 100)"), false);
 });
 
 Deno.test("chart wiring - full chart and legend expose the visible subset", () => {
@@ -64,7 +78,7 @@ Deno.test("chart wiring - full chart and legend expose the visible subset", () =
   assertStringIncludes(content, "[data, rootKey, contextLocale]");
   assertStringIncludes(content, "pointIndex.get(label, series)");
   assertStringIncludes(content, "[chartContext, ...pointIndex.values()]");
-  assertStringIncludes(content, "activeContext.activate(chartContext)");
+  assertStringIncludes(content, "activeContext.toggle(chartContext)");
   assertStringIncludes(
     content,
     "data-chart-context-control",

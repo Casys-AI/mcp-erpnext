@@ -652,8 +652,8 @@ function KpiCard({
   ) {
     if (canOpenDetail(action)) {
       clickIntent.click(interactionIntent(selection, action), clickCount);
-    } else if (contextEnabled && clickCount < 2) {
-      void activeContext.toggle(selection);
+    } else if (contextEnabled) {
+      clickIntent.click(interactionIntent(selection, action), clickCount);
     }
   }
 

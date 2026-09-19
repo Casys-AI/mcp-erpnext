@@ -476,8 +476,11 @@ export const hi: Record<string, string> = {
   "kanban.modal.nav.request_list.Opportunity": "इस अवसर को सूची में माँगें",
   "kanban.modal.nav.request_list.Issue": "इस समस्या को सूची में माँगें",
   "kanban.timesheets.loading": "टाइमशीट जाँची जा रही है…",
+  "kanban.timesheets.count": "टाइमशीट · {count}",
   "kanban.timesheets.empty": "कोई टाइमशीट नहीं",
   "kanban.timesheets.error": "टाइमशीट जाँची नहीं जा सकी",
+  "kanban.timesheets.error.too_many":
+    "सटीक गिनती के लिए बहुत अधिक संबंधित टाइमशीट हैं",
   "kanban.timesheets.unavailable": "टाइमशीट उपलब्धता जाँची नहीं गई",
   "kanban.modal.nav.request_timesheets": "टाइमशीट माँगें",
   "kanban.modal.nav.timesheets": "टाइमशीट",

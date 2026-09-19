@@ -1,4 +1,9 @@
-import { assert, assertEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertStringIncludes,
+} from "@std/assert";
 import { taskKanbanAdapter } from "../../../kanban/adapters/task.ts";
 import { opportunityKanbanAdapter } from "../../../kanban/adapters/opportunity.ts";
 import { issueKanbanAdapter } from "../../../kanban/adapters/issue.ts";
@@ -148,6 +153,15 @@ Deno.test("Kanban date fallback recognizes only canonical deadline metrics and p
       .needsDueDateFallback,
     true,
   );
+});
+
+Deno.test("Kanban due-date fallback uses the shared locale-aware formatter", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./KanbanViewer.tsx", import.meta.url),
+  );
+  assertStringIncludes(source, 'import { formatDate } from "~/shared/format"');
+  assertStringIncludes(source, "value: formatDate(card.dueDate)");
+  assertFalse(source.includes("formatDueDate"));
 });
 
 Deno.test("Kanban missing and invalid dates never produce an invalid day counter", () => {

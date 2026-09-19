@@ -45,6 +45,7 @@ import {
 } from "~/shared/kanban/presentation";
 import { useKanbanBoard } from "~/shared/kanban/useKanbanBoard";
 import { useTaskTimesheetAvailability } from "~/shared/kanban/useTaskTimesheetAvailability";
+import { taskTimesheetRevalidationKey } from "~/shared/kanban/task-timesheet-availability";
 import type {
   KanbanBoardData,
   KanbanCardData,
@@ -82,6 +83,7 @@ import type { CardDetailState } from "~/shared/kanban/state";
 import { sendTextMessage } from "~/shared/host-message";
 import { canCallViewerTool, hasAvailableTool } from "~/shared/viewer-tools";
 import { createSerialQueue } from "~/shared/single-flight";
+import { formatDate } from "~/shared/format";
 import { buildKanbanCardListHint, kanbanNavVars } from "./kanban-nav";
 import { kanbanViewerCapabilities } from "./capabilities";
 import { cardDeadlinePresentation } from "./card-deadline.ts";
@@ -266,14 +268,6 @@ function DragScrollContainer({
 
 /* ────────────────────────────── Helpers ────────────────────────────── */
 
-/** Format ISO date to MM-DD */
-function formatDueDate(isoDate: string): string {
-  // "2026-06-11" → "06-11"
-  const parts = isoDate.split("-");
-  if (parts.length >= 3) return `${parts[1]}-${parts[2].slice(0, 2)}`;
-  return isoDate;
-}
-
 /** Detect Milestone badge from card.badges[]. */
 function isMilestoneBadge(
   badges?: Array<{ label: string; tone?: string }>,
@@ -341,7 +335,7 @@ function KanbanCard({
   ) {
     metrics.push({
       label: t("kanban.field.exp_end_date"),
-      value: formatDueDate(card.dueDate),
+      value: formatDate(card.dueDate),
     });
   }
 
@@ -1058,10 +1052,10 @@ function KanbanBoardWithNav({
       serverTools: hostCapabilities?.serverTools,
       availableTools: board._availableTools,
       disabled: fixture,
-      revalidationKey: JSON.stringify([
+      revalidationKey: taskTimesheetRevalidationKey(
         rootFreshEvent,
         detail.cardDetail?.modified ?? null,
-      ]),
+      ),
     });
   const cardListHint = detail.selectedCardId
     ? buildKanbanCardListHint(board.doctype, detail.selectedCardId)

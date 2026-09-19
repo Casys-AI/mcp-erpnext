@@ -38,6 +38,20 @@ Deno.test("chart wiring - radar, named scatter points and treemap leaves expose 
   assertStringIncludes(pie, '"drilldown"');
 });
 
+Deno.test("chart wiring - pie legend keeps keyboard detail and context exclusive", () => {
+  const pie = between("function PieLegend", "function PieDonutChart");
+
+  assertStringIncludes(pie, "onDataKeyDown?.(entry.name, series, event)");
+  assertStringIncludes(pie, '(event.key === " " && contextEnabled)');
+  assertStringIncludes(pie, '(event.key === "Enter" && detailEnabled)');
+  assertStringIncludes(pie, "if (event.detail === 0) return;");
+  assertStringIncludes(
+    pie,
+    "formatPercent((entry.value / total) * 100, 0)",
+  );
+  assertEquals(pie.includes("Math.round((entry.value / total) * 100)"), false);
+});
+
 Deno.test("chart wiring - full chart and legend expose the visible subset", () => {
   const legend = between("function ChartLegend", "function legendItems");
   const legendEntries = between("function legendItems", "function BandCursor");

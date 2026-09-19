@@ -478,8 +478,11 @@ export const ta: Record<string, string> = {
   "kanban.modal.nav.request_list.Opportunity": "இந்த வாய்ப்பைப் பட்டியலில் கோருக",
   "kanban.modal.nav.request_list.Issue": "இந்தச் சிக்கலைப் பட்டியலில் கோருக",
   "kanban.timesheets.loading": "பணி நேரப் பதிவுகள் பார்க்கப்படுகின்றன…",
+  "kanban.timesheets.count": "பணி நேரப் பதிவுகள் · {count}",
   "kanban.timesheets.empty": "பணி நேரப் பதிவுகள் இல்லை",
   "kanban.timesheets.error": "பணி நேரப் பதிவுகளைப் பார்க்க முடியவில்லை",
+  "kanban.timesheets.error.too_many":
+    "துல்லியமாக எண்ண முடியாத அளவு தொடர்புடைய பணி நேரப் பதிவுகள் உள்ளன",
   "kanban.timesheets.unavailable": "பணி நேரப் பதிவு இருப்பு பார்க்கப்படவில்லை",
   "kanban.modal.nav.request_timesheets": "பணி நேரப் பதிவுகளைக் கோருக",
   "kanban.modal.nav.timesheets": "பணி நேரப் பதிவுகள்",

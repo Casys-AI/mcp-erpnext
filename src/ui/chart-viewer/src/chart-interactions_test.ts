@@ -254,9 +254,9 @@ Deno.test("chart activation - double click toggles detail or uses its explicit f
   assertEquals(chartPointExpansionState(false, false), undefined);
 });
 
-Deno.test("chart activation - a context-only double click preserves the first click", () => {
+Deno.test("chart activation - a context-only second click reaches compensation", () => {
   assertEquals(shouldHandleChartPointActivation("context", 1, false), true);
-  assertEquals(shouldHandleChartPointActivation("context", 2, false), false);
+  assertEquals(shouldHandleChartPointActivation("context", 2, false), true);
   assertEquals(shouldHandleChartPointActivation("drilldown", 2, false), false);
   assertEquals(shouldHandleChartPointActivation("context", 2, true), true);
   assertEquals(shouldHandleChartPointActivation("drilldown", 2, true), true);

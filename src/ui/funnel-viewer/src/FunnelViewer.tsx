@@ -291,11 +291,7 @@ function WideFunnelChart(
                       "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                   )}
                   onClick={interactive
-                    ? (event) => {
-                      if (detailAvailable || event.detail < 2) {
-                        clickIntent.click(intent, event.detail);
-                      }
-                    }
+                    ? (event) => clickIntent.click(intent, event.detail)
                     : undefined}
                   onDblClick={detailAvailable
                     ? () => clickIntent.doubleClick(intent)
@@ -563,11 +559,7 @@ function MobileFunnelChart(
                   minHeight: touch ? 40 : undefined,
                 }}
                 onClick={interactive
-                  ? (event) => {
-                    if (detailAvailable || event.detail < 2) {
-                      clickIntent.click(intent, event.detail);
-                    }
-                  }
+                  ? (event) => clickIntent.click(intent, event.detail)
                   : undefined}
                 onDblClick={detailAvailable
                   ? () => clickIntent.doubleClick(intent)

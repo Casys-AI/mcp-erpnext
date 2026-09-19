@@ -483,8 +483,11 @@ export const ur: Record<string, string> = {
   "kanban.modal.nav.request_list.Opportunity": "یہ موقع فہرست میں مانگیں",
   "kanban.modal.nav.request_list.Issue": "یہ مسئلہ فہرست میں مانگیں",
   "kanban.timesheets.loading": "ٹائم شیٹس دیکھی جا رہی ہیں…",
+  "kanban.timesheets.count": "ٹائم شیٹس · {count}",
   "kanban.timesheets.empty": "کوئی ٹائم شیٹ نہیں",
   "kanban.timesheets.error": "ٹائم شیٹس دیکھی نہ جا سکیں",
+  "kanban.timesheets.error.too_many":
+    "درست گنتی کے لیے متعلقہ ٹائم شیٹس بہت زیادہ ہیں",
   "kanban.timesheets.unavailable": "ٹائم شیٹ کی دستیابی دیکھی نہیں گئی",
   "kanban.modal.nav.request_timesheets": "ٹائم شیٹس مانگیں",
   "kanban.modal.nav.timesheets": "ٹائم شیٹس",

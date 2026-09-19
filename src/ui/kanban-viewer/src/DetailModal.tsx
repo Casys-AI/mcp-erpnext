@@ -34,9 +34,12 @@ import type { TFunction } from "~/shared/i18n-hook";
 import { hintLabel, type NavHint } from "~/shared/jumps";
 import { createSingleFlightGate } from "~/shared/single-flight.ts";
 import {
+  canNavigateToTaskTimesheets,
+  TASK_TIMESHEET_TOO_LARGE_KEY,
   type TaskTimesheetAvailability,
   taskTimesheetAvailabilityErrorMessage,
 } from "~/shared/kanban/task-timesheet-availability";
+import { formatInteger } from "~/shared/format";
 import { kanbanBadgeLabel, kanbanStatusLabel } from "~/shared/kanban/labels";
 
 type LocalizedMessage = string | { key: string };
@@ -952,7 +955,32 @@ export function CardDetailModal({
   );
   const hasSecondaryRow = (!!card && availableTargets.length > 0) ||
     hasJumpNav || hasSendMessageNav || !!onViewList || board.doctype === "Task";
-  const timesheetCanNavigate = timesheetAvailability.status === "present";
+  const timesheetHasCount = timesheetAvailability.status === "present";
+  const timesheetCanNavigate = canNavigateToTaskTimesheets(
+    timesheetAvailability,
+  );
+  const timesheetLabel = timesheetAvailability.status === "present"
+    ? t("kanban.timesheets.count", {
+      count: formatInteger(timesheetAvailability.count),
+    })
+    : t("kanban.modal.nav.timesheets");
+  const timesheetStatusLabel = timesheetAvailability.status === "error" &&
+      timesheetAvailability.messageKey === TASK_TIMESHEET_TOO_LARGE_KEY
+    ? taskTimesheetAvailabilityErrorMessage(timesheetAvailability, t)
+    : t(
+      `kanban.timesheets.${
+        timesheetAvailability.status === "empty"
+          ? "empty"
+          : timesheetAvailability.status === "loading"
+          ? "loading"
+          : timesheetAvailability.status === "error"
+          ? "error"
+          : "unavailable"
+      }`,
+    );
+  const timesheetErrorAnnouncement = timesheetAvailability.status === "error"
+    ? taskTimesheetAvailabilityErrorMessage(timesheetAvailability, t)
+    : undefined;
 
   const footer = (
     <>
@@ -1043,7 +1071,9 @@ export function CardDetailModal({
             ).map((hint) => (
               <LocalActionButton
                 key={hint.key ?? hint.label}
-                label={`${hintLabel(hint)} ›`}
+                label={`${
+                  hint.key === "timesheets" ? timesheetLabel : hintLabel(hint)
+                } ›`}
                 variant="info"
                 onClick={() =>
                   requestDiscard(
@@ -1076,11 +1106,9 @@ export function CardDetailModal({
                   timesheetAvailability.status === "unavailable") &&
                 (
                   <LocalActionButton
-                    label={t(
-                      timesheetCanNavigate
-                        ? "kanban.modal.nav.timesheets"
-                        : "kanban.modal.nav.request_timesheets",
-                    )}
+                    label={timesheetCanNavigate
+                      ? timesheetLabel
+                      : t("kanban.modal.nav.request_timesheets")}
                     variant="info"
                     disabled={navigatePendingKey !== null}
                     loading={navigatePendingKey === "timesheets"}
@@ -1140,10 +1168,11 @@ export function CardDetailModal({
               )}
             </>
           )}
-          {board.doctype === "Task" && !timesheetCanNavigate && (
+          {board.doctype === "Task" && !timesheetHasCount && (
             <span
               role="status"
               aria-live="polite"
+              aria-label={timesheetErrorAnnouncement}
               class={cx(
                 "font-mono text-chip",
                 timesheetAvailability.status === "error"
@@ -1151,24 +1180,13 @@ export function CardDetailModal({
                   : "text-ink-faint",
               )}
             >
-              {t(`kanban.timesheets.${
-                timesheetAvailability.status === "empty"
-                  ? "empty"
-                  : timesheetAvailability.status === "loading"
-                  ? "loading"
-                  : timesheetAvailability.status === "error"
-                  ? "error"
-                  : "unavailable"
-              }`)}
+              {timesheetStatusLabel}
               {timesheetAvailability.status === "error" &&
                 onRecheckTimesheets && (
                 <button
                   type="button"
                   class="ms-2 underline focus-visible:outline-2 focus-visible:outline-accent"
-                  title={taskTimesheetAvailabilityErrorMessage(
-                    timesheetAvailability,
-                    t,
-                  )}
+                  title={timesheetErrorAnnouncement}
                   onClick={onRecheckTimesheets}
                 >
                   {t("common.retry")}
@@ -1176,10 +1194,10 @@ export function CardDetailModal({
               )}
             </span>
           )}
-          {board.doctype === "Task" && timesheetCanNavigate &&
+          {board.doctype === "Task" && timesheetHasCount &&
             !jumpKeys.has("timesheets") && !hasSendMessageNav && (
             <span class="font-mono text-chip text-ink-muted">
-              {t("kanban.modal.nav.timesheets")}
+              {timesheetLabel}
             </span>
           )}
         </SheetActions>

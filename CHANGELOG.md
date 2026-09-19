@@ -9,6 +9,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 - Viewers support Traditional Chinese, Hindi, Bengali, Tamil and Urdu from the
   host locale, including right-to-left document direction for Urdu.
 
+- Generic document lists support bounded offset pagination and an explicit
+  fresh-read option for viewer revalidation.
+
 - Buy recorded-result `/2.0` retains bounded quantity, unit, and reason metadata
   for selected unpriced lines. The immutable Buy evidence viewer shows those
   excluded lines without assigning a monetary value or refreshing ERP.
@@ -42,8 +45,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 - Kanban cards retain assignees, all supplied metrics, badge colors, and
   milestone destinations on narrow and wide views. Task previews expose the
   milestone control and reflect its saved state on the card.
-- Task details check for related timesheets before offering navigation, with
-  distinct loading, empty, and failed checks.
+- Task details count distinct related timesheets before offering navigation,
+  with bounded fresh pagination and distinct loading, empty, oversized, and
+  failed checks.
 - Kanban list navigation explicitly opens only the selected document; hosts
   without tool navigation offer a clearly labeled conversational request.
 - Generic document lists such as Company use their actual fields in narrow

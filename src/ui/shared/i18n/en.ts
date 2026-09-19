@@ -492,8 +492,11 @@ export const en: Record<string, string> = {
     "Request this opportunity in a list",
   "kanban.modal.nav.request_list.Issue": "Request this issue in a list",
   "kanban.timesheets.loading": "Checking timesheets…",
+  "kanban.timesheets.count": "Timesheets · {count}",
   "kanban.timesheets.empty": "No timesheets",
   "kanban.timesheets.error": "Could not check timesheets",
+  "kanban.timesheets.error.too_many":
+    "Too many related timesheets to count exactly",
   "kanban.timesheets.unavailable": "Timesheet availability not checked",
   "kanban.modal.nav.request_timesheets": "Request timesheets",
   "kanban.modal.nav.timesheets": "Timesheets",

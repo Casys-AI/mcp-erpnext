@@ -144,7 +144,7 @@ Deno.test("document context interaction - a context-only target stays immediate"
   assertEquals(props["aria-keyshortcuts"], undefined);
 });
 
-Deno.test("document context interaction - a context-only double click toggles only once", () => {
+Deno.test("document context interaction - a context-only fast second click toggles off", () => {
   let selected = true;
   const props = contextInteractionProps({
     label: "Select ITEM-1 as active context",
@@ -157,11 +157,11 @@ Deno.test("document context interaction - a context-only double click toggles on
   props.onClick({ detail: 1 });
   assertEquals(selected, false);
   props.onClick({ detail: 2 });
-  assertEquals(selected, false);
-
-  // The next independent click selects the same datum again.
-  props.onClick({ detail: 1 });
   assertEquals(selected, true);
+
+  // The next independent click toggles the same datum again.
+  props.onClick({ detail: 1 });
+  assertEquals(selected, false);
 });
 
 Deno.test("document context interaction - holding Space does not toggle repeatedly", () => {

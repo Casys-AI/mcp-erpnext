@@ -831,9 +831,7 @@ function StockContent(
                           ? "Space Enter"
                           : (context.supported ? "Space" : "Enter"),
                         onClick: (event: MouseEvent) => {
-                          if (canDrill || event.detail < 2) {
-                            clickIntent.click(intent, event.detail);
-                          }
+                          clickIntent.click(intent, event.detail);
                         },
                         onDblClick: canDrill
                           ? () => clickIntent.doubleClick(intent)

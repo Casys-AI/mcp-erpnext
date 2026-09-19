@@ -471,8 +471,11 @@ export const bn: Record<string, string> = {
   "kanban.modal.nav.request_list.Opportunity": "এই সুযোগ তালিকায় চান",
   "kanban.modal.nav.request_list.Issue": "এই সমস্যা তালিকায় চান",
   "kanban.timesheets.loading": "টাইমশিট দেখা হচ্ছে…",
+  "kanban.timesheets.count": "টাইমশিট · {count}",
   "kanban.timesheets.empty": "কোনো টাইমশিট নেই",
   "kanban.timesheets.error": "টাইমশিট দেখা যায়নি",
+  "kanban.timesheets.error.too_many":
+    "সঠিকভাবে গণনা করার জন্য সংশ্লিষ্ট টাইমশিট খুব বেশি",
   "kanban.timesheets.unavailable": "টাইমশিট আছে কি না দেখা হয়নি",
   "kanban.modal.nav.request_timesheets": "টাইমশিট চান",
   "kanban.modal.nav.timesheets": "টাইমশিট",

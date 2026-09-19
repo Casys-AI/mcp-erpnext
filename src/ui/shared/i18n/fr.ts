@@ -503,8 +503,11 @@ export const fr: Record<string, string> = {
     "Demander cette opportunité en liste",
   "kanban.modal.nav.request_list.Issue": "Demander ce ticket en liste",
   "kanban.timesheets.loading": "Vérification des feuilles de temps…",
+  "kanban.timesheets.count": "Feuilles de temps · {count}",
   "kanban.timesheets.empty": "Aucune feuille de temps",
   "kanban.timesheets.error": "Vérification des feuilles de temps impossible",
+  "kanban.timesheets.error.too_many":
+    "Trop de feuilles de temps liées pour les compter exactement",
   "kanban.timesheets.unavailable":
     "Disponibilité des feuilles de temps non vérifiée",
   "kanban.modal.nav.request_timesheets": "Demander les feuilles de temps",

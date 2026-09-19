@@ -139,6 +139,11 @@ type ChartDataClick = (
   activation: ChartPointActivation,
   clickCount?: number,
 ) => void;
+type ChartDataKeyDown = (
+  label: string,
+  series: string | undefined,
+  event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
+) => void;
 type ChartSelectionPredicate = (label: string, series?: string) => boolean;
 const ChartSelectionContext = createContext<
   ChartSelectionPredicate | undefined
@@ -1284,63 +1289,101 @@ function PieLegend({
   total,
   isDonut,
   onDataClick,
+  onDataKeyDown,
   isSelected,
+  canDrillDown,
 }: {
   entries: Array<{ name: string; value: number }>;
   series?: string;
   total: number;
   isDonut: boolean;
   onDataClick?: ChartDataClick;
+  onDataKeyDown?: ChartDataKeyDown;
   isSelected?: ChartSelectionPredicate;
+  canDrillDown?: ChartSelectionPredicate;
 }) {
   const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
   return (
     <div class="flex min-w-0 flex-col gap-[7px]">
-      {entries.map((entry, i) => (
-        <button
-          key={i}
-          type="button"
-          disabled={!onDataClick}
-          aria-pressed={selectedAt ? selectedAt(entry.name, series) : undefined}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDataClick?.(entry.name, series, "context", event.detail);
-          }}
-          onDblClick={(event) => {
-            event.stopPropagation();
-            onDataClick?.(entry.name, series, "drilldown", event.detail);
-          }}
-          class={cx(
-            "inline-flex items-center gap-1.5 rounded-[3px] font-mono text-chip text-ink-2",
-            onDataClick &&
-              "cursor-pointer hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
-            selectedAt?.(entry.name, series) &&
-              "outline outline-2 outline-offset-1 outline-accent",
-          )}
-        >
-          <span
-            class="size-[7px] shrink-0 rounded-[2px]"
-            style={{
-              background: CATEGORICAL[Math.min(i, CATEGORICAL.length - 1)],
+      {entries.map((entry, i) => {
+        const contextEnabled = selectedAt !== undefined;
+        const detailEnabled = canDrillDown?.(entry.name, series) === true;
+        const shortcuts = contextEnabled && detailEnabled
+          ? "Space Enter"
+          : contextEnabled
+          ? "Space"
+          : detailEnabled
+          ? "Enter"
+          : undefined;
+        return (
+          <button
+            key={i}
+            type="button"
+            disabled={!onDataClick}
+            aria-pressed={selectedAt
+              ? selectedAt(entry.name, series)
+              : undefined}
+            aria-keyshortcuts={shortcuts}
+            onClick={(event) => {
+              event.stopPropagation();
+              // Enter et Espace emettent aussi un clic detail=0 sur un bouton.
+              if (event.detail === 0) return;
+              onDataClick?.(entry.name, series, "context", event.detail);
             }}
-          />
-          {entry.name}
-          <span class="text-ink-faint">
-            {isDonut
-              ? formatNumber(entry.value, 0)
-              : `${Math.round((entry.value / total) * 100)} %`}
-          </span>
-        </button>
-      ))}
+            onDblClick={(event) => {
+              event.stopPropagation();
+              onDataClick?.(entry.name, series, "drilldown", event.detail);
+            }}
+            onKeyDown={(event) => {
+              if (event.repeat) return;
+              if (
+                (event.key === " " && contextEnabled) ||
+                (event.key === "Enter" && detailEnabled)
+              ) {
+                event.stopPropagation();
+                onDataKeyDown?.(entry.name, series, event);
+              }
+            }}
+            class={cx(
+              "inline-flex items-center gap-1.5 rounded-[3px] font-mono text-chip text-ink-2",
+              onDataClick &&
+                "cursor-pointer hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
+              selectedAt?.(entry.name, series) &&
+                "outline outline-2 outline-offset-1 outline-accent",
+            )}
+          >
+            <span
+              class="size-[7px] shrink-0 rounded-[2px]"
+              style={{
+                background: CATEGORICAL[Math.min(i, CATEGORICAL.length - 1)],
+              }}
+            />
+            {entry.name}
+            <span class="text-ink-faint">
+              {isDonut
+                ? formatNumber(entry.value, 0)
+                : formatPercent((entry.value / total) * 100, 0)}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 function PieDonutChart(
-  { data, isDonut, onDataClick, isSelected, canDrillDown }: {
+  {
+    data,
+    isDonut,
+    onDataClick,
+    onDataKeyDown,
+    isSelected,
+    canDrillDown,
+  }: {
     data: ChartData;
     isDonut: boolean;
     onDataClick?: ChartDataClick;
+    onDataKeyDown?: ChartDataKeyDown;
     isSelected?: ChartSelectionPredicate;
     canDrillDown?: ChartSelectionPredicate;
   },
@@ -1462,7 +1505,9 @@ function PieDonutChart(
         total={total}
         isDonut={isDonut}
         onDataClick={onDataClick}
+        onDataKeyDown={onDataKeyDown}
         isSelected={isSelected}
+        canDrillDown={canDrillDown}
       />
     </div>
   );
@@ -2075,9 +2120,10 @@ function ChartKeyboardNavigator(
 }
 
 function ChartRouter(
-  { data, onDataClick, isSelected, canDrillDown }: {
+  { data, onDataClick, onDataKeyDown, isSelected, canDrillDown }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
+    onDataKeyDown?: ChartDataKeyDown;
     isSelected?: ChartSelectionPredicate;
     canDrillDown?: ChartSelectionPredicate;
   },
@@ -2154,6 +2200,7 @@ function ChartRouter(
           data={data}
           isDonut={false}
           onDataClick={onDataClick}
+          onDataKeyDown={onDataKeyDown}
           isSelected={isSelected}
           canDrillDown={canDrillDown}
         />
@@ -2164,6 +2211,7 @@ function ChartRouter(
           data={data}
           isDonut
           onDataClick={onDataClick}
+          onDataKeyDown={onDataKeyDown}
           isSelected={isSelected}
           canDrillDown={canDrillDown}
         />
@@ -2472,16 +2520,26 @@ function ChartContent(
     : undefined;
   const chartHandlers = useRef({
     onDataClick,
+    onDataKeyDown,
     isPointSelected,
     canDrillDownPoint,
   });
-  chartHandlers.current = { onDataClick, isPointSelected, canDrillDownPoint };
+  chartHandlers.current = {
+    onDataClick,
+    onDataKeyDown,
+    isPointSelected,
+    canDrillDownPoint,
+  };
   const stableDataClick = useCallback<ChartDataClick>(
     (...args) => chartHandlers.current.onDataClick?.(...args),
     [],
   );
   const stableIsSelected = useCallback<ChartSelectionPredicate>(
     (...args) => chartHandlers.current.isPointSelected(...args),
+    [],
+  );
+  const stableDataKeyDown = useCallback<ChartDataKeyDown>(
+    (...args) => chartHandlers.current.onDataKeyDown?.(...args),
     [],
   );
   const stableCanDrillDown = useCallback<ChartSelectionPredicate>(
@@ -2642,6 +2700,7 @@ function ChartContent(
                 <StableChartRouter
                   data={visibleData}
                   onDataClick={onDataClick ? stableDataClick : undefined}
+                  onDataKeyDown={onDataKeyDown ? stableDataKeyDown : undefined}
                   isSelected={activeContext.supported
                     ? stableIsSelected
                     : undefined}

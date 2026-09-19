@@ -22,6 +22,8 @@ Deno.test("stock viewer - contexte et detail gardent des commandes exclusives", 
     source,
     "nav.toggleRootChild(jump, contextItemFor(row).id)",
   );
+  assertStringIncludes(source, "clickIntent.click(intent, event.detail)");
+  assertEquals(source.includes("canDrill || event.detail < 2"), false);
   assertEquals(source.includes("nav.jump(jump)"), false);
 });
 

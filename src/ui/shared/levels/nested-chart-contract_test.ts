@@ -15,6 +15,7 @@ Deno.test("nested chart interaction - pointer and keyboard intents stay exclusiv
   assertStringIncludes(bars, "clickIntent.keyDown(");
   assertStringIncludes(bars, 'event.key === " "');
   assertStringIncludes(bars, 'event.key === "Enter"');
+  assertEquals(bars.includes("clickCount < 2"), false);
 });
 
 Deno.test("nested chart interaction - detail stays on double-click or Enter without a footer button", () => {

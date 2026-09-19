@@ -109,10 +109,7 @@ export function contextInteractionProps(
     title: target.label,
     onClick: clickIntent
       ? (event) => intent!.arbiter.click(clickIntent, event?.detail ?? 1)
-      : (event) => {
-        if ((event?.detail ?? 1) > 1) return;
-        target.onActivate();
-      },
+      : () => target.onActivate(),
     ...(clickIntent && target.onDoubleActivate
       ? {
         onDblClick: () => intent!.arbiter.doubleClick(clickIntent),

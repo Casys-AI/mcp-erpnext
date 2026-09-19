@@ -436,7 +436,7 @@ Deno.test("unavailable and unresolved sessions remain labelled", async () => {
 
 Deno.test("manifest is the published whole-view Buy evidence App", () => {
   assertEquals(BUY_VIEW_APP_MANIFEST.app.version, BUY_VIEW_APP_VERSION);
-  assertEquals(BUY_VIEW_APP_MANIFEST.app.version, "3.1.0-beta.10");
+  assertEquals(BUY_VIEW_APP_MANIFEST.app.version, "3.1.0-beta.11");
   assertEquals(
     BUY_VIEW_APP_MANIFEST.app.version.includes("local.buy-evidence"),
     false,

@@ -4,6 +4,8 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.1.0-beta.11] - 2026-09-19
+
 ### Added
 
 - Viewers support Traditional Chinese, Hindi, Bengali, Tamil and Urdu from the

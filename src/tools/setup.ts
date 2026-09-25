@@ -221,62 +221,100 @@ export const setupTools: ErpNextTool[] = [
         requiredUoms = (input.required_uoms as string[]).map((u) => u.trim());
       }
 
-      const [priceLists, warehouses, itemGroups, uoms] = await Promise.all([
-        ctx.client.list<{ name: string; selling?: number; buying?: number }>(
-          "Price List",
-          { fields: ["name", "selling", "buying"] },
-        ),
+      // Existence-only queries (limit: 1) — a count is not needed to answer
+      // "does at least one exist", and asking for one avoids Frappe's default
+      // 20-row page silently hiding a match past the first page.
+      const [
+        sellingPriceLists,
+        buyingPriceLists,
+        warehouses,
+        itemGroups,
+        uoms,
+      ] = await Promise.all([
+        ctx.client.list<{ name: string }>("Price List", {
+          filters: [["enabled", "=", 1], ["selling", "=", 1]],
+          fields: ["name"],
+          limit: 1,
+        }),
+        ctx.client.list<{ name: string }>("Price List", {
+          filters: [["enabled", "=", 1], ["buying", "=", 1]],
+          fields: ["name"],
+          limit: 1,
+        }),
         ctx.client.list<{ name: string }>("Warehouse", {
           filters: [["company", "=", company]],
           fields: ["name"],
+          limit: 1,
         }),
-        ctx.client.list<{ name: string }>("Item Group", { fields: ["name"] }),
+        ctx.client.list<{ name: string }>("Item Group", {
+          fields: ["name"],
+          limit: 1,
+        }),
+        // requiredUoms may exceed Frappe's default 20-row page — request
+        // exactly as many rows as names being checked.
         ctx.client.list<{ name: string }>("UOM", {
           filters: [["name", "in", requiredUoms]],
           fields: ["name"],
+          limit: Math.max(requiredUoms.length, 1),
         }),
       ]);
 
-      const hasSellingPriceList = priceLists.some((p) => p.selling === 1);
-      const hasBuyingPriceList = priceLists.some((p) => p.buying === 1);
+      const hasSellingPriceList = sellingPriceLists.length > 0;
+      const hasBuyingPriceList = buyingPriceLists.length > 0;
+      const hasWarehouse = warehouses.length > 0;
+      const hasItemGroup = itemGroups.length > 0;
       const existingUoms = new Set(uoms.map((u) => u.name));
       const missingUoms = requiredUoms.filter((u) => !existingUoms.has(u));
+
+      // Only needed for the Price List repair examples below, and only when
+      // one of them is actually missing.
+      let companyCurrency = "<company default_currency>";
+      if (!hasSellingPriceList || !hasBuyingPriceList) {
+        const companyDoc = await ctx.client.get<
+          { name: string; default_currency?: string }
+        >("Company", company);
+        if (companyDoc.default_currency) {
+          companyCurrency = companyDoc.default_currency;
+        }
+      }
 
       const checks = [
         {
           name: "selling_price_list",
           ok: hasSellingPriceList,
           detail: hasSellingPriceList
-            ? "At least one selling Price List exists."
-            : "No Price List has 'selling' enabled. " +
+            ? "At least one enabled selling Price List exists."
+            : "No enabled Price List has 'selling' set. " +
               "Create one with erpnext_doc_create({ doctype: 'Price List', " +
-              "fields: { price_list_name: 'Standard Selling', selling: 1 } }).",
+              "data: { price_list_name: 'Standard Selling', selling: 1, " +
+              `enabled: 1, currency: '${companyCurrency}' } }).`,
         },
         {
           name: "buying_price_list",
           ok: hasBuyingPriceList,
           detail: hasBuyingPriceList
-            ? "At least one buying Price List exists."
-            : "No Price List has 'buying' enabled. " +
+            ? "At least one enabled buying Price List exists."
+            : "No enabled Price List has 'buying' set. " +
               "Create one with erpnext_doc_create({ doctype: 'Price List', " +
-              "fields: { price_list_name: 'Standard Buying', buying: 1 } }).",
+              "data: { price_list_name: 'Standard Buying', buying: 1, " +
+              `enabled: 1, currency: '${companyCurrency}' } }).`,
         },
         {
           name: "warehouse",
-          ok: warehouses.length > 0,
-          detail: warehouses.length > 0
-            ? `${warehouses.length} warehouse(s) found for '${company}'.`
+          ok: hasWarehouse,
+          detail: hasWarehouse
+            ? `At least one Warehouse exists for company '${company}'.`
             : `No Warehouse exists for company '${company}'. Create one with ` +
               "erpnext_doc_create({ doctype: 'Warehouse', " +
-              `fields: { warehouse_name: 'Stores', company: '${company}' } }).`,
+              `data: { warehouse_name: 'Stores', company: '${company}' } }).`,
         },
         {
           name: "item_group",
-          ok: itemGroups.length > 0,
-          detail: itemGroups.length > 0
-            ? `${itemGroups.length} item group(s) found.`
+          ok: hasItemGroup,
+          detail: hasItemGroup
+            ? "At least one Item Group exists."
             : "No Item Group exists. Create one with erpnext_doc_create({ " +
-              "doctype: 'Item Group', fields: { item_group_name: '...' } }).",
+              "doctype: 'Item Group', data: { item_group_name: '...' } }).",
         },
         {
           name: "uom",
@@ -284,7 +322,7 @@ export const setupTools: ErpNextTool[] = [
           detail: missingUoms.length === 0
             ? `All required UOMs exist (${requiredUoms.join(", ")}).`
             : `Missing UOM(s): ${missingUoms.join(", ")}. Create with ` +
-              "erpnext_doc_create({ doctype: 'UOM', fields: { uom_name: '...' } }).",
+              "erpnext_doc_create({ doctype: 'UOM', data: { uom_name: '...' } }).",
         },
       ];
 

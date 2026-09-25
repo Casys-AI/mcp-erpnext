@@ -279,15 +279,22 @@ Deno.test("erpnext_user_list - escapes LIKE wildcards in search", async () => {
 
 // ── erpnext_setup_check ─────────────────────────────────────────────────────
 
+type ListOptions = {
+  filters?: unknown[][];
+  fields?: string[];
+  limit?: number;
+};
+
 function makeFullSetupClient(): FrappeClient {
   return makeMockClient({
-    list: async (doctype: string) => {
+    list: async (doctype: string, options: ListOptions) => {
       switch (doctype) {
-        case "Price List":
-          return [
-            { name: "Standard Selling", selling: 1, buying: 0 },
-            { name: "Standard Buying", selling: 0, buying: 1 },
-          ];
+        case "Price List": {
+          const wantsSelling = options.filters?.some((f) => f[0] === "selling");
+          return wantsSelling
+            ? [{ name: "Standard Selling" }]
+            : [{ name: "Standard Buying" }];
+        }
         case "Warehouse":
           return [{ name: "Stores - AC" }];
         case "Item Group":
@@ -298,6 +305,7 @@ function makeFullSetupClient(): FrappeClient {
           throw new Error(`Unexpected doctype: ${doctype}`);
       }
     },
+    get: async () => ({ name: "Acme", default_currency: "USD" }),
   });
 }
 
@@ -314,7 +322,10 @@ Deno.test("erpnext_setup_check - reports ready when everything exists", async ()
 Deno.test("erpnext_setup_check - flags every gap on a bare-bones instance", async () => {
   const result = await getTool("erpnext_setup_check").handler(
     { company: "Acme" },
-    makeCtx(makeMockClient({ list: async () => [] })),
+    makeCtx(makeMockClient({
+      list: async () => [],
+      get: async () => ({ name: "Acme" }),
+    })),
   ) as { ready: boolean; missing: string[] };
 
   assertEquals(result.ready, false);
@@ -327,6 +338,90 @@ Deno.test("erpnext_setup_check - flags every gap on a bare-bones instance", asyn
   ]);
 });
 
+Deno.test("erpnext_setup_check - a disabled-only Price List does not satisfy either check", async () => {
+  // The Price List query filters on enabled=1 server-side; the mock instead
+  // simulates the server returning nothing for that filter, as a real Frappe
+  // instance would for a disabled-only Price List.
+  const result = await getTool("erpnext_setup_check").handler(
+    { company: "Acme" },
+    makeCtx(makeMockClient({
+      list: async (doctype: string, options: ListOptions) => {
+        if (doctype === "Price List") {
+          const enabled = options.filters?.some((f) =>
+            f[0] === "enabled" && f[2] === 1
+          );
+          return enabled ? [] : [{ name: "Standard Selling" }];
+        }
+        if (doctype === "UOM") return [{ name: "Nos" }, { name: "Kg" }];
+        return [{ name: "x" }];
+      },
+      get: async () => ({ name: "Acme", default_currency: "USD" }),
+    })),
+  ) as { ready: boolean; missing: string[] };
+
+  assertEquals(result.ready, false);
+  assertEquals(result.missing, ["selling_price_list", "buying_price_list"]);
+});
+
+Deno.test("erpnext_setup_check - price list queries filter on enabled and selling/buying separately", async () => {
+  const capturedFilters: unknown[][][] = [];
+  await getTool("erpnext_setup_check").handler(
+    { company: "Acme" },
+    makeCtx(makeMockClient({
+      list: async (doctype: string, options: ListOptions) => {
+        if (doctype === "Price List") capturedFilters.push(options.filters!);
+        return [];
+      },
+      get: async () => ({ name: "Acme" }),
+    })),
+  );
+
+  assertEquals(capturedFilters, [
+    [["enabled", "=", 1], ["selling", "=", 1]],
+    [["enabled", "=", 1], ["buying", "=", 1]],
+  ]);
+});
+
+Deno.test("erpnext_setup_check - requests at least a limit=1 existence check for Warehouse and Item Group", async () => {
+  const capturedLimits: Record<string, number | undefined> = {};
+  await getTool("erpnext_setup_check").handler(
+    { company: "Acme" },
+    makeCtx(makeMockClient({
+      list: async (doctype: string, options: ListOptions) => {
+        capturedLimits[doctype] = options.limit;
+        return [];
+      },
+      get: async () => ({ name: "Acme" }),
+    })),
+  );
+
+  assertEquals(capturedLimits["Warehouse"], 1);
+  assertEquals(capturedLimits["Item Group"], 1);
+});
+
+Deno.test("erpnext_setup_check - requests a UOM page large enough for every required name, past the default 20-row page", async () => {
+  const requiredUoms = Array.from({ length: 25 }, (_, i) => `UOM-${i}`);
+  let capturedLimit: number | undefined;
+  const result = await getTool("erpnext_setup_check").handler(
+    { company: "Acme", required_uoms: requiredUoms },
+    makeCtx(makeMockClient({
+      list: async (doctype: string, options: ListOptions) => {
+        if (doctype !== "UOM") return [];
+        capturedLimit = options.limit;
+        // A real Frappe instance has all 25 — the bug this guards against is
+        // the client under-requesting and only getting Frappe's default
+        // 20-row page back.
+        return requiredUoms.map((name) => ({ name }));
+      },
+      get: async () => ({ name: "Acme" }),
+    })),
+  ) as { checks: Array<{ name: string; ok: boolean }> };
+
+  assertEquals(capturedLimit! >= 25, true);
+  const uomCheck = result.checks.find((c) => c.name === "uom");
+  assertEquals(uomCheck?.ok, true);
+});
+
 Deno.test("erpnext_setup_check - scopes the warehouse check to the given company", async () => {
   let capturedFilters: unknown[][] = [];
   await getTool("erpnext_setup_check").handler(
@@ -336,6 +431,7 @@ Deno.test("erpnext_setup_check - scopes the warehouse check to the given company
         if (doctype === "Warehouse") capturedFilters = options.filters ?? [];
         return [];
       },
+      get: async () => ({ name: "Acme" }),
     })),
   );
 
@@ -348,11 +444,42 @@ Deno.test("erpnext_setup_check - honours a custom required_uoms list", async () 
     makeCtx(makeMockClient({
       list: async (doctype: string) =>
         doctype === "UOM" ? [{ name: "Litre" }] : [],
+      get: async () => ({ name: "Acme" }),
     })),
   ) as { checks: Array<{ name: string; ok: boolean }> };
 
   const uomCheck = result.checks.find((c) => c.name === "uom");
   assertEquals(uomCheck?.ok, true);
+});
+
+Deno.test("erpnext_setup_check - repair examples use erpnext_doc_create's real 'data' argument", async () => {
+  const result = await getTool("erpnext_setup_check").handler(
+    { company: "Acme" },
+    makeCtx(makeMockClient({
+      list: async () => [],
+      get: async () => ({ name: "Acme", default_currency: "EUR" }),
+    })),
+  ) as { checks: Array<{ name: string; ok: boolean; detail: string }> };
+
+  for (const check of result.checks) {
+    if (check.ok) continue;
+    assertEquals(
+      check.detail.includes("fields:"),
+      false,
+      `${check.name} detail still references the wrong 'fields' argument: ${check.detail}`,
+    );
+    assertEquals(
+      check.detail.includes("erpnext_doc_create({ doctype:"),
+      true,
+      `${check.name} detail is missing a repair example: ${check.detail}`,
+    );
+  }
+
+  const sellingCheck = result.checks.find((c) =>
+    c.name === "selling_price_list"
+  );
+  assertEquals(sellingCheck?.detail.includes("data: {"), true);
+  assertEquals(sellingCheck?.detail.includes("currency: 'EUR'"), true);
 });
 
 Deno.test("erpnext_setup_check - rejects a missing or empty company", async () => {

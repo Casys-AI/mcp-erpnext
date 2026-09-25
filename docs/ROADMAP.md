@@ -71,17 +71,20 @@ history.
 ### Setup wizard automation
 
 A fresh ERPNext instance requires master data before being able to create
-transactional documents. The tools `erpnext_company_create` and
-`erpnext_doc_create` now exist, but the full workflow is:
+transactional documents. The tools `erpnext_company_create`,
+`erpnext_doc_create`, and `erpnext_setup_check` now exist covering:
 
-1. Create Company
-2. Create Price Lists (Standard Selling, Standard Buying)
-3. Create Warehouses (or use the ones auto-created by Company)
-4. Create Item Groups if needed
-5. Create UOMs if non-standard (Nos, Kg, etc. exist by default)
+1. Create Company (`erpnext_company_create`)
+2. Create Price Lists (Standard Selling, Standard Buying) —
+   `erpnext_setup_check` flags a missing selling/buying Price List
+3. Create Warehouses (or use the ones auto-created by Company) —
+   `erpnext_setup_check` flags a company with no Warehouse
+4. Create Item Groups if needed — `erpnext_setup_check` flags none existing
+5. Create UOMs if non-standard (Nos, Kg, etc. exist by default) —
+   `erpnext_setup_check` takes a `required_uoms` list to verify
 
-**Idea**: A tool `erpnext_setup_check` that checks that the prerequisites exist
-and returns what is missing.
+Still open: none of this runs automatically — an agent has to call
+`erpnext_setup_check` and then `erpnext_doc_create` for each gap itself.
 
 ### Retry / error context enrichment
 

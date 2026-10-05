@@ -24,9 +24,10 @@ Frappe instance — documents, workflows, and interactive viewers inside the hos
 
 Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 
-> Built on **[@casys/mcp-server](https://github.com/superWorldSavior/mcp-platform)** — the
-> MCP server framework (concurrency, auth, MCP Apps, observability) that powers
-> this project.
+> Built on
+> **[@casys/mcp-server](https://github.com/superWorldSavior/mcp-platform)** —
+> the MCP server framework (concurrency, auth, MCP Apps, observability) that
+> powers this project.
 
 ## Screenshots
 
@@ -79,8 +80,8 @@ results.
 ## What's New
 
 See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
-[latest release](https://github.com/superWorldSavior/mcp-erpnext/releases/latest) for
-the current version's highlights.
+[latest release](https://github.com/superWorldSavior/mcp-erpnext/releases/latest)
+for the current version's highlights.
 
 > **3.1 beta preview:** the beta keeps the 3.0 tool surface and adds a generic
 > document viewer, child tables, document attachments, in-view navigation, and

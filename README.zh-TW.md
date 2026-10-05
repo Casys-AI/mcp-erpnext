@@ -4,7 +4,7 @@
 
 [![JSR](https://jsr.io/badges/@casys/mcp-erpnext)](https://jsr.io/@casys/mcp-erpnext)
 [![npm](https://img.shields.io/npm/v/@casys/mcp-erpnext?logo=npm&color=cb3837)](https://www.npmjs.com/package/@casys/mcp-erpnext)
-[![CI](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml)
+[![CI](https://github.com/superWorldSavior/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/superWorldSavior/mcp-erpnext/actions/workflows/test.yml)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![M8ven Score](https://m8ven.ai/badge/mcp/casys-ai-mcp-erpnext-1kev4k)](https://m8ven.ai/mcp/casys-ai-mcp-erpnext-1kev4k)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -23,7 +23,7 @@ Code、VS Code Copilot 或自訂代理）。
 
 支援**自行託管**與 **ERPNext Cloud**（frappe.cloud）執行個體。
 
-> 基於 **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** 構建 —
+> 基於 **[@casys/mcp-server](https://github.com/superWorldSavior/mcp-platform)** 構建 —
 > 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。
 
 ## 截圖
@@ -76,7 +76,7 @@ Code、VS Code Copilot 或自訂代理）。
 ## 最新異動
 
 完整的發布歷程請參閱
-[CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
+[CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/superWorldSavior/mcp-erpnext/releases/latest)。
 
 > **3.1 Beta 2 預覽版：** 此版本維持與 3.0 工具介面的相容性，並新增通用文件
 > 檢視器、子表格、附件、檢視器內導覽及作用中內容。所有功能仍依 MCP 主機能力

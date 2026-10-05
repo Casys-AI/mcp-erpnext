@@ -4,7 +4,7 @@ English | [繁體中文](README.zh-TW.md)
 
 [![JSR](https://jsr.io/badges/@casys/mcp-erpnext)](https://jsr.io/@casys/mcp-erpnext)
 [![npm](https://img.shields.io/npm/v/@casys/mcp-erpnext?logo=npm&color=cb3837)](https://www.npmjs.com/package/@casys/mcp-erpnext)
-[![CI](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml)
+[![CI](https://github.com/superWorldSavior/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/superWorldSavior/mcp-erpnext/actions/workflows/test.yml)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![M8ven Score](https://m8ven.ai/badge/mcp/casys-ai-mcp-erpnext-1kev4k)](https://m8ven.ai/mcp/casys-ai-mcp-erpnext-1kev4k)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -24,7 +24,7 @@ Frappe instance — documents, workflows, and interactive viewers inside the hos
 
 Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 
-> Built on **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** — the
+> Built on **[@casys/mcp-server](https://github.com/superWorldSavior/mcp-platform)** — the
 > MCP server framework (concurrency, auth, MCP Apps, observability) that powers
 > this project.
 
@@ -79,7 +79,7 @@ results.
 ## What's New
 
 See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
-[latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for
+[latest release](https://github.com/superWorldSavior/mcp-erpnext/releases/latest) for
 the current version's highlights.
 
 > **3.1 beta preview:** the beta keeps the 3.0 tool surface and adds a generic

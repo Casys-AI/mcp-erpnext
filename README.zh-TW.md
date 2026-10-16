@@ -10,12 +10,12 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > [!IMPORTANT]
-> **安裝 3.1 Beta：** npm/Node 請執行 `npx -y @casys/mcp-erpnext@next`；Deno
-> 請執行
-> `deno run -A jsr:@casys/mcp-erpnext@^3.1.0-beta/server`。兩者都會跟隨當前的預發布
-> 版本；JSR 沒有 dist-tag，因此使用版本範圍。確切版本請見
-> [CHANGELOG](CHANGELOG.md)。此 Beta 新增通用文件檢視器及附件流程；在取代穩定版
-> 部署前，請務必使用實際的 MCP 主機進行測試。
+> **安裝 3.2 Beta：** npm/Node 請執行 `npx -y @casys/mcp-erpnext@next`；Deno
+> 請執行 `deno run -A jsr:@casys/mcp-erpnext@3.2.0-beta.1/server`。npm 的 `next`
+> 標籤會跟隨目前的預發布版本；JSR 沒有 dist-tag，因此此指令固定使用 這個 Beta
+> 版本。穩定版 **3.1.0** 可透過 npm 的 `latest` 標籤取得。 Beta
+> 保留通用文件檢視器及附件流程；在取代穩定版部署前，請使用實際的 MCP
+> 主機進行測試。發布歷程請見 [CHANGELOG](CHANGELOG.md)。
 
 讓任何相容 MCP 的 AI 智慧代理操作您的 [ERPNext](https://erpnext.com) / Frappe
 執行個體 — 文件、工作流程，以及主機內的互動式檢視器（Claude Desktop、 Claude
@@ -78,9 +78,11 @@ Code、VS Code Copilot 或自訂代理）。
 完整的發布歷程請參閱
 [CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/superWorldSavior/mcp-erpnext/releases/latest)。
 
-> **3.1 Beta 2 預覽版：** 此版本維持與 3.0 工具介面的相容性，並新增通用文件
-> 檢視器、子表格、附件、檢視器內導覽及作用中內容。所有功能仍依 MCP 主機能力
-> 啟用；下載同時需要代理伺服器工具與 MCP Apps 的 `downloadFile` 能力。
+> **3.2.0-beta.1 預覽版：** 此版同步納入穩定版 3.1.0 的建立錯誤修復指引、
+> ERPNext 16 商機相容性及日期修正，並保留通用文件檢視器、子表格、附件、
+> 檢視器內導覽及已記錄的 Buy 證據。另修正 KPI 百分比變化、銷售漏斗幣別，
+> 以及不支援內容選取的主機上的清除行為。所有功能仍依 MCP 主機能力啟用； Buy
+> 證據不會執行採購，也不代表即時 ERP 已通過驗證。
 
 ## 文件
 
@@ -223,7 +225,7 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 透過明確的唯讀工具讀回已提交狀態，不會自動重播寫入工具。若較新的主機資料或
 異動結果已生效，較舊或重疊的重新整理回應會被忽略。
 已確認的文件異動會把目前導覽堆疊中可能衍生的快照標記為過期；只有在該畫面
-實際重新讀取後才會移除標記。Beta 2 不會自動同步彼此分離的 MCP Apps。
+實際重新讀取後才會移除標記。3.2 Beta 不會自動同步彼此分離的 MCP Apps。
 
 ### 建置 UI 檢視器
 

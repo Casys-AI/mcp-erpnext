@@ -9,6 +9,14 @@
  */
 
 import type { NavHint } from "../../shared/jumps.ts";
+import { formatCurrency } from "../../shared/format.ts";
+
+export function funnelStageValueText(
+  value: number | null | undefined,
+  currency: string | undefined,
+): string {
+  return value != null && value > 0 ? formatCurrency(value, currency) : "—";
+}
 
 export type FunnelStageActivation = "context" | "detail";
 

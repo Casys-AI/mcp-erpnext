@@ -7,11 +7,32 @@
  */
 
 import { assertEquals, assertStringIncludes } from "@std/assert";
+import { setLocaleSource } from "../../shared/format.ts";
 import {
   funnelStageInteractionPlan,
+  funnelStageValueText,
   stageIsJumpable,
   stageNavHint,
 } from "./funnel-nav.ts";
+
+Deno.test("funnel stage values display the payload currency in the host locale", () => {
+  setLocaleSource(() => "fr-FR");
+  assertEquals(
+    funnelStageValueText(1234.5, "EUR").replace(/\s/g, ""),
+    "1234,50€",
+  );
+  assertStringIncludes(funnelStageValueText(1234.5, "GBP"), "£");
+  setLocaleSource(() => "en-US");
+  assertEquals(funnelStageValueText(1234.5, "USD"), "$1,234.50");
+});
+
+Deno.test("funnel stage values do not invent a currency or an absent amount", () => {
+  setLocaleSource(() => "en-US");
+  assertEquals(funnelStageValueText(1234.5, undefined), "1,234.50");
+  for (const value of [undefined, null, 0, -1]) {
+    assertEquals(funnelStageValueText(value, "EUR"), "—");
+  }
+});
 
 // ── stageNavHint ────────────────────────────────────────────────────────────
 

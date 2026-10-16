@@ -19,16 +19,21 @@ async function flush() {
 function item(id: string, value = id): ContextSelectionItem {
   return { id, label: id, view: "chart", value };
 }
-function harness() {
+type HostCapabilities = Record<string, unknown> | undefined;
+const CAPABLE_HOST: HostCapabilities = {
+  updateModelContext: { structuredContent: {} },
+  message: { text: {} },
+};
+/** Passing undefined explicitly models a host announcing no capabilities. */
+function harness(...args: [capabilities?: HostCapabilities]) {
+  const capabilities = args.length === 0 ? CAPABLE_HOST : args[0];
   const requests: {
     ids: string[];
     response: ReturnType<typeof deferred<unknown>>;
   }[] = [];
   const host: ActiveContextFlowHost = {
-    getHostCapabilities: () => ({
-      updateModelContext: { structuredContent: {} },
-      message: { text: {} },
-    }),
+    getHostCapabilities: () =>
+      capabilities as ReturnType<ActiveContextFlowHost["getHostCapabilities"]>,
     updateModelContext(params) {
       const response = deferred<unknown>();
       const items =
@@ -98,6 +103,49 @@ Deno.test("context controller - queued clicks show pending immediately, confirme
   await h.ack(1);
   await Promise.all([first, second]);
   assertEquals(h.ids(), ["A", "B"]);
+  assertEquals(h.controller.getSnapshot().pending, false);
+});
+
+Deno.test("context controller - unsupported host root changes produce no false failure or pending state", async () => {
+  for (
+    const capabilities of [
+      undefined,
+      {},
+      { updateModelContext: {} },
+    ] as HostCapabilities[]
+  ) {
+    const h = harness(capabilities);
+    const states: { pending: boolean; failed: boolean }[] = [];
+    h.controller.subscribe(({ pending, failed }) =>
+      states.push({ pending, failed })
+    );
+    h.controller.setScope("root-2");
+    assertEquals(await h.controller.clearPreviousScope(), "unsupported");
+    assertEquals(h.requests.length, 0);
+    assertEquals(h.controller.getSnapshot().failed, false);
+    assertEquals(h.controller.getSnapshot().pending, false);
+    assertEquals(states, []);
+  }
+});
+
+Deno.test("context controller - explicit clear is neutral on an unsupported host", async () => {
+  const h = harness({});
+  assertEquals(await h.actions.clear(), "unsupported");
+  assertEquals(h.requests.length, 0);
+  assertEquals(h.controller.getSnapshot().failed, false);
+  assertEquals(h.controller.getSnapshot().pending, false);
+});
+
+Deno.test("context controller - capable host rejecting root clear still reports failure", async () => {
+  const h = harness();
+  h.controller.setScope("root-2");
+  const clear = h.controller.clearPreviousScope();
+  assertEquals(h.controller.getSnapshot().pending, true);
+  await flush();
+  assertEquals(h.requests[0].ids, []);
+  await h.ack(0, false);
+  assertEquals(await clear, "error");
+  assertEquals(h.controller.getSnapshot().failed, true);
   assertEquals(h.controller.getSnapshot().pending, false);
 });
 

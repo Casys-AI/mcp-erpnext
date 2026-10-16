@@ -36,6 +36,7 @@ import {
 } from "~/shared/refresh";
 import { isFixtureMode, KPI_FIXTURE } from "./fixture.ts";
 import type { KpiData } from "./types.ts";
+import { formatDeltaPercent } from "./kpi-format.ts";
 import { currentLocale, formatNumber, toNumber } from "~/shared/format";
 import { t } from "~/shared/i18n.ts";
 import { type TFunction, useT } from "~/shared/i18n-hook.ts";
@@ -365,8 +366,7 @@ function DeltaBadge({ delta, trend, trendIsGood }: {
 }) {
   const direction = trend ?? (delta > 0 ? "up" : delta < 0 ? "down" : "flat");
   const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "—";
-  // delta est un ratio : 2.83 → 283 %.
-  const pct = Math.round(Math.abs(delta) * 100);
+  const pct = formatDeltaPercent(delta);
   const isGood = trendIsGood === undefined
     ? true
     : trendIsGood
@@ -387,7 +387,7 @@ function DeltaBadge({ delta, trend, trendIsGood }: {
         tone === "neutral" && "bg-ink-ghost/20 text-ink-muted",
       )}
     >
-      {arrow} {pct} %
+      {arrow} {pct}
     </span>
   );
 }

@@ -24,6 +24,7 @@ type RuntimePort = {
   getArgs(): string[];
   exit(code: number): never;
   onSignal(signal: string, handler: () => void): void;
+  netPermission(host: string): "granted" | "denied" | "prompt";
 };
 
 // Structural detection: a bare `globalThis.Deno = {}` shim (seen in some
@@ -44,3 +45,4 @@ export const readDirSync = impl.readDirSync;
 export const getArgs = impl.getArgs;
 export const exit = impl.exit;
 export const onSignal = impl.onSignal;
+export const netPermission = impl.netPermission;

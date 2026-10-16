@@ -10,13 +10,14 @@ English | [繁體中文](README.zh-TW.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > [!IMPORTANT]
-> **Installing the 3.1 beta:** for npm/Node use
+> **Installing the 3.2 beta:** for npm/Node use
 > `npx -y @casys/mcp-erpnext@next`; for Deno use
-> `deno run -A jsr:@casys/mcp-erpnext@^3.1.0-beta/server`. Both follow the
-> current prerelease — JSR has no dist-tags, hence the range there. Exact
-> versions are in the [CHANGELOG](CHANGELOG.md). The beta adds the generic
-> document viewer and attachment workflows, so test it with the MCP host your
-> users actually run before replacing a stable deployment.
+> `deno run -A jsr:@casys/mcp-erpnext@3.2.0-beta.1/server`. npm's `next` tag
+> follows the current prerelease; the JSR command pins this exact beta because
+> JSR has no dist-tags. Stable **3.1.0** is available through npm's `latest`
+> tag. The beta retains the generic document viewer and attachment workflows, so
+> test it with the MCP host your users actually run before replacing a stable
+> deployment. See the [CHANGELOG](CHANGELOG.md) for release history.
 
 Let any MCP-compatible AI agent operate your [ERPNext](https://erpnext.com) /
 Frappe instance — documents, workflows, and interactive viewers inside the host
@@ -83,14 +84,13 @@ See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
 [latest release](https://github.com/superWorldSavior/mcp-erpnext/releases/latest)
 for the current version's highlights.
 
-> **3.1 beta preview:** the beta keeps the 3.0 tool surface and adds a generic
-> document viewer, child tables, document attachments, in-view navigation, and
-> active context. **3.1.0-beta.11** adds reversible context selection, compact
-> Kanban details with distinct Timesheet counts, exact selected-document
-> navigation, five more host languages, and correct generic Company columns. It
-> also retains bounded metadata for unpriced Buy lines and adds offline demo
-> import plans. Features remain capability-gated by the MCP host; Buy evidence
-> does not purchase or qualify a live ERP.
+> **3.2.0-beta.1 preview:** the beta includes the creation-error guidance,
+> ERPNext 16 Opportunity compatibility and calendar-date fixes carried into
+> stable 3.1.0, alongside its generic document viewer, child tables,
+> attachments, in-view navigation and recorded Buy evidence. KPI percentage
+> changes, funnel currencies and context clearing on unsupported hosts are also
+> corrected. Features remain capability-gated by the MCP host; Buy evidence does
+> not purchase or qualify a live ERP.
 
 ## Documentation
 
@@ -244,7 +244,7 @@ tool is never replayed automatically. Overlapping or stale responses are ignored
 when a newer host payload or mutation has already won. A confirmed document
 change marks every potentially derived snapshot in the current navigation stack
 as stale; each marker is removed only when that surface has actually been read
-again. Separate MCP Apps are not synchronized automatically in the 3.1 beta.
+again. Separate MCP Apps are not synchronized automatically in the 3.2 beta.
 
 ### Building UI viewers
 
@@ -267,7 +267,7 @@ live ERPNext instance.
   caller cannot pass `sourceInstance`, URL, credentials, `capturedAt`, or a
   digest. Digital Thread stores those bytes in its own CAS; this server does not
   keep a second CAS.
-- App: `io.casys.mcp-erpnext.buy-evidence` `3.1.0-beta.11`, resource
+- App: `io.casys.mcp-erpnext.buy-evidence` `3.2.0-beta.1`, resource
   `ui://mcp-erpnext/buy-evidence-viewer` (`text/html;profile=mcp-app`), manifest
   `ui://mcp-erpnext/buy-evidence-manifest` (`application/json`),
   `acceptedActions` = `viewer.session.apply` only. Complete, partial,

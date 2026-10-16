@@ -29,6 +29,27 @@ import { CHART_META, FUNNEL_META, KPI_META } from "./viewer-meta.ts";
  */
 const MAX_RADAR_ITEMS = 8;
 
+/** Calendar dates from Frappe are date-only values, not UTC instants. */
+export function frappeCalendarMonth(
+  value: unknown,
+): { year: number; month: number } | null {
+  if (typeof value !== "string") return null;
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  return Number.isInteger(year) && month >= 0 && month <= 11
+    ? { year, month }
+    : null;
+}
+
+/** Formats a local calendar boundary without converting it through UTC. */
+export function localCalendarDate(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 export const analyticsTools: ErpNextTool[] = [
   // ── Stock Chart ───────────────────────────────────────────────────────────
 
@@ -321,7 +342,7 @@ export const analyticsTools: ErpNextTool[] = [
         now.getMonth() - monthsBack + 1,
         1,
       );
-      const startStr = startDate.toISOString().split("T")[0];
+      const startStr = localCalendarDate(startDate);
 
       const orders = await ctx.client.list("Sales Order", {
         fields: ["customer_name", "grand_total", "transaction_date"],
@@ -349,9 +370,10 @@ export const analyticsTools: ErpNextTool[] = [
         // Multi-line: one dataset per customer
         const byCustomerMonth: Record<string, number[]> = {};
         for (const order of orders) {
-          const d = new Date(order.transaction_date as string);
-          const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
-            d.getMonth() - startDate.getMonth();
+          const calendarMonth = frappeCalendarMonth(order.transaction_date);
+          if (!calendarMonth) continue;
+          const mIdx = (calendarMonth.year - startDate.getFullYear()) * 12 +
+            calendarMonth.month - startDate.getMonth();
           if (mIdx < 0 || mIdx >= monthsBack) continue;
           const cust = (order.customer_name as string) ?? "Unknown";
           if (!byCustomerMonth[cust]) {
@@ -389,9 +411,10 @@ export const analyticsTools: ErpNextTool[] = [
       // Single line: total revenue per month
       const monthlyTotals = new Array(monthsBack).fill(0);
       for (const order of orders) {
-        const d = new Date(order.transaction_date as string);
-        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
-          d.getMonth() - startDate.getMonth();
+        const calendarMonth = frappeCalendarMonth(order.transaction_date);
+        if (!calendarMonth) continue;
+        const mIdx = (calendarMonth.year - startDate.getFullYear()) * 12 +
+          calendarMonth.month - startDate.getMonth();
         if (mIdx >= 0 && mIdx < monthsBack) {
           monthlyTotals[mIdx] += Number(order.grand_total) || 0;
         }
@@ -916,7 +939,7 @@ export const analyticsTools: ErpNextTool[] = [
       const now = new Date();
       // Single API call: fetch all orders from 6 months ago to today
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-      const sinceStr = sixMonthsAgo.toISOString().split("T")[0];
+      const sinceStr = localCalendarDate(sixMonthsAgo);
 
       const allOrders = await ctx.client.list("Sales Order", {
         fields: ["grand_total", "transaction_date"],
@@ -930,10 +953,11 @@ export const analyticsTools: ErpNextTool[] = [
       // Bucket into 6 monthly bins
       const sparkline: number[] = [0, 0, 0, 0, 0, 0];
       for (const o of allOrders) {
-        const d = new Date(o.transaction_date as string);
+        const calendarMonth = frappeCalendarMonth(o.transaction_date);
+        if (!calendarMonth) continue;
         // Month index: 0 = oldest (5 months ago), 5 = current month
-        const monthDiff = (now.getFullYear() - d.getFullYear()) * 12 +
-          (now.getMonth() - d.getMonth());
+        const monthDiff = (now.getFullYear() - calendarMonth.year) * 12 +
+          (now.getMonth() - calendarMonth.month);
         const idx = 5 - monthDiff;
         if (idx >= 0 && idx < 6) {
           sparkline[idx] += Number(o.grand_total) || 0;
@@ -1022,8 +1046,8 @@ export const analyticsTools: ErpNextTool[] = [
       }-01`;
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-      const lastMonthStartStr = lastMonthStart.toISOString().split("T")[0];
-      const lastMonthEndStr = lastMonthEnd.toISOString().split("T")[0];
+      const lastMonthStartStr = localCalendarDate(lastMonthStart);
+      const lastMonthEndStr = localCalendarDate(lastMonthEnd);
 
       const currentOrders = await ctx.client.list("Sales Order", {
         fields: ["grand_total"],
@@ -1145,7 +1169,7 @@ export const analyticsTools: ErpNextTool[] = [
     category: "analytics",
     inputSchema: { type: "object", properties: {} },
     handler: async (_input, ctx) => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = localCalendarDate(new Date());
 
       const invoices = await ctx.client.list("Sales Invoice", {
         fields: ["outstanding_amount", "due_date"],
@@ -1657,7 +1681,7 @@ export const analyticsTools: ErpNextTool[] = [
         now.getMonth() - monthsBack + 1,
         1,
       );
-      const startStr = startDate.toISOString().split("T")[0];
+      const startStr = localCalendarDate(startDate);
 
       // Income and expenses are the same query against two doctypes, with no
       // dependency between them — one round-trip instead of two.
@@ -1706,18 +1730,20 @@ export const analyticsTools: ErpNextTool[] = [
       const expenses = new Array(monthsBack).fill(0) as number[];
 
       for (const so of salesOrders) {
-        const d = new Date(so.transaction_date as string);
-        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
-          d.getMonth() - startDate.getMonth();
+        const calendarMonth = frappeCalendarMonth(so.transaction_date);
+        if (!calendarMonth) continue;
+        const mIdx = (calendarMonth.year - startDate.getFullYear()) * 12 +
+          calendarMonth.month - startDate.getMonth();
         if (mIdx >= 0 && mIdx < monthsBack) {
           income[mIdx] += Number(so.grand_total) || 0;
         }
       }
 
       for (const po of purchaseOrders) {
-        const d = new Date(po.transaction_date as string);
-        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
-          d.getMonth() - startDate.getMonth();
+        const calendarMonth = frappeCalendarMonth(po.transaction_date);
+        if (!calendarMonth) continue;
+        const mIdx = (calendarMonth.year - startDate.getFullYear()) * 12 +
+          calendarMonth.month - startDate.getMonth();
         if (mIdx >= 0 && mIdx < monthsBack) {
           expenses[mIdx] += Number(po.grand_total) || 0;
         }

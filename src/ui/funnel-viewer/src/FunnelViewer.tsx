@@ -17,7 +17,7 @@ import {
   formatNumber,
   styles,
 } from "~/shared/theme";
-import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
+import { ErpNextBrandFooter, ErpNextBrandHeader } from "~/shared/ErpNextBrand";
 import {
   canRequestUiRefresh,
   extractToolResultText,
@@ -474,6 +474,7 @@ export function FunnelViewer() {
             />
           )}
       </div>
+      <ErpNextBrandFooter />
     </div>
   );
 }

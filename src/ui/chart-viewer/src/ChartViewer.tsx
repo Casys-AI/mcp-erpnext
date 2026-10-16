@@ -42,7 +42,7 @@ import {
   YAxis,
 } from "recharts";
 import { fonts, formatCurrency, formatNumber } from "~/shared/theme";
-import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
+import { ErpNextBrandFooter, ErpNextBrandHeader } from "~/shared/ErpNextBrand";
 import {
   canRequestUiRefresh,
   extractToolResultText,
@@ -1133,9 +1133,6 @@ function ChartContent(
     onRefresh: () => void;
   },
 ) {
-  // Header ~36px + title ~40px + padding ~24px = ~100px overhead
-  const chartHeight = "calc(100vh - 100px)";
-
   return (
     <div
       style={{
@@ -1143,6 +1140,8 @@ function ChartContent(
         background: "var(--bg-root)",
         height: "100vh",
         overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       <ErpNextBrandHeader />
@@ -1153,6 +1152,7 @@ function ChartContent(
           alignItems: "flex-start",
           justifyContent: "space-between",
           gap: 12,
+          flexShrink: 0,
         }}
       >
         <div style={{ minWidth: 0 }}>
@@ -1205,9 +1205,10 @@ function ChartContent(
           {refreshing ? "Refreshing" : "Refresh"}
         </button>
       </div>
-      <div style={{ height: chartHeight, padding: "4px 8px 8px" }}>
+      <div style={{ flex: 1, minHeight: 0, padding: "4px 8px 8px" }}>
         <ChartRouter data={data} />
       </div>
+      <ErpNextBrandFooter />
     </div>
   );
 }
@@ -1337,22 +1338,32 @@ export function ChartViewer() {
     };
   }, []);
 
-  if (loading) return <LoadingSkeleton />;
+  if (loading) {
+    return (
+      <>
+        <LoadingSkeleton />
+        <ErpNextBrandFooter />
+      </>
+    );
+  }
 
   if (!data) {
     return (
-      <div
-        style={{
-          padding: 32,
-          textAlign: "center",
-          color: "var(--text-muted)",
-          fontSize: 13,
-          fontFamily: fonts.sans,
-        }}
-      >
-        No chart data — run an analytics tool or PML workflow that returns
-        ChartData
-      </div>
+      <>
+        <div
+          style={{
+            padding: 32,
+            textAlign: "center",
+            color: "var(--text-muted)",
+            fontSize: 13,
+            fontFamily: fonts.sans,
+          }}
+        >
+          No chart data — run an analytics tool or PML workflow that returns
+          ChartData
+        </div>
+        <ErpNextBrandFooter />
+      </>
     );
   }
 

@@ -10,7 +10,7 @@ import {
 } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { colors, fonts, styles } from "~/shared/theme";
-import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
+import { ErpNextBrandFooter, ErpNextBrandHeader } from "~/shared/ErpNextBrand";
 import {
   formatBoardSummary,
   getErrorPresentation,
@@ -282,7 +282,7 @@ function AssigneeBadge({ email }: { email: string }) {
           height: 14,
           borderRadius: "50%",
           background: colors.accent,
-          color: "#fff",
+          color: colors.onAccent,
           fontSize: 8,
           fontWeight: 700,
           display: "inline-flex",
@@ -1010,6 +1010,7 @@ function BoardView({
             </div>
           )}
       </div>
+      <ErpNextBrandFooter />
     </div>
   );
 }
@@ -1618,9 +1619,17 @@ export function KanbanViewer() {
 
   if (state.loading) {
     return (
-      <div style={{ minHeight: 600, background: colors.bg.root }}>
+      <div
+        style={{
+          minHeight: 600,
+          background: colors.bg.root,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         <ErpNextBrandHeader />
         <LoadingSkeleton />
+        <ErpNextBrandFooter />
       </div>
     );
   }
@@ -1629,18 +1638,34 @@ export function KanbanViewer() {
 
   if (errorPresentation.blockingError) {
     return (
-      <div style={{ minHeight: 600, background: colors.bg.root }}>
+      <div
+        style={{
+          minHeight: 600,
+          background: colors.bg.root,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         <ErpNextBrandHeader />
         <ErrorState message={errorPresentation.blockingError} />
+        <ErpNextBrandFooter />
       </div>
     );
   }
 
   if (!state.board) {
     return (
-      <div style={{ minHeight: 600, background: colors.bg.root }}>
+      <div
+        style={{
+          minHeight: 600,
+          background: colors.bg.root,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         <ErpNextBrandHeader />
         <EmptyState />
+        <ErpNextBrandFooter />
       </div>
     );
   }

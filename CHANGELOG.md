@@ -2,6 +2,30 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [3.0.5] - 2026-10-16
+
+### Fixed
+
+- Opportunity Kanban boards support ERPNext 16's `utm_source` field while
+  preserving `source` on older instances. Source badges and detail labels work
+  with both schemas. Thanks to
+  [@dnewtonems-sketch](https://github.com/dnewtonems-sketch) for reporting
+  [#64](https://github.com/superWorldSavior/mcp-erpnext/issues/64).
+- Refreshing a newly created or submitted sales document reads that document
+  instead of repeating the creation or submission request.
+- Revenue charts, monthly KPIs and profit/loss charts keep ERPNext calendar
+  dates in the correct month across timezones. Overdue KPIs use the local
+  calendar day.
+- JSR installations load viewer HTML from the published package URL. Remote
+  reads have a timeout and share successful fetches; missing network permission
+  is reported at startup without prompting on stdio.
+
+### Changed
+
+- All seven viewers show the Casys logo and signature in their footer. Shared
+  colors, separators and table headings follow the beta's visual style, with
+  readable light/dark contrast and existing viewer interactions preserved.
+
 ## [3.0.4] - 2026-09-07
 
 ### Fixed

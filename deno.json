@@ -11,11 +11,15 @@
     "compile": "deno compile -A --output mcp-erpnext server.ts",
     "test": "deno test --allow-all src/",
     "ui:build": "cd src/ui && node build-all.mjs",
+    "ui:check:context": "cd src/ui && npx tsc --project tsconfig.context.json --noEmit",
     "inspect": "deno run --allow-all server.ts --inspect",
     "check": "deno check mod.ts server.ts",
     "pre-commit": "deno fmt --check && deno lint && deno task check",
     "release:check": "bash scripts/release-check.sh",
-    "hooks:install": "bash scripts/install-hooks.sh"
+    "hooks:install": "bash scripts/install-hooks.sh",
+    "test:scripts": "deno test --allow-all scripts/",
+    "notices:write": "node scripts/third-party-notices.mjs --write",
+    "notices:check": "node scripts/third-party-notices.mjs --check"
   },
   "exports": {
     ".": "./mod.ts",
@@ -28,12 +32,15 @@
       "src/**/*.ts",
       "src/ui/dist/",
       "README.md",
-      "LICENSE"
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.txt"
     ],
     "exclude": [
       "**/*_test.ts",
       "**/*.test.ts",
-      "**/*.bench.ts"
+      "**/*.bench.ts",
+      "src/ui/*-viewer/**",
+      "src/ui/shared/**"
     ]
   },
   "lint": {

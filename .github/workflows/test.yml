@@ -30,5 +30,11 @@ jobs:
           npm ci
           npm run build
 
+      - name: Context viewer types
+        run: deno task ui:check:context
+
       - name: Tests
         run: deno test --allow-all src/
+
+      - name: Release script tests
+        run: deno task test:scripts

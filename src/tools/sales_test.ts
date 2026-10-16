@@ -9,6 +9,7 @@
 
 import { assertEquals, assertRejects } from "@std/assert";
 import { salesTools } from "./sales.ts";
+import { withUiRefreshRequest } from "./ui-refresh.ts";
 import { AmbiguousLinkError } from "../api/resolve.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
@@ -43,6 +44,118 @@ function getTool(name: string) {
   const tool = salesTools.find((t) => t.name === name);
   if (!tool) throw new Error(`Tool not found: ${name}`);
   return tool;
+}
+
+interface RefreshableSalesResult {
+  data: Record<string, unknown>;
+  refreshRequest: {
+    toolName: string;
+    arguments: Record<string, unknown>;
+  };
+}
+
+for (
+  const [entity, doctype] of [
+    ["sales_order", "Sales Order"],
+    ["sales_invoice", "Sales Invoice"],
+    ["quotation", "Quotation"],
+  ]
+) {
+  Deno.test(`erpnext_${entity}_create - viewer refresh reads the created document without recreating it`, async () => {
+    const calls: string[] = [];
+    const client = makeMockClient({
+      create: async (actualDoctype: string) => {
+        calls.push(`create:${actualDoctype}`);
+        return { name: "NEW-001", grand_total: 100 };
+      },
+      get: async (actualDoctype: string, name: string) => {
+        calls.push(`get:${actualDoctype}:${name}`);
+        return actualDoctype === "Customer" ? { name } : { grand_total: 100 };
+      },
+    });
+    const tool = getTool(`erpnext_${entity}_create`);
+    const input = {
+      customer: "CUST-001",
+      quotation_to: "Customer",
+      party_name: "CUST-001",
+      items: [{ item_code: "ITEM-001", qty: 1, rate: 100 }],
+    };
+    const result = withUiRefreshRequest(
+      await tool.handler(input, makeCtx(client)),
+      tool.name,
+      input,
+    ) as RefreshableSalesResult;
+
+    assertEquals(result.data, { name: "NEW-001", grand_total: 100, doctype });
+    assertEquals(result.refreshRequest, {
+      toolName: `erpnext_${entity}_get`,
+      arguments: { name: "NEW-001" },
+    });
+    const callsBeforeRefresh = [...calls];
+    const refreshed = await getTool(result.refreshRequest.toolName).handler(
+      result.refreshRequest.arguments,
+      makeCtx(client),
+    ) as RefreshableSalesResult;
+
+    assertEquals(calls, [...callsBeforeRefresh, `get:${doctype}:NEW-001`]);
+    assertEquals(refreshed.data, {
+      name: "NEW-001",
+      grand_total: 100,
+      doctype,
+    });
+  });
+}
+
+for (
+  const [entity, doctype] of [
+    ["sales_order", "Sales Order"],
+    ["sales_invoice", "Sales Invoice"],
+  ]
+) {
+  Deno.test(`erpnext_${entity}_submit - viewer refresh reads without resubmitting`, async () => {
+    const calls: string[] = [];
+    const client = makeMockClient({
+      get: async (
+        actualDoctype: string,
+        name: string,
+        options?: { skipCache?: boolean },
+      ) => {
+        calls.push(`get:${actualDoctype}:${name}:${!!options?.skipCache}`);
+        return { name, modified: "2026-01-01 00:00:00" };
+      },
+      callMethod: async (method: string) => {
+        calls.push(method);
+        return { docstatus: 1 };
+      },
+      invalidate: (actualDoctype: string, name: string) => {
+        calls.push(`invalidate:${actualDoctype}:${name}`);
+      },
+    });
+    const tool = getTool(`erpnext_${entity}_submit`);
+    const input = { name: "DOC-001" };
+    const result = withUiRefreshRequest(
+      await tool.handler(input, makeCtx(client)),
+      tool.name,
+      input,
+    ) as RefreshableSalesResult;
+
+    assertEquals(result.data, { name: "DOC-001", doctype, docstatus: 1 });
+    assertEquals(result.refreshRequest, {
+      toolName: `erpnext_${entity}_get`,
+      arguments: input,
+    });
+    await getTool(result.refreshRequest.toolName).handler(
+      result.refreshRequest.arguments,
+      makeCtx(client),
+    );
+
+    assertEquals(calls, [
+      `get:${doctype}:DOC-001:true`,
+      "frappe.client.submit",
+      `invalidate:${doctype}:DOC-001`,
+      `get:${doctype}:DOC-001:false`,
+    ]);
+  });
 }
 
 // ── erpnext_customer_list ─────────────────────────────────────────────────────

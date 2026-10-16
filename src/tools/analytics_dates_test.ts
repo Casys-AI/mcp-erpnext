@@ -117,11 +117,20 @@ for (const timezone of ["America/Los_Angeles", "Asia/Taipei"]) {
         value: number;
         delta: number;
         sparkline: number[];
+        sparklineLabels: string[];
       };
 
       assertEquals(result.value, 100);
       assertEquals(result.delta, 100);
       assertEquals(result.sparkline, [10, 0, 0, 0, 50, 100]);
+      assertEquals(result.sparklineLabels, [
+        "Aug 25",
+        "Sep 25",
+        "Oct 25",
+        "Nov 25",
+        "Dec 25",
+        "Jan 26",
+      ]);
       assertEquals(filters, [
         ["transaction_date", ">=", "2025-08-01"],
         ["docstatus", "!=", 2],

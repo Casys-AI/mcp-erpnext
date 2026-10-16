@@ -1,5 +1,8 @@
-import { createRoot } from "react-dom/client";
-import "~/global.css";
+/** @jsxImportSource preact */
+import { render } from "preact";
+import "~/shared/viewer.css";
+import { applyCasysTheme, themeFromSearch } from "~/shared/casys-theme";
 import { FunnelViewer } from "./FunnelViewer";
 
-createRoot(document.getElementById("app")!).render(<FunnelViewer />);
+applyCasysTheme(themeFromSearch());
+render(<FunnelViewer />, document.getElementById("app")!);

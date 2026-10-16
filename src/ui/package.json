@@ -14,15 +14,20 @@
     "dev:funnel": "UI_NAME=funnel-viewer vite --config vite.single.config.mjs"
   },
   "dependencies": {
+    "@casys/mcp-view-components": "0.7.1",
     "@modelcontextprotocol/ext-apps": "^1.7.1",
+    "preact": "10.29.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^3.8.1"
   },
   "devDependencies": {
+    "@preact/preset-vite": "2.10.6",
+    "@tailwindcss/vite": "4.3.3",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.1",
+    "tailwindcss": "4.3.3",
     "typescript": "^5.5.3",
     "vite": "^6.0.0",
     "vite-plugin-singlefile": "^2.0.3"

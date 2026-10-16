@@ -8,6 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOCLIST_META, INVOICE_META } from "./viewer-meta.ts";
 import { resolveCustomer, resolveDynamicLink } from "../api/resolve.ts";
 import {
@@ -450,7 +451,7 @@ export const salesTools: ErpNextTool[] = [
         data.set_warehouse = input.set_warehouse as string;
       }
 
-      const doc = await ctx.client.create("Sales Order", data);
+      const doc = await createWithDiagnostics(ctx.client, "Sales Order", data);
 
       return {
         data: viewerDocument(doc, "Sales Order"),
@@ -807,7 +808,11 @@ export const salesTools: ErpNextTool[] = [
         data.set_warehouse = input.set_warehouse as string;
       }
 
-      const doc = await ctx.client.create("Sales Invoice", data);
+      const doc = await createWithDiagnostics(
+        ctx.client,
+        "Sales Invoice",
+        data,
+      );
       return {
         data: viewerDocument(doc, "Sales Invoice"),
         message: `Sales Invoice ${doc.name} created successfully`,
@@ -1079,7 +1084,7 @@ export const salesTools: ErpNextTool[] = [
         data.plc_conversion_rate = 1;
       }
 
-      const doc = await ctx.client.create("Quotation", data);
+      const doc = await createWithDiagnostics(ctx.client, "Quotation", data);
       return {
         data: viewerDocument(doc, "Quotation"),
         message: `Quotation ${doc.name} created successfully`,

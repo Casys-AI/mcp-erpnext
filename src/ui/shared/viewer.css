@@ -1,0 +1,265 @@
+/**
+ * ERPNext MCP Apps UI — feuille racine.
+ *
+ * tokens.css tire Tailwind, les polices embarquées et la charte Direction B v2.
+ * Ici on ne garde que ce qui relève du document lui-même : la vue est rendue
+ * dans une iframe d'hôte MCP, donc <html> porte le fond et le rayon de la carte.
+ */
+
+@import "./tokens.css";
+
+@layer base {
+  /**
+   * Surtout ne pas poser de font-size ici : `rem` se rapporte à la racine, et
+   * l'echelle d'espacement de Tailwind est en rem. Un `html { font-size:13px }`
+   * rétrécirait tout paddings, tailles et rayons compris de 19 %, et les cibles
+   * tactiles de 40 px de la maquette n'en feraient plus que 32.
+   */
+  html {
+    overflow: hidden;
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+  }
+
+  body {
+    overflow: auto;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /**
+   * Écriture de droite à gauche (ourdou, `dir="rtl"` posé par
+   * applyDocumentLocale) : l'espacement de lettres des labels mono est retiré.
+   * Sur une écriture cursive il n'espace rien de propre — les lettres restent
+   * liées — et Chrome comble l'écart par des allongements (kashida) dans le
+   * mot. La casse haute, elle, est sans effet sur cette écriture : inutile d'y
+   * toucher, et le latin qui s'y mêle (noms de DocType) garde sa charte.
+   *
+   * On remet à zéro les jetons plutôt que chaque classe : tout `tracking-*`
+   * positif de la charte suit, sans cas par cas. Les jetons négatifs
+   * (`--tracking-title`, `--tracking-metric`) serrent des chiffres latins et
+   * restent.
+   */
+  :root[dir="rtl"] {
+    --tracking-mono: 0;
+    --tracking-chip: 0;
+    --tracking-live: 0;
+    --tracking-label: 0;
+    --tracking-eyebrow: 0;
+  }
+
+  /**
+   * Les chiffres s'alignent verticalement partout où ils sont en colonne —
+   * montants, quantités, totaux. La maquette applique tabular-nums sur chaque
+   * cellule numérique ; le poser sur la police mono évite de le répéter.
+   */
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /**
+   * Barre dégradée de 2 px en tête de chaque vue — le motif signature de la
+   * direction, cyan → violet Casys. Utilitaire plutôt que composant : le
+   * gradient a besoin des deux tokens à la fois, ce qu'aucune classe Tailwind
+   * ne compose seule.
+   */
+  .brand-rule {
+    height: 2px;
+    flex-shrink: 0;
+    background: linear-gradient(
+      90deg,
+      var(--color-accent) 0%,
+      var(--color-brand) 100%
+    );
+  }
+
+  /* Ascenseurs discrets : dans une iframe étroite, la barre native mange la colonne. */
+  .scroll-slim::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scroll-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-slim::-webkit-scrollbar-thumb {
+    border-radius: 3px;
+    background: var(--color-line);
+  }
+  .scroll-slim::-webkit-scrollbar-thumb:hover {
+    background: var(--color-line-hover);
+  }
+
+  /**
+   * Bord droit estompé d'une bande qui défile horizontalement.
+   *
+   * La maquette signale la suite d'une liste de chips en coupant le dernier à
+   * 40 % d'opacité, dans un conteneur `overflow:hidden`. Pris au pied de la
+   * lettre, les filtres tronqués deviendraient inatteignables — or le mobile
+   * est le contexte où filtrer compte le plus. On garde donc le défilement et
+   * on reproduit le signal par un dégradé : même lecture, sans impasse.
+   */
+  .fade-edge-r {
+    mask-image: linear-gradient(
+      to right,
+      #000 calc(100% - 32px),
+      transparent 100%
+    );
+  }
+
+  /**
+   * Chevron des listes déroulantes.
+   *
+   * `appearance-none` retire celui du système — seule pièce de l'interface
+   * dessinée par l'OS, et la plus visible en thème sombre où il arrive gris
+   * clair sur fond noir. On le redessine ici plutôt qu'en valeur arbitraire
+   * Tailwind : les guillemets d'un `url()` ne survivent pas au parseur de
+   * classes, et le résultat serait un select sans aucune affordance.
+   *
+   * `currentColor` n'existe pas dans une image de fond, d'où le masque : la
+   * teinte vient du token et suit donc le thème.
+   */
+  .select-chevron {
+    appearance: none;
+    padding-inline-end: 2rem;
+    background-image: none;
+  }
+
+  .select-chevron::-ms-expand {
+    display: none;
+  }
+
+  .select-chevron-wrap {
+    position: relative;
+    display: block;
+  }
+
+  .select-chevron-wrap::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    inset-inline-end: 0.7rem;
+    width: 11px;
+    height: 11px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    background-color: var(--color-ink-muted);
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'><path d='M3 4.5 6 7.5 9 4.5'/></svg>");
+    mask-repeat: no-repeat;
+    mask-size: contain;
+  }
+
+  /* Aide compacte du controle de detail. Elle ne participe jamais a la
+   * largeur de la ligne ou du tooltip qui la contient. */
+  .detail-toggle {
+    position: relative;
+  }
+
+  .detail-toggle::after {
+    content: attr(data-detail-hint);
+    position: absolute;
+    z-index: 40;
+    top: 50%;
+    right: calc(100% + 6px);
+    width: max-content;
+    max-width: min(
+      180px,
+      calc(100vw - 16px),
+      var(--detail-hint-max-width, 180px)
+    );
+    padding: 4px 7px;
+    transform: translateY(-50%) translateX(2px);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-chip);
+    background: var(--color-control);
+    box-shadow: var(--shadow-tooltip);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 400;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms ease, transform 120ms ease;
+  }
+
+  .detail-toggle:hover::after,
+  .detail-toggle:focus-visible::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+
+  .detail-toggle[data-detail-hint-side="right"]::after {
+    right: auto;
+    left: calc(100% + 6px);
+    transform: translateY(-50%) translateX(-2px);
+  }
+
+  .detail-toggle[data-detail-hint-side="right"]:hover::after,
+  .detail-toggle[data-detail-hint-side="right"]:focus-visible::after {
+    transform: translateY(-50%) translateX(0);
+  }
+
+  @media (pointer: coarse) {
+    .detail-toggle {
+      min-width: 40px;
+      min-height: 40px;
+    }
+  }
+
+  @media (hover: none) {
+    .detail-toggle::after {
+      display: none;
+    }
+  }
+
+  /* Conteneurs à défilement par glisser — aucune barre visible. */
+  .drag-scroll {
+    scrollbar-width: none;
+  }
+  .drag-scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  .skeleton {
+    border-radius: var(--radius-chip);
+    background: linear-gradient(
+      90deg,
+      var(--color-sunken) 25%,
+      var(--color-row-hover) 50%,
+      var(--color-sunken) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

@@ -29,6 +29,19 @@ import { CHART_META, FUNNEL_META, KPI_META } from "./viewer-meta.ts";
  */
 const MAX_RADAR_ITEMS = 8;
 
+function monthlyLabels(now: Date, count: number): string[] {
+  return Array.from({ length: count }, (_, index) => {
+    const month = new Date(
+      now.getFullYear(),
+      now.getMonth() - count + index + 1,
+      1,
+    );
+    return `${month.toLocaleString("en", { month: "short" })} ${
+      String(month.getFullYear()).slice(-2)
+    }`;
+  });
+}
+
 /** Calendar dates from Frappe are date-only values, not UTC instants. */
 export function frappeCalendarMonth(
   value: unknown,
@@ -980,6 +993,7 @@ export const analyticsTools: ErpNextTool[] = [
         trend: delta > 0 ? "up" : delta < 0 ? "down" : "flat",
         trendIsGood: true,
         sparkline,
+        sparklineLabels: monthlyLabels(now, sparkline.length),
         color: "#60a5fa",
         _meta: KPI_META,
       };

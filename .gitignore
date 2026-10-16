@@ -10,3 +10,6 @@ src/ui/node_modules/
 .serena/
 .DS_Store
 **/.DS_Store
+
+# UI bundle provenance for third-party notices
+src/ui/.build-meta/

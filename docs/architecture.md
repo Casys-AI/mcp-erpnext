@@ -43,8 +43,8 @@ src/
     stock-viewer/     # Stock balance (detail panel, sendMessage)
     chart-viewer/     # Universal chart renderer (12 types, click drill-down)
     kanban-viewer/    # Read-write kanban (drag, edit, sendMessage)
-    kpi-viewer/       # KPI card (clickable number + sparkline)
-    funnel-viewer/    # Sales funnel (trapezoid stages, click-through)
+    kpi-viewer/       # Preact KPI card (context selection + conversation details)
+    funnel-viewer/    # Preact sales funnel (context selection + conversation details)
     viewers.ts        # Viewer registry
 docs/
   ROADMAP.md          # Feature roadmap

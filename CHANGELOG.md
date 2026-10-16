@@ -2,6 +2,26 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- KPI trend charts and sales-funnel stages can be selected as context for the
+  next conversation turn. Clicking again removes the selection; the context
+  control can remove individual selections or clear them together. Pending or
+  rejected updates remain visible. This uses the host's MCP Apps context
+  capability and does not add tools.
+
+### Changed
+
+- KPI and funnel viewers use the beta's responsive interface. The other five
+  viewers keep their existing rendering and interactions.
+
+### Fixed
+
+- KPI growth percentages retain the scale returned by ERPNext. Funnel stage
+  amounts include the currency supplied by the tool result.
+
 ## [3.0.5] - 2026-10-16
 
 ### Fixed

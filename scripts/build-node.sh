@@ -104,6 +104,7 @@ node -e '
   --target=node20 \
   --format=esm \
   --outfile=bin/mcp-erpnext.mjs \
+  --metafile=esbuild-metafile.json \
   --external:node:* \
   --banner:js='import { createRequire } from "node:module"; const require = createRequire(import.meta.url);'
 tmp_shebang="$(mktemp)"
@@ -112,6 +113,7 @@ cat bin/mcp-erpnext.mjs >> "$tmp_shebang"
 mv "$tmp_shebang" bin/mcp-erpnext.mjs
 chmod +x bin/mcp-erpnext.mjs
 cp -r src/ui/dist bin/ui-dist
+cp "$ROOT_DIR/LICENSE" "$ROOT_DIR/THIRD_PARTY_NOTICES.txt" bin/
 cp README.md bin/README.md 2>/dev/null || cp ../README.md bin/README.md 2>/dev/null || true
 
 cat > bin/package.json <<PKGJSON
@@ -126,7 +128,9 @@ cat > bin/package.json <<PKGJSON
   "files": [
     "mcp-erpnext.mjs",
     "ui-dist/**/*",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.txt"
   ],
   "keywords": [
     "mcp",

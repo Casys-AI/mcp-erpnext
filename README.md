@@ -180,21 +180,33 @@ until it exists. See
 Seven interactive [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
 viewers, registered as `ui://mcp-erpnext/{name}`:
 
-| Viewer           | Description                                                      | Interactive Features                                                                                                                               |
-| ---------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `doclist-viewer` | Generic document table with sort, filter, pagination, CSV export | Row click → inline detail panel with Submit/Cancel + sendMessage navigation. Chip filters for status columns. Max 6 columns, rest in detail panel. |
-| `invoice-viewer` | Sales/Purchase Invoice with parties, items, totals               | Item click → stock balance + item info panel. Submit/Cancel/Payment actions. sendMessage to payment entries and customer invoices.                 |
-| `stock-viewer`   | Stock balance table with color-coded qty badges                  | Row click → item info + recent movements. sendMessage to stock chart, item details, stock entries.                                                 |
-| `chart-viewer`   | Universal chart renderer (12 types via Recharts)                 | Click bar/pie/line data points → sendMessage drill-down into underlying documents.                                                                 |
-| `kanban-viewer`  | Read-write kanban for Task, Opportunity, Issue                   | Drag-and-drop moves, inline edit (priority, progress, dates), sendMessage to Timesheets/Quotations/Related docs.                                   |
-| `kpi-viewer`     | Big number card with delta, sparkline, trend                     | Click number → sendMessage to exception list. Click sparkline → trend chart.                                                                       |
-| `funnel-viewer`  | Trapezoid sales funnel with conversion rates                     | Click stage → sendMessage to document list at that stage. Stage action buttons.                                                                    |
+| Viewer           | Description                                                             | Interactive Features                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `doclist-viewer` | Generic document table with sort, filter, pagination, CSV export        | Row click → inline detail panel with Submit/Cancel + sendMessage navigation. Chip filters for status columns. Max 6 columns, rest in detail panel. |
+| `invoice-viewer` | Sales/Purchase Invoice with parties, items, totals                      | Item click → stock balance + item info panel. Submit/Cancel/Payment actions. sendMessage to payment entries and customer invoices.                 |
+| `stock-viewer`   | Stock balance table with color-coded qty badges                         | Row click → item info + recent movements. sendMessage to stock chart, item details, stock entries.                                                 |
+| `chart-viewer`   | Universal chart renderer (12 types via Recharts)                        | Click bar/pie/line data points → sendMessage drill-down into underlying documents.                                                                 |
+| `kanban-viewer`  | Read-write kanban for Task, Opportunity, Issue                          | Drag-and-drop moves, inline edit (priority, progress, dates), sendMessage to Timesheets/Quotations/Related docs.                                   |
+| `kpi-viewer`     | Responsive KPI card with delta and monthly trend                        | Select trend data/months as context; double-click or Enter requests details in the conversation. Scalar-only KPIs have no selection control.       |
+| `funnel-viewer`  | Responsive sales funnel with stage counts, amounts and conversion rates | Click/Space selects or removes a stage from context; double-click, Enter or the explicit Ask button requests details in the conversation.          |
+
+### Context selection in KPI and funnel
+
+On hosts that support `app.updateModelContext()`, selecting an element prepares
+context for the next conversation turn. It does not send a chat message. Click
+again or use the Context control to remove a selection or clear the basket.
+Pending and rejected updates are shown separately from confirmed selections.
+Refreshing keeps the selections that still exist and updates their values.
+
+KPI and funnel use the new Preact/Tailwind interface. The other five viewers
+retain their existing React interface and interactions. Detail requests in these
+two viewers use the conversation; they do not open nested document editors.
 
 ### Cross-viewer navigation
 
 Viewers communicate via `app.sendMessage()` — clicking a button in one viewer
-injects a message into the conversation, which triggers the AI to call the right
-tool and open the appropriate viewer.
+sends a request to the conversation for the assistant to open the requested
+data.
 
 The server auto-injects navigation metadata into tool results:
 
@@ -216,7 +228,7 @@ All viewers carry a `refreshRequest` payload for safe revalidation via
 
 ```bash
 cd src/ui
-npm install
+npm ci
 node build-all.mjs
 ```
 

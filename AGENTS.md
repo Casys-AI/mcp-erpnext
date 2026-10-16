@@ -19,13 +19,14 @@ workflows, and interactive UI viewers. Published as `@casys/mcp-erpnext` on npm
 - **Config**: `deno.json` is the primary config (version, tasks, import map).
   `src/ui/package.json` manages UI-only npm deps (React, Vite, Recharts).
 - **Source code**: all under `src/`. Server-side TypeScript uses Deno
-  conventions; UI viewers use Vite/React with standard npm imports.
+  conventions; UI viewers use Vite with React or Preact and standard npm
+  imports.
 - **Tool categories**: one file per category under `src/tools/` (`sales.ts`,
   `inventory.ts`, `accounting.ts`, etc.). All registered in `src/tools/mod.ts`.
 - **Tests**: colocated with source files (Deno convention) — `foo.ts` /
   `foo_test.ts`. Not all modules have tests yet; the convention is the target,
   not a guarantee.
-- **UI viewers**: each viewer is a standalone React app under
+- **UI viewers**: each viewer is a standalone UI app under
   `src/ui/{viewer-name}/`, bundled to a single HTML file. Built output goes to
   `src/ui/dist/` (gitignored but included in published artifacts via `deno.json`
   publish config).
@@ -238,9 +239,16 @@ Card design conventions:
 
 ### UI viewers
 
-7 React viewers built with Vite, bundled as single HTML files via
+7 viewers built with Vite, bundled as single HTML files via
 `vite-plugin-singlefile`. Located under `src/ui/{viewer-name}/`. Built output
 goes to `src/ui/dist/{viewer-name}/index.html`.
+
+KPI and funnel use Preact/Tailwind and `shared/viewer.css`. The other five use
+React 18 and `global.css`. `vite.single.config.mjs` selects the stack by
+`UI_NAME`; never apply Preact aliases or the new CSS globally. Shared context
+modules and `refresh-sequence.ts` serve the two new views; keep the legacy
+`shared/refresh.ts` contract intact. Run `deno task ui:check:context` for the
+new viewers in addition to the build.
 
 Viewers: `invoice-viewer`, `stock-viewer`, `doclist-viewer`, `chart-viewer`,
 `kpi-viewer`, `funnel-viewer`, `kanban-viewer`. Resource URIs:

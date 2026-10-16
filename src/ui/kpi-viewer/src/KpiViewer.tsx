@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { fonts, formatCurrency, formatNumber } from "~/shared/theme";
-import { ErpNextBrandHeader } from "~/shared/ErpNextBrand";
+import { ErpNextBrandFooter, ErpNextBrandHeader } from "~/shared/ErpNextBrand";
 import {
   canRequestUiRefresh,
   extractToolResultText,
@@ -367,6 +367,7 @@ function KpiContent(
           )}
         </div>
       </div>
+      <ErpNextBrandFooter />
     </div>
   );
 }
@@ -500,21 +501,31 @@ export function KpiViewer() {
     };
   }, []);
 
-  if (loading) return <LoadingSkeleton />;
+  if (loading) {
+    return (
+      <>
+        <LoadingSkeleton />
+        <ErpNextBrandFooter />
+      </>
+    );
+  }
 
   if (!data) {
     return (
-      <div
-        style={{
-          padding: 32,
-          textAlign: "center",
-          color: "var(--text-muted)",
-          fontSize: 13,
-          fontFamily: fonts.sans,
-        }}
-      >
-        No KPI data — run an analytics KPI tool
-      </div>
+      <>
+        <div
+          style={{
+            padding: 32,
+            textAlign: "center",
+            color: "var(--text-muted)",
+            fontSize: 13,
+            fontFamily: fonts.sans,
+          }}
+        >
+          No KPI data — run an analytics KPI tool
+        </div>
+        <ErpNextBrandFooter />
+      </>
     );
   }
 

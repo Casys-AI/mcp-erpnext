@@ -5,8 +5,10 @@
  * Casys design: surface background + accent text, consistent with mcp-einvoice.
  */
 
-import { CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import { colors, fonts } from "./theme";
+
+const casysLogoUrl = new URL("./casys-logo.svg", import.meta.url).href;
 
 function ErpNextIcon() {
   return (
@@ -64,7 +66,11 @@ export function ErpNextBrandHeader() {
     gap: 7,
     padding: "0 14px",
     height: 30,
-    background: colors.bg.surface,
+    backgroundColor: colors.bg.root,
+    backgroundImage: "linear-gradient(90deg, var(--accent), var(--brand))",
+    backgroundSize: "100% 2px",
+    backgroundPosition: "top",
+    backgroundRepeat: "no-repeat",
     borderBottom: `1px solid ${colors.border}`,
     flexShrink: 0,
   };
@@ -112,21 +118,32 @@ export function ErpNextBrandFooter() {
     display: "flex",
     justifyContent: "flex-end",
     alignItems: "center",
-    padding: "6px 16px 8px",
-    borderTop: `1px solid ${colors.borderSubtle}`,
-    marginTop: 8,
+    gap: 7,
+    padding: "8px 16px",
+    borderTop: `1px solid ${colors.border}`,
+    marginTop: "auto",
+    flexShrink: 0,
+    background: colors.bg.root,
   };
 
   const textStyle: CSSProperties = {
-    fontFamily: fonts.sans,
+    fontFamily: fonts.mono,
     fontSize: 10,
     color: colors.text.faint,
     letterSpacing: "0.04em",
+    lineHeight: "16px",
   };
 
   return (
-    <div style={footerStyle}>
-      <span style={textStyle}>Casys AI</span>
-    </div>
+    <footer style={footerStyle}>
+      <img
+        src={casysLogoUrl}
+        alt=""
+        width={16}
+        height={16}
+        style={{ display: "block", flexShrink: 0 }}
+      />
+      <span style={textStyle}>Powered by Casys.ai</span>
+    </footer>
   );
 }

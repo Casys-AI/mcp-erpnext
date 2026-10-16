@@ -7,9 +7,11 @@
 
 /* ── Shared tokens ──────────────────────────────────────────────── */
 :root {
-  --accent: #0089ff;
-  --accent-dim: rgba(0, 137, 255, 0.15);
-  --accent-border: rgba(0, 137, 255, 0.3);
+  --accent: #0d7c8a;
+  --on-accent: #ffffff;
+  --accent-dim: rgba(13, 124, 138, 0.12);
+  --accent-border: rgba(13, 124, 138, 0.3);
+  --brand: #8a4fa3;
 
   --success: #16a34a;
   --success-dim: rgba(22, 163, 74, 0.10);
@@ -29,18 +31,18 @@
 
   /* ── Light mode (default) ──────────────────────────────────── */
   --bg-root: #ffffff;
-  --bg-surface: #f9fafb;
-  --bg-elevated: #f3f4f6;
-  --bg-hover: #e5e7eb;
-  --bg-active: #d1d5db;
+  --bg-surface: #f4f7f8;
+  --bg-elevated: #ffffff;
+  --bg-hover: #eef3f4;
+  --bg-active: #dbe3e7;
 
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #6b7280;
-  --text-faint: #9ca3af;
+  --text-primary: #101519;
+  --text-secondary: #2c3740;
+  --text-muted: #5b6a74;
+  --text-faint: #687781;
 
-  --border: #e5e7eb;
-  --border-subtle: #f3f4f6;
+  --border: #dbe3e7;
+  --border-subtle: #eef3f4;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -49,19 +51,25 @@
 /* ── Dark mode ─────────────────────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-root: #08080a;
-    --bg-surface: #111113;
-    --bg-elevated: #18181b;
-    --bg-hover: #1f1f23;
-    --bg-active: #27272a;
+    --accent: #3ec1cf;
+    --on-accent: #101519;
+    --accent-dim: rgba(62, 193, 207, 0.12);
+    --accent-border: rgba(62, 193, 207, 0.3);
+    --brand: #b47ec9;
 
-    --text-primary: #e7e5e4;
-    --text-secondary: #a8a29e;
-    --text-muted: #78716c;
-    --text-faint: #57534e;
+    --bg-root: #13161a;
+    --bg-surface: #0f1215;
+    --bg-elevated: #1a1e23;
+    --bg-hover: #181c21;
+    --bg-active: #1b2126;
 
-    --border: #27272a;
-    --border-subtle: #1f1f23;
+    --text-primary: #e6ecf0;
+    --text-secondary: #c3ccd3;
+    --text-muted: #8895a0;
+    --text-faint: #74818b;
+
+    --border: #262c33;
+    --border-subtle: #1d2227;
 
     --success: #4ade80;
     --success-dim: rgba(74, 222, 128, 0.12);

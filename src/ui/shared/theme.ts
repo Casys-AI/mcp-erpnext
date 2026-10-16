@@ -30,6 +30,7 @@ export const colors = {
     faint: cssVar("--text-faint"),
   },
   accent: cssVar("--accent"),
+  onAccent: cssVar("--on-accent"),
   accentDim: cssVar("--accent-dim"),
   border: cssVar("--border"),
   borderSubtle: cssVar("--border-subtle"),
@@ -105,6 +106,7 @@ export const styles = {
     padding: "8px 12px",
     textAlign: "left" as const,
     fontSize: "11px",
+    fontFamily: fonts.mono,
     fontWeight: 600,
     color: colors.text.muted,
     textTransform: "uppercase" as const,
@@ -125,6 +127,7 @@ export const styles = {
 
   mono: {
     fontFamily: fonts.mono,
+    fontVariantNumeric: "tabular-nums",
     fontSize: "12px",
   } as CSSProperties,
 } as const;

@@ -80,6 +80,37 @@ Requires step 1.
 }
 ```
 
+## When a creation fails
+
+`erpnext_doc_create` and the dedicated Item, Stock Entry, Sales Order, Sales
+Invoice, Quotation, Purchase Order, Delivery Note and Work Order creation tools
+add a `Recovery:` suggestion to recognized ERPNext validation errors. The
+original error remains intact. The tools do not run a separate setup check,
+fetch extra records, create master data or retry automatically.
+
+- **Invalid links:** look up the documents named by ERPNext with
+  `erpnext_doc_list` or `erpnext_doc_get`, then use their exact IDs. An invalid
+  reference does not mean the instance has no suitable master data.
+- **Required fields:** supply the fields or child rows named by ERPNext. Where
+  the error includes technical field names, the suggestion can identify an
+  Item's UOM or Item Group, a selling Price List, a Price List's currency, or
+  required warehouse fields. In `erpnext_item_create`, `uom` maps to ERPNext's
+  `stock_uom`.
+- **Missing warehouses:** Sales Orders can use item-level `warehouse` or
+  `set_warehouse`; Purchase Invoices with `update_stock` enabled need warehouses
+  on the affected stock item rows. Use warehouses belonging to the document's
+  company.
+- **Disabled Price Lists:** when ERPNext supplies the recognized English error
+  title, verify the named list and select an enabled list for the appropriate
+  selling or buying side. Other localized or unrecognized validation errors keep
+  ERPNext's original message without an inferred diagnosis.
+
+If a dedicated creation tool does not expose a field needed by the document, use
+`erpnext_doc_create` with that field inside `data`. Correct the input or the
+relevant ERPNext default before trying again. A successful draft creation does
+not establish that submission will succeed or that the whole instance is ready
+for every workflow.
+
 ## Purchase invoices
 
 The generic document tools use standard ERPNext APIs. No app, server script, or

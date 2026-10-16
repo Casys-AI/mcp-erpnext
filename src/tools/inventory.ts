@@ -8,6 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOC_META, DOCLIST_META, STOCK_META } from "./viewer-meta.ts";
 import { resolveItem } from "../api/resolve.ts";
 
@@ -152,7 +153,7 @@ export const inventoryTools: ErpNextTool[] = [
       }
       if (input.description) data.description = input.description as string;
 
-      const doc = await ctx.client.create("Item", data);
+      const doc = await createWithDiagnostics(ctx.client, "Item", data);
       return {
         data: doc,
         message: `Item ${doc.name} created successfully`,
@@ -501,7 +502,7 @@ export const inventoryTools: ErpNextTool[] = [
       if (input.posting_date) data.posting_date = input.posting_date as string;
       if (input.remarks) data.remarks = input.remarks as string;
 
-      const doc = await ctx.client.create("Stock Entry", data);
+      const doc = await createWithDiagnostics(ctx.client, "Stock Entry", data);
       return {
         data: doc,
         message: `Stock Entry ${doc.name} created successfully`,

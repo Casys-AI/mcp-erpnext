@@ -9,6 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveLink, resolveSupplier } from "../api/resolve.ts";
 
@@ -329,7 +330,7 @@ export const purchasingTools: ErpNextTool[] = [
             },
           );
 
-      const doc = await ctx.client.create("Purchase Order", {
+      const doc = await createWithDiagnostics(ctx.client, "Purchase Order", {
         supplier: await resolveLink(
           ctx.client,
           "Supplier",

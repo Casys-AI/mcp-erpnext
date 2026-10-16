@@ -10,6 +10,7 @@
 
 import type { FrappeFile, FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import {
   roundedTotalFallbackWarning,
@@ -366,7 +367,8 @@ export const operationsTools: ErpNextTool[] = [
       const doc = await withPiAccountHintsIfNeeded(
         input.doctype,
         () =>
-          ctx.client.create(
+          createWithDiagnostics(
+            ctx.client,
             input.doctype as string,
             input.data as Record<string, unknown>,
           ),

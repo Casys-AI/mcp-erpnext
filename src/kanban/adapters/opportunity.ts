@@ -177,8 +177,11 @@ function buildOpportunityCard(row: Record<string, unknown>): KanbanCard {
     badges.push({ label: "Overdue", tone: "error" });
   }
 
-  if (typeof row.source === "string" && row.source.length > 0) {
-    badges.push({ label: row.source, tone: "info" });
+  const source = [row.utm_source, row.source].find((value) =>
+    typeof value === "string" && value.length > 0
+  );
+  if (typeof source === "string") {
+    badges.push({ label: source, tone: "info" });
   }
 
   const metrics: KanbanCard["metrics"] = [];

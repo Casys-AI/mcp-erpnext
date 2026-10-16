@@ -56,3 +56,13 @@ export function exit(code: number): never {
 export function onSignal(signal: string, handler: () => void): void {
   process.on(signal, handler);
 }
+
+// ─── Permissions ─────────────────────────────────────────
+
+/**
+ * Node has no permission model for network access, and the remote viewer path
+ * is never taken there (import.meta.url is a file: URL).
+ */
+export function netPermission(_host: string): "granted" | "denied" | "prompt" {
+  return "granted";
+}

@@ -9,6 +9,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveItem } from "../api/resolve.ts";
 
@@ -265,7 +266,7 @@ export const manufacturingTools: ErpNextTool[] = [
         throw new Error("[erpnext_work_order_create] 'qty' is required");
       }
 
-      const doc = await ctx.client.create("Work Order", {
+      const doc = await createWithDiagnostics(ctx.client, "Work Order", {
         production_item: input.production_item as string,
         bom_no: input.bom_no as string,
         qty: input.qty as number,

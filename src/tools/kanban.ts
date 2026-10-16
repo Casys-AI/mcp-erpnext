@@ -2,6 +2,7 @@ import { getKanbanBoardDefinition } from "../kanban/definitions.ts";
 import { taskKanbanAdapter } from "../kanban/adapters/task.ts";
 import { opportunityKanbanAdapter } from "../kanban/adapters/opportunity.ts";
 import { issueKanbanAdapter } from "../kanban/adapters/issue.ts";
+import { isOpportunitySourceFieldError } from "../kanban/opportunity-source.ts";
 import type {
   KanbanAdapter,
   KanbanBoard,
@@ -109,13 +110,30 @@ export const kanbanTools: ErpNextTool[] = [
       const limit = Math.max(1, Number(input.limit ?? 50));
       const offset = Math.max(0, Number(input.offset ?? 0));
 
-      const rows = await ctx.client.list(doctype, {
+      const options = {
         fields: adapter.getListFields(),
         filters: adapter.buildListFilters(input),
         limit: limit + 1,
         limit_start: offset,
         order_by: "modified desc",
-      });
+      };
+      let rows;
+      try {
+        rows = await ctx.client.list(doctype, options);
+      } catch (error) {
+        if (
+          doctype !== "Opportunity" || !isOpportunitySourceFieldError(error)
+        ) {
+          throw error;
+        }
+        // ERPNext 16 renamed source; older versions still require the legacy field.
+        rows = await ctx.client.list(doctype, {
+          ...options,
+          fields: options.fields.map((field) =>
+            field === "source" ? "utm_source" : field
+          ),
+        });
+      }
 
       const hasMore = rows.length > limit;
       const visibleRows = rows.slice(0, limit) as Record<string, unknown>[];

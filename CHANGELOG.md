@@ -4,6 +4,24 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.2.0-beta.1] - 2026-10-16
+
+### Fixed
+
+- Opportunity Kanban boards support ERPNext 16's `utm_source` field while
+  preserving compatibility with earlier releases and their source badges.
+- Order KPIs and profit-and-loss charts preserve calendar dates at month
+  boundaries in all time zones.
+- Viewers loaded from JSR use bounded, shared remote reads and report actionable
+  errors when a network permission, timeout or remote response prevents loading.
+- Existing document creation tools add targeted recovery guidance for recognized
+  ERPNext prerequisite errors, preserving the original error without an extra
+  tool, prerequisite request or automatic retry.
+- KPI changes expressed as percentages retain their original percentage-point
+  value rather than being multiplied by 100.
+- Sales funnel amounts use the supplied currency in wide layouts.
+- Clearing viewer context is neutral on hosts without context-selection support.
+
 ## [3.1.0-beta.11] - 2026-09-19
 
 ### Added

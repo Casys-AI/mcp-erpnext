@@ -74,6 +74,25 @@ Deno.test("opportunity kanban adapter - maps opportunities to normalized cards",
   assertEquals(cards[0].metrics?.[1].value, "70%");
 });
 
+Deno.test("opportunity kanban adapter - shows legacy and v16 source badges", () => {
+  const cases = [
+    { row: { source: "Website" }, source: "Website" },
+    { row: { utm_source: "Referral" }, source: "Referral" },
+    { row: { source: "Legacy", utm_source: "Current" }, source: "Current" },
+    { row: { source: "Legacy", utm_source: "" }, source: "Legacy" },
+    { row: { source: null, utm_source: null }, source: undefined },
+  ];
+  for (const { row, source } of cases) {
+    const [card] = opportunityKanbanAdapter.buildCards([
+      { name: "OPP-1", status: "Open", ...row },
+    ]);
+    assertEquals(
+      card.badges,
+      source ? [{ label: source, tone: "info" }] : [],
+    );
+  }
+});
+
 Deno.test("opportunity kanban adapter - executes an allowed move through Opportunity update", async () => {
   let capturedDoctype = "";
   let capturedName = "";
@@ -105,6 +124,7 @@ Deno.test("opportunity kanban adapter - executes an allowed move through Opportu
           currency: "EUR",
           probability: 70,
           opportunity_owner: "alice@example.com",
+          utm_source: "Website",
         };
       },
     } as unknown) as ErpNextToolContext["client"],
@@ -122,6 +142,10 @@ Deno.test("opportunity kanban adapter - executes an allowed move through Opportu
   assertEquals(capturedData, { status: "Quotation" });
   assertEquals(result.ok, true);
   assertEquals(result.serverCard?.columnId, "quotation");
+  assertEquals(result.serverCard?.badges?.at(-1), {
+    label: "Website",
+    tone: "info",
+  });
 });
 
 Deno.test("opportunity kanban adapter - rejects stale client state before update", async () => {

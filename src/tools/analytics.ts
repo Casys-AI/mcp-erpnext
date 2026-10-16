@@ -1049,8 +1049,8 @@ export const analyticsTools: ErpNextTool[] = [
       }-01`;
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-      const lastMonthStartStr = lastMonthStart.toISOString().split("T")[0];
-      const lastMonthEndStr = lastMonthEnd.toISOString().split("T")[0];
+      const lastMonthStartStr = localCalendarDate(lastMonthStart);
+      const lastMonthEndStr = localCalendarDate(lastMonthEnd);
 
       const currentOrders = await ctx.client.list("Sales Order", {
         fields: ["grand_total"],
@@ -1690,7 +1690,7 @@ export const analyticsTools: ErpNextTool[] = [
         now.getMonth() - monthsBack + 1,
         1,
       );
-      const startStr = startDate.toISOString().split("T")[0];
+      const startStr = localCalendarDate(startDate);
 
       // Income and expenses are the same query against two doctypes, with no
       // dependency between them — one round-trip instead of two.
@@ -1739,18 +1739,20 @@ export const analyticsTools: ErpNextTool[] = [
       const expenses = new Array(monthsBack).fill(0) as number[];
 
       for (const so of salesOrders) {
-        const d = new Date(so.transaction_date as string);
-        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
-          d.getMonth() - startDate.getMonth();
+        const calendarMonth = frappeCalendarMonth(so.transaction_date);
+        if (!calendarMonth) continue;
+        const mIdx = (calendarMonth.year - startDate.getFullYear()) * 12 +
+          calendarMonth.month - startDate.getMonth();
         if (mIdx >= 0 && mIdx < monthsBack) {
           income[mIdx] += Number(so.grand_total) || 0;
         }
       }
 
       for (const po of purchaseOrders) {
-        const d = new Date(po.transaction_date as string);
-        const mIdx = (d.getFullYear() - startDate.getFullYear()) * 12 +
-          d.getMonth() - startDate.getMonth();
+        const calendarMonth = frappeCalendarMonth(po.transaction_date);
+        if (!calendarMonth) continue;
+        const mIdx = (calendarMonth.year - startDate.getFullYear()) * 12 +
+          calendarMonth.month - startDate.getMonth();
         if (mIdx >= 0 && mIdx < monthsBack) {
           expenses[mIdx] += Number(po.grand_total) || 0;
         }

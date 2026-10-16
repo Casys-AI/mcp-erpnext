@@ -2,7 +2,7 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
-## [Unreleased]
+## [3.0.5] - 2026-10-16
 
 ### Fixed
 

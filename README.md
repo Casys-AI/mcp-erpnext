@@ -69,6 +69,16 @@ results.
 
 ## What's New
 
+**3.1.0 is the stable release.** KPI and funnel viewers now use the refreshed
+interface and support selecting context for the next conversation turn.
+Recognized creation errors include recovery guidance in the existing tools. The
+other five viewers keep their existing interactions.
+
+For stable npm installations use `@casys/mcp-erpnext@latest`; for Deno use
+`jsr:@casys/mcp-erpnext@3.1.0/server`. The separate 3.2 beta remains on npm
+`@next` and includes the generic document viewer, attachment workflows and Buy
+evidence features.
+
 See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
 [latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for
 the current version's highlights.

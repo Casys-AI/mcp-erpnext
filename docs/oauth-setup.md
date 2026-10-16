@@ -36,10 +36,9 @@ also publishes the matching RFC 9728 metadata at
 `/.well-known/oauth-protected-resource/mcp`; make sure a reverse proxy forwards
 that path too.
 
-The planned, unreleased 3.0.0 HTTP surface uses MCP 2026-07-28. An MCP request
-must include `MCP-Protocol-Version`, `Mcp-Method`, and the `_meta` protocol
-envelope shown below. `clientInfo` is recommended by the protocol (SHOULD), not
-required.
+Since 3.0.0, the HTTP surface uses MCP 2026-07-28. An MCP request must include
+`MCP-Protocol-Version`, `Mcp-Method`, and the `_meta` protocol envelope shown
+below. `clientInfo` is recommended by the protocol (SHOULD), not required.
 
 ---
 

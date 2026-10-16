@@ -67,6 +67,14 @@ Code、VS Code Copilot 或自訂代理）。
 
 ## 最新異動
 
+**3.1.0 是目前的穩定版。** KPI 與銷售漏斗檢視器採用更新的介面，並可選取內容作為
+下一輪對話的上下文。既有建立工具會針對可辨識的錯誤提供修正建議，其餘五個檢視器
+保留原有的互動方式。
+
+npm 穩定版使用 `@casys/mcp-erpnext@latest`；Deno 使用
+`jsr:@casys/mcp-erpnext@3.1.0/server`。獨立的 3.2 測試版使用 npm `@next`，
+包含通用文件檢視器、附件工作流程及 Buy 證據功能。
+
 完整的發布歷程請參閱
 [CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
 

@@ -4,6 +4,8 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-16
+
 ### Added
 
 - KPI trend charts and sales-funnel stages can be selected as context for the

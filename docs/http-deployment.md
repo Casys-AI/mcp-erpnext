@@ -16,8 +16,8 @@ the server lives somewhere other than the user's machine.
 
 ## HTTP mode
 
-> **Implemented in unreleased 3.0.0 — HTTP clients only.** The HTTP transport is
-> stateless (MCP spec 2026-07-28). Every request must carry
+> **Since 3.0.0 — HTTP clients only.** The HTTP transport is stateless (MCP spec
+> 2026-07-28). Every request must carry
 > `params._meta["io.modelcontextprotocol/protocolVersion"]`; clients that omit
 > it are rejected. The official TypeScript SDK v1 line is affected. **stdio is
 > unaffected** — if you connect via `command`/`args` above, nothing changes. See

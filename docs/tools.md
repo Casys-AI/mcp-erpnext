@@ -169,6 +169,11 @@ overview.
 | `erpnext_file_upload`  | Upload    | Attach base64 data as a native File                                      |
 | `erpnext_method_call`  | Call      | Escape hatch for whitelisted Frappe methods (deny-by-default, see below) |
 
+Recognized creation errors include recovery guidance directly in the existing
+tools, without a separate setup-check tool or additional prerequisite requests.
+See [creation error guidance](./fresh-instance-setup.md#when-a-creation-fails)
+for supported cases and field mappings.
+
 Purchase Invoice rounding is configured in ERPNext. The existing generic tools
 can set `data.disable_rounded_total: 1` on a draft to disable final rounding, or
 update the Currency configuration with appropriate permissions. No extra tool

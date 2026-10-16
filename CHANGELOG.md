@@ -19,6 +19,10 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Fixed
 
+- Recognized document-creation errors now include recovery guidance for missing
+  links, required fields, warehouses and disabled Price Lists. Existing creation
+  tools preserve ERPNext's original error and add no prerequisite calls or
+  automatic retries.
 - KPI growth percentages retain the scale returned by ERPNext. Funnel stage
   amounts include the currency supplied by the tool result.
 

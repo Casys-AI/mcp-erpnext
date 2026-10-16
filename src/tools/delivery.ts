@@ -8,6 +8,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
 import { resolveCustomer } from "../api/resolve.ts";
 
@@ -177,7 +178,7 @@ export const deliveryTools: ErpNextTool[] = [
         };
       });
 
-      const doc = await ctx.client.create("Delivery Note", {
+      const doc = await createWithDiagnostics(ctx.client, "Delivery Note", {
         customer: input.customer as string,
         items,
         posting_date: (input.posting_date as string) ?? undefined,

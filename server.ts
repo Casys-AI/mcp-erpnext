@@ -35,10 +35,17 @@ import { launchInspector, MCP_APP_MIME_TYPE, McpApp } from "@casys/mcp-server";
 import { ErpNextToolsClient } from "./src/client.ts";
 import { FrappeAPIError } from "./src/api/frappe-client.ts";
 import { UI_VIEWERS } from "./src/ui/viewers.ts";
-import { resolveViewerDistPath } from "./src/ui/viewer-resource-paths.ts";
+import {
+  isViewerNetAllowed,
+  readViewerDist,
+  remoteViewerNetTarget,
+  resolveViewerDistPath,
+  viewerNetRecovery,
+} from "./src/ui/viewer-resource-paths.ts";
 import {
   exit,
   getArgs,
+  netPermission,
   onSignal,
   readTextFile,
   statSync,
@@ -128,6 +135,8 @@ async function main() {
 
   // Register UI resources (MCP Apps viewers)
   // Built by: cd lib/erpnext/src/ui && node build-all.mjs
+  const skippedRemoteViewers: string[] = [];
+  let skippedRemoteHost = "";
   for (const viewerName of UI_VIEWERS) {
     const distPath = resolveViewerDistPath(
       import.meta.url,
@@ -141,7 +150,14 @@ async function main() {
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(" ");
 
-    if (distPath) {
+    const remoteTarget = distPath ? remoteViewerNetTarget(distPath) : null;
+    if (
+      distPath && remoteTarget !== null &&
+      !isViewerNetAllowed(netPermission(remoteTarget))
+    ) {
+      skippedRemoteViewers.push(viewerName);
+      skippedRemoteHost = new URL(distPath).hostname;
+    } else if (distPath) {
       server.registerResource(
         {
           uri: resourceUri,
@@ -150,7 +166,7 @@ async function main() {
           mimeType: MCP_APP_MIME_TYPE,
         },
         async () => {
-          const html = await readTextFile(distPath);
+          const html = await readViewerDist(distPath, readTextFile);
           return { uri: resourceUri, mimeType: MCP_APP_MIME_TYPE, text: html };
         },
       );
@@ -161,6 +177,16 @@ async function main() {
           `Run 'cd lib/erpnext/src/ui && node build-all.mjs' first or package ui-dist with the npm bundle.`,
       );
     }
+  }
+
+  if (skippedRemoteViewers.length > 0) {
+    console.error(`[mcp-erpnext] ${
+      JSON.stringify({
+        code: "VIEWER_REMOTE_PERMISSION_DENIED",
+        context: { host: skippedRemoteHost, viewers: skippedRemoteViewers },
+        recovery: viewerNetRecovery(skippedRemoteHost),
+      })
+    }`);
   }
 
   console.error(

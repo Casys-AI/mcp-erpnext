@@ -2,6 +2,47 @@
 
 All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
+## [Unreleased]
+
+## [3.2.0] - 2026-10-17
+
+First stable release of the 3.2 line. Highlights since 3.1.0:
+
+- All nine viewers run on Preact and navigate inside the view: related lists,
+  records and charts open in place, with back and breadcrumb navigation that
+  restores each level.
+- A confirmed document change propagates between levels: every potentially
+  derived snapshot in the navigation stack is marked stale until it is read
+  again. Mutations are never replayed automatically.
+- Active context selection works across the interactive viewers (charts, KPIs,
+  funnels, lists, documents, invoice lines, stock rows and attachments), capped
+  at eight compact references and supported by compatible hosts.
+- Chart, KPI and nested-chart details open from a visible button, so they are
+  reachable on touch screens without a double-click.
+- A generic `doc-viewer` presents any ERPNext document with its fields and child
+  tables.
+- Attachment workflows: list, upload and download a document's files, with
+  downloads gated on the host's capabilities.
+- Document details, in the document viewer and when opened from lists and
+  charts, follow ERPNext's own DocType metadata: preview and bold fields first,
+  under ERPNext labels, and every other field in a closed "All fields" block
+  grouped by the DocType's sections.
+- Tool selection with `ERPNEXT_CATEGORIES`, `ERPNEXT_EXCLUDE_CATEGORIES` and
+  `ERPNEXT_EXCLUDE_TOOLS` (and matching CLI flags).
+- Structured errors: input, attachment-download, viewer-resource and tool-filter
+  (`INVALID_TOOL_FILTER`) failures carry a stable `code`, a `context` and a
+  `recovery`; recognized document-creation errors add targeted recovery guidance
+  to ERPNext's original message.
+- Viewer enrichment (refresh requests, navigation jumps, tool manifests) travels
+  in `_meta["io.casys/viewer"]`, which hosts keep out of the model's context, so
+  the model reads domain data only.
+
+The details of each change are kept in the prerelease sections below:
+[3.2.0-beta.1](#320-beta1---2026-10-16), [3.2.0-beta.2](#320-beta2---2026-10-17)
+and [3.2.0-beta.3](#320-beta3---2026-10-17). The
+[3.0 to 3.1 migration guide](docs/migration-3.0-to-3.1.md) also applies when
+upgrading to 3.2.
+
 ## [3.2.0-beta.3] - 2026-10-17
 
 ### Added

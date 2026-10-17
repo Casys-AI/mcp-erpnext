@@ -10,11 +10,10 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > [!IMPORTANT]
-> **安裝 3.2 Beta：** npm/Node 請執行 `npx -y @casys/mcp-erpnext@next`；Deno
-> 請執行 `deno run -A jsr:@casys/mcp-erpnext@3.2.0-beta.3/server`。npm 的 `next`
-> 標籤會跟隨目前的預發布版本；JSR 沒有 dist-tag，因此此指令固定使用 這個 Beta
-> 版本。穩定版 **3.1.0** 可透過 npm 的 `latest` 標籤取得。 Beta
-> 保留通用文件檢視器及附件流程；在取代穩定版部署前，請使用實際的 MCP
+> **安裝 3.2：** npm/Node 請執行 `npx -y @casys/mcp-erpnext@latest`；Deno 請執行
+> `deno run -A jsr:@casys/mcp-erpnext@3.2.0/server`。3.2.0 是穩定版，並使用 npm
+> 的 `latest` 標籤；預發布版本若有發布，則使用 `next` 標籤。3.2
+> 新增通用文件檢視器及附件流程；在取代既有部署前，請使用實際的 MCP
 > 主機進行測試。發布歷程請見 [CHANGELOG](CHANGELOG.md)。
 
 讓任何相容 MCP 的 AI 智慧代理操作您的 [ERPNext](https://erpnext.com) / Frappe
@@ -75,19 +74,27 @@ Code、VS Code Copilot 或自訂代理）。
 
 ## 最新異動
 
+**3.2.0 是目前的穩定版。** 九個檢視器皆可在檢視器內導覽，並提供返回與麵包屑
+導覽；已確認的文件異動會把衍生的層級標記為過期，直到重新讀取為止。作用中內容
+選取涵蓋各互動式檢視器，圖表、KPI 與巢狀圖表的詳細資料可透過可見按鈕開啟，
+方便觸控螢幕使用。通用文件檢視器、子表格與附件流程依循 ERPNext 自身的 DocType
+中繼資料。工具選取篩選器（`ERPNEXT_CATEGORIES`、`ERPNEXT_EXCLUDE_CATEGORIES`、
+`ERPNEXT_EXCLUDE_TOOLS`）可限制部署所公開的工具；未宣告支援 MCP Apps
+的用戶端無法下載附件；錯誤採結構化格式。檢視器專用的附加資料（重新整理請求、
+導覽跳轉、工具清單）改經 `_meta` 傳遞，不再進入模型的上下文。
+
+3.2.0 同時納入穩定版 3.0.5 與 3.1.0 的建立錯誤修復指引、ERPNext 16
+商機相容性、日期、KPI 百分比及銷售漏斗幣別修正。所有功能仍依 MCP 主機能力啟用；
+Buy 證據不會執行採購，也不代表即時 ERP 已通過驗證。
+
+npm 穩定版請使用 `@casys/mcp-erpnext@latest`；Deno 請使用
+`jsr:@casys/mcp-erpnext@3.2.0/server`。
+
 完整的發布歷程請參閱
 [CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
 
-> **3.2.0-beta.3 預覽版：** 此版同步納入穩定版 3.1.0 的建立錯誤修復指引、
-> ERPNext 16 商機相容性及日期修正，並保留通用文件檢視器、子表格、附件、
-> 檢視器內導覽及已記錄的 Buy 證據。另修正 KPI 百分比變化、銷售漏斗幣別，
-> 以及不支援內容選取的主機上的清除行為；檢視器返回先前的根層級後，先前造訪
-> 的延遲回應不再覆寫之後開啟的層級。檢視器專用的附加資料（重新整理請求、
-> 導覽跳轉、工具清單）也改經 `_meta` 傳遞，不再進入模型的上下文。 所有功能仍依
-> MCP 主機能力啟用； Buy 證據不會執行採購，也不代表即時 ERP 已通過驗證。
-
 [3.0 至 3.1 遷移指南](docs/migration-3.0-to-3.1.md) 說明原始碼的契約、
-主機需求與部署限制。
+主機需求與部署限制，亦適用於從 3.0 或穩定版 3.1.0 升級至 3.2。
 
 ## 文件
 
@@ -221,8 +228,8 @@ CLI 值會分別覆寫 `ERPNEXT_CATEGORIES`、`ERPNEXT_EXCLUDE_CATEGORIES` 與
 檢視器與 Buy 結果欄位會使用主機語言：英文、法文、簡體中文、繁體中文、印地語、
 孟加拉語、泰米爾語與烏爾都語。中文的文字系統標記優先於地區標記；未指定文字
 系統時，`zh-TW`、`zh-HK` 與 `zh-MO` 會使用繁體中文。烏爾都語採用由右至左
-的文件方向。主機後續變更語言時，介面會更新語言與方向，無須重新載入。此 Beta 的
-App 等待與拒絕畫面仍使用英文；這些共用畫面的主機語言支援仍待上游 MCP View 補足。
+的文件方向。主機後續變更語言時，介面會更新語言與方向，無須重新載入。3.2 的 App
+等待與拒絕畫面仍使用英文；這些共用畫面的主機語言支援仍待上游 MCP View 補足。
 
 ### 導覽與作用中內容
 
@@ -251,7 +258,7 @@ App 等待與拒絕畫面仍使用英文；這些共用畫面的主機語言支�
 透過明確的唯讀工具讀回已提交狀態，不會自動重播寫入工具。若較新的主機資料或
 異動結果已生效，較舊或重疊的重新整理回應會被忽略。
 已確認的文件異動會把目前導覽堆疊中可能衍生的快照標記為過期；只有在該畫面
-實際重新讀取後才會移除標記。3.2 Beta 不會自動同步彼此分離的 MCP Apps。
+實際重新讀取後才會移除標記。3.2 不會自動同步彼此分離的 MCP Apps。
 
 ### 建置 UI 檢視器
 

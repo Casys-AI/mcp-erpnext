@@ -1,10 +1,12 @@
-# Migrate from 3.0 to the 3.1 beta
+# Migrate from 3.0 to 3.1 (and 3.2)
 
-The package in this checkout reports **`3.2.0-beta.3`** (not yet published). The
-3.1 changes described here are part of that beta (see the
-[CHANGELOG](../CHANGELOG.md)); the installation channels below do not acquire
-them until publication. This guide describes the current source, including those
-changes.
+The package in this checkout reports **`3.2.0`**, the stable release. The 3.1
+changes described here were developed as 3.1 prereleases and reach the stable
+channel in 3.2.0; stable 3.1.0 carried only a subset (KPI and funnel context
+selection and creation-error guidance). This guide therefore applies when you
+move from 3.0 to 3.2, and also when you move from stable 3.1.0 to 3.2. See the
+[CHANGELOG](../CHANGELOG.md) for the details of each change. This guide
+describes the current source.
 
 3.1 retains the 3.0 tool names and adds generic document presentation,
 attachments, navigation within a viewer, and bounded active context. Existing
@@ -12,12 +14,12 @@ ERPNext credentials remain valid. This is not a migration of the ERP database.
 
 ## Choose the deployment
 
-For a published beta, replace the package argument in your existing MCP host
-configuration with `@casys/mcp-erpnext@next` (npm/Node), or
-`jsr:@casys/mcp-erpnext@3.2.0-beta.3/server` (Deno). JSR has no npm-style
-dist-tags, so the Deno command pins the exact beta. Restart the server process
-after changing the configuration. An exact version such as `@3.2.0-beta.3` pins
-the package instead of following the channel.
+Replace the package argument in your existing MCP host configuration with
+`@casys/mcp-erpnext@latest` (npm/Node), or `jsr:@casys/mcp-erpnext@3.2.0/server`
+(Deno). JSR has no npm-style dist-tags, so the Deno command pins the exact
+version. Restart the server process after changing the configuration. An exact
+version such as `@casys/mcp-erpnext@3.2.0` pins the npm package instead of
+following the `latest` channel.
 
 To try the source changes in this checkout, keep your existing environment
 configuration and build the viewers before starting the server:
@@ -259,12 +261,11 @@ DocTypes. Two cache-bypassing reads must agree before returning canonical JSON,
 its digest, and byte count. The Buy Evidence viewer accepts only a validated
 recorded session; it has no live refresh or mutation controls.
 
-Its App version is now `3.1.0`, independent of the package's beta version. Hosts
-that pin an App manifest identity must update that binding when adopting these
-source changes. This does not identify a published stable package.
-Recorded-result `/1.0` and `/2.0` remain accepted; `/2.0` retains bounded
-unpriced-line metadata without assigning a monetary value. Showing sealed
-evidence does not purchase goods or qualify a live ERP instance.
+Its App version is `3.1.0`, independent of the package version (3.2.0 keeps it).
+Hosts that pin an App manifest identity must update that binding when adopting
+these changes. Recorded-result `/1.0` and `/2.0` remain accepted; `/2.0` retains
+bounded unpriced-line metadata without assigning a monetary value. Showing
+sealed evidence does not purchase goods or qualify a live ERP instance.
 
 ## Check the host journey before replacing a deployment
 

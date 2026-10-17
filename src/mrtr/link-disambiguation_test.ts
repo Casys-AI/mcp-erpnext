@@ -4,7 +4,7 @@ import {
   linkDisambiguationRequestKey,
   runWithLinkDisambiguation,
 } from "./link-disambiguation.ts";
-import type { ToolHandlerContext } from "@casys/mcp-server";
+import type { ToolHandlerContext } from "@mcpview/server";
 
 const inputPath = "customer";
 const requestKey = linkDisambiguationRequestKey(inputPath);

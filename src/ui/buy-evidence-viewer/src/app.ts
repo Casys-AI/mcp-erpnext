@@ -5,9 +5,9 @@ import {
   type SurfaceAppHandle,
   type SurfaceAppRuntime,
   type SurfaceDisplayState,
-} from "@casys/mcp-view-components/preact";
-import { installMcpViewFonts } from "@casys/mcp-view-components/fonts";
-import type { ViewComponentRegistry } from "@casys/mcp-view-components";
+} from "@mcpview/components/preact";
+import { installMcpViewFonts } from "@mcpview/components/fonts";
+import type { ViewComponentRegistry } from "@mcpview/components";
 import {
   BUY_RECORDED_SESSION_SCHEMA,
   BUY_VIEW_APP_ID,

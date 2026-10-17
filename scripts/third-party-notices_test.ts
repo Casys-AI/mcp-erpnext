@@ -267,15 +267,15 @@ Deno.test("an own package shipping no license file reuses the repository LICENSE
   const { root, write } = fixture();
   try {
     write(
-      "dist-node/node_modules/@casys/mcp-server/package.json",
+      "dist-node/node_modules/@mcpview/server/package.json",
       JSON.stringify({
-        name: "@casys/mcp-server",
-        version: "0.26.1",
+        name: "@mcpview/server",
+        version: "0.29.0",
         license: "MIT",
       }),
     );
     const roots = new Set([
-      `${root}/dist-node/node_modules/@casys/mcp-server`,
+      `${root}/dist-node/node_modules/@mcpview/server`,
     ]);
     const entries = buildEntries(new Map(), roots, "Repo terms");
     assertEquals(entries[0].hasLicenseText, true);

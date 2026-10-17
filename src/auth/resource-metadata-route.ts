@@ -1,7 +1,4 @@
-import type {
-  AuthProvider,
-  ProtectedResourceMetadata,
-} from "@casys/mcp-server";
+import type { AuthProvider, ProtectedResourceMetadata } from "@mcpview/server";
 
 type CustomHttpRoute = {
   method: "get";

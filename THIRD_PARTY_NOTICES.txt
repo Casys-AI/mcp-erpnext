@@ -12,13 +12,13 @@ viewers and of the Node bundle. Do not edit by hand; regenerate with:
 
 The embedded webfonts are maintained by hand (section 3).
 
-1. Package index (46 packages)
+1. Package index (45 packages)
 ------------------------------------------------------------------------------
 
-- @casys/mcp-server@0.26.1 (MIT) [node]
-- @casys/mcp-view@0.9.3 (MIT) [ui]
-- @casys/mcp-view-components@0.7.1 (MIT) [ui]
-- @casys/mcp-view-contracts@0.1.0 (MIT) [ui]
+- @mcpview/components@0.10.0 (MIT) [ui]
+- @mcpview/contracts@0.2.0 (MIT) [ui]
+- @mcpview/server@0.29.0 (MIT) [node]
+- @mcpview/view@0.10.0 (MIT) [ui]
 - @modelcontextprotocol/core@2.3.1 (Apache-2.0) [node]
 - @modelcontextprotocol/ext-apps@1.7.5 (MIT) [ui]
 - @modelcontextprotocol/sdk@1.29.0 (MIT) [ui]
@@ -57,7 +57,6 @@ The embedded webfonts are maintained by hand (section 3).
 - reselect@5.1.1 (MIT) [ui]
 - tiny-invariant@1.3.3 (MIT) [ui]
 - use-sync-external-store@1.6.0 (MIT) [ui]
-- yaml@2.9.1 (ISC) [node]
 - zod@4.4.3 (MIT) [ui]
 - zod@4.6.7 (MIT) [node]
 - zod-to-json-schema@3.25.2 (ISC) [ui]
@@ -69,10 +68,10 @@ The embedded webfonts are maintained by hand (section 3).
 ==============================================================================
 MIT
 Applies to:
-  @casys/mcp-server@0.26.1
-  @casys/mcp-view@0.9.3
-  @casys/mcp-view-components@0.7.1
-  @casys/mcp-view-contracts@0.1.0
+  @mcpview/components@0.10.0
+  @mcpview/contracts@0.2.0
+  @mcpview/server@0.29.0
+  @mcpview/view@0.10.0
 
 MIT License
 
@@ -1164,26 +1163,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-
-==============================================================================
-ISC
-Applies to:
-  yaml@2.9.1
-
-Copyright Eemeli Aro <eemeli@gmail.com>
-
-Permission to use, copy, modify, and/or distribute this software for any purpose
-with or without fee is hereby granted, provided that the above copyright notice
-and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
-FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
-OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
-TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
-THIS SOFTWARE.
 
 
 ==============================================================================

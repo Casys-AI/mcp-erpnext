@@ -6,7 +6,7 @@
  * pointeur qui les sépare — un téléphone est grossier, un panneau de bureau
  * est fin, à largeur identique — et qui justifie les cibles tactiles.
  *
- * La décision vit désormais dans `@casys/mcp-view-components/layout`.
+ * La décision vit désormais dans `@mcpview/components/layout`.
  *
  *   « Les listes restent des tableaux. Trois colonnes, ligne de 40 px,
  *     en-têtes conservés. » — chapeau de la section mobile · 390
@@ -15,10 +15,10 @@
 import {
   layoutFromSearch as kitLayoutFromSearch,
   useViewerLayout as useKitViewerLayout,
-} from "@casys/mcp-view-components/layout";
+} from "@mcpview/components/layout";
 import { useHostContext } from "./host-context-hook";
 
-export type { ViewerLayout } from "@casys/mcp-view-components/layout";
+export type { ViewerLayout } from "@mcpview/components/layout";
 
 export function layoutFromSearch(search = location.search) {
   return kitLayoutFromSearch(search);

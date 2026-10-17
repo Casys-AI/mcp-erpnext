@@ -6,7 +6,7 @@ version installed.
 
 ## What 3.x implements
 
-The server uses `@casys/mcp-server` `^0.26.1` and the 2026-07-28 protocol
+The server uses `@mcpview/server` `^0.29.0` and the 2026-07-28 protocol
 contract:
 
 - `server/discover` is available for capability discovery.
@@ -34,7 +34,7 @@ contract:
 request is not rejected merely because it is absent.
 
 `deno.json` preserves Deno 2.9's 24-hour minimum dependency age for every other
-package, while explicitly exempting the coordinated `jsr:@casys/mcp-server`
+package, while explicitly exempting the coordinated `jsr:@mcpview/server`
 release. This makes clean CI and Docker builds reproducible during its initial
 cooldown without globally disabling the supply-chain delay.
 

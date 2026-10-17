@@ -2,7 +2,7 @@
  * Combine multiple AuthProviders into one: a token is accepted if any
  * underlying provider accepts it. Lets static-token and OAuth JWT auth run
  * side by side (e.g. a static token for same-network tooling, OAuth for
- * external clients), which `@casys/mcp-server` doesn't provide out of the box.
+ * external clients), which `@mcpview/server` doesn't provide out of the box.
  *
  * @module lib/erpnext/src/auth/composite-provider
  */
@@ -11,7 +11,7 @@ import {
   type AuthInfo,
   AuthProvider,
   type ProtectedResourceMetadata,
-} from "@casys/mcp-server";
+} from "@mcpview/server";
 
 export class CompositeAuthProvider extends AuthProvider {
   constructor(private readonly providers: AuthProvider[]) {

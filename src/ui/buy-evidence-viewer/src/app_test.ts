@@ -2,14 +2,14 @@ import { act } from "preact/test-utils";
 import { mergeHostContext } from "../../shared/host-context.ts";
 import { assert, assertEquals } from "@std/assert";
 import { createElement } from "preact";
-import { defineComponentRegistry } from "@casys/mcp-view-components";
-import { definePreactComponent } from "@casys/mcp-view-components/preact";
+import { defineComponentRegistry } from "@mcpview/components";
+import { definePreactComponent } from "@mcpview/components/preact";
 import {
   fakeApp,
   PERMISSIONS,
   until,
   withDocument,
-} from "@casys/mcp-view-components/testing";
+} from "@mcpview/components/testing";
 import {
   SESSION_REJECTED_CODE,
   startBuyEvidenceApp,

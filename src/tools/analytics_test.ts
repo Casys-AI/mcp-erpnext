@@ -10,7 +10,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { assert, assertEquals, assertRejects } from "@std/assert";
-import { SchemaValidator } from "@casys/mcp-server";
+import { SchemaValidator } from "@mcpview/server";
 import {
   analyticsTools,
   frappeCalendarMonth,

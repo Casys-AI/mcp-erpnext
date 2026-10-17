@@ -13,7 +13,7 @@ import {
   assertRejects,
   assertStrictEquals,
 } from "@std/assert";
-import { SchemaValidator } from "@casys/mcp-server";
+import { SchemaValidator } from "@mcpview/server";
 import { FileDownloadError } from "./file-download-error.ts";
 import { operationsTools } from "./operations.ts";
 import { FrappeAPIError } from "../api/frappe-client.ts";

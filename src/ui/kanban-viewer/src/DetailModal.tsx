@@ -2,7 +2,7 @@
 /**
  * Panneau de détail de carte kanban — Direction B v2.
  *
- * Aucun import de @casys/mcp-view : les primitives viennent de ~/shared/ui.
+ * Aucun import de @mcpview/view : les primitives viennent de ~/shared/ui.
  */
 import type { JSX } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";

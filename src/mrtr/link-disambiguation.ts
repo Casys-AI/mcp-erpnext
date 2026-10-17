@@ -6,10 +6,7 @@
  */
 
 import { AmbiguousLinkError } from "../api/resolve.ts";
-import type {
-  InputRequiredSignal,
-  ToolHandlerContext,
-} from "@casys/mcp-server";
+import type { InputRequiredSignal, ToolHandlerContext } from "@mcpview/server";
 
 export interface LinkDisambiguationResult {
   result: unknown;

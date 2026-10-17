@@ -20,7 +20,7 @@ import {
   VIEWER_ONLY_RESULT_KEYS,
 } from "./tools/model-visible.ts";
 import type { ErpNextTool, ErpNextToolContext } from "./tools/types.ts";
-import type { ToolHandlerContext } from "@casys/mcp-server";
+import type { ToolHandlerContext } from "@mcpview/server";
 
 // Note: Error handling previously tested here (isError wrapping) has been moved
 // to the server layer via toolErrorMapper in server.ts. Handlers now throw

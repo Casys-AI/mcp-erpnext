@@ -7,7 +7,7 @@
 #    picks runtime.deno.ts or runtime.node.ts — no build-time swap)
 # 2. Strips .ts extensions from relative imports (Node ESM convention)
 # 3. Installs the Node build dependencies in dist-node/
-#    (@casys/mcp-server comes from npm — its own npm build — not from a
+#    (@mcpview/server comes from npm — its own npm build — not from a
 #    re-bundle of its Deno/JSR source)
 # 4. Produces a publishable npm package in dist-node/bin/
 #    (dist-node/esbuild-metafile.json records what got bundled; it stays out
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist-node"
 VERSION="$(grep '"version"' "$ROOT_DIR/deno.json" | sed 's/.*"version": *"\([^"]*\)".*/\1/')"
-MCP_SERVER_VERSION="$(grep '"@casys/mcp-server"' "$ROOT_DIR/deno.json" | sed 's/.*"@casys\/mcp-server": *"jsr:@casys\/mcp-server@\([^"]*\)".*/\1/')"
+MCP_SERVER_VERSION="$(grep '"@mcpview/server"' "$ROOT_DIR/deno.json" | sed 's/.*"@mcpview\/server": *"jsr:@mcpview\/server@\([^"]*\)".*/\1/')"
 
 echo "[build-node] Building Node.js distribution for @casys/mcp-erpnext..."
 
@@ -81,24 +81,28 @@ cp "$ROOT_DIR/README.md" "$DIST_DIR/README.md" 2>/dev/null || true
 
 pushd "$DIST_DIR" >/dev/null
 npm install --no-fund --no-audit
-# Install @casys/mcp-server from npm: its npm build ships the same runtime
+# Install @mcpview/server from npm: its npm build ships the same runtime
 # selector as the JSR source, so the bundle stays Node-clean (no Deno.*).
 # MCP_SERVER_OVERRIDE lets CI/local builds point at a tarball for pre-release
 # end-to-end validation.
-npm install --no-fund --no-audit "${MCP_SERVER_OVERRIDE:-@casys/mcp-server@$MCP_SERVER_VERSION}"
+npm install --no-fund --no-audit "${MCP_SERVER_OVERRIDE:-@mcpview/server@$MCP_SERVER_VERSION}"
 # Fail fast if npm resolved a version older than 0.21.1 — the first release
 # whose npm build is fully Node-clean (runtime selector + launcher). An older
 # resolution would silently re-embed Deno.* calls in the published bundle.
+# The version is read from disk: the package "exports" map does not expose
+# ./package.json, so require("@mcpview/server/package.json") is rejected.
 node -e '
-  const v = require("@casys/mcp-server/package.json").version;
+  const v = JSON.parse(
+    require("node:fs").readFileSync("node_modules/@mcpview/server/package.json", "utf8"),
+  ).version;
   const [ma, mi, pa] = v.split(".").map(Number);
   if (ma === 0 && (mi < 24 || (mi === 24 && pa < 1))) {
-    console.error(`[build-node] @casys/mcp-server ${v} lacks MRTR nonce consumption (need >=0.24.1)`);
+    console.error(`[build-node] @mcpview/server ${v} lacks MRTR nonce consumption (need >=0.24.1)`);
     console.error(`[build-node] 0.24.0 verifies a requestState token but never consumes its nonce,`);
     console.error(`[build-node] so a signed retry can be replayed into a duplicate write.`);
     process.exit(1);
   }
-  console.log(`[build-node] @casys/mcp-server ${v} OK (>=0.21.1)`);
+  console.log(`[build-node] @mcpview/server ${v} OK (>=0.21.1)`);
 '
 ./node_modules/.bin/esbuild server.ts \
   --bundle \

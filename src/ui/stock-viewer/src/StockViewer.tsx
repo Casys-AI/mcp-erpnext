@@ -2,7 +2,7 @@
 /**
  * Stock viewer — Direction B v2.
  * Handshake stays on ext-apps (refresh / callServerTool / sendMessage).
- * Presentation: Tailwind classes only, no @casys/mcp-view dependency.
+ * Presentation: Tailwind classes only, no @mcpview/view dependency.
  *
  * Une ligne partage son contexte au clic simple / Espace. Son detail reste une
  * commande distincte : double-clic / Entree ou chevron explicite. Sans saut

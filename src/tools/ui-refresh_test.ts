@@ -3,7 +3,7 @@ import {
   assertNotStrictEquals,
   assertStrictEquals,
 } from "@std/assert";
-import { SchemaValidator } from "@casys/mcp-server";
+import { SchemaValidator } from "@mcpview/server";
 import { allTools } from "./mod.ts";
 import {
   availableViewerToolNames,

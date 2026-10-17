@@ -1,11 +1,11 @@
 /** @jsxImportSource preact */
 
 import { useEffect } from "preact/hooks";
-import { defineComponentRegistry } from "@casys/mcp-view-components";
+import { defineComponentRegistry } from "@mcpview/components";
 import {
   definePreactComponent,
   type PreactSurfaceComponentProps,
-} from "@casys/mcp-view-components/preact";
+} from "@mcpview/components/preact";
 import { DocumentSurface } from "../../shared/document/DocumentSurface.tsx";
 import { translatorForLocale } from "../../shared/i18n.ts";
 import { mergeHostContext } from "../../shared/host-context.ts";

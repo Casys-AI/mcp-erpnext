@@ -19,16 +19,16 @@ LibreChat  ──Bearer JWT──►  mcp-erpnext (port 7654)
                                   │
                           validates JWT against
                           provider's JWKS URL
-                          (@casys/mcp-server's
+                          (@mcpview/server's
                            createOIDCAuthProvider)
                                   │
                             ✓ valid → handle
                             ✗ invalid → 401
 ```
 
-Token validation happens in-process — `@casys/mcp-server` fetches your
-provider's public keys once and caches them. No credentials are stored — only
-the token's signature and claims are verified.
+Token validation happens in-process — `@mcpview/server` fetches your provider's
+public keys once and caches them. No credentials are stored — only the token's
+signature and claims are verified.
 
 The canonical Streamable HTTP endpoint is `/mcp`. Set `MCP_AUTH_RESOURCE` to
 that exact public URL (for example, `https://mcp.example.com/mcp`). The server

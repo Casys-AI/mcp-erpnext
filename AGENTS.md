@@ -128,7 +128,7 @@ process (failed fetches are not cached), 15 s timeout
 - Read failures throw `ViewerResourceError` (`src/ui/viewer-errors.ts`): closed
   code list, and `message` is a compact JSON string
   `{code,message,retryable,context,recovery}` (the only channel
-  `@casys/mcp-server` relays for a plain `Error`, JSON-RPC `-32603`).
+  `@mcpview/server` relays for a plain `Error`, JSON-RPC `-32603`).
 
 ### Tool architecture
 
@@ -287,7 +287,7 @@ Registered in `src/ui/viewers.ts` — add new viewer names there and in
 
 ### Server bootstrap
 
-`server.ts` creates a `McpApp` (from `@casys/mcp-server`), registers all tools +
+`server.ts` creates a `McpApp` (from `@mcpview/server`), registers all tools +
 UI resources, and starts in stdio or HTTP mode. Supports `--http`, `--port=`,
 `--hostname=`, `--categories=`, `--exclude-categories=` and `--exclude-tools=`
 flags (the three tool filters also read `ERPNEXT_CATEGORIES`,
@@ -298,7 +298,7 @@ invalid filters exit 1 with an `INVALID_TOOL_FILTER` error. See
 
 ### HTTP authentication
 
-`src/auth/config.ts` reads env vars and builds an `@casys/mcp-server`
+`src/auth/config.ts` reads env vars and builds an `@mcpview/server`
 `AuthProvider`, wired straight into `McpApp`'s own `auth: { provider }` option —
 no separate proxy or listener. Two combinable modes:
 
@@ -334,8 +334,8 @@ framework itself.
   in `deno.json` (UI `.tsx`/`.mjs` files are excluded from Deno lint).
 - **Server-side code** (`src/` except `src/ui/`): all imports use `.ts`
   extensions (Deno convention). External deps use the import map in `deno.json`
-  (e.g. `import { ... } from "@casys/mcp-server"`). Never add bare npm
-  specifiers in server-side files.
+  (e.g. `import { ... } from "@mcpview/server"`). Never add bare npm specifiers
+  in server-side files.
 - **UI viewer code** (`src/ui/`): standard npm imports resolved by Vite (e.g.
   `import { ... } from "preact/hooks"`). These follow `src/ui/package.json`
   deps, not the Deno import map.

@@ -12,7 +12,7 @@ import type {
   MCPToolMeta,
   ToolAnnotations,
   ToolHandlerContext,
-} from "@casys/mcp-server";
+} from "@mcpview/server";
 
 export type { ToolAnnotations };
 
@@ -71,7 +71,7 @@ export interface ErpNextTool {
   inputSchema: JSONSchema;
   /** Behavioural hints for model clients */
   annotations?: ToolAnnotations;
-  /** MCP Apps UI metadata — uses MCPToolMeta from @casys/mcp-server */
+  /** MCP Apps UI metadata — uses MCPToolMeta from @mcpview/server */
   _meta?: MCPToolMeta;
   /** Execute the tool and return a JSON-serializable result */
   handler: (

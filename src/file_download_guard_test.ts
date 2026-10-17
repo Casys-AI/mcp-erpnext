@@ -16,8 +16,8 @@
  */
 
 import { assert, assertEquals, assertFalse, assertRejects } from "@std/assert";
-import { McpApp } from "@casys/mcp-server";
-import type { FetchHandler, ToolHandlerContext } from "@casys/mcp-server";
+import { McpApp } from "@mcpview/server";
+import type { FetchHandler, ToolHandlerContext } from "@mcpview/server";
 import { setFrappeClient } from "./api/frappe-client.ts";
 import type { FrappeClient } from "./api/frappe-client.ts";
 import { ErpNextToolsClient } from "./client.ts";

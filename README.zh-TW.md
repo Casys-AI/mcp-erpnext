@@ -11,7 +11,7 @@
 
 > [!IMPORTANT]
 > **安裝 3.2：** npm/Node 請執行 `npx -y @casys/mcp-erpnext@latest`；Deno 請執行
-> `deno run -A jsr:@casys/mcp-erpnext@3.2.0/server`。3.2.0 是穩定版，並使用 npm
+> `deno run -A jsr:@casys/mcp-erpnext@3.2.1/server`。3.2.1 是穩定版，並使用 npm
 > 的 `latest` 標籤；預發布版本若有發布，則使用 `next` 標籤。3.2
 > 新增通用文件檢視器及附件流程；在取代既有部署前，請使用實際的 MCP
 > 主機進行測試。發布歷程請見 [CHANGELOG](CHANGELOG.md)。
@@ -89,7 +89,7 @@ Code、VS Code Copilot 或自訂代理）。
 Buy 證據不會執行採購，也不代表即時 ERP 已通過驗證。
 
 npm 穩定版請使用 `@casys/mcp-erpnext@latest`；Deno 請使用
-`jsr:@casys/mcp-erpnext@3.2.0/server`。
+`jsr:@casys/mcp-erpnext@3.2.1/server`。
 
 完整的發布歷程請參閱
 [CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。

@@ -4,6 +4,8 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.2.1] - 2026-10-18
+
 ### Changed
 
 - Depends on `@mcpview/*` instead of the deprecated `@casys/mcp-*` packages

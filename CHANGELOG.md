@@ -4,6 +4,14 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.2.0-beta.2] - 2026-10-17
+
+### Fixed
+
+- A viewer that returns to an earlier root, such as a list, chart or KPI shown
+  again after another one, no longer lets a late drill-down response from the
+  earlier visit overwrite the level opened since.
+
 ## [3.2.0-beta.1] - 2026-10-16
 
 ### Fixed

@@ -11,7 +11,7 @@
 
 > [!IMPORTANT]
 > **安裝 3.2 Beta：** npm/Node 請執行 `npx -y @casys/mcp-erpnext@next`；Deno
-> 請執行 `deno run -A jsr:@casys/mcp-erpnext@3.2.0-beta.1/server`。npm 的 `next`
+> 請執行 `deno run -A jsr:@casys/mcp-erpnext@3.2.0-beta.2/server`。npm 的 `next`
 > 標籤會跟隨目前的預發布版本；JSR 沒有 dist-tag，因此此指令固定使用 這個 Beta
 > 版本。穩定版 **3.1.0** 可透過 npm 的 `latest` 標籤取得。 Beta
 > 保留通用文件檢視器及附件流程；在取代穩定版部署前，請使用實際的 MCP
@@ -78,10 +78,11 @@ Code、VS Code Copilot 或自訂代理）。
 完整的發布歷程請參閱
 [CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/superWorldSavior/mcp-erpnext/releases/latest)。
 
-> **3.2.0-beta.1 預覽版：** 此版同步納入穩定版 3.1.0 的建立錯誤修復指引、
+> **3.2.0-beta.2 預覽版：** 此版同步納入穩定版 3.1.0 的建立錯誤修復指引、
 > ERPNext 16 商機相容性及日期修正，並保留通用文件檢視器、子表格、附件、
 > 檢視器內導覽及已記錄的 Buy 證據。另修正 KPI 百分比變化、銷售漏斗幣別，
-> 以及不支援內容選取的主機上的清除行為。所有功能仍依 MCP 主機能力啟用； Buy
+> 以及不支援內容選取的主機上的清除行為；檢視器返回先前的根層級後，先前造訪
+> 的延遲回應不再覆寫之後開啟的層級。所有功能仍依 MCP 主機能力啟用； Buy
 > 證據不會執行採購，也不代表即時 ERP 已通過驗證。
 
 ## 文件

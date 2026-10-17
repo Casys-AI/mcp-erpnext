@@ -10,3 +10,4 @@ src/ui/node_modules/
 .serena/
 .DS_Store
 **/.DS_Store
+src/ui/.build-meta/

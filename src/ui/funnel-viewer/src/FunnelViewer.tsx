@@ -28,7 +28,6 @@ import {
 } from "~/shared/refresh";
 import { FUNNEL_FIXTURE, isFixtureMode } from "./fixture.ts";
 import type { FunnelData, FunnelStage } from "./types.ts";
-import { formatNumber } from "~/shared/format";
 import { type TFunction, useT } from "~/shared/i18n-hook";
 import { type DrillDownChannel, sharedLabel } from "~/shared/drill-down";
 import { useViewerNav } from "~/shared/useViewerNav";
@@ -37,7 +36,11 @@ import { PathBar } from "~/shared/PathBar";
 import { jumpFromHint } from "~/shared/jumps";
 import { canCallViewerTool, readAvailableTools } from "~/shared/viewer-tools";
 import { LevelBody } from "~/shared/levels/LevelBody";
-import { funnelStageInteractionPlan, stageIsJumpable } from "./funnel-nav.ts";
+import {
+  funnelStageInteractionPlan,
+  funnelStageValueText,
+  stageIsJumpable,
+} from "./funnel-nav.ts";
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
 import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
@@ -197,6 +200,7 @@ function WideConnector({ rate }: { rate: number }) {
 function WideFunnelChart(
   {
     stages,
+    currency,
     contextEnabled,
     hasNavJump,
     hasDetail,
@@ -206,6 +210,8 @@ function WideFunnelChart(
     isContextActive,
   }: {
     stages: FunnelStage[];
+    /** Devise du payload : symbole des valeurs d'étape. */
+    currency?: string;
     contextEnabled: boolean;
     /** Indique si cette étape a un saut serveur disponible. */
     hasNavJump: (label: string) => boolean;
@@ -367,7 +373,7 @@ function WideFunnelChart(
       >
         {stages.map((stage, idx) => {
           const hasValue = stage.value != null && stage.value > 0;
-          const valueText = hasValue ? formatNumber(stage.value, 2) : "—";
+          const valueText = funnelStageValueText(stage.value, currency);
           return (
             <>
               <div
@@ -378,7 +384,7 @@ function WideFunnelChart(
                   style={{
                     fontFamily: "var(--font-mono)",
                     fontSize: 10.5,
-                    letterSpacing: "0.06em",
+                    letterSpacing: "var(--tracking-chip)",
                     textTransform: "uppercase",
                     color: "var(--color-ink-muted)",
                   }}
@@ -887,7 +893,7 @@ function FunnelContent(
                     style={{
                       fontFamily: "var(--font-mono)",
                       fontSize: 10.5,
-                      letterSpacing: "0.06em",
+                      letterSpacing: "var(--tracking-chip)",
                       textTransform: "uppercase",
                       color: "var(--color-ink-faint)",
                     }}
@@ -1023,6 +1029,7 @@ function FunnelContent(
           ? (
             <WideFunnelChart
               stages={stages}
+              currency={data.currency}
               contextEnabled={activeContext.supported}
               hasNavJump={hasNavJump}
               hasDetail={hasStageDetail}

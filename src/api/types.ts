@@ -143,7 +143,16 @@ export interface FrappeListOptions {
   filters?: FrappeFilter[];
   /** SQL ORDER BY clause, e.g. `"creation desc"` */
   order_by?: string;
-  /** Maximum number of records to return (Frappe `limit_page_length`) */
+  /**
+   * SQL GROUP BY clause, e.g. `` "`tabStock Entry`.name" ``. Used to return each
+   * parent once when a filter targets a child table (Frappe's REST API has no
+   * `distinct`).
+   */
+  group_by?: string;
+  /**
+   * Maximum number of records to return (Frappe `limit_page_length`).
+   * `0` means every record — and Frappe then ignores `limit_start`.
+   */
   limit?: number;
   /** Offset for pagination (Frappe `limit_start`) */
   limit_start?: number;

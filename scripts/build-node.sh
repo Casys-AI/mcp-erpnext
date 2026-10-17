@@ -10,6 +10,8 @@
 #    (@casys/mcp-server comes from npm — its own npm build — not from a
 #    re-bundle of its Deno/JSR source)
 # 4. Produces a publishable npm package in dist-node/bin/
+#    (dist-node/esbuild-metafile.json records what got bundled; it stays out
+#    of bin/ and feeds scripts/third-party-notices.mjs)
 #
 # Usage:
 #   cd lib/erpnext && ./scripts/build-node.sh
@@ -104,6 +106,7 @@ node -e '
   --target=node20 \
   --format=esm \
   --outfile=bin/mcp-erpnext.mjs \
+  --metafile=esbuild-metafile.json \
   --external:node:* \
   --banner:js='import { createRequire } from "node:module"; const require = createRequire(import.meta.url);'
 tmp_shebang="$(mktemp)"

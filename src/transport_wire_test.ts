@@ -611,3 +611,33 @@ Deno.test("server.ts configures the stateless transport", async () => {
     "server.ts must not advertise process-local Tasks",
   );
 });
+
+Deno.test("stateless wire: an excluded category is absent from tools/list and refused on tools/call", async () => {
+  const toolsClient = new ErpNextToolsClient({ excludeCategories: ["buy"] });
+  const app = new McpApp({
+    name: "mcp-erpnext-wire-filter-test",
+    version: "0.0.0",
+    transport: "stateless",
+  });
+  app.registerTools(toolsClient.toMCPFormat(), toolsClient.buildHandlersMap());
+  const h = await app.getFetchHandler({ cors: false });
+
+  const list = await h(request("tools/list", {}));
+  assertEquals(list.status, 200);
+  const listBody = await list.json() as {
+    result: { tools: Array<{ name: string }> };
+  };
+  const names = listBody.result.tools.map((t) => t.name);
+  assert(names.includes("erpnext_customer_list"));
+  assert(!names.includes("erpnext_buy_capture"));
+
+  const call = await h(request("tools/call", {
+    name: "erpnext_buy_capture",
+    arguments: {},
+  }, { "Mcp-Name": "erpnext_buy_capture" }));
+  const body = await call.json() as {
+    result?: { isError?: boolean };
+    error?: unknown;
+  };
+  assert(body.result?.isError === true || body.error !== undefined);
+});

@@ -50,6 +50,18 @@ export const hi: Record<string, string> = {
   "document.table.no_columns": "कोई दिखाने योग्य कॉलम नहीं",
   "document.json": "मूल दस्तावेज़ JSON",
   "document.action.refresh_pending": "बदलाव सहेजा गया — रीफ़्रेश अभी बाकी है",
+  "document.company.general": "कंपनी का परिचय",
+  "document.company.advanced": "उन्नत सेटिंग्स",
+  "document.company.field.company_name": "नाम",
+  "document.company.field.abbr": "संक्षिप्त नाम",
+  "document.company.field.country": "देश",
+  "document.company.field.default_currency": "मुद्रा",
+  "document.company.field.domain": "क्षेत्र",
+  "document.company.field.is_group": "समूह कंपनी",
+  "document.company.other": "अन्य जानकारी",
+  "document.company.schema_loading": "ERPNext अनुभाग लोड हो रहे हैं…",
+  "document.company.schema_unavailable":
+    "ERPNext अनुभाग उपलब्ध नहीं हैं। सभी फ़ील्ड अभी भी उपलब्ध हैं।",
   "document.purchase_invoice.total": "चालान कुल",
   "document.purchase_invoice.calculated": "परिकलित",
   "document.purchase_invoice.rounding": "पूर्णांकन",
@@ -190,6 +202,11 @@ export const hi: Record<string, string> = {
   "kpi.status.auto_refresh": "फ़ोकस पर स्वतः रीफ़्रेश",
   "kpi.drilldown.title_detail": "ड्रिल-डाउन के लिए क्लिक करें",
   "kpi.drilldown.title_trend": "रुझान विवरण के लिए क्लिक करें",
+  "kpi.secondary.invoices": "चालान",
+  "kpi.secondary.amount": "राशि",
+  "kpi.drilldown.title_message": "बातचीत में पूछने के लिए दोहरा क्लिक करें या एंटर दबाएँ",
+  "kpi.drilldown.title_context":
+    "संदर्भ में जोड़ने/हटाने के लिए क्लिक या स्पेस दबाएँ · विवरण के लिए दोहरा क्लिक या एंटर दबाएँ",
   // ── /KPI व्यूअर ───────────────────────────────────────────────────────────
 
   // ── चालान व्यूअर ────────────────────────────────────────────────────────
@@ -328,6 +345,7 @@ export const hi: Record<string, string> = {
   "chart.tooltip.click_action_context": "क्लिक: संदर्भ जोड़ें/हटाएँ · 2× विवरण",
   "chart.tooltip.click_action_context_only": "क्लिक: संदर्भ जोड़ें/हटाएँ",
   "chart.tooltip.click_action_fallback": "2× विवरण",
+  "chart.tooltip.click_action_detail": "क्लिक: विवरण",
   // ── नेविगेशन स्टैक (पथ, स्तर, छलाँग) ──
   "nav.back": "वापस",
   "nav.elided": "…{n}",

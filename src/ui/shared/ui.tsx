@@ -150,7 +150,7 @@ export function CasysCredit({ compact }: { compact?: boolean } = {}) {
     <a
       class={cx(
         "inline-flex items-center text-ink-faint transition-colors",
-        "font-mono tracking-[0.04em] hover:text-accent",
+        "font-mono tracking-mono hover:text-accent",
         "focus-visible:rounded-badge focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
         compact ? "gap-1.5 text-micro" : "gap-[7px] text-chip",
       )}

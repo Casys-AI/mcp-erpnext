@@ -361,15 +361,6 @@ function RecordDocumentLevel({
       }];
     })
     : [];
-  if (onAsk && asks.length === 0 && jumps.length === 0) {
-    asks.push({
-      label: t("nav.ask"),
-      message: t("doclist.detail.full_detail_message", {
-        doctype: envelope.doctype,
-        id: envelope.name,
-      }),
-    });
-  }
   const contextItem = documentContextItem(
     model,
     contextView ?? envelope.doctype,
@@ -491,8 +482,10 @@ function RecordDocumentLevel({
 
   return (
     <DocumentSurface
+      app={app}
       model={model}
       layout={layout}
+      presentation="preview"
       attachments={capabilities.canListAttachments
         ? (
           <AttachmentsSection

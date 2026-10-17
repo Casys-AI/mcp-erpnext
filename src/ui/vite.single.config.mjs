@@ -11,6 +11,7 @@ import { defineConfig } from "vite";
 import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,8 +21,55 @@ if (!uiName) {
   throw new Error("UI_NAME environment variable is required");
 }
 
+/**
+ * Records which node_modules files actually end up in this viewer's bundle.
+ *
+ * Output: src/ui/.build-meta/<viewer>.json (gitignored, never published).
+ * `scripts/third-party-notices.mjs` reads it to generate THIRD_PARTY_NOTICES.txt
+ * from what is really embedded — tree-shaken modules (renderedLength 0) and
+ * aliased packages (react -> preact/compat) are correctly left out.
+ */
+function bundledModulesReport() {
+  const cssIds = new Set();
+  // Rollup prefixes virtual ids (commonjs proxies) with \0 and may add ?query.
+  const clean = (id) =>
+    id.replace(/^\0/, "").split("?")[0].replaceAll("\\", "/");
+  return {
+    name: "erpnext-bundled-modules-report",
+    apply: "build",
+    transform(_code, id) {
+      const file = clean(id);
+      if (file.endsWith(".css") && file.includes("/node_modules/")) {
+        cssIds.add(file);
+      }
+    },
+    generateBundle(_options, bundle) {
+      const modules = new Set(cssIds);
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type !== "chunk") continue;
+        for (const [id, info] of Object.entries(chunk.modules)) {
+          const file = clean(id);
+          if (info.renderedLength > 0 && file.includes("/node_modules/")) {
+            modules.add(file);
+          }
+        }
+      }
+      const dir = resolve(__dirname, ".build-meta");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        resolve(dir, `${uiName}.json`),
+        JSON.stringify(
+          { version: 1, viewer: uiName, modules: [...modules].sort() },
+          null,
+          2,
+        ) + "\n",
+      );
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [tailwindcss(), preact(), viteSingleFile()],
+  plugins: [tailwindcss(), preact(), viteSingleFile(), bundledModulesReport()],
   root: resolve(__dirname, uiName),
   resolve: {
     alias: {

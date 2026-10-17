@@ -5,7 +5,7 @@
 
 import type { App } from "@modelcontextprotocol/ext-apps";
 import type { ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 import { ConfirmSheet, useConfirm } from "~/shared/confirm";
 import { AttachmentsSection } from "~/shared/document/AttachmentsSection.tsx";
 import { documentCapabilities } from "~/shared/document/capabilities.ts";
@@ -27,6 +27,17 @@ import {
   documentModelOf,
 } from "~/shared/document/model.ts";
 import { DocumentSurface } from "~/shared/document/DocumentSurface.tsx";
+import { LifecycleActions } from "~/shared/document/LifecycleActions.tsx";
+import {
+  type LifecycleAction,
+  lifecycleConfirmIsStale,
+  lifecycleConfirmRequest,
+  lifecycleConfirmSnapshot,
+  type LifecycleFeedback,
+  type LifecycleOutcome,
+  lifecycleOutcomeFeedback,
+  lifecycleVisibility,
+} from "~/shared/document/lifecycle-actions.ts";
 import { purchaseInvoiceConfirmAmount } from "~/shared/document/purchase-invoice.ts";
 import type { DocumentEnvelope } from "~/shared/document/types.ts";
 import { useAttachments } from "~/shared/document/useAttachments.ts";
@@ -61,7 +72,7 @@ interface InlineDetailPanelProps {
   onAction: (
     toolName: string,
     args: Record<string, unknown>,
-  ) => Promise<boolean | { unconfirmed: true } | { transport: true }>;
+  ) => Promise<LifecycleOutcome>;
   onDocumentChanged?: (event: DocumentChangeEvent) => void;
   /** @deprecated Utiliser `envelope`; conservé pour les anciens appelants. */
   data?: Record<string, unknown> | null;
@@ -192,7 +203,7 @@ function InlineDocument({
   onAction: (
     toolName: string,
     args: Record<string, unknown>,
-  ) => Promise<boolean | { unconfirmed: true } | { transport: true }>;
+  ) => Promise<LifecycleOutcome>;
   onDocumentChanged?: (event: DocumentChangeEvent) => void;
   context?: DocumentContextController;
   contextView?: string;
@@ -200,9 +211,10 @@ function InlineDocument({
 }) {
   const t = useT();
   const confirm = useConfirm();
-  const [actLoading, setActLoading] = useState<string | null>(null);
-  const [actMsg, setActMsg] = useState<string | null>(null);
-  const [actOk, setActOk] = useState(true);
+  const [actLoading, setActLoading] = useState<LifecycleAction | null>(null);
+  const [actFeedback, setActFeedback] = useState<LifecycleFeedback | null>(
+    null,
+  );
   const surfaceLayout: ViewerLayout = embedded
     ? outerLayout
     : outerLayout === "mobile"
@@ -292,50 +304,56 @@ function InlineDocument({
     })
     : [];
 
-  const isDraft = model.status === "Draft" || model.docstatus === 0;
-  const isSubmitted = model.docstatus === 1;
   const submitAmount = purchaseInvoiceConfirmAmount(
     envelope.doctype,
     envelope.document,
   );
-  const showSubmit = isDraft && (fixture || capabilities.canSubmit);
-  const showCancel = isSubmitted && (fixture || capabilities.canCancel);
+  const lifecycle = lifecycleVisibility({
+    docstatus: model.docstatus,
+    status: model.status,
+    canSubmit: capabilities.canSubmit,
+    canCancel: capabilities.canCancel,
+    preview: fixture,
+  });
+  const confirmSnapshot = lifecycleConfirmSnapshot(
+    envelope.doctype,
+    envelope.name,
+    envelope.document,
+  );
+  useLayoutEffect(() => {
+    if (lifecycleConfirmIsStale(confirm.pending, lifecycle, confirmSnapshot)) {
+      confirm.dismiss();
+    }
+  }, [confirm.pending, lifecycle.submit, lifecycle.cancel, confirmSnapshot]);
 
-  async function act(
-    key: string,
-    tool: string,
-    args: Record<string, unknown>,
-    msg: string,
-  ) {
+  async function act(action: LifecycleAction) {
     if (fixture) return;
-    const allowed = key === "submit"
+    const allowed = action === "submit"
       ? capabilities.canSubmit
-      : key === "cancel"
-      ? capabilities.canCancel
-      : false;
+      : capabilities.canCancel;
     if (!allowed) return;
-    setActLoading(key);
-    setActMsg(null);
-    const outcome = await onAction(tool, args);
-    const unconfirmed = typeof outcome === "object" &&
-      "unconfirmed" in outcome;
-    const transport = typeof outcome === "object" && "transport" in outcome;
-    const ok = outcome === true;
-    setActOk(ok);
-    setActMsg(
-      unconfirmed
-        ? t("document.purchase_invoice.submit.unconfirmed")
-        : transport
-        ? t("document.purchase_invoice.submit.transport")
-        : ok
-        ? msg
-        : t("doclist.detail.action_failed"),
+    setActLoading(action);
+    setActFeedback(null);
+    const outcome = await onAction(
+      action === "submit" ? "erpnext_doc_submit" : "erpnext_doc_cancel",
+      { doctype: envelope.doctype, name: envelope.name },
+    );
+    setActFeedback(
+      lifecycleOutcomeFeedback(
+        outcome,
+        t(
+          action === "submit"
+            ? "doclist.detail.action.submit_ok"
+            : "doclist.detail.action.cancel_ok",
+        ),
+        t,
+      ),
     );
     setActLoading(null);
   }
 
-  const hasActions = jumps.length > 0 || asks.length > 0 || showSubmit ||
-    showCancel || actMsg !== null;
+  const hasActions = jumps.length > 0 || asks.length > 0 || lifecycle.submit ||
+    lifecycle.cancel || actFeedback !== null;
   const actions = hasActions
     ? (
       <div class="flex flex-col gap-2">
@@ -349,69 +367,23 @@ function InlineDocument({
             onAsk={onAsk}
           />
         )}
-        {actMsg && (
-          <p class={`font-mono text-chip ${actOk ? "text-ok" : "text-bad"}`}>
-            {actMsg}
-          </p>
-        )}
-        {showSubmit && (
-          <Button
-            variant="secondary"
-            disabled={actLoading === "submit" || fixture}
-            title={fixture
-              ? t("doclist.preview.no_host")
-              : t("doclist.detail.action.submit_title")}
-            class="min-h-[44px] rounded-control text-body"
-            onClick={() =>
-              confirm.request({
-                subject: `${envelope.doctype} ${envelope.name}`,
-                title: t("doclist.confirm.submit"),
-                detail: submitAmount
-                  ? t("doclist.confirm.submit.detail_with_amount", {
-                    amount: submitAmount,
-                  })
-                  : t("doclist.confirm.submit.detail"),
-                actionLabel: submitAmount
-                  ? t("doclist.confirm.submit.action_with_amount", {
-                    amount: submitAmount,
-                  })
-                  : t("doclist.confirm.submit.action"),
-                onConfirm: () =>
-                  void act("submit", "erpnext_doc_submit", {
-                    doctype: envelope.doctype,
-                    name: envelope.name,
-                  }, t("doclist.detail.action.submit_ok")),
-              })}
-          >
-            {actLoading === "submit" ? "…" : t("common.submit")}
-          </Button>
-        )}
-        {showCancel && (
-          <Button
-            variant="danger"
-            disabled={actLoading === "cancel" || fixture}
-            title={fixture
-              ? t("doclist.preview.no_host")
-              : t("doclist.detail.action.cancel_label")}
-            class="min-h-[44px] rounded-control text-body"
-            onClick={() =>
-              confirm.request({
-                subject: `${envelope.doctype} ${envelope.name}`,
-                title: t("doclist.confirm.cancel"),
-                detail: t("doclist.confirm.cancel.detail"),
-                actionLabel: t("doclist.confirm.cancel.action"),
-                onConfirm: () =>
-                  void act("cancel", "erpnext_doc_cancel", {
-                    doctype: envelope.doctype,
-                    name: envelope.name,
-                  }, t("doclist.detail.action.cancel_ok")),
-              })}
-          >
-            {actLoading === "cancel"
-              ? "…"
-              : t("doclist.detail.action.cancel_label")}
-          </Button>
-        )}
+        <LifecycleActions
+          show={lifecycle}
+          loading={actLoading}
+          preview={fixture}
+          feedback={actFeedback}
+          onRequest={(action) =>
+            confirm.request(
+              lifecycleConfirmRequest(action, {
+                doctype: envelope.doctype,
+                name: envelope.name,
+                documentSnapshot: confirmSnapshot,
+                amount: action === "submit" ? submitAmount : undefined,
+                translate: t,
+                onConfirm: () => void act(action),
+              }),
+            )}
+        />
       </div>
     )
     : undefined;
@@ -542,8 +514,10 @@ function InlineDocument({
   return (
     <>
       <DocumentSurface
+        app={app}
         model={model}
         layout={surfaceLayout}
+        presentation="preview"
         navigation={navigation}
         headerActions={headerActions}
         attachments={capabilities.canListAttachments

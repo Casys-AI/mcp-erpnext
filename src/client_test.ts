@@ -1,5 +1,16 @@
-import { assert, assertEquals, assertRejects } from "@std/assert";
-import { ErpNextToolsClient, getToolByName } from "./client.ts";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+  assertThrows,
+} from "@std/assert";
+import {
+  allTools,
+  ErpNextToolsClient,
+  getToolByName,
+  ToolFilterError,
+} from "./client.ts";
 import { type FrappeClient, setFrappeClient } from "./api/frappe-client.ts";
 import { AmbiguousLinkError } from "./api/resolve.ts";
 import { linkDisambiguationRequestKey } from "./mrtr/link-disambiguation.ts";
@@ -614,6 +625,106 @@ Deno.test("execute - bounded tools stay bounded on the direct-execution path", a
     queries = 0;
     await client.execute("erpnext_product_radar", { items: [] });
     assert(queries > 0, "auto-select still reaches Frappe");
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Tool filtering (categories / excludeCategories / excludeTools)
+// ---------------------------------------------------------------------------
+
+Deno.test("ErpNextToolsClient - without option listTools() is allTools itself", () => {
+  const client = new ErpNextToolsClient();
+  assertStrictEquals(client.listTools(), allTools);
+  assertEquals(client.count, allTools.length);
+  assertEquals(client.selection.warnings, []);
+});
+
+Deno.test("ErpNextToolsClient - legacy categories never throws, unknown names land in selection.warnings", () => {
+  const client = new ErpNextToolsClient({ categories: ["sales", "slaes"] });
+  assertEquals(client.selection.warnings.length, 1);
+  assertEquals(client.selection.warnings[0].reason, "UNKNOWN_CATEGORY");
+  assertEquals(new ErpNextToolsClient({ categories: ["slaes"] }).count, 0);
+  assertEquals(new ErpNextToolsClient({ categories: [] }).count, 0);
+});
+
+Deno.test("ErpNextToolsClient - new exclusion options are strict", () => {
+  assertThrows(
+    () => new ErpNextToolsClient({ excludeCategories: ["slaes"] }),
+    ToolFilterError,
+  );
+  assertThrows(
+    () => new ErpNextToolsClient({ excludeTools: ["erpnext_nope"] }),
+    ToolFilterError,
+  );
+});
+
+Deno.test("ErpNextToolsClient - excludeCategories buy hides buy_capture from list, wire format and handlers", () => {
+  const client = new ErpNextToolsClient({ excludeCategories: ["buy"] });
+  assertEquals(client.count, allTools.length - 1);
+  assert(
+    !client.toMCPFormat().some((t) => t.name === "erpnext_buy_capture"),
+  );
+  assert(!client.buildHandlersMap().has("erpnext_buy_capture"));
+});
+
+Deno.test("ErpNextToolsClient - execute refuses an excluded tool", async () => {
+  const client = new ErpNextToolsClient({
+    excludeTools: ["erpnext_file_list"],
+  });
+  await assertRejects(
+    () => client.execute("erpnext_file_list", {}),
+    Error,
+    "Unknown tool",
+  );
+});
+
+Deno.test("viewers stay fail-closed - excluding the file tools removes them from _availableTools", async () => {
+  const client = new ErpNextToolsClient({
+    categories: ["crm", "operations"],
+    excludeTools: [
+      "erpnext_file_list",
+      "erpnext_file_upload",
+      "erpnext_file_download",
+    ],
+  });
+  setFrappeClient({
+    get: () =>
+      Promise.resolve({ name: "LEAD-001", doctype: "Lead", docstatus: 0 }),
+  } as unknown as FrappeClient);
+  try {
+    const result = await client.buildHandlersMap().get("erpnext_lead_get")!(
+      { name: "LEAD-001" },
+    ) as { structuredContent: Record<string, unknown> };
+    const available = result.structuredContent._availableTools as string[];
+    assert(available.length > 0);
+    assertEquals(available.filter((n) => n.startsWith("erpnext_file_")), []);
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("viewers stay fail-closed - excluding operations removes doc_submit and doc_cancel", async () => {
+  const client = new ErpNextToolsClient({ excludeCategories: ["operations"] });
+  setFrappeClient({
+    get: () =>
+      Promise.resolve({
+        name: "SO-001",
+        customer: "CUST-001",
+        status: "Draft",
+        docstatus: 0,
+      }),
+  } as unknown as FrappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(
+      "erpnext_sales_order_get",
+    )!({ name: "SO-001" }) as { structuredContent: Record<string, unknown> };
+    const available = result.structuredContent._availableTools as string[];
+    assert(!available.includes("erpnext_doc_submit"));
+    assert(!available.includes("erpnext_doc_cancel"));
+    assert(available.includes("erpnext_sales_order_submit"));
+    assertEquals(available.filter((n) => n.startsWith("erpnext_file_")), []);
   } finally {
     setFrappeClient(null);
   }

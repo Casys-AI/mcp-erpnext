@@ -81,9 +81,10 @@ export function attachmentListFromToolResult(
 }
 
 /**
- * Extract the single inline resource returned by the app-only download tool.
- * It is deliberately returned only to the click handler, never persisted in UI
- * state, so large base64 data is eligible for collection immediately afterward.
+ * Extract the single inline resource returned by the download tool (MCP Apps
+ * only, capability-gated). It is deliberately returned only to the click
+ * handler, never persisted in UI state, so large base64 data is eligible for
+ * collection immediately afterward.
  */
 export function downloadResourceFromToolResult(
   result: unknown,

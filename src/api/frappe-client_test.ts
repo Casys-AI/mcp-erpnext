@@ -180,6 +180,40 @@ Deno.test("FrappeClient.list() - builds correct query string", async () => {
   globalThis.fetch = original;
 });
 
+Deno.test("FrappeClient.list() - sends limit 0, limit_start and group_by verbatim", async () => {
+  const urls: string[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url: string | URL | Request) => {
+    urls.push(url.toString());
+    return new Response(JSON.stringify({ data: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  try {
+    const client = makeClient();
+    // limit=0 is Frappe's "every row": it must reach the wire, not be dropped
+    // as falsy.
+    await client.list("Item", { limit: 0 });
+    await client.list("Stock Entry", {
+      limit: 20,
+      limit_start: 40,
+      group_by: "`tabStock Entry`.name",
+    });
+    await client.list("Item", { limit: 20 });
+
+    const [all, grouped, plain] = urls.map((url) => new URL(url).searchParams);
+    assertEquals(all.get("limit"), "0");
+    assertEquals(all.get("limit_start"), null);
+    assertEquals(grouped.get("limit_start"), "40");
+    assertEquals(grouped.get("group_by"), "`tabStock Entry`.name");
+    assertEquals(plain.get("group_by"), null);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 // ── get() ─────────────────────────────────────────────────────────────────────
 
 Deno.test("FrappeClient.get() - returns single document", async () => {

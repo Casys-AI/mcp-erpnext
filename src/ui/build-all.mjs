@@ -32,6 +32,8 @@ const uis = readdirSync(__dirname).filter((entry) => {
 console.log(`\nBuilding ${uis.length} ERPNext UIs: ${uis.join(", ")}\n`);
 
 rmSync(resolve(__dirname, "dist"), { recursive: true, force: true });
+// Bundled-module reports (see vite.single.config.mjs) are rebuilt with dist/.
+rmSync(resolve(__dirname, ".build-meta"), { recursive: true, force: true });
 mkdirSync(resolve(__dirname, "dist"), { recursive: true });
 
 for (const ui of uis) {

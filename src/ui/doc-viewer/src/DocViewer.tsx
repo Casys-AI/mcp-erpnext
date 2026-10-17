@@ -21,6 +21,17 @@ import {
   documentContextItem,
 } from "~/shared/document/context-items.ts";
 import { DocumentSurface } from "~/shared/document/DocumentSurface.tsx";
+import { LifecycleActions } from "~/shared/document/LifecycleActions.tsx";
+import {
+  type LifecycleAction,
+  lifecycleConfirmIsStale,
+  lifecycleConfirmRequest,
+  lifecycleConfirmSnapshot,
+  lifecycleErrorText,
+  type LifecycleFeedback,
+  lifecycleRefreshedFeedback,
+  lifecycleVisibility,
+} from "~/shared/document/lifecycle-actions.ts";
 import {
   interpretHostPurchaseInvoiceSubmit,
   purchaseInvoiceConfirmAmount,
@@ -51,7 +62,6 @@ import {
 import {
   Button,
   CasysCredit,
-  cx,
   StateMessage,
   ToolButton,
   ViewerShell,
@@ -318,9 +328,12 @@ function DocumentContent({
   const { ref, layout } = useViewerLayout<HTMLDivElement>();
   const confirm = useConfirm();
   const [showJson, setShowJson] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const [actionOk, setActionOk] = useState(true);
+  const [actionLoading, setActionLoading] = useState<LifecycleAction | null>(
+    null,
+  );
+  const [actionFeedback, setActionFeedback] = useState<
+    LifecycleFeedback | null
+  >(null);
   const [mutationCommitted, setMutationCommitted] = useState(false);
   const [mutationBaseline, setMutationBaseline] = useState<number | null>(null);
   const delayedRefreshRef = useRef<number | null>(null);
@@ -562,8 +575,7 @@ function DocumentContent({
     const args = { doctype: envelope.doctype, name: envelope.name };
     actionInFlightRef.current = true;
     setActionLoading(mutation);
-    setActionMessage(null);
-    setActionOk(true);
+    setActionFeedback(null);
     onError(null);
     try {
       let result: ToolResultPayload;
@@ -581,8 +593,10 @@ function DocumentContent({
           // Local lock until a canonical read, not proof that submit succeeded.
           setMutationCommitted(true);
           beginCanonicalReadback();
-          setActionOk(false);
-          setActionMessage(t("document.purchase_invoice.submit.transport"));
+          setActionFeedback({
+            tone: "warn",
+            text: t("document.purchase_invoice.submit.transport"),
+          });
           await new Promise<void>((resolve) =>
             setTimeout(resolve, CANONICAL_READBACK_DELAY_MS)
           );
@@ -622,19 +636,18 @@ function DocumentContent({
         if (!mountedRef.current) return;
         const refreshed = await onRefresh(true);
         if (!mountedRef.current) return;
-        if (decision.claimSubmitted) {
-          setActionOk(true);
-          setActionMessage(
-            refreshed
-              ? t("doclist.detail.action.submit_ok")
-              : t("document.action.refresh_pending"),
-          );
-        } else {
-          setActionOk(false);
-          setActionMessage(
-            t("document.purchase_invoice.submit.unconfirmed"),
-          );
-        }
+        setActionFeedback(
+          decision.claimSubmitted
+            ? lifecycleRefreshedFeedback(
+              refreshed,
+              t("doclist.detail.action.submit_ok"),
+              t,
+            )
+            : {
+              tone: "warn",
+              text: t("document.purchase_invoice.submit.unconfirmed"),
+            },
+        );
         return;
       }
       if (result.isError) {
@@ -656,39 +669,57 @@ function DocumentContent({
       if (!mountedRef.current) return;
       const refreshed = await onRefresh(true);
       if (!mountedRef.current) return;
-      setActionOk(true);
-      setActionMessage(
-        refreshed
-          ? t(
+      setActionFeedback(
+        lifecycleRefreshedFeedback(
+          refreshed,
+          t(
             mutation === "submit"
               ? "doclist.detail.action.submit_ok"
               : "doclist.detail.action.cancel_ok",
-          )
-          : t("document.action.refresh_pending"),
+          ),
+          t,
+        ),
       );
     } catch (cause) {
       if (!mountedRef.current) return;
-      const message = cause instanceof Error && cause.message
-        ? cause.message
-        : t("doclist.detail.action_failed");
-      onError(message);
+      // Même retour que l'inspecteur des listes : sous les boutons, sans
+      // occuper le bandeau d'erreur de chargement du document.
+      setActionFeedback({
+        tone: "bad",
+        text: lifecycleErrorText(
+          cause instanceof Error ? cause.message : null,
+          t("doclist.detail.action_failed"),
+        ),
+      });
     } finally {
       actionInFlightRef.current = false;
       if (mountedRef.current) setActionLoading(null);
     }
   }
 
-  const isDraft = model.docstatus === 0 || model.status === "Draft";
-  const isSubmitted = model.docstatus === 1;
   const submitAmount = purchaseInvoiceConfirmAmount(
     envelope.doctype,
     envelope.document,
   );
   const rootStale = nav.stack.levels[0].stale;
-  const canSubmit = isDraft && capabilities.canRefresh &&
-    capabilities.canSubmit && !mutationCommitted;
-  const canCancel = isSubmitted && capabilities.canRefresh &&
-    capabilities.canCancel && !mutationCommitted;
+  const confirmSnapshot = lifecycleConfirmSnapshot(
+    envelope.doctype,
+    envelope.name,
+    envelope.document,
+  );
+  const lifecycle = lifecycleVisibility({
+    docstatus: model.docstatus,
+    status: model.status,
+    canSubmit: capabilities.canRefresh && capabilities.canSubmit &&
+      !mutationCommitted,
+    canCancel: capabilities.canRefresh && capabilities.canCancel &&
+      !mutationCommitted,
+  });
+  useLayoutEffect(() => {
+    if (lifecycleConfirmIsStale(confirm.pending, lifecycle, confirmSnapshot)) {
+      confirm.dismiss();
+    }
+  }, [confirm.pending, lifecycle.submit, lifecycle.cancel, confirmSnapshot]);
   const navigationActions = (jumps.length > 0 || asks.length > 0) && (
     <div class="flex flex-col gap-2 border-b border-line-soft pb-3">
       <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
@@ -703,50 +734,27 @@ function DocumentContent({
       />
     </div>
   );
-  const mutationActions = (navigationActions || canSubmit || canCancel)
+  const mutationActions = (navigationActions || lifecycle.submit ||
+      lifecycle.cancel || actionFeedback)
     ? (
       <div class="flex flex-col gap-2">
         {navigationActions}
-        {canSubmit && (
-          <Button
-            variant="accent"
-            disabled={actionLoading !== null}
-            onClick={() =>
-              confirm.request({
-                subject: envelope.name,
-                title: t("doclist.confirm.submit"),
-                detail: submitAmount
-                  ? t("doclist.confirm.submit.detail_with_amount", {
-                    amount: submitAmount,
-                  })
-                  : t("doclist.confirm.submit.detail"),
-                actionLabel: submitAmount
-                  ? t("doclist.confirm.submit.action_with_amount", {
-                    amount: submitAmount,
-                  })
-                  : t("doclist.confirm.submit.action"),
-                onConfirm: () => void mutate("submit"),
-              })}
-          >
-            {actionLoading === "submit" ? "…" : t("common.submit")}
-          </Button>
-        )}
-        {canCancel && (
-          <Button
-            variant="danger"
-            disabled={actionLoading !== null}
-            onClick={() =>
-              confirm.request({
-                subject: envelope.name,
-                title: t("doclist.confirm.cancel"),
-                detail: t("doclist.confirm.cancel.detail"),
-                actionLabel: t("doclist.confirm.cancel.action"),
-                onConfirm: () => void mutate("cancel"),
-              })}
-          >
-            {actionLoading === "cancel" ? "…" : t("common.cancel")}
-          </Button>
-        )}
+        <LifecycleActions
+          show={lifecycle}
+          loading={actionLoading}
+          feedback={actionFeedback}
+          onRequest={(action) =>
+            confirm.request(
+              lifecycleConfirmRequest(action, {
+                doctype: envelope.doctype,
+                name: envelope.name,
+                documentSnapshot: confirmSnapshot,
+                amount: action === "submit" ? submitAmount : undefined,
+                translate: t,
+                onConfirm: () => void mutate(action),
+              }),
+            )}
+        />
       </div>
     )
     : undefined;
@@ -808,20 +816,7 @@ function DocumentContent({
   const footer = (
     <div class="flex min-h-9 items-center gap-3 px-3.5 py-2">
       <div class="min-w-0 flex-1">
-        {error
-          ? <StateMessage tone="bad">{error}</StateMessage>
-          : actionMessage
-          ? (
-            <span
-              class={cx(
-                "font-mono text-chip",
-                actionOk ? "text-ok" : "text-warn",
-              )}
-            >
-              {actionMessage}
-            </span>
-          )
-          : null}
+        {error ? <StateMessage tone="bad">{error}</StateMessage> : null}
       </div>
       <CasysCredit />
     </div>
@@ -840,6 +835,7 @@ function DocumentContent({
         ? (
           <div class="relative flex min-h-0 flex-1">
             <DocumentSurface
+              app={app}
               model={model}
               layout={layout}
               live={capabilities.canRefresh && !error}

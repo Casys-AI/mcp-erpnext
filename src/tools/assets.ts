@@ -22,7 +22,9 @@ export const assetsTools: ErpNextTool[] = [
     description:
       "List Fixed Assets. Filterable by status, asset_category, location, custodian. " +
       "Fields: name, asset_name, asset_category, status, purchase_date, gross_purchase_amount, " +
-      "current_value, location, custodian.",
+      "net_purchase_amount, current_value, value_after_depreciation, location, custodian. " +
+      "gross_purchase_amount is an alias of net_purchase_amount (the ERPNext v15 field was renamed in v16). " +
+      "current_value is an alias of value_after_depreciation, the book value rather than market value.",
     category: "assets",
     inputSchema: {
       type: "object",
@@ -82,17 +84,8 @@ export const assetsTools: ErpNextTool[] = [
       }
 
       const docs = await ctx.client.list("Asset", {
-        fields: [
-          "name",
-          "asset_name",
-          "asset_category",
-          "status",
-          "purchase_date",
-          "gross_purchase_amount",
-          "current_value",
-          "location",
-          "custodian",
-        ],
+        // The purchase amount was renamed in v16. Project only the list columns below.
+        fields: ["*"],
         filters,
         limit,
         order_by: "modified desc",
@@ -101,7 +94,31 @@ export const assetsTools: ErpNextTool[] = [
       return {
         doctype: "Asset",
         count: docs.length,
-        data: docs,
+        data: docs.map((doc) => {
+          if (
+            !("net_purchase_amount" in doc) && !("gross_purchase_amount" in doc)
+          ) {
+            throw new Error(
+              "[erpnext_asset_list] Asset has no supported net purchase amount field",
+            );
+          }
+          const purchaseAmount = "net_purchase_amount" in doc
+            ? doc.net_purchase_amount
+            : doc.gross_purchase_amount;
+          return {
+            name: doc.name,
+            asset_name: doc.asset_name,
+            asset_category: doc.asset_category,
+            status: doc.status,
+            purchase_date: doc.purchase_date,
+            gross_purchase_amount: purchaseAmount,
+            net_purchase_amount: purchaseAmount,
+            current_value: doc.value_after_depreciation,
+            value_after_depreciation: doc.value_after_depreciation,
+            location: doc.location,
+            custodian: doc.custodian,
+          };
+        }),
         _meta: DOCLIST_META,
       };
     },
@@ -134,7 +151,8 @@ export const assetsTools: ErpNextTool[] = [
     name: "erpnext_asset_create",
     description:
       "Create a new Asset record. Requires asset_name, asset_category, company, purchase_date, " +
-      "gross_purchase_amount. Optionally set location, custodian, item_code.",
+      "gross_purchase_amount (net purchase amount before depreciation, using the legacy field name). " +
+      "Supports ERPNext v15 and v16. Set a fixed asset item_code and location as required by ERPNext.",
     category: "assets",
     inputSchema: {
       type: "object",
@@ -154,11 +172,12 @@ export const assetsTools: ErpNextTool[] = [
         },
         gross_purchase_amount: {
           type: "number",
-          description: "Purchase cost (before depreciation)",
+          description:
+            "Net purchase amount before depreciation (legacy parameter name)",
         },
         item_code: {
           type: "string",
-          description: "Linked item code (optional)",
+          description: "Fixed asset item code (required by ERPNext)",
         },
         location: {
           type: "string",
@@ -201,7 +220,9 @@ export const assetsTools: ErpNextTool[] = [
         asset_category: input.asset_category as string,
         company: input.company as string,
         purchase_date: input.purchase_date as string,
+        // Frappe persists only DocType fields; v15/v16 use different names for this amount.
         gross_purchase_amount: input.gross_purchase_amount as number,
+        net_purchase_amount: input.gross_purchase_amount as number,
         item_code: (input.item_code as string) ?? undefined,
         location: (input.location as string) ?? undefined,
         custodian: (input.custodian as string) ?? undefined,

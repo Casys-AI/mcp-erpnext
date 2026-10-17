@@ -40,6 +40,49 @@ export type {
   MCPToolWireFormat,
 } from "./src/client.ts";
 
+export {
+  assertNonEmptySelection,
+  isToolFilterError,
+  resolveToolSelection,
+  TOOL_FILTER_ERROR_CODE,
+  TOOL_FILTER_REASONS,
+  ToolFilterError,
+} from "./src/tools/selection.ts";
+export type {
+  ToolFilterReason,
+  ToolFilterWarning,
+  ToolSelection,
+  ToolSelectionOptions,
+} from "./src/tools/selection.ts";
+
+export {
+  formatToolError,
+  formatToolInputError,
+  isToolInputError,
+  parseToolInputError,
+  TOOL_INPUT_ERROR_CODES,
+  ToolInputError,
+} from "./src/tools/errors.ts";
+export type {
+  ParsedToolInputError,
+  ToolInputErrorCode,
+} from "./src/tools/errors.ts";
+export {
+  FILE_DOWNLOAD_ERROR_CODES,
+  FileDownloadError,
+  isFileDownloadError,
+} from "./src/tools/file-download-error.ts";
+export type { FileDownloadErrorCode } from "./src/tools/file-download-error.ts";
+export {
+  isViewerResourceError,
+  VIEWER_RESOURCE_ERROR_CODES,
+  ViewerResourceError,
+} from "./src/ui/viewer-errors.ts";
+export type {
+  ViewerResourceErrorCode,
+  ViewerResourceErrorContext,
+} from "./src/ui/viewer-errors.ts";
+
 // Re-export Frappe client (for direct use or DI in tests)
 export {
   FrappeAPIError,

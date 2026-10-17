@@ -51,6 +51,18 @@ export const zh: Record<string, string> = {
   "document.table.no_columns": "无可显示的列",
   "document.json": "原始单据 JSON",
   "document.action.refresh_pending": "已提交更改 — 刷新仍待处理",
+  "document.company.general": "公司概况",
+  "document.company.advanced": "高级设置",
+  "document.company.field.company_name": "名称",
+  "document.company.field.abbr": "简称",
+  "document.company.field.country": "国家",
+  "document.company.field.default_currency": "币种",
+  "document.company.field.domain": "业务领域",
+  "document.company.field.is_group": "集团公司",
+  "document.company.other": "其他信息",
+  "document.company.schema_loading": "正在加载 ERPNext 分区…",
+  "document.company.schema_unavailable":
+    "ERPNext 分区暂不可用。所有字段仍可查看。",
   "document.purchase_invoice.total": "发票总额",
   "document.purchase_invoice.calculated": "已计算",
   "document.purchase_invoice.rounding": "舍入",
@@ -182,6 +194,11 @@ export const zh: Record<string, string> = {
   "kpi.status.auto_refresh": "聚焦时自动刷新",
   "kpi.drilldown.title_detail": "点击下钻",
   "kpi.drilldown.title_trend": "点击查看趋势详情",
+  "kpi.secondary.invoices": "发票",
+  "kpi.secondary.amount": "金额",
+  "kpi.drilldown.title_message": "双击或按回车键，在对话中询问",
+  "kpi.drilldown.title_context":
+    "单击或空格键加入/移出上下文 · 双击或回车键查看详情",
   // ── kpi视图 ───────────────────────────────────────────────────────────
 
   // ── 发票视图 ────────────────────────────────────────────────────────
@@ -315,6 +332,7 @@ export const zh: Record<string, string> = {
   "chart.tooltip.click_action_context": "单击：加入/移出上下文 · 双击详情",
   "chart.tooltip.click_action_context_only": "单击：加入/移出上下文",
   "chart.tooltip.click_action_fallback": "双击详情",
+  "chart.tooltip.click_action_detail": "单击：详情",
   // ── 导航栈（路径、层级、跳转） ──
   "nav.back": "返回",
   "nav.elided": "…{n}",

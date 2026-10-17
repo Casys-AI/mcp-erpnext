@@ -4,6 +4,94 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Tool selection supports `ERPNEXT_CATEGORIES`, `ERPNEXT_EXCLUDE_CATEGORIES`,
+  and `ERPNEXT_EXCLUDE_TOOLS`, with matching CLI flags. Exclusions also remove
+  viewer actions and prevent cache warm-up from invoking the excluded tools.
+  Invalid exclusions and an empty server selection stop startup with an
+  actionable `INVALID_TOOL_FILTER` error.
+- Public library exports include tool-selection helpers and typed input,
+  attachment-download, and viewer-resource errors.
+- [3.0 to 3.1 migration guide](docs/migration-3.0-to-3.1.md) covers host
+  capabilities, pagination, lifecycle actions, and deployment limits.
+
+### Changed
+
+- Buy Evidence declares App version `3.1.0`, independently of the package
+  version. This App identity does not announce a stable package release; the
+  package remains `3.1.0-beta.11` until the next package release.
+
+### Fixed
+
+- Attachment downloads are refused before contacting ERPNext unless the MCP
+  client announces the MCP Apps extension and its HTML MIME type. Library
+  `execute()` calls are refused with `APP_CONTEXT_REQUIRED`. This is a host
+  capability gate; hosts must still keep hidden App tools out of model calls.
+- Generic document lists preserve Frappe's `limit: 0` semantics and accept
+  positive `limit`/`offset` pagination without the beta's artificial ceilings.
+  `limit: 0` with a positive offset fails explicitly. Portable filter schemas
+  allow tool loading in hosts that reject tuple-specific JSON Schema; malformed
+  filters return actionable input errors.
+- Child-table filters qualify parent ordering and collapse duplicate parents
+  when requesting parent fields. Stock Entry lists use the same query plan for
+  `item_code` filters and count each matching entry once.
+- Payment Entry lists use the source account currency for `paid_amount` and
+  expose the destination amount and currency, avoiding an absent generic
+  `currency` column. Asset lists support the v15/v16 Net Purchase Amount field
+  rename and preserve legacy amount/book-value aliases. Shipment lists no longer
+  request the nonexistent `delivery_date`; date filters use `pickup_date`.
+- Asset creation retains its `gross_purchase_amount` input and writes the
+  corresponding Net Purchase Amount field on ERPNext v15/v16.
+- Submit and Cancel actions in document and list details follow a maintained
+  allowlist of submittable ERPNext/HRMS DocTypes, the document state, and the
+  actual tools available. Shared confirmation and feedback distinguish a
+  committed change awaiting refresh from a failed operation. Confirmations close
+  when refreshed identity, revision, effective amount, or currency changes; a
+  locale change only updates the translated request.
+- Scalar KPIs open available local details on a single click. Pie, donut, and
+  treemap charts offer the same fallback when context selection is unavailable;
+  conversational actions keep their explicit activation gesture. Hosts without
+  context replacement no longer show a spurious failure when clearing context.
+- KPI values, comparison values, and secondary invoice counts or amounts use the
+  host locale; older payloads retain their supplied caption. Selected KPI
+  context preserves those secondary values.
+- KPI change badges display the percentage returned by the server without
+  multiplying it again: a 2.8% increase displays as 2.8%, with locale-aware
+  formatting.
+- Revenue, outstanding receivables, and overdue KPIs use the stored amount's
+  actual currency and refuse mixed or unknown currencies. The four revenue,
+  receivables, overdue, and order-count KPIs accept company/currency filters and
+  read all matching records fresh, removing silent total caps. Monthly counts
+  and detail lists use local calendar dates through today. Their detail lists
+  retain the selected scope; financial KPIs no longer open legacy charts with
+  different currency or completeness rules.
+- Revenue Trend uses the Sales Order currency, refuses mixed currencies, accepts
+  company/currency filters, and reads every matching order fresh through today.
+  Opening a month keeps the same company, currency, and calendar period.
+- Refreshing invoice, chart, and funnel details brings the loaded panel into
+  view inside the viewer and respects reduced-motion preferences. Viewer labels
+  share the same typography and spacing conventions.
+- Document detail fields adapt to their panel's available width. Long labels and
+  values wrap instead of overlapping adjacent columns or being truncated.
+- Company details keep their identity visible and group settings in collapsible
+  sections read from ERPNext's DocType. Unmapped and custom fields remain
+  accessible. List previews show the company name, abbreviation, country,
+  currency, domain, and group flag rather than system metadata. Company details
+  use the same attachment sidebar as other document views on wide screens.
+- Document details no longer invent a generic conversational action when ERPNext
+  supplies no navigation or question hint.
+- Document previews opened from lists and chart details retain the stable
+  12-value limit and array counts instead of displaying the entire document.
+  Attachment access remains available alongside the preview. Dates and Frappe
+  timestamps follow the host locale while preserving their civil date and time.
+- JSR viewers are registered only when their remote host already has network
+  permission. HTML is fetched lazily with a 15-second timeout, successful reads
+  are cached, and failures carry structured codes and recovery instructions.
+- Compiled binaries embed the built viewers. Docker includes Buy modules, and
+  published JSR artifacts retain the runtime modules and built HTML while
+  excluding viewer source trees and fixtures.
+
 ## [3.1.0-beta.11] - 2026-09-19
 
 ### Added
@@ -152,6 +240,22 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   case differs: a host declaring a non-positive container width (`0`, negative,
   `NaN`) no longer forces the narrow layout and falls through to the measured
   width. Every other input resolves to the same layout as before.
+
+## [3.0.4] - 2026-09-07
+
+### Fixed
+
+- **Purchase Invoice totals and rounding.** The invoice viewer shows the
+  effective invoice total with a small information icon when an adjustment is
+  applied. Hover, focus, or click the icon to compare the calculated and rounded
+  amounts and learn how to disable final rounding on a draft. Opening the
+  explanation does not modify the invoice. Existing MCP tool inputs remain
+  unchanged. See [#34](https://github.com/Casys-AI/mcp-erpnext/issues/34).
+
+- **Purchase Invoice configuration errors** now identify the payable-account or
+  Stock Received But Not Billed setting when ERPNext rejects the operation for a
+  recognized missing-account error. Native account validation and the original
+  error details are preserved.
 
 ## [3.1.0-beta.6] - 2026-09-01
 
@@ -319,7 +423,9 @@ viewer and attachment work remains on the prerelease channel.
 
 - No existing tool was removed and no existing input schema was made
   incompatible. The new download tool is hidden from model tool lists and is
-  callable only by an MCP App.
+  intended for MCP Apps. Tool visibility alone does not authenticate whether a
+  call came from an App; see the additional host capability gate under
+  [Unreleased](#unreleased).
 - This beta intentionally changes the presentation of generic and dedicated
   record reads from raw JSON to `doc-viewer` in compatible hosts. Hosts without
   MCP Apps continue to receive the normal tool result.

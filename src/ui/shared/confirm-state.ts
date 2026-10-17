@@ -6,6 +6,9 @@
 
 import type { t } from "./i18n.ts";
 
+/** Couleur du bouton de confirmation : « danger » sauf action constructive. */
+export type ConfirmTone = "accent" | "danger";
+
 export interface PendingConfirm {
   /** L'identifiant du document, dans l'eyebrow : « ACC-SINV-2026-00042 ». */
   subject: string;
@@ -19,6 +22,19 @@ export interface PendingConfirm {
   actionLabel: string;
   actionLabelKey?: string;
   params?: Record<string, unknown>;
+  /**
+   * Couleur du bouton de confirmation. Absent = « danger » (comportement
+   * historique) ; une soumission passe « accent », seule une destruction
+   * s'affiche en rouge.
+   */
+  tone?: ConfirmTone;
+  /**
+   * Ce que la feuille confirme (« submit », « cancel »), pour que le parent
+   * la ferme quand l'action n'est plus offerte.
+   */
+  key?: string;
+  /** État local du document au moment de la demande, indépendant de la locale. */
+  documentSnapshot?: string;
   onConfirm: () => void;
 }
 
@@ -45,6 +61,10 @@ export function confirmPending(
   current: ConfirmSnapshot,
 ): { next: ConfirmSnapshot; run: (() => void) | null } {
   return { next: null, run: current?.onConfirm ?? null };
+}
+
+export function confirmTone(pending: PendingConfirm): ConfirmTone {
+  return pending.tone ?? "danger";
 }
 
 /** Older and business-specific prompts keep their original strings. */

@@ -4,6 +4,7 @@ import {
   type ActiveContextSelection,
   activeContextSelectionsForScope,
   addActiveContextSelectionWithEviction,
+  canReplaceActiveContext,
   clearActiveContext,
   compactActiveContextMutations,
   type ContextSelectionItem,
@@ -115,7 +116,12 @@ export function createActiveContextController(
       ? clearActiveContext(app)
       : replaceActiveContext(app, next.map((selection) => selection.item));
   }
-  function clear() {
+  function clear(): Promise<ActiveContextResult> {
+    // Host without updateModelContext: nothing was ever shared, nothing to
+    // clear. Neutral outcome: no pending flash, no failure badge.
+    if (!canReplaceActiveContext(app.getHostCapabilities())) {
+      return Promise.resolve("unsupported");
+    }
     const finish = beginOperation();
     publish({ evictedLabel: null });
     return queue.run(async () => {
@@ -126,7 +132,8 @@ export function createActiveContextController(
           mutationLog = [];
           commit([]);
         }
-        finish(result === "cleared");
+        // "unsupported" is neutral (defense in depth vs. the guard above).
+        finish(result === "unsupported" ? undefined : result === "cleared");
         return result;
       } finally {
         finish();

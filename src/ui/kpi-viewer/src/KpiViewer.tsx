@@ -34,14 +34,29 @@ import {
   type ToolResultPayload,
   type UiRefreshRequestData,
 } from "~/shared/refresh";
-import { isFixtureMode, KPI_FIXTURE } from "./fixture.ts";
+import { isFixtureMode, kpiFixtureFromSearch } from "./fixture.ts";
 import type { KpiData } from "./types.ts";
-import { currentLocale, formatNumber, toNumber } from "~/shared/format";
+import { currentLocale } from "~/shared/format";
 import { t } from "~/shared/i18n.ts";
 import { type TFunction, useT } from "~/shared/i18n-hook.ts";
 import { type DrillDownChannel, sharedLabel } from "~/shared/drill-down";
 import {
+  formatDeltaPercent,
+  formatDeltaValue,
+  kpiCaption,
+  kpiMainText,
+  kpiParts,
+  kpiSecondary,
+  type KpiSecondaryLine,
+  kpiSecondaryText,
+} from "./kpi-format.ts";
+import {
+  kpiClickAction,
+  kpiClickIntent,
+  kpiContextEnabled,
+  kpiHintKey,
   kpiInteractionPlan,
+  kpiKeyShortcuts,
   kpiNumberAction,
   kpiTrendAction,
 } from "./kpi-jumps.ts";
@@ -64,62 +79,17 @@ const app = new App({ name: "KPI Viewer", version: "1.0.0" });
 const KPI_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
-/* ── Formatage ────────────────────────────────────────────────────── */
+/* ── Contexte modèle ──────────────────────────────────────────────── */
 
-/**
- * Retourne le montant et l'unité séparément pour permettre le rendu
- * bipolaire 46px/26px (montant gros, unité faufilée à droite).
- */
-function formatKpiParts(data: KpiData): { amount: string; unit: string } {
-  // Normalise la valeur — null, undefined, NaN sont traités comme 0, jamais une exception.
-  const v = toNumber(data.value) ?? 0;
-  if (data.currency) {
-    const amount = formatNumber(v, 2);
-    // Extraire le symbole monétaire depuis Intl sans le chiffre.
-    const symbol = new Intl.NumberFormat(currentLocale(), {
-      style: "currency",
-      currency: data.currency,
-    })
-      .formatToParts(0)
-      .find((p) => p.type === "currency")?.value ?? data.currency;
-    return { amount, unit: symbol };
-  }
-  if (data.unit === "%") {
-    const decimals = v % 1 === 0 ? 0 : 1;
-    return { amount: formatNumber(v, decimals), unit: "%" };
-  }
-  const decimals = v % 1 === 0 ? 0 : 2;
-  return { amount: formatNumber(v, decimals), unit: data.unit ?? "" };
-}
-
-/**
- * Formate la valeur de comparaison (deltaValue) de la même manière
- * que la valeur principale, mais sans scinder en deux éléments.
- */
-function formatDeltaValue(data: KpiData): string {
-  // Garde == null (double égal) : capture à la fois null et undefined.
-  if (data.deltaValue == null) return "";
-  const v = toNumber(data.deltaValue) ?? 0;
-  if (data.currency) {
-    const amount = formatNumber(v, 2);
-    const symbol = new Intl.NumberFormat(currentLocale(), {
-      style: "currency",
-      currency: data.currency,
-    })
-      .formatToParts(0)
-      .find((p) => p.type === "currency")?.value ?? data.currency;
-    return `${amount} ${symbol}`;
-  }
-  return formatNumber(v, 2);
-}
-
-function kpiNumberContext(data: KpiData): ContextSelectionItem {
-  const { amount, unit } = formatKpiParts(data);
+function kpiNumberContext(data: KpiData, tf: TFunction): ContextSelectionItem {
+  const secondary = kpiSecondaryText(data, tf);
   return {
     id: `kpi:${data.label}:value`,
     view: "KPI",
     label: data.label,
-    value: [amount, unit].filter(Boolean).join(" "),
+    value: [kpiMainText(kpiParts(data)), secondary].filter(Boolean).join(
+      " · ",
+    ),
   };
 }
 
@@ -133,7 +103,7 @@ function kpiTrendContext(
   const points = kpiSparklinePoints(data);
   const period = kpiSparklinePeriod(points);
   const lastValue = sparkline?.length
-    ? formatKpiParts({ ...data, value: sparkline[sparkline.length - 1] })
+    ? kpiParts({ ...data, value: sparkline[sparkline.length - 1] })
     : undefined;
   const resource = kpiTrendContextResource(data);
   return {
@@ -154,12 +124,11 @@ function kpiTrendPointContext(
   data: KpiData,
   point: KpiSparklinePoint,
 ): ContextSelectionItem {
-  const { amount, unit } = formatKpiParts({ ...data, value: point.value });
   return {
     id: `kpi:${data.label}:trend:${encodeURIComponent(point.label)}`,
     view: "KPI",
     label: `${data.label} · ${point.label}`,
-    value: [amount, unit].filter(Boolean).join(" "),
+    value: kpiMainText(kpiParts({ ...data, value: point.value })),
   };
 }
 
@@ -172,7 +141,7 @@ function kpiContextCandidates(
     kpiTrendPointContext(data, point)
   );
   return [
-    kpiNumberContext(data),
+    kpiNumberContext(data, tf),
     kpiTrendContext(data, tf),
     ...pointContexts,
   ];
@@ -306,6 +275,9 @@ function SparklineBars({
                   event.stopPropagation();
                   onKeyDown?.(index, event);
                 }}
+                onKeyUp={(event) => {
+                  if (event.key === " ") event.preventDefault();
+                }}
               >
                 <span
                   aria-hidden="true"
@@ -365,8 +337,7 @@ function DeltaBadge({ delta, trend, trendIsGood }: {
 }) {
   const direction = trend ?? (delta > 0 ? "up" : delta < 0 ? "down" : "flat");
   const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "—";
-  // delta est un ratio : 2.83 → 283 %.
-  const pct = Math.round(Math.abs(delta) * 100);
+  const pct = formatDeltaPercent(delta);
   const isGood = trendIsGood === undefined
     ? true
     : trendIsGood
@@ -387,7 +358,7 @@ function DeltaBadge({ delta, trend, trendIsGood }: {
         tone === "neutral" && "bg-ink-ghost/20 text-ink-muted",
       )}
     >
-      {arrow} {pct} %
+      {arrow} {pct}
     </span>
   );
 }
@@ -528,6 +499,35 @@ function KpiEmptyState() {
   );
 }
 
+/* ── Ligne secondaire ─────────────────────────────────────────────── */
+
+/**
+ * Libellé mono micro à gauche, valeur en chiffres tabulaires à droite : même
+ * gabarit que la ligne du delta, un seul niveau sous le grand nombre.
+ */
+function KpiSecondaryRow(
+  { line, compact }: { line: KpiSecondaryLine; compact: boolean },
+) {
+  return (
+    <div
+      data-kpi-secondary
+      class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5"
+    >
+      <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+        {line.label}
+      </span>
+      <span
+        class={cx(
+          "tabular-nums text-ink-muted",
+          compact ? "text-[11.5px]" : "text-[12px]",
+        )}
+      >
+        {line.value}
+      </span>
+    </div>
+  );
+}
+
 /* ── Carte KPI ───────────────────────────────────────────────────── */
 
 /**
@@ -559,12 +559,18 @@ function KpiCard({
   const sparkline = data.sparkline && data.sparkline.length >= 2
     ? data.sparkline
     : undefined;
-  const contextEnabled = activeContext.supported && sparkline !== undefined;
+  const contextEnabled = kpiContextEnabled(
+    activeContext.supported,
+    sparkline !== undefined,
+  );
   const sparklinePoints = kpiSparklinePoints(data);
   const sparklineLabels = sparklinePoints.length > 0
     ? sparklinePoints.map((point) => point.label)
     : undefined;
-  const { amount, unit } = formatKpiParts(data);
+  const parts = kpiParts(data);
+  const { amount, unit } = parts;
+  const secondaryLine = kpiSecondary(data, t);
+  const caption = kpiCaption(data, parts, t);
   const periodLabel = kpiSparklinePeriod(sparklinePoints);
 
   const [shared, setShared] = useState<DrillDownChannel | null>(null);
@@ -587,7 +593,7 @@ function KpiCard({
     setTimeout(() => setShared(null), 1500);
   }
 
-  const numberContext = kpiNumberContext(data);
+  const numberContext = kpiNumberContext(data, t);
   const trendContext = kpiTrendContext(data, t);
   const trendPointContexts = sparklinePoints.map((point) =>
     kpiTrendPointContext(data, point)
@@ -630,19 +636,26 @@ function KpiCard({
     }
   }
 
+  function detailAvailability(action: ReturnType<typeof kpiNumberAction>) {
+    return {
+      hasJump: action?.kind === "jump" && onOpenJump !== undefined,
+      hasMessage: action?.kind === "drill" && onAsk !== undefined,
+    };
+  }
+
   function interactionIntent(
     selection: ContextSelectionItem,
     action: ReturnType<typeof kpiNumberAction>,
   ) {
-    return {
+    const { hasJump, hasMessage } = detailAvailability(action);
+    return kpiClickIntent({
       key: selection.id,
+      click: kpiClickAction(contextEnabled, hasJump, hasMessage),
+      hasJump: action?.kind === "jump",
       onSingle: () => activateContext(selection),
       onDouble: () => toggleDetail(action),
       runConversation: activeContext.runConversation,
-      doublePolicy: action?.kind === "jump"
-        ? "local" as const
-        : "after-context" as const,
-    };
+    });
   }
 
   function pointerClick(
@@ -650,11 +663,8 @@ function KpiCard({
     action: ReturnType<typeof kpiNumberAction>,
     clickCount: number,
   ) {
-    if (canOpenDetail(action)) {
-      clickIntent.click(interactionIntent(selection, action), clickCount);
-    } else if (contextEnabled) {
-      clickIntent.click(interactionIntent(selection, action), clickCount);
-    }
+    if (!canOpenDetail(action) && !contextEnabled) return;
+    clickIntent.click(interactionIntent(selection, action), clickCount);
   }
 
   function pointerDoubleClick(
@@ -683,10 +693,32 @@ function KpiCard({
     void activeContext.toggle(selection);
   }
 
+  // Firefox émet un clic natif à Espace relâché malgré le preventDefault du
+  // keydown : sur un <button>, on l'absorbe pour ne pas activer deux fois.
+  function swallowSpaceKeyUp(event: JSX.TargetedKeyboardEvent<HTMLElement>) {
+    if (event.key === " ") event.preventDefault();
+  }
+
+  const numberDetail = detailAvailability(numberAction);
+  const trendDetail = detailAvailability(trendAction);
   const numberHasDetail = canOpenDetail(numberAction);
   const trendHasDetail = canOpenDetail(trendAction);
   const numberInteractive = contextEnabled || numberHasDetail;
   const trendInteractive = contextEnabled || trendHasDetail;
+  // En mode détail au clic, le double-clic natif n'est pas câblé : le clic a
+  // déjà ouvert le détail, un second geste le refermerait.
+  const numberClick = kpiClickAction(
+    contextEnabled,
+    numberDetail.hasJump,
+    numberDetail.hasMessage,
+  );
+  const trendClick = kpiClickAction(
+    contextEnabled,
+    trendDetail.hasJump,
+    trendDetail.hasMessage,
+  );
+  const numberDblClickEnabled = numberHasDetail && numberClick !== "detail";
+  const trendDblClickEnabled = trendHasDetail && trendClick !== "detail";
   const numberSelected = contextEnabled &&
     activeContext.isSelected(numberContext);
   const trendSelected = activeContext.isSelected(trendContext);
@@ -703,16 +735,30 @@ function KpiCard({
       ? t("context.active.toggle", { label: trendContext.label })
       : t("kpi.drilldown.aria_trend", { label: data.label })
     : undefined;
-  const numberKeyShortcuts = numberHasDetail
-    ? contextEnabled ? "Space Enter" : "Enter"
-    : contextEnabled
-    ? "Space Enter"
-    : undefined;
-  const trendKeyShortcuts = trendHasDetail
-    ? contextEnabled ? "Space Enter" : "Enter"
-    : contextEnabled
-    ? "Space Enter"
-    : undefined;
+  const numberHintKey = kpiHintKey(
+    "number",
+    contextEnabled,
+    numberDetail.hasJump,
+    numberDetail.hasMessage,
+  );
+  const trendHintKey = kpiHintKey(
+    "trend",
+    contextEnabled,
+    trendDetail.hasJump,
+    trendDetail.hasMessage,
+  );
+  const numberTitle = numberHintKey ? t(numberHintKey) : undefined;
+  const trendTitle = trendHintKey ? t(trendHintKey) : undefined;
+  const numberKeyShortcuts = kpiKeyShortcuts(
+    contextEnabled,
+    numberDetail.hasJump,
+    numberDetail.hasMessage,
+  );
+  const trendKeyShortcuts = kpiKeyShortcuts(
+    contextEnabled,
+    trendDetail.hasJump,
+    trendDetail.hasMessage,
+  );
   const compact = layout !== "wide";
 
   /* ── Layout mobile / panel ─────────────────────────────────────── */
@@ -740,27 +786,28 @@ function KpiCard({
             />
           </div>
 
-          {/* Valeur principale — double-clic / Entree ouvrent le detail. */}
+          {/* Valeur principale — geste et title dictés par kpiClickAction. */}
           <div class="flex min-w-0 items-center justify-between gap-2">
             <span
               class={cx(
                 "rounded-[4px] font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
                 "text-[length:var(--text-metric-compact)]",
                 numberInteractive &&
-                  "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+                  "-mx-1 cursor-pointer px-1 transition-colors hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
                 numberSelected &&
                   "bg-sunken outline outline-1 outline-accent-edge",
               )}
               role={numberInteractive ? "button" : undefined}
               tabIndex={numberInteractive ? 0 : undefined}
               aria-label={numberAriaLabel}
+              title={numberTitle}
               aria-pressed={contextEnabled ? numberSelected : undefined}
               aria-keyshortcuts={numberKeyShortcuts}
               onClick={numberInteractive
                 ? (event) =>
                   pointerClick(numberContext, numberAction, event.detail)
                 : undefined}
-              onDblClick={numberHasDetail
+              onDblClick={numberDblClickEnabled
                 ? () => pointerDoubleClick(numberContext, numberAction)
                 : undefined}
               onKeyDown={numberInteractive
@@ -773,6 +820,19 @@ function KpiCard({
               </span>
             </span>
           </div>
+
+          {/* Ligne secondaire : compte de factures ou montant en retard. */}
+          {secondaryLine && (
+            <KpiSecondaryRow line={secondaryLine} compact={true} />
+          )}
+          {!secondaryLine && caption && (
+            <p
+              data-kpi-caption
+              class="m-0 min-w-0 text-[11.5px] leading-snug text-ink-faint tabular-nums"
+            >
+              {caption}
+            </p>
+          )}
 
           {/* Delta */}
           {data.delta !== undefined && (
@@ -812,11 +872,13 @@ function KpiCard({
                   type="button"
                   class="absolute inset-x-0 bottom-0 top-1.5 z-0 rounded-[4px] border-0 bg-transparent p-0 hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
                   aria-label={trendAriaLabel}
+                  title={trendTitle}
                   aria-pressed={contextEnabled ? trendSelected : undefined}
                   aria-keyshortcuts={trendKeyShortcuts}
+                  onKeyUp={swallowSpaceKeyUp}
                   onClick={(event) =>
                     pointerClick(trendContext, trendAction, event.detail)}
-                  onDblClick={trendHasDetail
+                  onDblClick={trendDblClickEnabled
                     ? () => pointerDoubleClick(trendContext, trendAction)
                     : undefined}
                   onKeyDown={(event) =>
@@ -842,7 +904,7 @@ function KpiCard({
                         event.detail,
                       )
                     : undefined}
-                  onDoubleClick={trendHasDetail
+                  onDoubleClick={trendDblClickEnabled
                     ? (index) =>
                       pointerDoubleClick(
                         trendPointContexts[index] ?? trendContext,
@@ -903,27 +965,28 @@ function KpiCard({
             />
           </div>
 
-          {/* Valeur principale — double-clic / Entree ouvrent le detail. */}
+          {/* Valeur principale — geste et title dictés par kpiClickAction. */}
           <div class="flex min-w-0 items-center gap-2">
             <span
               class={cx(
                 "rounded-[4px] font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
                 "text-[length:var(--text-metric)]",
                 numberInteractive &&
-                  "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
+                  "-mx-1 cursor-pointer px-1 transition-colors hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
                 numberSelected &&
                   "bg-sunken outline outline-1 outline-accent-edge",
               )}
               role={numberInteractive ? "button" : undefined}
               tabIndex={numberInteractive ? 0 : undefined}
               aria-label={numberAriaLabel}
+              title={numberTitle}
               aria-pressed={contextEnabled ? numberSelected : undefined}
               aria-keyshortcuts={numberKeyShortcuts}
               onClick={numberInteractive
                 ? (event) =>
                   pointerClick(numberContext, numberAction, event.detail)
                 : undefined}
-              onDblClick={numberHasDetail
+              onDblClick={numberDblClickEnabled
                 ? () => pointerDoubleClick(numberContext, numberAction)
                 : undefined}
               onKeyDown={numberInteractive
@@ -933,6 +996,19 @@ function KpiCard({
               {amount} <span class="text-[26px] text-ink-faint">{unit}</span>
             </span>
           </div>
+
+          {/* Ligne secondaire : compte de factures ou montant en retard. */}
+          {secondaryLine && (
+            <KpiSecondaryRow line={secondaryLine} compact={false} />
+          )}
+          {!secondaryLine && caption && (
+            <p
+              data-kpi-caption
+              class="m-0 min-w-0 text-[12px] leading-snug text-ink-faint tabular-nums"
+            >
+              {caption}
+            </p>
+          )}
 
           {/* Delta */}
           {data.delta !== undefined && (
@@ -974,11 +1050,13 @@ function KpiCard({
                   type="button"
                   class="absolute inset-0 z-0 rounded-[4px] border-0 bg-transparent p-0 hover:outline hover:outline-1 hover:outline-accent-edge focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
                   aria-label={trendAriaLabel}
+                  title={trendTitle}
                   aria-pressed={contextEnabled ? trendSelected : undefined}
                   aria-keyshortcuts={trendKeyShortcuts}
+                  onKeyUp={swallowSpaceKeyUp}
                   onClick={(event) =>
                     pointerClick(trendContext, trendAction, event.detail)}
-                  onDblClick={trendHasDetail
+                  onDblClick={trendDblClickEnabled
                     ? () => pointerDoubleClick(trendContext, trendAction)
                     : undefined}
                   onKeyDown={(event) =>
@@ -1015,7 +1093,7 @@ function KpiCard({
                         event.detail,
                       )
                     : undefined}
-                  onDoubleClick={trendHasDetail
+                  onDoubleClick={trendDblClickEnabled
                     ? (index) =>
                       pointerDoubleClick(
                         trendPointContexts[index] ?? trendContext,
@@ -1232,14 +1310,16 @@ export function KpiViewer() {
   const fixture = isFixtureMode();
 
   const [data, setData] = useState<KpiData | null>(
-    fixture ? KPI_FIXTURE : null,
+    fixture ? kpiFixtureFromSearch() : null,
   );
   const [loading, setLoading] = useState(!fixture);
   const [refreshing, setRefreshing] = useState(false);
   const [rootFreshEvent, setRootFreshEvent] = useState(0);
   const [rootMutationEvent, setRootMutationEvent] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const dataRef = useRef<KpiData | null>(fixture ? KPI_FIXTURE : null);
+  const dataRef = useRef<KpiData | null>(
+    fixture ? kpiFixtureFromSearch() : null,
+  );
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(null);
   const refreshSequenceRef = useRef(createUiRefreshSequence());
   const rootEventRef = useRef(0);

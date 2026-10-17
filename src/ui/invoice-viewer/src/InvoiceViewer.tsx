@@ -29,6 +29,12 @@ import {
   childRowContextItem,
   documentContextItem,
 } from "~/shared/document/context-items";
+import {
+  lifecycleConfirmIsStale,
+  lifecycleConfirmSnapshot,
+  lifecycleConfirmSubject,
+  lifecycleVisibility,
+} from "~/shared/document/lifecycle-actions";
 import { documentModelOf } from "~/shared/document/model";
 import { PurchaseInvoiceRoundingNote } from "~/shared/document/PurchaseInvoiceRoundingNote";
 import {
@@ -943,6 +949,20 @@ function InvoiceContent({
     hasServerTools ? availableTools : [],
     mutationCommitted,
   );
+  const lifecycle = lifecycleVisibility({
+    docstatus: data.docstatus,
+    status: data.status,
+    canSubmit: Boolean(mutations.submit) && !canonicalRefreshPending &&
+      !attachmentMutationBusy,
+    canCancel: Boolean(mutations.cancel) && !canonicalRefreshPending &&
+      !attachmentMutationBusy,
+  });
+  const confirmSnapshot = lifecycleConfirmSnapshot(doctype, data.name, data);
+  useLayoutEffect(() => {
+    if (lifecycleConfirmIsStale(confirm.pending, lifecycle, confirmSnapshot)) {
+      confirm.dismiss();
+    }
+  }, [confirm.pending, lifecycle.submit, lifecycle.cancel, confirmSnapshot]);
 
   /** Envoie une question au chat (chemin de secours sans outils). */
   const { ask } = viewerNav;
@@ -1028,18 +1048,29 @@ function InvoiceContent({
       title={fixture ? previewTitle : t("invoice.btn.submit.title")}
       onClick={() =>
         confirm.request({
-          subject: data.name,
+          subject: lifecycleConfirmSubject(doctype, data.name),
+          key: "submit",
+          documentSnapshot: confirmSnapshot,
+          tone: "accent",
           title: t("invoice.confirm.submit"),
+          titleKey: "invoice.confirm.submit",
           detail: submitAmount
             ? t("invoice.confirm.submit.detail_with_amount", {
               amount: submitAmount,
             })
             : t("invoice.confirm.submit.detail"),
+          detailKey: submitAmount
+            ? "invoice.confirm.submit.detail_with_amount"
+            : "invoice.confirm.submit.detail",
           actionLabel: submitAmount
             ? t("invoice.confirm.submit.action_with_amount", {
               amount: submitAmount,
             })
             : t("invoice.confirm.submit.action"),
+          actionLabelKey: submitAmount
+            ? "invoice.confirm.submit.action_with_amount"
+            : "invoice.confirm.submit.action",
+          params: submitAmount ? { amount: submitAmount } : undefined,
           onConfirm: () => {
             if (!mutations.submit) return;
             void callAction(
@@ -1072,10 +1103,15 @@ function InvoiceContent({
       title={fixture ? previewTitle : t("invoice.btn.cancel.title")}
       onClick={() =>
         confirm.request({
-          subject: data.name,
+          subject: lifecycleConfirmSubject(doctype, data.name),
+          key: "cancel",
+          documentSnapshot: confirmSnapshot,
           title: t("invoice.confirm.cancel"),
+          titleKey: "invoice.confirm.cancel",
           detail: t("invoice.confirm.cancel.detail"),
+          detailKey: "invoice.confirm.cancel.detail",
           actionLabel: t("invoice.confirm.cancel.action"),
+          actionLabelKey: "invoice.confirm.cancel.action",
           onConfirm: () => {
             if (!mutations.cancel) return;
             void callAction(

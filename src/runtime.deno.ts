@@ -52,3 +52,19 @@ export function exit(code: number): never {
 export function onSignal(signal: string, handler: () => void): void {
   Deno.addSignalListener(signal as Deno.Signal, handler);
 }
+
+// ─── Permissions ─────────────────────────────────────────
+
+/**
+ * Current state of the network permission for `host` ("hostname:port").
+ * Read-only query: never prompts. Fails open ("granted") when the permission
+ * API is unavailable (exotic runtimes): a later failure is then reported at
+ * read time by a structured error instead of silently hiding features.
+ */
+export function netPermission(host: string): "granted" | "denied" | "prompt" {
+  try {
+    return Deno.permissions.querySync({ name: "net", host }).state;
+  } catch {
+    return "granted";
+  }
+}

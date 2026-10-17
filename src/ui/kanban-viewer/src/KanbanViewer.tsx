@@ -38,7 +38,7 @@ import {
   kanbanTransitionLabel,
 } from "~/shared/kanban/labels";
 
-import { t } from "~/shared/i18n";
+import { currentLang, t } from "~/shared/i18n";
 import {
   getErrorPresentation,
   normalizeMoveFailureMessage,
@@ -92,6 +92,7 @@ import {
   kanbanLiveMessageText,
 } from "./live-message.ts";
 import { CardDetailModal } from "./DetailModal";
+import { horizontalScrollEdges } from "./scroll.ts";
 import {
   isFixtureMode,
   KANBAN_FIXTURE,
@@ -176,14 +177,27 @@ function DragScrollContainer({
   & JSX.HTMLAttributes<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
   const dragState = useRef({ active: false, startX: 0, scrollLeft: 0 });
+  // Physical sides that still hide columns (left/right, whatever the writing
+  // direction). In RTL browsers scrollLeft is 0 at the start (right edge) and
+  // goes negative, see scroll.ts.
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  // Re-render (and re-read the direction) when the host locale flips between
+  // LTR and RTL without any resize or scroll event.
+  useT();
+  const lang = currentLang();
 
   const updateFades = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 0);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
+    const edges = horizontalScrollEdges(
+      el.scrollLeft,
+      el.scrollWidth,
+      el.clientWidth,
+      getComputedStyle(el).direction === "rtl",
+    );
+    setCanScrollLeft(edges.left);
+    setCanScrollRight(edges.right);
   }, []);
 
   useEffect(() => {
@@ -194,6 +208,8 @@ function DragScrollContainer({
     observer.observe(el);
     return () => observer.disconnect();
   }, [updateFades]);
+
+  useEffect(updateFades, [updateFades, lang]);
 
   const onMouseDown = useCallback(
     (e: JSX.TargetedMouseEvent<HTMLDivElement>) => {
@@ -231,6 +247,8 @@ function DragScrollContainer({
     }
   }, []);
 
+  // Mask gradients are physical (`to right`), like canScrollLeft/Right: a fade
+  // sits on the physical edge that still hides columns, in LTR and RTL alike.
   function computeMaskImage(): string | undefined {
     if (canScrollLeft && canScrollRight) {
       return "linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent)";
@@ -459,7 +477,7 @@ function KanbanCard({
             ? (
               <span
                 class={cx(
-                  "shrink-0 font-mono text-[9px] uppercase tracking-[0.06em]",
+                  "shrink-0 font-mono text-[9px] uppercase tracking-chip",
                   "rounded-bar px-[5px] py-0.5 flex-shrink-0",
                   "bg-brand/12 dark:bg-brand/16 text-brand-text dark:text-brand-text",
                 )}
@@ -719,7 +737,7 @@ function KanbanColumn({
             class="shrink-0 rounded-full"
             style={{ width: 5, height: 5, background: column.color }}
           />
-          <span class="font-mono text-chip uppercase tracking-[0.08em] text-ink-2">
+          <span class="font-mono text-chip uppercase tracking-live text-ink-2">
             {kanbanStatusLabel(column.label, t)}
           </span>
         </div>
@@ -811,7 +829,7 @@ function MobileColumnNavWrapper({
           />
           <span
             class={cx(
-              "font-mono uppercase tracking-[0.08em] text-ink",
+              "font-mono uppercase tracking-live text-ink",
               isMobile ? "text-meta" : "text-chip",
             )}
           >

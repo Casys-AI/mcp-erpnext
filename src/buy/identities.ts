@@ -1,8 +1,9 @@
 /**
  * App, capture, result, and recorded-session identities owned by mcp-erpnext.
  *
- * Package and App versions are the same published prerelease (3.1.0-beta.11).
- * Presentation of sealed Buy evidence is not a live ERP qualification.
+ * The App version follows its own cycle, independent of the package version:
+ * bump BUY_VIEW_APP_VERSION only when the App manifest contract changes (it
+ * must stay a stable semver; see src/ui/app_versions_test.ts). Presentation of sealed Buy evidence is not a live ERP qualification.
  *
  * `sourceInstance.siteId` is SHA-256 of the configured FrappeClient
  * normalized site URL (origin + site path). It is not an ERP database UUID.
@@ -31,7 +32,7 @@ export const BUY_VIEW_APP_MANIFEST_URI =
 
 export const BUY_VIEW_APP_ID = "io.casys.mcp-erpnext.buy-evidence" as const;
 export const BUY_VIEW_APP_TITLE = "ERPNext Buy Evidence" as const;
-export const BUY_VIEW_APP_VERSION = "3.1.0-beta.11" as const;
+export const BUY_VIEW_APP_VERSION = "3.1.0" as const;
 
 export const BUY_SEAL_OPERATION = "buy.seal-configuration-cost@1" as const;
 export const BUY_CAPTURE_OPERATION =

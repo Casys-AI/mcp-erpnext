@@ -38,8 +38,11 @@
  * `bg-ok` d'un viewer ne fera plus disparaître silencieusement la couleur d'une
  * série de graphe — et seulement en thème clair, là où le token élagué perd sa
  * valeur tout en gardant celle du bloc sombre écrit à la main.
+ *
+ * Même garde pour les jetons d'espacement de lettres (`--tracking-*`), lus en
+ * `var()` par les styles inline du funnel.
  */
-@source inline("bg-accent bg-bad bg-cat-1 bg-cat-2 bg-cat-3 bg-cat-4 bg-cat-5 bg-cat-6 bg-cat-7 bg-cat-8 bg-control bg-ink bg-ink-faint bg-ink-ghost bg-ink-muted bg-line bg-line-soft bg-ok bg-row-hover bg-surface");
+@source inline("tracking-mono tracking-chip tracking-live tracking-label tracking-eyebrow bg-accent bg-bad bg-cat-1 bg-cat-2 bg-cat-3 bg-cat-4 bg-cat-5 bg-cat-6 bg-cat-7 bg-cat-8 bg-control bg-ink bg-ink-faint bg-ink-ghost bg-ink-muted bg-line bg-line-soft bg-ok bg-row-hover bg-surface");
 
 /**
  * Le thème est piloté par [data-theme] sur <html>, posé par applyCasysTheme()
@@ -185,6 +188,13 @@
 
   --tracking-title: -0.01em;
   --tracking-metric: -0.025em;
+  /**
+   * Tout espacement de lettres POSITIF passe par un de ces jetons, jamais par
+   * une valeur arbitraire (`tracking-[0.08em]`) ni un `letterSpacing` inline :
+   * global.css les remet à zéro en écriture RTL, où l'espacement casse les
+   * ligatures de l'écriture cursive. `tracking_test.ts` garde la règle.
+   */
+  --tracking-mono: 0.04em;
   --tracking-chip: 0.06em;
   --tracking-live: 0.08em;
   --tracking-label: 0.1em;

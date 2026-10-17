@@ -8,7 +8,19 @@
  * - `jumpFromHint` vit dans shared/jumps.ts ; on ne le duplique pas.
  */
 
+import { formatCurrency } from "../../shared/format.ts";
 import type { NavHint } from "../../shared/jumps.ts";
+
+/**
+ * Valeur monétaire d'une étape : la devise du payload, sans repli inventé
+ * (sans devise, le nombre seul). Tiret quand il n'y a aucun montant.
+ */
+export function funnelStageValueText(
+  value: number | null | undefined,
+  currency: string | undefined,
+): string {
+  return value != null && value > 0 ? formatCurrency(value, currency) : "—";
+}
 
 export type FunnelStageActivation = "context" | "detail";
 

@@ -35,7 +35,11 @@ workflows, and interactive UI viewers. Published as `@casys/mcp-erpnext` on npm
   `NoopCache` implementations, app-wide singleton.
 - **Runtime adapters**: `src/runtime.ts` (Deno) and `src/runtime.node.ts`
   (Node.js) — the build script swaps them.
-- **Scripts**: `scripts/build-node.sh` produces the npm bundle.
+- **Scripts**: `scripts/build-node.sh` produces the npm bundle;
+  `scripts/release-guard.mjs` is the publish guard (versions, tag ref, npm
+  dist-tag, `latest` never moves backwards); `scripts/third-party-notices.mjs`
+  generates/checks `THIRD_PARTY_NOTICES.txt`. Their tests (`scripts/*_test.ts`)
+  run with `deno task test:scripts`.
 - **Docs**: `docs/` contains roadmap, known issues, and coverage notes.
 - Keep UI-only deps in `src/ui/package.json`; do not add them to `deno.json`.
   Conversely, server-side deps go in the `deno.json` import map.
@@ -64,7 +68,8 @@ deno task serve                    # --http --port=3012
 # Start with MCP inspector
 deno task inspect
 
-# Compile to standalone binary
+# Compile to standalone binary (embeds src/ui/dist: run `deno task ui:build` first,
+# otherwise --include fails on the missing folder)
 deno task compile
 
 # Build UI viewers
@@ -106,6 +111,24 @@ esbuild bundle at `dist-node/bin/mcp-erpnext.mjs`.
 
 **All source code imports `from "./runtime.ts"` — never import Deno or Node APIs
 directly.**
+
+#### JSR viewers (remote `import.meta.url`)
+
+Under `deno run jsr:@casys/mcp-erpnext/server`, `import.meta.url` is an
+`https://jsr.io/...` URL, so viewers are fetched lazily on `resources/read`
+(`readViewerDist`, `src/ui/viewer-resource-paths.ts`): memoised per URL for the
+process (failed fetches are not cached), 15 s timeout
+(`VIEWER_FETCH_TIMEOUT_MS`), local file reads unchanged and never memoised.
+
+- Remote viewers are registered only when `netPermission("host:port")`
+  (`runtime.ts`) is `granted`; `prompt` counts as not granted (no prompt on
+  stdio) and an unavailable permission API fails open. Otherwise none are
+  announced and ONE stderr line with `VIEWER_REMOTE_PERMISSION_DENIED` and the
+  recovery (`--allow-net=jsr.io`) is logged.
+- Read failures throw `ViewerResourceError` (`src/ui/viewer-errors.ts`): closed
+  code list, and `message` is a compact JSON string
+  `{code,message,retryable,context,recovery}` (the only channel
+  `@casys/mcp-server` relays for a plain `Error`, JSON-RPC `-32603`).
 
 ### Tool architecture
 
@@ -261,7 +284,12 @@ Registered in `src/ui/viewers.ts` — add new viewer names there and in
 
 `server.ts` creates a `McpApp` (from `@casys/mcp-server`), registers all tools +
 UI resources, and starts in stdio or HTTP mode. Supports `--http`, `--port=`,
-`--hostname=`, and `--categories=` flags.
+`--hostname=`, `--categories=`, `--exclude-categories=` and `--exclude-tools=`
+flags (the three tool filters also read `ERPNEXT_CATEGORIES`,
+`ERPNEXT_EXCLUDE_CATEGORIES`, `ERPNEXT_EXCLUDE_TOOLS`; CLI wins). Parsing lives
+in `src/tools/selection-config.ts`, resolution in `src/tools/selection.ts`;
+invalid filters exit 1 with an `INVALID_TOOL_FILTER` error. See
+`docs/environment-variables.md`.
 
 ### HTTP authentication
 
@@ -309,8 +337,12 @@ framework itself.
 - Use `import type { ... }` for type-only imports everywhere.
 - Tool names: `erpnext_{entity}_{operation}` — snake_case, always prefixed with
   `erpnext_`.
-- Tool categories: one of the 14 registered categories in `src/tools/mod.ts`.
-  New categories require updating the registry.
+- Tool categories: one of the 15 registered categories in `src/tools/mod.ts`
+  (`sales`, `inventory`, `accounting`, `hr`, `project`, `purchasing`,
+  `delivery`, `manufacturing`, `crm`, `assets`, `operations`, `setup`,
+  `analytics`, `kanban`, `buy`). New categories require updating the registry;
+  never move an existing tool to another category (`--categories=` is a public
+  contract).
 - Add brief code comments for tricky or non-obvious logic only. Do not add
   JSDoc/comments to straightforward code.
 - Keep files concise; extract helpers rather than letting files bloat.
@@ -378,13 +410,32 @@ Two GitHub Actions workflows matter:
    `deno fmt --check`, `deno lint`, `deno task check`, UI build, and
    `deno test --allow-all src/`.
 2. `.github/workflows/publish.yml` is reusable/manual:
+   - **release_guard**: `node scripts/release-guard.mjs release` checks
+     `deno.json` == `server.ts`, the `v<version>` tag ref and the npm dist-tag.
+     Prereleases publish on `next`; stable versions on `latest` (`auto`), which
+     never moves backwards: a stable version lower than npm `latest` is rejected
+     (`STABLE_BELOW_LATEST`). Backports use the explicit `maintenance` choice of
+     `npm_dist_tag`. Errors are JSON (`code` + `context` + `recovery`).
    - **publish-jsr**: builds UI → `npx jsr publish --allow-dirty`
-   - **publish-npm**: builds UI → `scripts/build-node.sh` →
+   - **publish-npm**: builds UI → `scripts/build-node.sh` → re-checks the tag
+     against the live registry (`release-guard.mjs tag`) →
      `npm publish --access public` (skips only if the version is already
      published)
 
 Run `deno task release:check` locally before merging release-sensitive work. It
-performs the local preflight without publishing anything.
+performs the local preflight without publishing anything (release guard, tests,
+builds, and `THIRD_PARTY_NOTICES.txt` drift check).
+
+### Third-party notices
+
+`THIRD_PARTY_NOTICES.txt` is generated, not hand-written: the UI build records
+the node_modules files that survive bundling (`src/ui/.build-meta/`, Vite plugin
+in `src/ui/vite.single.config.mjs`) and `scripts/build-node.sh` writes an
+esbuild metafile (`dist-node/esbuild-metafile.json`). After any dependency
+change:
+`deno task ui:build && bash scripts/build-node.sh && deno task notices:write`.
+The three embedded webfonts are the only manual part
+(`scripts/third-party-notices.fonts.txt`).
 
 ## Versioning
 

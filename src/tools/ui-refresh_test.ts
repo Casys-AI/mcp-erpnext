@@ -18,6 +18,8 @@ import {
   monthRange,
   type NavJump,
   STOCK_HINTS,
+  SUBMITTABLE_VIEWER_DOCTYPES,
+  submittableViewerDoctype,
   withViewerToolCapabilities,
 } from "./ui-refresh.ts";
 import {
@@ -192,7 +194,7 @@ Deno.test("ui refresh - no _sendMessageHints for doctype without hints", () => {
 
 // ── KPI drill-down injection ─────────────────────────────────────────────────
 
-Deno.test("ui refresh - injects _drillDown and _trendDrillDown for KPI tools", () => {
+Deno.test("ui refresh - financial KPI hints omit charts with different populations", () => {
   const result = withUiRefreshRequest(
     {
       label: "Revenue",
@@ -204,10 +206,7 @@ Deno.test("ui refresh - injects _drillDown and _trendDrillDown for KPI tools", (
   ) as Record<string, unknown>;
 
   assertEquals(result._drillDown, "Show all sales orders for this month");
-  assertEquals(
-    result._trendDrillDown,
-    "Show revenue trend chart for the last 12 months",
-  );
+  assertEquals(result._trendDrillDown, undefined);
 });
 
 Deno.test("ui refresh - no KPI drill-down for non-KPI tools", () => {
@@ -451,7 +450,7 @@ Deno.test("ui refresh - every KPI and funnel jump targets a real tool with valid
   for (const [tool, jumps] of Object.entries(KPI_JUMPS)) {
     const { number, trend } = jumps(range);
     if (number) assertJumpMatchesTool(number, `${tool}/number`);
-    assertJumpMatchesTool(trend, `${tool}/trend`);
+    if (trend) assertJumpMatchesTool(trend, `${tool}/trend`);
   }
   for (const [stage, jump] of Object.entries(FUNNEL_STAGE_JUMPS)) {
     assertJumpMatchesTool(jump, `funnel/${stage}`);
@@ -478,14 +477,14 @@ Deno.test("ui refresh - injects _jumps for KPI tools with the month of `now`", (
     "erpnext_kpi_revenue",
     {},
     now,
-  ) as { _jumps?: { number: NavJump; trend: NavJump } };
+  ) as { _jumps?: { number: NavJump; trend?: NavJump } };
   assertEquals(result._jumps?.number.tool, "erpnext_doc_list");
   assertEquals(result._jumps?.number.args.filters, [
     ["transaction_date", ">=", "2026-08-01"],
-    ["transaction_date", "<=", "2026-08-31"],
+    ["transaction_date", "<=", "2026-08-22"],
     ["docstatus", "<", 2],
   ]);
-  assertEquals(result._jumps?.trend.kind, "chart");
+  assertEquals(result._jumps?.trend, undefined);
 });
 
 Deno.test("ui refresh - injects _stageJumps for the funnel and nothing for charts", () => {
@@ -581,10 +580,10 @@ Deno.test("ui refresh - injects period-scoped funnel jumps from original args", 
 });
 
 Deno.test("ui refresh - filters typed jumps by available host tools without mutation", () => {
-  const number = KPI_JUMPS["erpnext_kpi_revenue"](
+  const number = KPI_JUMPS["erpnext_kpi_orders"](
     monthRange(new Date(2026, 7, 22, 10)),
   ).number!;
-  const trend = KPI_JUMPS["erpnext_kpi_revenue"](
+  const trend = KPI_JUMPS["erpnext_kpi_orders"](
     monthRange(new Date(2026, 7, 22, 10)),
   ).trend;
   const result = {
@@ -838,29 +837,221 @@ Deno.test("ui refresh - Purchase Invoice doc viewer exposes exact line navigatio
   ]);
 });
 
-Deno.test("ui refresh - mutation capabilities are bounded by the explicit doctype", () => {
-  const available = new Set([
-    "erpnext_doc_submit",
-    "erpnext_doc_cancel",
-    "erpnext_sales_order_submit",
-    "erpnext_sales_order_cancel",
-    "erpnext_sales_invoice_submit",
-  ]);
-  const invoiceUri = {
-    ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" },
-  };
-  const doclistUri = {
-    ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" },
-  };
-  const docUri = {
-    ui: { resourceUri: "ui://mcp-erpnext/doc-viewer" },
-  };
+/**
+ * Preuve de chaque entrée de SUBMITTABLE_VIEWER_DOCTYPES : le JSON source du
+ * DocType, branche version-15, contient `"is_submittable": 1`. Vérifié le
+ * 2026-09-30 sur frappe/erpnext@8390fda et frappe/hrms@2238ff6 (version-15).
+ * Format : URL GitHub complète (greppable) du JSON. Ajouter un DocType à la liste sans
+ * l'ajouter ici (avec sa source) fait échouer le test de parité ci-dessous.
+ */
+const SUBMITTABLE_SOURCES: Record<string, string> = {
+  "Quotation":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/selling/doctype/quotation/quotation.json",
+  "Sales Order":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/selling/doctype/sales_order/sales_order.json",
+  "Delivery Note":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/doctype/delivery_note/delivery_note.json",
+  "Sales Invoice":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/doctype/sales_invoice/sales_invoice.json",
+  "POS Invoice":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/doctype/pos_invoice/pos_invoice.json",
+  "Installation Note":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/selling/doctype/installation_note/installation_note.json",
+  "Request for Quotation":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/buying/doctype/request_for_quotation/request_for_quotation.json",
+  "Supplier Quotation":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/buying/doctype/supplier_quotation/supplier_quotation.json",
+  "Purchase Order":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/buying/doctype/purchase_order/purchase_order.json",
+  "Purchase Receipt":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/doctype/purchase_receipt/purchase_receipt.json",
+  "Purchase Invoice":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/doctype/purchase_invoice/purchase_invoice.json",
+  "Journal Entry":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/doctype/journal_entry/journal_entry.json",
+  "Payment Entry":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/doctype/payment_entry/payment_entry.json",
+  "Payment Request":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/doctype/payment_request/payment_request.json",
+  "Period Closing Voucher":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/accounts/doctype/period_closing_voucher/period_closing_voucher.json",
+  "Material Request":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/doctype/material_request/material_request.json",
+  "Stock Entry":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/doctype/stock_entry/stock_entry.json",
+  "Stock Reconciliation":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json",
+  "Pick List":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/doctype/pick_list/pick_list.json",
+  "Delivery Trip":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/doctype/delivery_trip/delivery_trip.json",
+  "Landed Cost Voucher":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/doctype/landed_cost_voucher/landed_cost_voucher.json",
+  "Quality Inspection":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/doctype/quality_inspection/quality_inspection.json",
+  "Shipment":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/stock/doctype/shipment/shipment.json",
+  "BOM":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/manufacturing/doctype/bom/bom.json",
+  "Work Order":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/manufacturing/doctype/work_order/work_order.json",
+  "Job Card":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/manufacturing/doctype/job_card/job_card.json",
+  "Blanket Order":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/manufacturing/doctype/blanket_order/blanket_order.json",
+  "Timesheet":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/projects/doctype/timesheet/timesheet.json",
+  "Asset":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/assets/doctype/asset/asset.json",
+  "Asset Movement":
+    "https://github.com/frappe/erpnext/blob/version-15/erpnext/assets/doctype/asset_movement/asset_movement.json",
+  "Attendance":
+    "https://github.com/frappe/hrms/blob/version-15/hrms/hr/doctype/attendance/attendance.json",
+  "Leave Application":
+    "https://github.com/frappe/hrms/blob/version-15/hrms/hr/doctype/leave_application/leave_application.json",
+  "Leave Allocation":
+    "https://github.com/frappe/hrms/blob/version-15/hrms/hr/doctype/leave_allocation/leave_allocation.json",
+  "Leave Encashment":
+    "https://github.com/frappe/hrms/blob/version-15/hrms/hr/doctype/leave_encashment/leave_encashment.json",
+  "Expense Claim":
+    "https://github.com/frappe/hrms/blob/version-15/hrms/hr/doctype/expense_claim/expense_claim.json",
+  "Employee Advance":
+    "https://github.com/frappe/hrms/blob/version-15/hrms/hr/doctype/employee_advance/employee_advance.json",
+  "Payroll Entry":
+    "https://github.com/frappe/hrms/blob/version-15/hrms/payroll/doctype/payroll_entry/payroll_entry.json",
+  "Salary Slip":
+    "https://github.com/frappe/hrms/blob/version-15/hrms/payroll/doctype/salary_slip/salary_slip.json",
+  "Additional Salary":
+    "https://github.com/frappe/hrms/blob/version-15/hrms/payroll/doctype/additional_salary/additional_salary.json",
+};
 
+/**
+ * Preuve inverse : DocTypes servis par un outil du dépôt qui ne sont PAS
+ * soumettables (`is_submittable` absent ou 0 dans le JSON version-15 de
+ * frappe/erpnext, frappe/hrms ; frappe/frappe pour Contact et User). Le viewer
+ * ne doit jamais leur offrir Soumettre / Annuler.
+ */
+const MASTER_DOCTYPES = [
+  "Customer",
+  "Item",
+  "Task",
+  "Supplier",
+  "Lead",
+  "Opportunity",
+  "Contact",
+  "Employee",
+  "Project",
+  "Company",
+  "Warehouse",
+  "Issue",
+  "Campaign",
+  "Account",
+  "Asset Maintenance",
+  "Asset Category",
+  "Item Price",
+  "Item Group",
+  "User",
+];
+
+const ALL_MUTATION_TOOLS = new Set([
+  "erpnext_doc_submit",
+  "erpnext_doc_cancel",
+  "erpnext_sales_order_submit",
+  "erpnext_sales_order_cancel",
+  "erpnext_sales_invoice_submit",
+]);
+const INVOICE_URI = { ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" } };
+const DOCLIST_URI = { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } };
+const DOC_URI = { ui: { resourceUri: "ui://mcp-erpnext/doc-viewer" } };
+
+Deno.test("ui refresh - every submittable doctype is proven by its version-15 source", () => {
+  assertEquals(
+    Object.keys(SUBMITTABLE_SOURCES).sort(),
+    [...SUBMITTABLE_VIEWER_DOCTYPES].sort(),
+    "SUBMITTABLE_VIEWER_DOCTYPES and SUBMITTABLE_SOURCES must list the same doctypes",
+  );
+  assertEquals(
+    new Set(SUBMITTABLE_VIEWER_DOCTYPES).size,
+    SUBMITTABLE_VIEWER_DOCTYPES.length,
+    "no duplicate entry",
+  );
+  for (const [doctype, url] of Object.entries(SUBMITTABLE_SOURCES)) {
+    // Le fichier JSON porte le nom du DocType (snake_case) dans son dossier.
+    const slug = doctype.toLowerCase().replaceAll(" ", "_");
+    const match = url.match(
+      /^https:\/\/github\.com\/frappe\/(erpnext|hrms)\/blob\/version-15\/(.+)\/([^/]+)\/([^/]+)\.json$/,
+    );
+    assertEquals(match !== null, true, `${doctype}: ${url}`);
+    assertEquals([match?.[3], match?.[4]], [slug, slug], doctype);
+  }
+  // Les DocTypes qui avaient perdu Soumettre / Annuler depuis la stable.
+  for (
+    const doctype of [
+      "Supplier Quotation",
+      "Expense Claim",
+      "Payroll Entry",
+      "Attendance",
+      "Material Request",
+      "Stock Reconciliation",
+      "Leave Allocation",
+      "Pick List",
+      "Employee Advance",
+    ]
+  ) {
+    assertEquals(SUBMITTABLE_VIEWER_DOCTYPES.includes(doctype), true, doctype);
+  }
+});
+
+Deno.test("ui refresh - doc-viewer offers submit and cancel for every submittable doctype", () => {
+  for (const doctype of SUBMITTABLE_VIEWER_DOCTYPES) {
+    assertEquals(
+      availableViewerToolNames({
+        _meta: DOC_URI,
+        data: { doctype, name: "DOC-1", docstatus: 0 },
+      }, ALL_MUTATION_TOOLS),
+      ["erpnext_doc_cancel", "erpnext_doc_submit"],
+      doctype,
+    );
+  }
+});
+
+Deno.test("ui refresh - master data never gets submit or cancel, in any viewer", () => {
+  for (const doctype of MASTER_DOCTYPES) {
+    for (const uri of [DOC_URI, INVOICE_URI, DOCLIST_URI]) {
+      assertEquals(
+        availableViewerToolNames({
+          _meta: uri,
+          doctype,
+          data: uri === DOCLIST_URI ? [] : { doctype, name: "M-1" },
+        }, ALL_MUTATION_TOOLS),
+        [],
+        `${doctype} via ${uri.ui.resourceUri}`,
+      );
+    }
+  }
+  // Un doctype inconnu (custom, app tierce) reste refusé : absence = refus.
   assertEquals(
     availableViewerToolNames({
-      _meta: invoiceUri,
+      _meta: DOC_URI,
+      data: { doctype: "My Custom Doc", name: "X-1" },
+    }, ALL_MUTATION_TOOLS),
+    [],
+  );
+  assertEquals(
+    availableViewerToolNames({
+      _meta: DOC_URI,
+      data: { name: "X-1" },
+    }, ALL_MUTATION_TOOLS),
+    [],
+  );
+});
+
+Deno.test("ui refresh - mutation capabilities are bounded by the explicit doctype", () => {
+  assertEquals(
+    availableViewerToolNames({
+      _meta: INVOICE_URI,
       data: { doctype: "Sales Order", name: "SO-1" },
-    }, available),
+    }, ALL_MUTATION_TOOLS),
     [
       "erpnext_doc_cancel",
       "erpnext_doc_submit",
@@ -870,9 +1061,9 @@ Deno.test("ui refresh - mutation capabilities are bounded by the explicit doctyp
   );
   assertEquals(
     availableViewerToolNames({
-      _meta: invoiceUri,
+      _meta: INVOICE_URI,
       data: { doctype: "Sales Invoice", name: "SINV-1" },
-    }, available),
+    }, ALL_MUTATION_TOOLS),
     [
       "erpnext_doc_cancel",
       "erpnext_doc_submit",
@@ -881,35 +1072,112 @@ Deno.test("ui refresh - mutation capabilities are bounded by the explicit doctyp
   );
   assertEquals(
     availableViewerToolNames({
-      _meta: doclistUri,
-      doctype: "Customer",
-      data: [],
-    }, available),
-    [],
-  );
-  assertEquals(
-    availableViewerToolNames({
-      _meta: doclistUri,
-      doctype: "Item",
-      data: [],
-    }, available),
-    [],
-  );
-  assertEquals(
-    availableViewerToolNames({
-      _meta: doclistUri,
-      doctype: "Quotation",
-      data: [],
-    }, available),
-    ["erpnext_doc_cancel", "erpnext_doc_submit"],
-  );
-  assertEquals(
-    availableViewerToolNames({
-      _meta: docUri,
+      _meta: DOC_URI,
       data: { doctype: "BOM", name: "BOM-1" },
-    }, available),
+    }, ALL_MUTATION_TOOLS),
     ["erpnext_doc_cancel", "erpnext_doc_submit"],
   );
+  // Les outils absents du serveur sont filtrés, même pour un doctype connu.
+  assertEquals(
+    availableViewerToolNames({
+      _meta: DOC_URI,
+      data: { doctype: "BOM", name: "BOM-1" },
+    }, new Set(["erpnext_doc_submit"])),
+    ["erpnext_doc_submit"],
+  );
+});
+
+Deno.test("ui refresh - doctype match ignores case and still routes dedicated tools", () => {
+  assertEquals(submittableViewerDoctype("sales order"), "Sales Order");
+  assertEquals(submittableViewerDoctype("  SALES ORDER "), "Sales Order");
+  assertEquals(submittableViewerDoctype("Customer"), undefined);
+  assertEquals(
+    availableViewerToolNames({
+      _meta: INVOICE_URI,
+      data: { doctype: "sales order", name: "SO-1" },
+    }, ALL_MUTATION_TOOLS),
+    [
+      "erpnext_doc_cancel",
+      "erpnext_doc_submit",
+      "erpnext_sales_order_cancel",
+      "erpnext_sales_order_submit",
+    ],
+  );
+});
+
+Deno.test("ui refresh - invoice-viewer only serves submittable doctypes, so the client keeps no list", () => {
+  // Invariant qui permet à invoice-viewer de ne se fier qu'au manifeste
+  // serveur : chaque outil lié à ce viewer rend un DocType soumettable.
+  const bound = allTools
+    .filter((tool) =>
+      (tool._meta as { ui?: { resourceUri?: string } } | undefined)?.ui
+        ?.resourceUri === INVOICE_URI.ui.resourceUri
+    )
+    .map((tool) => tool.name)
+    .sort();
+  assertEquals(bound, [
+    "erpnext_quotation_create",
+    "erpnext_quotation_get",
+    "erpnext_sales_invoice_get",
+    "erpnext_sales_order_create",
+    "erpnext_sales_order_get",
+    "erpnext_sales_order_submit",
+  ]);
+  for (const doctype of ["Quotation", "Sales Invoice", "Sales Order"]) {
+    assertEquals(submittableViewerDoctype(doctype), doctype);
+  }
+});
+
+Deno.test("ui refresh - the list level exposes no submit or cancel candidate", () => {
+  // L'inspecteur inline lit les capacités de la fiche enfant (`*_get`), pas
+  // celles de la liste : un candidat au niveau liste serait du code mort.
+  for (const doctype of ["Quotation", "Sales Order", "Customer"]) {
+    assertEquals(
+      availableViewerToolNames({
+        _meta: DOCLIST_URI,
+        doctype,
+        data: [],
+      }, ALL_MUTATION_TOOLS),
+      [],
+      doctype,
+    );
+  }
+});
+
+Deno.test("ui refresh - a real doc_get result carries submit only for submittable doctypes", () => {
+  const tools = new Set(allTools.map((tool) => tool.name));
+  const docGet = allTools.find((tool) => tool.name === "erpnext_doc_get");
+  assertEquals(docGet !== undefined, true);
+  const viewerResult = (doctype: string) =>
+    withUiRefreshRequest(
+      {
+        _meta: docGet?._meta,
+        data: { doctype, name: "DOC-1", docstatus: 0 },
+      },
+      "erpnext_doc_get",
+      { doctype, name: "DOC-1" },
+      new Date(2026, 8, 30),
+      tools,
+    ) as { _availableTools?: string[] };
+  for (
+    const doctype of [
+      "Supplier Quotation",
+      "Expense Claim",
+      "Payroll Entry",
+      "Attendance",
+      "Material Request",
+      "Stock Reconciliation",
+    ]
+  ) {
+    const available = viewerResult(doctype)._availableTools ?? [];
+    assertEquals(available.includes("erpnext_doc_submit"), true, doctype);
+    assertEquals(available.includes("erpnext_doc_cancel"), true, doctype);
+  }
+  for (const doctype of ["Customer", "Item", "Task"]) {
+    const available = viewerResult(doctype)._availableTools ?? [];
+    assertEquals(available.includes("erpnext_doc_submit"), false, doctype);
+    assertEquals(available.includes("erpnext_doc_cancel"), false, doctype);
+  }
 });
 
 Deno.test("ui refresh - mutating viewer payload cannot forge capabilities", () => {
@@ -1128,7 +1396,7 @@ Deno.test("ui refresh - the outstanding and overdue jumps filter like the KPIs d
   for (const [tool, jumps] of Object.entries(KPI_JUMPS)) {
     const { number, trend } = jumps(r);
     if (number) assertEquals(typeof number.key, "string", `${tool}/number`);
-    assertEquals(typeof trend.key, "string", `${tool}/trend`);
+    if (trend) assertEquals(typeof trend.key, "string", `${tool}/trend`);
   }
   assertEquals(
     KPI_JUMPS["erpnext_kpi_gross_margin"](r).number,
@@ -1138,6 +1406,65 @@ Deno.test("ui refresh - the outstanding and overdue jumps filter like the KPIs d
   for (const [stage, jump] of Object.entries(FUNNEL_STAGE_JUMPS)) {
     assertEquals(typeof jump.key, "string", `funnel/${stage}`);
   }
+});
+
+Deno.test("ui refresh - financial KPI lists retain company and the amount's currency field", () => {
+  const now = new Date(2026, 7, 22, 10);
+  for (
+    const [tool, currencyField] of [
+      ["erpnext_kpi_revenue", "currency"],
+      ["erpnext_kpi_outstanding", "party_account_currency"],
+      ["erpnext_kpi_overdue", "party_account_currency"],
+    ]
+  ) {
+    const args = { company: " Taiwan Company ", currency: "twd" };
+    const result = withUiRefreshRequest(
+      {
+        value: 100,
+        _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } },
+      },
+      tool,
+      args,
+      now,
+    ) as {
+      _jumps: { number: NavJump; trend?: NavJump };
+      _trendDrillDown?: string;
+      refreshRequest: { arguments: Record<string, unknown> };
+    };
+    const filters = result._jumps.number.args.filters as unknown[];
+    assertEquals(filters.slice(-2), [
+      ["company", "=", "Taiwan Company"],
+      [currencyField, "=", "TWD"],
+    ], tool);
+    assertEquals(result.refreshRequest.arguments, args, tool);
+    assertEquals(result._jumps.trend, undefined, tool);
+    assertEquals(result._trendDrillDown, undefined, tool);
+    assertJumpMatchesTool(result._jumps.number, tool);
+  }
+});
+
+Deno.test("ui refresh - Orders MTD list stops today and retains its selected scope", () => {
+  const result = withUiRefreshRequest(
+    {
+      value: 37,
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } },
+    },
+    "erpnext_kpi_orders",
+    { company: "Taiwan Company", currency: "TWD" },
+    new Date(2026, 7, 22, 10),
+  ) as {
+    _jumps: { number: NavJump; trend?: NavJump };
+    _trendDrillDown?: string;
+  };
+  assertEquals(result._jumps.number.args.filters, [
+    ["transaction_date", ">=", "2026-08-01"],
+    ["transaction_date", "<=", "2026-08-22"],
+    ["docstatus", "<", 2],
+    ["company", "=", "Taiwan Company"],
+    ["currency", "=", "TWD"],
+  ]);
+  assertEquals(result._jumps.trend, undefined);
+  assertEquals(result._trendDrillDown, undefined);
 });
 
 Deno.test("ui refresh - chart point jumps: every chart tool, every label, a real read-only tool", () => {
@@ -1195,6 +1522,39 @@ Deno.test("ui refresh - a month point opens exactly that civil month", () => {
     ["transaction_date", "<=", "2026-07-31"],
     ["docstatus", "<", 2],
   ]);
+});
+
+Deno.test("ui refresh - Revenue Trend points retain company, currency, and today's upper bound", () => {
+  const now = new Date(2026, 7, 22, 10);
+  const jumps = chartPointJumps(
+    "erpnext_revenue_trend",
+    {
+      months: 2,
+      company: " Taiwan Company ",
+      currency: "twd",
+    },
+    ["Jul 26", "Aug 26"],
+    now,
+  )!;
+
+  assertEquals(jumps["Jul 26"].args.filters, [
+    ["transaction_date", ">=", "2026-07-01"],
+    ["transaction_date", "<=", "2026-07-31"],
+    ["docstatus", "<", 2],
+    ["company", "=", "Taiwan Company"],
+    ["currency", "=", "TWD"],
+  ]);
+  assertEquals(jumps["Aug 26"].args.filters, [
+    ["transaction_date", ">=", "2026-08-01"],
+    ["transaction_date", "<=", "2026-08-22"],
+    ["docstatus", "<", 2],
+    ["company", "=", "Taiwan Company"],
+    ["currency", "=", "TWD"],
+  ]);
+  assertEquals(
+    (jumps["Aug 26"].args.fields as string[]).includes("currency"),
+    true,
+  );
 });
 
 Deno.test("ui refresh - injects _pointJumps on chart results only", () => {

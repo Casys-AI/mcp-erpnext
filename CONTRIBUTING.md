@@ -135,8 +135,8 @@ grow a section per PR.
 ## Built on @casys/mcp-server
 
 This server runs on
-**[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)**, the MCP
-framework that handles concurrency, auth, MCP Apps, and observability. If a
+**[@casys/mcp-server](https://github.com/superWorldSavior/mcp-platform)**, the
+MCP framework that handles concurrency, auth, MCP Apps, and observability. If a
 change is about server / auth / transport plumbing rather than ERPNext tools, it
 may belong there instead — happy to help figure out which repo fits.
 

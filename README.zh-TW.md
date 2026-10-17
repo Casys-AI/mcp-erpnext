@@ -23,8 +23,8 @@ Code、VS Code Copilot 或自訂代理）。
 
 支援**自行託管**與 **ERPNext Cloud**（frappe.cloud）執行個體。
 
-> 基於 **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** 構建 —
-> 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。
+> 基於 **[@casys/mcp-server](https://github.com/superWorldSavior/mcp-platform)**
+> 構建 — 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。
 
 ## 截圖
 

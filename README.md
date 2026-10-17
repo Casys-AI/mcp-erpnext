@@ -25,9 +25,10 @@ Frappe instance — documents, workflows, and interactive viewers inside the hos
 
 Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 
-> Built on **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** — the
-> MCP server framework (concurrency, auth, MCP Apps, observability) that powers
-> this project.
+> Built on
+> **[@casys/mcp-server](https://github.com/superWorldSavior/mcp-platform)** —
+> the MCP server framework (concurrency, auth, MCP Apps, observability) that
+> powers this project.
 
 ## Screenshots
 

@@ -12,6 +12,16 @@
  * Each embedded file is mapped to its npm package; the license text comes from
  * the LICENSE / NOTICE / COPYING files shipped in that package.
  *
+ * JSR packages vendored inside npm dependencies (the `deps/jsr.io/@scope/name/
+ * <version>/` sub-trees that dnt-built packages such as @mcpview/server copy
+ * into their tarball, e.g. @std/yaml) are not npm packages and have no
+ * package.json: they are detected from the metafile paths and listed on their
+ * own. Their license text comes, in order, from a LICENSE file inside the
+ * vendored sub-tree, then from JSR_SCOPE_LICENSES (fixed, offline). Any other
+ * scope without a license file fails with JSR_LICENSE_MISSING — never silently.
+ * The LICENSE of the carrying npm package is deliberately NOT used: it states
+ * the carrier's own terms and holder, not those of the vendored code.
+ *
  * Manual part: the three embedded webfonts are not npm packages. Their OFL
  * texts live in scripts/third-party-notices.fonts.txt and are appended as-is
  * (the check verifies every family declared in src/ui/shared/fonts.css is named
@@ -27,7 +37,7 @@
  */
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const OUTPUT_FILE = "THIRD_PARTY_NOTICES.txt";
@@ -52,6 +62,54 @@ const MAX_LICENSE_BYTES = 200_000;
  * file falls back to its package.json metadata and is reported by the run.
  */
 export const OWN_PACKAGES_WITHOUT_LICENSE_FILE = ["@mcpview/server"];
+
+/**
+ * MIT text of the Deno authors, reproduced verbatim from the LICENSE.md of
+ * denoland/deno 2.9.2 (checked locally). Same holder and year range as the
+ * `Copyright 2018-2026 the Deno authors. MIT license.` header of every vendored
+ * @std module. The LICENSE on denoland/std `main` still reads 2018-2022
+ * (checked 2026-10-18): the notice follows the headers of the embedded files.
+ */
+export const DENO_MIT_LICENSE = [
+  "MIT License",
+  "",
+  "Copyright 2018-2026 the Deno authors",
+  "",
+  "Permission is hereby granted, free of charge, to any person obtaining a copy of",
+  'this software and associated documentation files (the "Software"), to deal in',
+  "the Software without restriction, including without limitation the rights to",
+  "use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of",
+  "the Software, and to permit persons to whom the Software is furnished to do so,",
+  "subject to the following conditions:",
+  "",
+  "The above copyright notice and this permission notice shall be included in all",
+  "copies or substantial portions of the Software.",
+  "",
+  'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR',
+  "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS",
+  "FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR",
+  "COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER",
+  "IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN",
+  "CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+].join("\n");
+
+/**
+ * Fixed license of JSR scopes whose packages may be vendored without a license
+ * file. Only add a scope with a text verified against its upstream repository.
+ * @type {Map<string, {license: string, text: string, author: string, repository: string}>}
+ */
+export const JSR_SCOPE_LICENSES = new Map([
+  ["@std", {
+    license: "MIT",
+    text: DENO_MIT_LICENSE,
+    author: "the Deno authors",
+    repository: "https://github.com/denoland/std",
+  }],
+]);
+
+/** Licenses that must not ship, detected in the text of a vendored license file. */
+const FORBIDDEN_LICENSE_TEXT =
+  /GNU (Affero |Lesser |Library )?General Public License|Server Side Public License|Business Source License|Commons Clause|Creative Commons Attribution[- ]NonCommercial/i;
 
 /** Structured failure: code + context + recovery (AX machine-readable error). */
 export class NoticesError extends Error {
@@ -102,6 +160,40 @@ export function packageRootOf(filePath) {
     segments.slice(0, length).join("/");
 }
 
+const JSR_MARKER = "/deps/jsr.io/";
+const JSR_VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/;
+
+/**
+ * Maps a file path to the JSR package vendored in it, i.e. a path shaped like
+ * `.../deps/jsr.io/@scope/name/<version>/<file>` (last marker wins).
+ * @returns {null | {scope:string, name:string, version:string, root:string, carrier:string|null}}
+ *   `root` is the vendored `<version>` directory, `carrier` the root of the npm
+ *   package that ships it (`null` outside node_modules); `null` when the path
+ *   is not a vendored JSR file.
+ */
+export function jsrPackageOf(filePath) {
+  const path = normalizePath(filePath);
+  const index = path.lastIndexOf(JSR_MARKER);
+  if (index === -1) return null;
+  const segments = path.slice(index + JSR_MARKER.length).split("/");
+  // @scope / name / version / at least one file segment
+  if (segments.length < 4 || segments.slice(0, 4).some((s) => !s)) return null;
+  const [scope, name, version] = segments;
+  if (
+    !scope.startsWith("@") || scope.length < 2 || !JSR_VERSION.test(version)
+  ) {
+    return null;
+  }
+  return {
+    scope,
+    name: `${scope}/${name}`,
+    version,
+    root: path.slice(0, index + JSR_MARKER.length) +
+      segments.slice(0, 3).join("/"),
+    carrier: packageRootOf(path),
+  };
+}
+
 /**
  * Package roots embedded in the UI viewers.
  * @param {string} metaDir directory of `<viewer>.json` reports
@@ -146,12 +238,12 @@ export function collectUiPackages(metaDir) {
 }
 
 /**
- * Package roots embedded in the Node bundle (esbuild metafile).
+ * Absolute paths of the esbuild inputs that reached the output.
  * @param {string} metafilePath
  * @param {string} baseDir directory esbuild ran in (metafile paths are relative to it)
- * @returns {Set<string>}
+ * @returns {string[]}
  */
-export function collectNodePackages(metafilePath, baseDir) {
+function embeddedNodeInputs(metafilePath, baseDir) {
   const meta = readJson(metafilePath, "META_MISSING");
   if (!meta || typeof meta.outputs !== "object" || meta.outputs === null) {
     throw new NoticesError(
@@ -162,15 +254,46 @@ export function collectNodePackages(metafilePath, baseDir) {
       2,
     );
   }
-  const roots = new Set();
+  const inputs = [];
   for (const output of Object.values(meta.outputs)) {
     for (const [input, info] of Object.entries(output.inputs ?? {})) {
-      if (!(info.bytesInOutput > 0)) continue;
-      const root = packageRootOf(resolve(baseDir, input));
-      if (root) roots.add(root);
+      if (info.bytesInOutput > 0) inputs.push(resolve(baseDir, input));
     }
   }
+  return inputs;
+}
+
+/**
+ * Package roots embedded in the Node bundle (esbuild metafile).
+ * @param {string} metafilePath
+ * @param {string} baseDir directory esbuild ran in (metafile paths are relative to it)
+ * @returns {Set<string>}
+ */
+export function collectNodePackages(metafilePath, baseDir) {
+  const roots = new Set();
+  for (const input of embeddedNodeInputs(metafilePath, baseDir)) {
+    const root = packageRootOf(input);
+    if (root) roots.add(root);
+  }
   return roots;
+}
+
+/**
+ * JSR packages vendored inside npm dependencies and embedded in the Node
+ * bundle (see {@link jsrPackageOf}); a package whose files were all
+ * tree-shaken away does not count.
+ * @param {string} metafilePath
+ * @param {string} baseDir directory esbuild ran in
+ * @returns {Map<string, NonNullable<ReturnType<typeof jsrPackageOf>>>}
+ *   vendored `<version>` directory -> package
+ */
+export function collectJsrPackages(metafilePath, baseDir) {
+  const packages = new Map();
+  for (const input of embeddedNodeInputs(metafilePath, baseDir)) {
+    const pkg = jsrPackageOf(input);
+    if (pkg && !packages.has(pkg.root)) packages.set(pkg.root, pkg);
+  }
+  return packages;
 }
 
 function readJson(path, missingCode) {
@@ -256,8 +379,15 @@ const normalizeText = (text) =>
  * @param {Set<string>} node roots
  * @param {string | null} [repositoryLicense] text used for
  *   {@link OWN_PACKAGES_WITHOUT_LICENSE_FILE} when the package ships none
+ * @param {ReturnType<typeof collectJsrPackages>} [jsr] vendored JSR packages
+ *   (listed after the npm ones; npm wins on a name@version collision)
  */
-export function buildEntries(ui, node, repositoryLicense = null) {
+export function buildEntries(
+  ui,
+  node,
+  repositoryLicense = null,
+  jsr = new Map(),
+) {
   const byKey = new Map();
   const add = (root, source) => {
     const pkg = readJson(resolve(root, "package.json"), "PACKAGE_UNREADABLE");
@@ -292,9 +422,69 @@ export function buildEntries(ui, node, repositoryLicense = null) {
     }
     byKey.get(key).sources.add(source);
   };
+  const addJsr = (pkg) => {
+    const key = `${pkg.name}@${pkg.version}`;
+    if (!byKey.has(key)) byKey.set(key, jsrEntry(pkg));
+    byKey.get(key).sources.add("node");
+  };
   for (const root of [...ui.keys()].sort()) add(root, "ui");
   for (const root of [...node].sort()) add(root, "node");
+  for (const root of [...jsr.keys()].sort()) addJsr(jsr.get(root));
   return [...byKey.values()].sort(compareEntries);
+}
+
+/**
+ * Notice entry of a JSR package vendored in an npm dependency. License text:
+ * a LICENSE file inside the vendored sub-tree, else the fixed text of its
+ * scope ({@link JSR_SCOPE_LICENSES}), else JSR_LICENSE_MISSING.
+ */
+function jsrEntry(pkg) {
+  const scope = JSR_SCOPE_LICENSES.get(pkg.scope);
+  const vendoredText = readLicenseText(pkg.root);
+  if (vendoredText === null && !scope) {
+    throw new NoticesError(
+      "JSR_LICENSE_MISSING",
+      `No license text for the vendored JSR package ${pkg.name}@${pkg.version}`,
+      {
+        package: `${pkg.name}@${pkg.version}`,
+        scope: pkg.scope,
+        vendoredIn: packageIdOf(pkg.carrier),
+        path: normalizePath(
+          pkg.carrier ? relative(pkg.carrier, pkg.root) : pkg.root,
+        ),
+        knownScopes: [...JSR_SCOPE_LICENSES.keys()].sort(),
+      },
+      `Ship a LICENSE file in the vendored sub-tree, or add the ${pkg.scope} scope with its verified license text to JSR_SCOPE_LICENSES in scripts/third-party-notices.mjs, then retry.`,
+    );
+  }
+  const licenseText = vendoredText ?? scope.text;
+  return {
+    name: pkg.name,
+    version: pkg.version,
+    license: scope?.license ?? "UNKNOWN",
+    licenseText,
+    hasLicenseText: true,
+    author: scope?.author ?? "",
+    repository: scope?.repository ?? `https://jsr.io/${pkg.name}`,
+    sources: new Set(),
+    jsr: {
+      licenseSource: vendoredText !== null ? "vendored-file" : "scope-table",
+      vendoredIn: packageIdOf(pkg.carrier),
+    },
+  };
+}
+
+/** `name@version` of the npm package at `root`, `null` when unreadable. */
+function packageIdOf(root) {
+  if (!root) return null;
+  try {
+    const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+    return typeof pkg.name === "string" && typeof pkg.version === "string"
+      ? `${pkg.name}@${pkg.version}`
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function compareEntries(a, b) {
@@ -315,9 +505,15 @@ function repositoryOf(pkg) {
   return (repo ?? pkg.homepage ?? "").replace(/^git\+/, "");
 }
 
-/** Entries whose declared license must not ship (copyleft / non-commercial). */
+/**
+ * Entries whose license must not ship (copyleft / non-commercial). A vendored
+ * JSR package has no package.json, so its license file text is checked too.
+ */
 export function forbiddenEntries(entries) {
-  return entries.filter((e) => FORBIDDEN_LICENSE.test(e.license));
+  return entries.filter((e) =>
+    FORBIDDEN_LICENSE.test(e.license) ||
+    (e.jsr !== undefined && FORBIDDEN_LICENSE_TEXT.test(e.licenseText ?? ""))
+  );
 }
 
 function fallbackText(entry) {
@@ -356,8 +552,10 @@ export function renderNotices(entries, fontsText) {
     RULE,
     "",
     "This package embeds the third-party software listed below: the interactive",
-    "viewers (ui) and the bundled Node.js server (node). Each license text is",
-    "reproduced as shipped by the package's authors.",
+    "viewers (ui) and the bundled Node.js server (node), including JSR packages",
+    "(such as @std/yaml) vendored inside npm dependencies. Each license text is",
+    "reproduced as shipped by the package's authors, or taken from the upstream",
+    "repository of the JSR scope when the vendored copy ships none.",
     "",
     "Generated by scripts/third-party-notices.mjs from the build metadata of the",
     "viewers and of the Node bundle. Do not edit by hand; regenerate with:",
@@ -433,11 +631,13 @@ export function missingFontNotices(fontsCss, fontsText) {
 export function run(mode, root) {
   const ui = collectUiPackages(resolve(root, UI_META_DIR));
   const nodeBase = resolve(root, dirname(NODE_META_FILE));
-  const node = collectNodePackages(resolve(root, NODE_META_FILE), nodeBase);
+  const nodeMeta = resolve(root, NODE_META_FILE);
+  const node = collectNodePackages(nodeMeta, nodeBase);
+  const jsr = collectJsrPackages(nodeMeta, nodeBase);
   const repositoryLicense = normalizeText(
     readFileSync(resolve(root, "LICENSE"), "utf8"),
   );
-  const entries = buildEntries(ui, node, repositoryLicense);
+  const entries = buildEntries(ui, node, repositoryLicense, jsr);
 
   const forbidden = forbiddenEntries(entries);
   if (forbidden.length > 0) {
@@ -478,6 +678,12 @@ export function run(mode, root) {
     without_license_text: entries
       .filter((e) => !e.hasLicenseText)
       .map((e) => `${e.name}@${e.version} (${e.license})`),
+    jsr_packages: entries.filter((e) => e.jsr).map((e) => ({
+      package: `${e.name}@${e.version}`,
+      license: e.license,
+      license_source: e.jsr.licenseSource,
+      vendored_in: e.jsr.vendoredIn,
+    })),
   };
 
   if (mode === "write") {

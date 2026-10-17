@@ -11,6 +11,11 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   Moving from components 0.7 to 0.10 also localizes the Buy evidence viewer's
   generic states (loading, empty, rejected) to the host's locale.
 
+### Fixed
+
+- Third-party notices now cover JSR packages vendored inside npm dependencies
+  (such as @std/yaml)
+
 ## [3.2.0] - 2026-10-17
 
 First stable release of the 3.2 line. Highlights since 3.1.0:

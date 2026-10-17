@@ -54,6 +54,17 @@ Deno.test("split viewer result - data keeps domain keys, viewer keeps enrichment
   assert(result._meta);
 });
 
+Deno.test("split viewer result - the DocType field layout goes to the viewer block", () => {
+  const layout = { version: 1, preview: ["a"], sections: [], labels: {} };
+  const { data, viewer } = splitViewerResult({
+    data: { doctype: "Lead", name: "LEAD-001" },
+    _fieldLayout: layout,
+  });
+
+  assertEquals(data, { data: { doctype: "Lead", name: "LEAD-001" } });
+  assertEquals(viewer, { _fieldLayout: layout });
+});
+
 Deno.test("split viewer result - no enrichment yields an empty viewer block", () => {
   const { data, viewer } = splitViewerResult({ data: { name: "BOM-001" } });
   assertEquals(data, { data: { name: "BOM-001" } });

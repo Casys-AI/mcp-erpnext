@@ -148,8 +148,9 @@ singleton. The client is lazily initialized from env vars on first use.
 
 `src/api/frappe-client.ts` is a zero-dependency HTTP client wrapping the Frappe
 REST API. Key methods: `list()`, `get()`, `create()`, `update()`, `delete()`,
-`callMethod()`, `invalidate()`. All errors throw `FrappeAPIError` with HTTP
-status and parsed body — no silent fallbacks.
+`callMethod()` (returns `message`), `callMethodRaw()` (whole body, for methods
+that fill `frappe.response` such as `getdoctype`), `invalidate()`. All errors
+throw `FrappeAPIError` with HTTP status and parsed body — no silent fallbacks.
 
 **Submit handlers must GET the doc first** to pass `modified` for Frappe's
 optimistic locking (see `docs/erpnext-quirks.md`), and must pass
@@ -179,6 +180,9 @@ in-process implementation — a hand-rolled TTL `Map`, zero dependencies;
   `ctx.client.invalidate(doctype, name)` itself afterward.
 - **Config**: `MCP_CACHE_ENABLED` (`"false"` disables caching entirely, default
   enabled) and `MCP_CACHE_TTL_MS` (default `15000`).
+- **DocType layouts**: `src/tools/doctype-layout.ts` keeps its own in-process
+  memo (bounded to 200 DocTypes, 1 h on success, 60 s on failure), independent
+  of `MCP_CACHE_ENABLED`. Company and DocType are never read.
 - **Warming**: `src/cache/warm.ts`'s `warmCache()` optionally pre-populates the
   cache on startup by calling a configured set of read-only `_list` tool
   handlers with no filters — matching the exact cache key a real unfiltered call

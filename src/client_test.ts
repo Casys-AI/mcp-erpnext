@@ -12,6 +12,7 @@ import {
   ToolFilterError,
 } from "./client.ts";
 import { type FrappeClient, setFrappeClient } from "./api/frappe-client.ts";
+import { docTypeLayoutMemo } from "./tools/doctype-layout.ts";
 import { AmbiguousLinkError } from "./api/resolve.ts";
 import { linkDisambiguationRequestKey } from "./mrtr/link-disambiguation.ts";
 import {
@@ -839,4 +840,266 @@ Deno.test("viewers stay fail-closed - excluding operations removes doc_submit an
   } finally {
     setFrappeClient(null);
   }
+});
+
+// ── Mise en page des fiches (`_fieldLayout`) ──────────────────────────────────
+
+const LEAD_GETDOCTYPE = {
+  docs: [{
+    name: "Lead",
+    title_field: "lead_name",
+    fields: [
+      { fieldname: "lead_name", fieldtype: "Data", label: "Full Name" },
+      {
+        fieldname: "email_id",
+        fieldtype: "Data",
+        label: "Email Address",
+        bold: 1,
+      },
+      { fieldname: "details", fieldtype: "Section Break", label: "Details" },
+      { fieldname: "source", fieldtype: "Link", label: "Source" },
+    ],
+  }],
+};
+
+type ViewerResult = {
+  content: Array<{ text: string }>;
+  structuredContent: Record<string, unknown>;
+  _meta?: Record<string, unknown>;
+};
+
+/** Fait tourner `run` avec un faux client Frappe et un mémo de mises en page vide. */
+async function withFrappe(
+  frappe: Record<string, unknown>,
+  run: () => Promise<void>,
+): Promise<void> {
+  docTypeLayoutMemo.clear();
+  setFrappeClient(frappe as unknown as FrappeClient);
+  try {
+    await run();
+  } finally {
+    setFrappeClient(null);
+    docTypeLayoutMemo.clear();
+  }
+}
+
+Deno.test("buildHandlersMap - attaches the DocType field layout to the viewer block only", async () => {
+  const calls: Array<{ method: string; args: unknown; http: unknown }> = [];
+  await withFrappe({
+    get: () => Promise.resolve({ name: "LEAD-001", lead_name: "Ada" }),
+    callMethodRaw: (method: string, args: unknown, http: unknown) => {
+      calls.push({ method, args, http });
+      return Promise.resolve(LEAD_GETDOCTYPE);
+    },
+  }, async () => {
+    const client = new ErpNextToolsClient();
+    const result = await client.buildHandlersMap().get("erpnext_lead_get")!(
+      { name: "LEAD-001" },
+    ) as ViewerResult;
+
+    const layout = viewerBlock(result)._fieldLayout as Record<string, unknown>;
+    assertEquals(layout, {
+      version: 1,
+      preview: ["lead_name", "email_id"],
+      sections: [
+        { label: null, fields: ["lead_name", "email_id"] },
+        { label: "Details", fields: ["source"] },
+      ],
+      labels: {
+        lead_name: "Full Name",
+        email_id: "Email Address",
+        source: "Source",
+      },
+    });
+    // Jamais dans ce que lit le modèle.
+    assertEquals(result.structuredContent._fieldLayout, undefined);
+    assertEquals(result.content[0].text.includes("_fieldLayout"), false);
+    assertEquals(result.content[0].text.includes("Email Address"), false);
+    assertEquals(JSON.parse(result.content[0].text), result.structuredContent);
+    assertEquals(result.structuredContent.data, {
+      name: "LEAD-001",
+      lead_name: "Ada",
+      doctype: "Lead",
+    });
+    assertEquals(calls, [{
+      method: "frappe.desk.form.load.getdoctype",
+      args: { doctype: "Lead" },
+      http: "GET",
+    }]);
+  });
+});
+
+Deno.test("buildHandlersMap - a failing getdoctype never fails the tool", async () => {
+  const errors: unknown[][] = [];
+  const consoleError = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  try {
+    await withFrappe({
+      get: () => Promise.resolve({ name: "LEAD-001", lead_name: "Ada" }),
+      callMethodRaw: () => Promise.reject(new Error("403 PermissionError")),
+    }, async () => {
+      const client = new ErpNextToolsClient();
+      const result = await client.buildHandlersMap().get("erpnext_lead_get")!(
+        { name: "LEAD-001" },
+      ) as ViewerResult;
+
+      assertEquals(result.structuredContent.data, {
+        name: "LEAD-001",
+        lead_name: "Ada",
+        doctype: "Lead",
+      });
+      assertEquals(viewerBlock(result)._fieldLayout, undefined);
+      // Le reste de l'enrichissement viewer est intact.
+      assert(Array.isArray(viewerBlock(result)._availableTools));
+    });
+  } finally {
+    console.error = consoleError;
+  }
+  assertEquals(errors.length, 1);
+  assertEquals(String(errors[0][0]).includes("Lead"), true);
+});
+
+Deno.test("buildHandlersMap - field layout is fetched once per DocType per hour", async () => {
+  let calls = 0;
+  await withFrappe({
+    get: () => Promise.resolve({ name: "LEAD-001" }),
+    callMethodRaw: () => {
+      calls++;
+      return Promise.resolve(LEAD_GETDOCTYPE);
+    },
+  }, async () => {
+    const handler = new ErpNextToolsClient().buildHandlersMap().get(
+      "erpnext_lead_get",
+    )!;
+    await handler({ name: "LEAD-001" });
+    await handler({ name: "LEAD-001" });
+    assertEquals(calls, 1);
+  });
+});
+
+Deno.test("buildHandlersMap - Company and DocType documents never trigger a layout read", async () => {
+  let calls = 0;
+  const probe = (doctype: string): ErpNextTool => ({
+    name: `erpnext_${doctype.toLowerCase()}_document_probe`,
+    description: "Test-only viewer document",
+    category: "setup",
+    inputSchema: { type: "object" },
+    annotations: { readOnlyHint: true },
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doc-viewer" } },
+    handler: async () => ({ data: { doctype, name: "X-001" } }),
+  });
+  await withFrappe({
+    callMethodRaw: () => {
+      calls++;
+      return Promise.resolve(LEAD_GETDOCTYPE);
+    },
+  }, async () => {
+    const tools = [probe("Company"), probe("DocType")];
+    const client = new ErpNextToolsClient();
+    (client as unknown as { tools: ErpNextTool[] }).tools = tools;
+    const handlers = client.buildHandlersMap();
+    for (const tool of tools) {
+      const result = await handlers.get(tool.name)!({}) as ViewerResult;
+      assertEquals(viewerBlock(result)._fieldLayout, undefined);
+      assertEquals(result.structuredContent.data, {
+        doctype: tool.name.includes("company") ? "Company" : "DocType",
+        name: "X-001",
+      });
+    }
+    assertEquals(calls, 0);
+  });
+});
+
+Deno.test("buildHandlersMap - lists and viewer-less results get no field layout", async () => {
+  let calls = 0;
+  const plain: ErpNextTool = {
+    name: "erpnext_plain_document_probe",
+    description: "Test-only document without a viewer",
+    category: "setup",
+    inputSchema: { type: "object" },
+    handler: async () => ({ data: { doctype: "Lead", name: "LEAD-001" } }),
+  };
+  const list: ErpNextTool = {
+    name: "erpnext_list_document_probe",
+    description: "Test-only list",
+    category: "setup",
+    inputSchema: { type: "object" },
+    annotations: { readOnlyHint: true },
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    handler: async () => ({
+      doctype: "Lead",
+      data: [{ doctype: "Lead", name: "LEAD-001" }],
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    }),
+  };
+  await withFrappe({
+    callMethodRaw: () => {
+      calls++;
+      return Promise.resolve(LEAD_GETDOCTYPE);
+    },
+  }, async () => {
+    const client = new ErpNextToolsClient();
+    (client as unknown as { tools: ErpNextTool[] }).tools = [plain, list];
+    const handlers = client.buildHandlersMap();
+    const plainResult = await handlers.get(plain.name)!({}) as ViewerResult;
+    const listResult = await handlers.get(list.name)!({}) as ViewerResult;
+
+    assertEquals(calls, 0);
+    assertEquals(plainResult._meta, undefined);
+    assertEquals(viewerBlock(listResult)._fieldLayout, undefined);
+  });
+});
+
+Deno.test("buildHandlersMap - a direct document record also gets its field layout", async () => {
+  const direct: ErpNextTool = {
+    name: "erpnext_direct_document_probe",
+    description: "Test-only direct document",
+    category: "setup",
+    inputSchema: { type: "object" },
+    annotations: { readOnlyHint: true },
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doc-viewer" } },
+    handler: async () => ({
+      doctype: "Lead",
+      name: "LEAD-001",
+      lead_name: "Ada",
+    }),
+  };
+  await withFrappe({
+    callMethodRaw: () => Promise.resolve(LEAD_GETDOCTYPE),
+  }, async () => {
+    const client = new ErpNextToolsClient();
+    (client as unknown as { tools: ErpNextTool[] }).tools = [direct];
+    const result = await client.buildHandlersMap().get(direct.name)!(
+      {},
+    ) as ViewerResult;
+    assertEquals(
+      (viewerBlock(result)._fieldLayout as { version: number }).version,
+      1,
+    );
+    assertEquals(result.structuredContent._fieldLayout, undefined);
+  });
+});
+
+Deno.test("execute - leaves the library result without a field layout", async () => {
+  let calls = 0;
+  await withFrappe({
+    get: () => Promise.resolve({ name: "LEAD-001" }),
+    callMethodRaw: () => {
+      calls++;
+      return Promise.resolve(LEAD_GETDOCTYPE);
+    },
+  }, async () => {
+    const result = await new ErpNextToolsClient().execute(
+      "erpnext_lead_get",
+      { name: "LEAD-001" },
+    ) as Record<string, unknown>;
+    assertEquals(calls, 0);
+    assertEquals(result._fieldLayout, undefined);
+  });
+});
+
+Deno.test("viewer-only keys include the field layout", () => {
+  assert(
+    (VIEWER_ONLY_RESULT_KEYS as readonly string[]).includes("_fieldLayout"),
+  );
 });

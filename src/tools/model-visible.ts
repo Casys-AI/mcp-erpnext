@@ -18,6 +18,8 @@ export const VIEWER_META_KEY = "io.casys/viewer";
  * Clés ajoutées pour la vue. Liste explicite plutôt qu'une règle de préfixe :
  * une future clé `_` destinée au modèle ne doit pas disparaître en silence.
  * Le test de contrat vérifie que `withUiRefreshRequest` n'ajoute rien d'autre.
+ * `_fieldLayout` (mise en page ERPNext d'une fiche) est joint par
+ * `buildHandlersMap`, pas par `withUiRefreshRequest`.
  */
 export const VIEWER_ONLY_RESULT_KEYS = [
   "_meta",
@@ -31,6 +33,7 @@ export const VIEWER_ONLY_RESULT_KEYS = [
   "_stageJumps",
   "_pointJumps",
   "_seriesPointJumps",
+  "_fieldLayout",
 ] as const;
 
 /** Copie superficielle du résultat sans les clés réservées à la vue. */

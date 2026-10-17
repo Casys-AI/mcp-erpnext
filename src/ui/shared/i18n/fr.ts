@@ -38,6 +38,7 @@ export const fr: Record<string, string> = {
   "document.docstatus": "docstatus {value}",
   "document.sections": "Sections du document",
   "document.fields": "Champs",
+  "document.all_fields": "Tous les champs",
   "document.attachments": "Pièces jointes",
   "document.surface": "Document {name}",
   "document.sidebar": "Actions et pièces jointes du document",

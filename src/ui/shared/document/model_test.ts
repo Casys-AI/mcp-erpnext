@@ -213,3 +213,295 @@ Deno.test("documentFieldOf produces display-only primitives for nested values", 
   assertEquals(typeof field.value, "string");
   assert(String(field.value).includes("<script>alert(1)</script>"));
 });
+
+// ── Mise en page ERPNext (`_fieldLayout`) ────────────────────────────────────
+
+const LAYOUT = {
+  version: 1,
+  preview: ["customer_name", "posting_date", "grand_total", "po_no"],
+  sections: [
+    { label: null, fields: ["company", "customer_name", "posting_date"] },
+    { label: "Totals", fields: ["grand_total", "outstanding_amount"] },
+    { label: "Notes", fields: ["po_no", "remarks"] },
+  ],
+  labels: {
+    customer_name: "Client",
+    outstanding_amount: "Outstanding Amount",
+    remarks: "Internal Remarks",
+    tags: "Tag List",
+    progress: "Completion",
+  },
+};
+
+function invoicePayload(extra: Record<string, unknown> = {}) {
+  return {
+    data: {
+      doctype: "Sales Invoice",
+      name: "SINV-0001",
+      owner: "user@example.com",
+      docstatus: 1,
+      status: "Paid",
+      company: "Acme",
+      customer_name: "Ada",
+      posting_date: "2026-10-01",
+      grand_total: 100,
+      outstanding_amount: 0,
+      is_pos: false,
+      due_date: null,
+      remarks: "Short note stays a long section.",
+      progress: "64",
+      tags: ["a", "b"],
+      custom_ref: "REF-1",
+      items: [{ item_code: "A", qty: 1, amount: 100 }],
+    },
+    _fieldLayout: LAYOUT,
+    ...extra,
+  };
+}
+
+Deno.test("documentEnvelopeOf - lit la mise en page à côté de la fiche, hors du document", () => {
+  const envelope = documentEnvelopeOf(invoicePayload());
+  assertEquals(envelope?.fieldLayout?.preview, LAYOUT.preview);
+  assertEquals(envelope?.fieldLayout?.labels.customer_name, "Client");
+  assertEquals("_fieldLayout" in (envelope?.document ?? {}), false);
+});
+
+Deno.test("documentEnvelopeOf - une fiche directe n'expose pas la mise en page comme champ", () => {
+  const envelope = documentEnvelopeOf({
+    doctype: "Task",
+    name: "TASK-1",
+    subject: "Ship",
+    _fieldLayout: LAYOUT,
+  });
+  assertEquals(envelope?.document, {
+    doctype: "Task",
+    name: "TASK-1",
+    subject: "Ship",
+  });
+  assertEquals(envelope?.fieldLayout?.preview, LAYOUT.preview);
+});
+
+Deno.test("documentEnvelopeOf - une mise en page invalide est ignorée", () => {
+  const envelope = documentEnvelopeOf(
+    invoicePayload({ _fieldLayout: { version: 9, preview: [] } }),
+  );
+  assertEquals(envelope?.fieldLayout, undefined);
+  assert(envelope);
+  assertEquals("_fieldLayout" in envelope.document, false);
+});
+
+Deno.test("documentModelOf - avec mise en page, l'aperçu d'abord puis les sections repliables", () => {
+  const model = documentModelOf(invoicePayload());
+  assert(model);
+
+  // Aperçu : champs avec valeur, dans l'ordre de `preview` (po_no est absent).
+  assertEquals(model.fields.map((field) => field.key), [
+    "customer_name",
+    "posting_date",
+    "grand_total",
+  ]);
+  // Reste des champs scalaires non vides, groupés comme la mise en page.
+  // `due_date` (null) est omis, `remarks` (champ long) se replie dans sa
+  // section « Notes », et les champs hors mise en page clôturent la liste.
+  assertEquals(
+    model.sections?.map((section) => [
+      section.label,
+      section.fields.map((field) => field.key),
+      section.longFields.map((field) => field.key),
+    ]),
+    [
+      [null, ["company"], []],
+      ["Totals", ["outstanding_amount"], []],
+      ["Notes", [], ["remarks"]],
+      [null, ["is_pos", "custom_ref"], []],
+    ],
+  );
+});
+
+Deno.test("documentModelOf - les libellés ERPNext l'emportent, sinon le libellé humanisé", () => {
+  const model = documentModelOf(invoicePayload());
+  assert(model);
+  assertEquals(model.fields[0].label, "Client");
+  // Pas de libellé ERPNext : libellé humanisé actuel.
+  assertEquals(model.fields[1].label, "Posting date");
+  const outstanding = model.sections?.flatMap((section) => section.fields)
+    .find((field) => field.key === "outstanding_amount");
+  assertEquals(outstanding?.label, "Outstanding Amount");
+  // Champs longs, progression et collections relibellés eux aussi.
+  const remarks = model.sections?.flatMap((section) => section.longFields)
+    .find((field) => field.key === "remarks");
+  assertEquals(remarks?.label, "Internal Remarks");
+  assertEquals(model.progressFields[0].label, "Completion");
+  assertEquals(model.collections[0].label, "Tag List");
+});
+
+Deno.test("documentModelOf - tables enfants, progression, collections et système gardent leur traitement", () => {
+  const withLayout = documentModelOf(invoicePayload());
+  const without = documentModelOf({ data: invoicePayload().data });
+  assert(withLayout && without);
+
+  assertEquals(withLayout.childTables, without.childTables);
+  assertEquals(
+    withLayout.progressFields.map((field) => field.key),
+    without.progressFields.map((field) => field.key),
+  );
+  assertEquals(
+    withLayout.collections.map((field) => field.key),
+    without.collections.map((field) => field.key),
+  );
+  assertEquals(withLayout.systemFields, without.systemFields);
+  assertEquals(withLayout.status, "Paid");
+  assertEquals(
+    withLayout.fields.some((field) => field.key === "status"),
+    false,
+  );
+});
+
+Deno.test("documentModelOf - un champ long hors aperçu se replie dans « Tous les champs », un champ long d'aperçu reste en section", () => {
+  const data = {
+    ...invoicePayload().data,
+    terms: "Net 30\nNo returns",
+    configuration: { safe: true },
+  };
+  const layout = {
+    ...LAYOUT,
+    preview: [...LAYOUT.preview, "terms"],
+    sections: [
+      ...LAYOUT.sections,
+      { label: "Terms", fields: ["terms", "configuration"] },
+    ],
+  };
+  const model = documentModelOf({ data, _fieldLayout: layout });
+  assert(model);
+
+  // `terms` est dans l'aperçu : traitement de champ long inchangé.
+  assertEquals(model.longFields.map((field) => field.key), ["terms"]);
+  // `remarks` et `configuration` (JSON) se replient dans leur section.
+  assertEquals(
+    model.sections?.flatMap((section) =>
+      section.longFields.map((field) => [section.label, field.key])
+    ),
+    [["Notes", "remarks"], ["Terms", "configuration"]],
+  );
+  // Sans mise en page, tous les champs longs restent des sections à part.
+  const plain = documentModelOf({ data });
+  assertEquals(
+    plain?.longFields.map((field) => field.key),
+    ["remarks", "terms", "configuration"],
+  );
+  assertEquals(plain?.sections, undefined);
+});
+
+Deno.test("documentModelOf - un champ long vide disparaît avec la mise en page seulement", () => {
+  const data = { ...invoicePayload().data, description: "" };
+  const withLayout = documentModelOf({ data, _fieldLayout: LAYOUT });
+  const without = documentModelOf({ data });
+  assert(withLayout && without);
+
+  const everyLong = [
+    ...withLayout.longFields,
+    ...(withLayout.sections ?? []).flatMap((section) => section.longFields),
+  ];
+  assertEquals(everyLong.some((field) => field.key === "description"), false);
+  assertEquals(
+    without.longFields.some((field) => field.key === "description"),
+    true,
+  );
+});
+
+Deno.test("documentModelOf - les collections vides sont masquées avec la mise en page seulement", () => {
+  const data = {
+    ...invoicePayload().data,
+    empty_links: [],
+    pricing_rules: [],
+  };
+  const withLayout = documentModelOf({ data, _fieldLayout: LAYOUT });
+  const without = documentModelOf({ data });
+  assert(withLayout && without);
+
+  // `tags` (non vide) reste ; les collections vides disparaissent.
+  assertEquals(
+    withLayout.collections.map((collection) => collection.key),
+    ["tags"],
+  );
+  assertEquals(
+    without.collections.map((collection) => collection.key),
+    ["tags", "empty_links", "pricing_rules"],
+  );
+});
+
+Deno.test("documentModelOf - sans mise en page le modèle est inchangé", () => {
+  const model = documentModelOf({ data: invoicePayload().data });
+  assert(model);
+  assertEquals(model.sections, undefined);
+  assertEquals(model.envelope.fieldLayout, undefined);
+  // Les champs vides restent listés, dans l'ordre du document.
+  assertEquals(model.fields.map((field) => field.key), [
+    "company",
+    "customer_name",
+    "posting_date",
+    "grand_total",
+    "outstanding_amount",
+    "is_pos",
+    "due_date",
+    "custom_ref",
+  ]);
+  assertEquals(model.fields[1].label, "Customer name");
+});
+
+Deno.test("documentModelOf - une mise en page invalide laisse le modèle inchangé", () => {
+  const model = documentModelOf(
+    invoicePayload({ _fieldLayout: { version: 1, preview: "x" } }),
+  );
+  assert(model);
+  assertEquals(model.sections, undefined);
+  assertEquals(model.fields.length, 8);
+});
+
+Deno.test("documentModelOf - Company garde sa sélection dédiée et ignore la mise en page", () => {
+  const payload = {
+    data: {
+      doctype: "Company",
+      name: "Acme",
+      company_name: "Acme",
+      abbr: "AC",
+      country: "France",
+      default_currency: "EUR",
+      domain: "Services",
+      is_group: 0,
+    },
+    _fieldLayout: {
+      version: 1,
+      preview: ["is_group"],
+      sections: [{ label: "All", fields: ["company_name", "abbr"] }],
+      labels: { company_name: "Company Name (ERPNext)" },
+    },
+  };
+  const model = documentModelOf(payload);
+  assert(model);
+  assertEquals(model.sections, undefined);
+  assertEquals(model.fields.map((field) => field.key), [
+    "company_name",
+    "abbr",
+    "country",
+    "default_currency",
+    "domain",
+    "is_group",
+  ]);
+  assertEquals(model.fields[0].label, "Company name");
+});
+
+Deno.test("documentModelOf - avec mise en page mais rien hors aperçu, sections vides", () => {
+  const model = documentModelOf({
+    data: { doctype: "Lead", name: "LEAD-1", lead_name: "Ada" },
+    _fieldLayout: {
+      version: 1,
+      preview: ["lead_name"],
+      sections: [{ label: null, fields: ["lead_name"] }],
+      labels: {},
+    },
+  });
+  assert(model);
+  assertEquals(model.fields.map((field) => field.key), ["lead_name"]);
+  assertEquals(model.sections, []);
+});

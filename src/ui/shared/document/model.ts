@@ -6,6 +6,11 @@ import {
   humanizeDocumentKey,
   isChildTableValue,
 } from "./child-table-model.ts";
+import {
+  fieldLayoutOf,
+  layoutDocumentFields,
+  layoutLabelOf,
+} from "./field-layout.ts";
 import type {
   DocumentCollectionModel,
   DocumentDisplayValue,
@@ -17,9 +22,13 @@ import type {
 
 const ENVELOPE_FIELDS = new Set([
   "_availableTools",
+  "_fieldLayout",
   "_sendMessageHints",
   "refreshRequest",
 ]);
+
+/** DocTypes dont la sélection dédiée (`company-*.ts`) prime sur la mise en page ERPNext. */
+const DEDICATED_SELECTION_DOCTYPES = new Set(["Company"]);
 
 const SYSTEM_FIELDS = new Set([
   "name",
@@ -147,6 +156,7 @@ export function documentEnvelopeOf(payload: unknown): DocumentEnvelope | null {
   const availableTools = stringArray(payload._availableTools);
   const refreshRequest = refreshRequestOf(payload.refreshRequest);
   const sendMessageHints = sendMessageHintsOf(payload._sendMessageHints);
+  const fieldLayout = fieldLayoutOf(payload._fieldLayout);
   return {
     document,
     doctype,
@@ -154,6 +164,7 @@ export function documentEnvelopeOf(payload: unknown): DocumentEnvelope | null {
     ...(availableTools !== undefined ? { availableTools } : {}),
     ...(refreshRequest ? { refreshRequest } : {}),
     ...(sendMessageHints !== undefined ? { sendMessageHints } : {}),
+    ...(fieldLayout ? { fieldLayout } : {}),
   };
 }
 
@@ -263,12 +274,9 @@ function statusOf(document: Record<string, unknown>): string | undefined {
 function collectionOf(
   key: string,
   values: readonly unknown[],
+  label: string,
 ): DocumentCollectionModel {
-  return {
-    key,
-    label: humanizeDocumentKey(key),
-    values: values.map(documentDisplayValue),
-  };
+  return { key, label, values: values.map(documentDisplayValue) };
 }
 
 export function documentModelOf(envelope: DocumentEnvelope): DocumentModel;
@@ -277,8 +285,18 @@ export function documentModelOf(payload: unknown): DocumentModel | null {
   const envelope = normalizedEnvelope(payload) ?? documentEnvelopeOf(payload);
   if (!envelope) return null;
 
-  const fields: DocumentFieldModel[] = [];
-  const longFields: DocumentFieldModel[] = [];
+  const layout = DEDICATED_SELECTION_DOCTYPES.has(envelope.doctype)
+    ? undefined
+    : envelope.fieldLayout;
+  // Libellé ERPNext en priorité, sinon le libellé humanisé.
+  const fieldOf = (key: string, value: unknown): DocumentFieldModel => {
+    const field = documentFieldOf(key, value);
+    const label = layoutLabelOf(layout, key);
+    return label ? { ...field, label } : field;
+  };
+
+  const scalars: DocumentFieldModel[] = [];
+  const longCandidates: DocumentFieldModel[] = [];
   const progressFields: DocumentFieldModel[] = [];
   const collections: DocumentCollectionModel[] = [];
   const childTables = [];
@@ -295,15 +313,29 @@ export function documentModelOf(payload: unknown): DocumentModel | null {
       continue;
     }
     if (Array.isArray(value)) {
-      collections.push(collectionOf(key, value));
+      // Une collection vide n'apporte rien à une fiche résumée par ERPNext.
+      if (layout && value.length === 0) continue;
+      collections.push(
+        collectionOf(
+          key,
+          value,
+          layoutLabelOf(layout, key) ?? humanizeDocumentKey(key),
+        ),
+      );
       continue;
     }
 
-    const field = documentFieldOf(key, value);
+    const field = fieldOf(key, value);
     if (field.kind === "progress") progressFields.push(field);
-    else if (isLongField(field)) longFields.push(field);
-    else fields.push(field);
+    else if (isLongField(field)) longCandidates.push(field);
+    else scalars.push(field);
   }
+
+  const placed = layout
+    ? layoutDocumentFields({ scalars, longFields: longCandidates }, layout)
+    : undefined;
+  const fields = placed ? placed.fields : scalars;
+  const longFields = placed ? placed.longFields : longCandidates;
 
   const docstatus = numericValue(envelope.document.docstatus);
   const status = statusOf(envelope.document);
@@ -313,6 +345,7 @@ export function documentModelOf(payload: unknown): DocumentModel | null {
     ...(status ? { status } : {}),
     ...(docstatus !== null ? { docstatus } : {}),
     fields,
+    ...(placed ? { sections: placed.sections } : {}),
     longFields,
     progressFields,
     collections,

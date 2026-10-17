@@ -40,6 +40,7 @@ export const zh: Record<string, string> = {
   "document.docstatus": "单据状态 {value}",
   "document.sections": "单据分区",
   "document.fields": "字段",
+  "document.all_fields": "全部字段",
   "document.attachments": "附件",
   "document.surface": "单据 {name}",
   "document.sidebar": "单据操作与附件",

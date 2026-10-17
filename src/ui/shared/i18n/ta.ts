@@ -39,6 +39,7 @@ export const ta: Record<string, string> = {
   "document.docstatus": "ஆவண நிலை {value}",
   "document.sections": "ஆவணப் பிரிவுகள்",
   "document.fields": "புலங்கள்",
+  "document.all_fields": "அனைத்துப் புலங்கள்",
   "document.attachments": "இணைப்புகள்",
   "document.surface": "ஆவணம் {name}",
   "document.sidebar": "ஆவணச் செயல்களும் இணைப்புகளும்",

@@ -584,3 +584,95 @@ Deno.test("click intent - illegal detail intents do not type-check", () => {
     3,
   );
 });
+
+// ── Bouton de détail explicite (tactile) ─────────────────────────────────────
+//
+// Le bouton « › » est l'équivalent de la touche Entrée : il ouvre le détail,
+// ne lance jamais le clic simple (donc ne bascule pas le contexte) et ne défait
+// pas une sélection déjà appliquée par un clic précédent sur la même cible.
+
+Deno.test("click intent - activateDetail opens the detail without running the simple click", () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+
+  arbiter.activateDetail(intent("A", events));
+
+  assertEquals(events, ["double:A"]);
+});
+
+Deno.test("click intent - activateDetail keeps an immediate pointer context like Enter", async () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+  const target = intent("A", events);
+
+  arbiter.click(target);
+  await Promise.resolve();
+  arbiter.activateDetail(target);
+  await nextTurn();
+
+  assertEquals(events, ["single:A", "double:A"]);
+});
+
+Deno.test("click intent - activateDetail on a conversational target goes through the conversation gate", async () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+  const restoredSeen: boolean[] = [];
+  const target: ClickIntent = {
+    key: "A",
+    onSingle: () => {
+      events.push("single:A");
+    },
+    onDouble: () => events.push("double:A"),
+    doublePolicy: "after-context",
+    runConversation: async (action, restored) => {
+      events.push("gate:A");
+      restoredSeen.push(await restored);
+      action();
+      return true;
+    },
+  };
+
+  arbiter.activateDetail(target);
+  await nextTurn();
+
+  assertEquals(events, ["gate:A", "double:A"]);
+  assertEquals(restoredSeen, [true]);
+});
+
+Deno.test("click intent - activateDetail on a local target ignores the conversation gate", () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+
+  arbiter.activateDetail({
+    key: "A",
+    onSingle: () => {},
+    onDouble: () => events.push("double:A"),
+    doublePolicy: "local",
+    runConversation: async () => {
+      events.push("gate:A");
+      return true;
+    },
+  });
+
+  assertEquals(events, ["double:A"]);
+});
+
+Deno.test("click intent - activateDetail opens a detail intent once", () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+
+  arbiter.activateDetail(detailIntent("A", events));
+
+  assertEquals(events, ["open:A"]);
+});
+
+Deno.test("click intent - activateDetail can be repeated: each tap toggles the detail again", () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+  const target = intent("A", events);
+
+  arbiter.activateDetail(target);
+  arbiter.activateDetail(target);
+
+  assertEquals(events, ["double:A", "double:A"]);
+});

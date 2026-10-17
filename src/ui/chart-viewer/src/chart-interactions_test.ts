@@ -10,13 +10,17 @@ import {
   chartContextNamespace,
   chartContextSelection,
   chartCursorCounts,
+  chartDetailBarLabelKey,
   chartDrillDownMessage,
+  chartFocusedDetailAction,
   chartJumpHint,
   chartNavigationGroups,
   chartPointActionPlan,
   chartPointContextItem,
+  chartPointDetailMode,
   chartPointExpansionState,
   chartPointLabel,
+  chartPointTarget,
   chartScatterPointLabel,
   chartSelectionAt,
   chartSeriesFromTarget,
@@ -32,6 +36,7 @@ import {
   shouldHandleChartPointActivation,
   toggleHiddenChartSeries,
 } from "./chart-interactions.ts";
+import { en } from "../../shared/i18n/en.ts";
 import type { ChartData } from "./types.ts";
 
 const DATA: ChartData = {
@@ -980,5 +985,274 @@ Deno.test("chart tooltip hint - the key for the eight context x detail x click-o
       expected,
       `context=${contextEnabled} detail=${detailEnabled} click=${clickOpensDetail}`,
     );
+  }
+});
+
+// ── Barre d'action « Ouvrir le détail » (tactile, sans double-clic) ────────
+
+const CAPS = { jumpsEnabled: true, messagesEnabled: true };
+const CATEGORY_JUMP = { label: "August", tool: "erpnext_sales_order_list" };
+const EXPENSES_JUMP = {
+  label: "Expenses",
+  tool: "erpnext_purchase_order_list",
+};
+
+Deno.test("chart detail bar - un point avec saut propose l'ouverture du détail", () => {
+  const data: ChartData = { ...DATA, _pointJumps: { "Aug 26": CATEGORY_JUMP } };
+
+  assertEquals(
+    chartFocusedDetailAction(data, CAPS, { label: "Aug 26" }),
+    { label: "Aug 26", series: undefined, mode: "inline" },
+  );
+  assertEquals(
+    chartFocusedDetailAction(data, CAPS, { label: "Aug 26", series: "Income" }),
+    { label: "Aug 26", series: "Income", mode: "inline" },
+  );
+});
+
+Deno.test("chart detail bar - un point sans saut ni message ne propose rien", () => {
+  const data: ChartData = { ...DATA, _pointJumps: { "Aug 26": CATEGORY_JUMP } };
+
+  assertEquals(chartFocusedDetailAction(data, CAPS, { label: "Jul 26" }), null);
+  assertEquals(chartFocusedDetailAction(DATA, CAPS, { label: "Aug 26" }), null);
+});
+
+Deno.test("chart detail bar - aucun point activé, aucune barre", () => {
+  const data: ChartData = { ...DATA, _pointJumps: { "Aug 26": CATEGORY_JUMP } };
+
+  assertEquals(chartFocusedDetailAction(data, CAPS, null), null);
+  assertEquals(chartFocusedDetailAction(data, CAPS, undefined), null);
+  assertEquals(chartFocusedDetailAction(data, CAPS, { label: "" }), null);
+});
+
+Deno.test("chart detail bar - le saut de la série prime sur celui de la catégorie, comme au double-clic", () => {
+  const data: ChartData = {
+    ...DATA,
+    _pointJumps: { "Aug 26": CATEGORY_JUMP },
+    // Un segment dont le saut est inutilisable (pas d'outil) ne retombe pas
+    // sur la catégorie : même règle que `pointJump`.
+    _seriesPointJumps: {
+      "Aug 26": { Expenses: { label: "Expenses" }, Income: EXPENSES_JUMP },
+    },
+  };
+
+  assertEquals(
+    chartFocusedDetailAction(data, CAPS, { label: "Aug 26", series: "Income" })
+      ?.mode,
+    "inline",
+  );
+  assertEquals(
+    chartFocusedDetailAction(data, CAPS, {
+      label: "Aug 26",
+      series: "Expenses",
+    }),
+    null,
+  );
+  // Le point entier garde le saut de la catégorie.
+  assertEquals(
+    chartFocusedDetailAction(data, CAPS, { label: "Aug 26" })?.mode,
+    "inline",
+  );
+});
+
+Deno.test("chart detail bar - un segment dérivé sans saut propre reprend celui de la catégorie", () => {
+  const data: ChartData = {
+    ...DATA,
+    _pointJumps: { "Aug 26": CATEGORY_JUMP },
+    _seriesPointJumps: { "Aug 26": { Income: EXPENSES_JUMP } },
+  };
+
+  assertEquals(
+    chartFocusedDetailAction(data, CAPS, {
+      label: "Aug 26",
+      series: "Expenses",
+    })?.mode,
+    "inline",
+  );
+});
+
+Deno.test("chart detail bar - sans saut, le repli conversationnel dépend du modèle et du gabarit", () => {
+  const data: ChartData = { ...DATA, _drillDown: "Détail de {label}" };
+
+  assertEquals(
+    chartFocusedDetailAction(data, CAPS, { label: "Aug 26" }),
+    { label: "Aug 26", series: undefined, mode: "message" },
+  );
+  assertEquals(
+    chartFocusedDetailAction(
+      data,
+      { jumpsEnabled: true, messagesEnabled: false },
+      { label: "Aug 26" },
+    ),
+    null,
+  );
+  assertEquals(
+    chartFocusedDetailAction(
+      { ...DATA, _drillDown: "  {series}  " },
+      CAPS,
+      { label: "Aug 26" },
+    ),
+    null,
+  );
+});
+
+Deno.test("chart detail bar - un saut disponible prime sur le message, hôte sans relais d'outils compris", () => {
+  const data: ChartData = {
+    ...DATA,
+    _pointJumps: { "Aug 26": CATEGORY_JUMP },
+    _drillDown: "Détail de {label}",
+  };
+
+  assertEquals(
+    chartFocusedDetailAction(data, CAPS, { label: "Aug 26" })?.mode,
+    "inline",
+  );
+  assertEquals(
+    chartFocusedDetailAction(
+      data,
+      { jumpsEnabled: false, messagesEnabled: true },
+      { label: "Aug 26" },
+    )?.mode,
+    "message",
+  );
+  assertEquals(
+    chartFocusedDetailAction(
+      { ...data, _drillDown: undefined },
+      { jumpsEnabled: false, messagesEnabled: true },
+      { label: "Aug 26" },
+    ),
+    null,
+  );
+});
+
+Deno.test("chart detail bar - un point disparu (série masquée, données rafraîchies) retire la barre", () => {
+  const data: ChartData = { ...DATA, _pointJumps: { "Aug 26": CATEGORY_JUMP } };
+  const withoutExpenses: ChartData = {
+    ...data,
+    datasets: data.datasets.filter((dataset) => dataset.label !== "Expenses"),
+  };
+
+  assertEquals(
+    chartFocusedDetailAction(data, CAPS, {
+      label: "Aug 26",
+      series: "Expenses",
+    })?.mode,
+    "inline",
+  );
+  assertEquals(
+    chartFocusedDetailAction(withoutExpenses, CAPS, {
+      label: "Aug 26",
+      series: "Expenses",
+    }),
+    null,
+  );
+  assertEquals(
+    chartFocusedDetailAction(
+      {
+        ...data,
+        labels: ["Jul 26"],
+        datasets: [{ label: "Income", values: [1] }],
+      },
+      CAPS,
+      { label: "Aug 26" },
+    ),
+    null,
+  );
+});
+
+Deno.test("chart detail bar - pie, scatter et treemap utilisent leurs propres points", () => {
+  const pie: ChartData = {
+    title: "Mix",
+    type: "pie",
+    labels: ["Bearings", "Belts"],
+    datasets: [{ label: "Sales", values: [3, 2] }],
+    _pointJumps: { Belts: CATEGORY_JUMP },
+  };
+  assertEquals(
+    chartFocusedDetailAction(pie, CAPS, { label: "Belts" })?.mode,
+    "inline",
+  );
+  assertEquals(
+    chartFocusedDetailAction(pie, CAPS, { label: "Bearings" }),
+    null,
+  );
+
+  const treemap: ChartData = {
+    title: "Stock",
+    type: "treemap",
+    labels: [],
+    datasets: [],
+    treeData: [{ name: "Bearings", value: 5 }],
+    _pointJumps: { Bearings: CATEGORY_JUMP },
+  };
+  assertEquals(
+    chartFocusedDetailAction(treemap, CAPS, { label: "Bearings" })?.mode,
+    "inline",
+  );
+  assertEquals(
+    chartFocusedDetailAction(treemap, CAPS, { label: "Nope" }),
+    null,
+  );
+
+  const scatter: ChartData = {
+    title: "Price vs qty",
+    type: "scatter",
+    labels: [],
+    datasets: [],
+    scatterData: [{
+      label: "Items",
+      points: [{ x: 1, y: 2, label: "Widget" }],
+    }],
+    _pointJumps: { Widget: CATEGORY_JUMP },
+  };
+  assertEquals(
+    chartFocusedDetailAction(scatter, CAPS, { label: "Widget" })?.mode,
+    "inline",
+  );
+});
+
+Deno.test("chart detail bar - chartPointDetailMode est la règle unique du double-clic et du bouton", () => {
+  const data: ChartData = {
+    ...DATA,
+    _pointJumps: { "Aug 26": CATEGORY_JUMP },
+    _drillDown: "Détail de {label}",
+  };
+
+  assertEquals(chartPointDetailMode(data, CAPS, "Aug 26"), "inline");
+  assertEquals(chartPointDetailMode(data, CAPS, "Jul 26"), "message");
+  assertEquals(
+    chartPointDetailMode(
+      data,
+      { jumpsEnabled: false, messagesEnabled: false },
+      "Aug 26",
+    ),
+    null,
+  );
+});
+
+Deno.test("chart detail bar - la cible affichée suit le libellé de contexte (libellé · série)", () => {
+  assertEquals(chartPointTarget("Aug 26"), "Aug 26");
+  assertEquals(chartPointTarget("Aug 26", "Income"), "Aug 26 · Income");
+  assertEquals(chartPointTarget("Aug 26", ""), "Aug 26");
+});
+
+Deno.test("chart detail bar - le libellé dit l'action réelle : ouvrir, fermer ou demander", () => {
+  const inline = { label: "Aug 26", mode: "inline" as const };
+  const message = { label: "Aug 26", mode: "message" as const };
+
+  assertEquals(chartDetailBarLabelKey(inline, false), "chart.detail_bar.open");
+  assertEquals(chartDetailBarLabelKey(inline, true), "chart.detail_bar.close");
+  // Un message n'ouvre aucun panneau : jamais « fermer ».
+  assertEquals(chartDetailBarLabelKey(message, false), "chart.detail_bar.ask");
+  assertEquals(chartDetailBarLabelKey(message, true), "chart.detail_bar.ask");
+});
+
+Deno.test("chart detail bar - chaque clé du bouton existe dans le catalogue avec son {label}", () => {
+  for (const mode of ["inline", "message"] as const) {
+    for (const expanded of [false, true]) {
+      const key = chartDetailBarLabelKey({ label: "A", mode }, expanded);
+      assertEquals(key in en, true, key);
+      assertEquals(en[key].includes("{label}"), true, key);
+    }
   }
 });

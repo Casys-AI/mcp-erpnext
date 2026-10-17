@@ -18,8 +18,17 @@ Deno.test("nested chart interaction - pointer and keyboard intents stay exclusiv
   assertEquals(bars.includes("clickCount < 2"), false);
 });
 
-Deno.test("nested chart interaction - detail stays on double-click or Enter without a footer button", () => {
-  assertEquals(bars.includes("DetailToggleButton"), false);
+Deno.test("nested chart interaction - detail opens on double-click, Enter or the visible per-bar button", () => {
+  // Voie tactile : un bouton par barre qui a un détail, sans pied de graphe.
+  assertStringIncludes(bars, "DetailToggleButton");
+  assertStringIncludes(bars, "clickIntent.activateDetail(");
+  assertStringIncludes(bars, "canOpenPoint(labelIndex, seriesIndex)");
+  // Chaque série garde son emplacement : le bouton reste sous sa barre.
+  assertStringIncludes(bars, "detailSlotCount");
+  assertStringIncludes(bars, 'hint={t("interaction.detail.button_hint")}');
+  assertStringIncludes(bars, "touch={narrow}");
+  // Le saut reste une action : jamais d'état de disclosure.
+  assertEquals(bars.includes("expanded="), false);
   assertStringIncludes(bars, "onDblClick=");
   assertStringIncludes(bars, 'event.key === "Enter"');
   assertStringIncludes(bars, "onPointDetail?.(");

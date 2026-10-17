@@ -112,6 +112,12 @@ export interface ClickIntentArbiter {
    * Intent de détail : Espace et Entrée ouvrent le détail une seule fois.
    */
   keyDown(intent: ClickIntent, event: ClickIntentKeyEvent): void;
+  /**
+   * Bouton de détail explicite (tactile) : même effet qu'Entrée, sans passer
+   * par le clic simple. Il ne bascule donc jamais le contexte et conserve un
+   * contexte déjà appliqué sur cette cible.
+   */
+  activateDetail(intent: ClickIntent): void;
   /** Libère l'historique réversible d'une cible sans annuler son effet. */
   cancel(key: string): void;
   /** Libère tout l'historique, notamment lors du démontage. */
@@ -288,6 +294,17 @@ export function createClickIntentArbiter(
     intent.onDouble();
   }
 
+  // Geste explicite (Entrée, bouton de détail) : pas de séquence à arbitrer.
+  function runExplicitDetail(intent: ContextClickIntent) {
+    // Une Entrée ultérieure conserve un contexte pointer déjà appliqué.
+    cancel(intent.key);
+    if (intent.doublePolicy !== "local" && intent.runConversation) {
+      runConversation(intent, Promise.resolve(true));
+    } else {
+      intent.onDouble();
+    }
+  }
+
   return {
     click(intent, clickCount = 1) {
       if (isDetailClickIntent(intent)) {
@@ -334,14 +351,12 @@ export function createClickIntentArbiter(
       }
       if (event.key === "Enter") {
         event.preventDefault();
-        // Une Entrée ultérieure conserve un contexte pointer déjà appliqué.
-        cancel(intent.key);
-        if (intent.doublePolicy !== "local" && intent.runConversation) {
-          runConversation(intent, Promise.resolve(true));
-        } else {
-          intent.onDouble();
-        }
+        runExplicitDetail(intent);
       }
+    },
+    activateDetail(intent) {
+      if (isDetailClickIntent(intent)) openDetail(intent);
+      else runExplicitDetail(intent);
     },
     cancel,
     cancelAll,

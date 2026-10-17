@@ -54,6 +54,8 @@ import {
   kpiClickAction,
   kpiClickIntent,
   kpiContextEnabled,
+  type KpiDetailButtonSpec,
+  kpiDetailButtonSpec,
   kpiHintKey,
   kpiInteractionPlan,
   kpiKeyShortcuts,
@@ -67,6 +69,7 @@ import {
   kpiTrendContextResource,
 } from "./kpi-sparkline.ts";
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
+import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
 import { useClickIntent } from "~/shared/useClickIntent.ts";
 import {
@@ -760,6 +763,43 @@ function KpiCard({
     trendDetail.hasMessage,
   );
   const compact = layout !== "wide";
+  // Voie tactile du double-clic ou d'Entrée : un bouton visible, présent
+  // exactement quand ce double-clic est câblé. Il passe par l'arbitre comme
+  // Entrée, donc ne bascule jamais le contexte.
+  const numberDetailButton = kpiDetailButtonSpec(
+    "number",
+    numberClick,
+    numberDetail.hasJump,
+    numberDetail.hasMessage,
+  );
+  const trendDetailButton = kpiDetailButtonSpec(
+    "trend",
+    trendClick,
+    trendDetail.hasJump,
+    trendDetail.hasMessage,
+  );
+
+  function renderDetailButton(
+    spec: KpiDetailButtonSpec | null,
+    selection: ContextSelectionItem,
+    action: ReturnType<typeof kpiNumberAction>,
+    hintSide: "left" | "right",
+    klass?: string,
+  ) {
+    if (!spec) return null;
+    return (
+      <DetailToggleButton
+        label={data.label}
+        actionLabel={t(spec.actionLabelKey, { label: data.label })}
+        hint={t(spec.hintKey)}
+        onToggle={() =>
+          clickIntent.activateDetail(interactionIntent(selection, action))}
+        touch={compact}
+        hintSide={hintSide}
+        class={klass}
+      />
+    );
+  }
 
   /* ── Layout mobile / panel ─────────────────────────────────────── */
   if (compact) {
@@ -819,6 +859,12 @@ function KpiCard({
                 {unit}
               </span>
             </span>
+            {renderDetailButton(
+              numberDetailButton,
+              numberContext,
+              numberAction,
+              "left",
+            )}
           </div>
 
           {/* Ligne secondaire : compte de factures ou montant en retard. */}
@@ -886,6 +932,17 @@ function KpiCard({
                 />
               )}
               <div class="pointer-events-none relative z-10">
+                {trendDetailButton && (
+                  <div class="flex justify-end">
+                    {renderDetailButton(
+                      trendDetailButton,
+                      trendContext,
+                      trendAction,
+                      "left",
+                      "pointer-events-auto",
+                    )}
+                  </div>
+                )}
                 <SparklineBars
                   values={sparkline}
                   labels={sparklineLabels}
@@ -995,6 +1052,12 @@ function KpiCard({
             >
               {amount} <span class="text-[26px] text-ink-faint">{unit}</span>
             </span>
+            {renderDetailButton(
+              numberDetailButton,
+              numberContext,
+              numberAction,
+              "right",
+            )}
           </div>
 
           {/* Ligne secondaire : compte de factures ou montant en retard. */}
@@ -1071,8 +1134,17 @@ function KpiCard({
                       {periodLabel}
                     </span>
                   )}
-                  <span class="font-mono text-micro text-accent">
-                    {t("kpi.sparkline.trend_label")}
+                  <span class="flex items-center gap-1">
+                    <span class="font-mono text-micro text-accent">
+                      {t("kpi.sparkline.trend_label")}
+                    </span>
+                    {renderDetailButton(
+                      trendDetailButton,
+                      trendContext,
+                      trendAction,
+                      "left",
+                      "pointer-events-auto -my-2",
+                    )}
                   </span>
                 </div>
                 <SparklineBars

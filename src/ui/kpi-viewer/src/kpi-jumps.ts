@@ -61,6 +61,41 @@ export function kpiClickAction(
   return hasJump ? "detail" : "none";
 }
 
+/** Libellé et indice du bouton de détail visible d'un élément KPI. */
+export interface KpiDetailButtonSpec {
+  actionLabelKey: string;
+  hintKey: string;
+}
+
+/**
+ * Bouton « détail » visible, la voie tactile du double-clic ou d'Entrée.
+ * Il existe exactement quand ce double-clic est câblé : un détail existe et le
+ * clic simple ne l'ouvre pas déjà (`detail`). Un saut ouvre un niveau, un
+ * message interroge la conversation : le libellé dit l'action réelle.
+ */
+export function kpiDetailButtonSpec(
+  target: "number" | "trend",
+  click: KpiClickAction,
+  hasJump: boolean,
+  hasMessage: boolean,
+): KpiDetailButtonSpec | null {
+  if (click === "detail" || (!hasJump && !hasMessage)) return null;
+  if (hasJump) {
+    return {
+      actionLabelKey: target === "number"
+        ? "interaction.detail.open"
+        : "kpi.drilldown.aria_trend",
+      hintKey: "interaction.detail.button_hint",
+    };
+  }
+  return {
+    actionLabelKey: target === "number"
+      ? "interaction.detail.ask"
+      : "kpi.drilldown.aria_trend_ask",
+    hintKey: "nav.ask",
+  };
+}
+
 /**
  * Clé i18n du title de l'élément, ou undefined s'il n'a aucun geste utile.
  * Le texte dit toujours le geste réellement actif.

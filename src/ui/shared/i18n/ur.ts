@@ -332,6 +332,13 @@ export const ur: Record<string, string> = {
   "interaction.detail.close": "{label} کی تفصیل بند کریں",
   "interaction.detail.open_hint": "تفصیل · ڈبل کلک",
   "interaction.detail.close_hint": "بند کریں · ڈبل کلک",
+  // ── détail sans double-clic : boutons visibles (tactile) ──
+  "interaction.detail.button_hint": "تفصیل",
+  "interaction.detail.ask": "{label} کے بارے میں پوچھیں",
+  "kpi.drilldown.aria_trend_ask": "{label} کے رجحان کے بارے میں پوچھیں",
+  "chart.detail_bar.open": "تفصیل کھولیں: {label}",
+  "chart.detail_bar.close": "تفصیل بند کریں: {label}",
+  "chart.detail_bar.ask": "پوچھیں: {label}",
   "document.row.open_actions":
     "{label} سیاق میں شامل کرنے یا ہٹانے کے لیے کلک یا اسپیس دبائیں · اقدامات دیکھنے کے لیے ڈبل کلک یا انٹر دبائیں",
   "document.row.close_actions":

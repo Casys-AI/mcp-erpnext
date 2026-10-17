@@ -71,6 +71,7 @@ import {
   detailOnClickIntent,
 } from "~/shared/click-intent.ts";
 import { viewerRootKey } from "~/shared/nav-stack";
+import { acceptsDetailToggleClick } from "~/shared/detail-toggle";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
 import { chartSeriesFormat } from "~/shared/levels/bodies";
@@ -103,12 +104,18 @@ import {
   type ChartCursor,
   chartCursorCounts,
   type ChartCursorMove,
+  type ChartDetailAction,
+  chartDetailBarLabelKey,
   chartDrillDownMessage,
+  type ChartFocus,
+  chartFocusedDetailAction,
   chartJumpHint,
   chartPointActionPlan,
   type ChartPointActivation,
+  chartPointDetailMode,
   chartPointExpansionState,
   chartPointLabel,
+  chartPointTarget,
   chartScatterPointLabel,
   chartSelectionAt,
   chartSeriesFromTarget,
@@ -2180,6 +2187,64 @@ function ChartKeyboardNavigator(
   );
 }
 
+/**
+ * Voie tactile du double-clic ou d'Entrée : une barre sous le graphe propose le
+ * détail du dernier point activé. Un vrai bouton HTML, jamais une infobulle
+ * Recharts (non cliquable de façon fiable). Hors de la scène à hauteur fixe,
+ * elle ne redimensionne pas le tracé en apparaissant.
+ */
+function ChartDetailBar(
+  { action, expanded, narrow, onToggle }: {
+    action: ChartDetailAction;
+    /** Absent pour un repli conversationnel, qui n'ouvre aucun panneau. */
+    expanded?: boolean;
+    narrow: boolean;
+    onToggle: () => void;
+  },
+) {
+  const t = useT();
+  const text = t(chartDetailBarLabelKey(action, expanded === true), {
+    label: chartPointTarget(action.label, action.series),
+  });
+  return (
+    <div
+      data-chart-detail-bar
+      class={cx(
+        "flex shrink-0 items-center border-t border-line-soft bg-sunken",
+        narrow ? "px-2 py-1" : "px-3 py-1.5",
+      )}
+    >
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={expanded === undefined
+          ? undefined
+          : CHART_DETAIL_PANEL_ID}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (!acceptsDetailToggleClick(event.detail)) return;
+          onToggle();
+        }}
+        class={cx(
+          "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-chip px-2 font-mono text-[11px] text-ink-muted transition-colors hover:bg-control hover:text-accent focus-visible:outline-2 focus-visible:outline-accent",
+          narrow ? "min-h-10" : "min-h-8",
+        )}
+      >
+        <span
+          aria-hidden="true"
+          class={cx(
+            "shrink-0 select-none text-[14px] leading-none transition-transform duration-150",
+            expanded === true && "rotate-90 text-accent",
+          )}
+        >
+          ›
+        </span>
+        <span class="truncate">{text}</span>
+      </button>
+    </div>
+  );
+}
+
 function ChartRouter(
   {
     data,
@@ -2367,6 +2432,8 @@ function ChartContent(
 ) {
   const [shared, setShared] = useState<DrillDownChannel | null>(null);
   const [hiddenSeries, setHiddenSeries] = useState<string[]>([]);
+  // Dernier point ou segment activé : la barre de détail agit sur lui.
+  const [detailFocus, setDetailFocus] = useState<ChartFocus | null>(null);
   const clickIntent = useClickIntent();
   function flashShared(channel: DrillDownChannel) {
     if (channel === "none") return;
@@ -2430,6 +2497,7 @@ function ChartContent(
   const { ask } = viewerNav;
   useLayoutEffect(() => () => clickIntent.cancelAll(), [clickIntent, rootKey]);
   useLayoutEffect(() => setHiddenSeries([]), [rootKey]);
+  useLayoutEffect(() => setDetailFocus(null), [rootKey]);
   useEffect(() => {
     setHiddenSeries((current) => {
       const next = normalizeHiddenChartSeries(data, current);
@@ -2498,14 +2566,13 @@ function ChartContent(
 
   const fallbackMessageEnabled = messagesEnabled &&
     data._drillDown !== undefined;
+  const detailCapabilities = { jumpsEnabled, messagesEnabled };
+  // Règle unique, partagée avec la barre de détail (voir chart-interactions).
   function pointDetailMode(
     label: string,
     series?: string,
   ): "inline" | "message" | null {
-    if (pointJump?.(label, series)) return "inline";
-    return fallbackMessageEnabled && pointFallback(label, series)
-      ? "message"
-      : null;
+    return chartPointDetailMode(data, detailCapabilities, label, series);
   }
   function canDrillDownPoint(label: string, series?: string): boolean {
     return pointDetailMode(label, series) !== null;
@@ -2572,6 +2639,14 @@ function ChartContent(
     };
   }
 
+  function focusDetailPoint(label: string, series: string | undefined) {
+    setDetailFocus((current) =>
+      current?.label === label && current.series === series
+        ? current
+        : { label, series }
+    );
+  }
+
   const onDataClick = interactionEnabled
     ? (
       label: string,
@@ -2580,6 +2655,7 @@ function ChartContent(
       clickCount = activation === "context" ? 1 : 2,
     ) => {
       if (!label) return;
+      focusDetailPoint(label, series);
       if (
         !shouldHandleChartPointActivation(
           activation,
@@ -2599,6 +2675,7 @@ function ChartContent(
       series: string | undefined,
       event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
     ) => {
+      focusDetailPoint(label, series);
       clickIntent.keyDown(pointIntent(label, series), event);
     }
     : undefined;
@@ -2635,6 +2712,11 @@ function ChartContent(
   const stableClickOpensDetail = useCallback<ChartSelectionPredicate>(
     (...args) => chartHandlers.current.clickOpensDetailPoint(...args),
     [],
+  );
+  const detailAction = chartFocusedDetailAction(
+    visibleData,
+    detailCapabilities,
+    detailFocus,
   );
   const chartSelected = activeContext.isSelected(chartContext);
   const chartContextActionLabel = t("context.active.toggle", {
@@ -2828,6 +2910,21 @@ function ChartContent(
             </span>
           )}
         </div>
+
+        {detailAction && (
+          <ChartDetailBar
+            action={detailAction}
+            expanded={pointExpansionState(
+              detailAction.label,
+              detailAction.series,
+            )}
+            narrow={narrow}
+            onToggle={() =>
+              clickIntent.activateDetail(
+                pointIntent(detailAction.label, detailAction.series),
+              )}
+          />
+        )}
 
         {!isRoot && (
           <section

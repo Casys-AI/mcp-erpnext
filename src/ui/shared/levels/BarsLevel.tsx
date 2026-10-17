@@ -6,7 +6,9 @@
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 import type { ClickIntentSingleResult } from "../click-intent.ts";
+import { DetailToggleButton } from "../DetailToggleButton.tsx";
 import { formatCurrency, formatNumber, formatPercent } from "../format";
+import { useT } from "../i18n-hook";
 import { useClickIntent } from "../useClickIntent.ts";
 import { type BarsBody, type BarsSeries, chartSeriesFormat } from "./bodies";
 import { nestedChartModel, type NestedPoint } from "./nested-chart-model.ts";
@@ -70,6 +72,7 @@ export function BarsLevel(
     narrow?: boolean;
   },
 ) {
+  const t = useT();
   const clickIntent = useClickIntent();
   const { labels, datasets } = chart;
   const model = nestedChartModel(chart);
@@ -103,10 +106,6 @@ export function BarsLevel(
   };
   const active = activePoint.labelIndex;
   const multiSeries = datasets.length > 1;
-  const chartWidth = Math.max(
-    100,
-    labels.length * Math.max(42, 26 + datasets.length * 5),
-  );
 
   const valueLabel = (series: BarsSeries, value: number) => {
     const format = chartSeriesFormat(chart, series);
@@ -138,6 +137,24 @@ export function BarsLevel(
   const canUsePoint = (labelIndex: number, seriesIndex: number) =>
     canSharePoint(labelIndex, seriesIndex) ||
     canOpenPoint(labelIndex, seriesIndex);
+
+  // Voie tactile du double-clic et d'Entrée : un bouton visible sous l'étiquette
+  // de chaque barre qui a un détail. Chaque série garde son emplacement sous
+  // l'étiquette (un vide quand elle n'a pas de détail) pour que le bouton reste
+  // aligné sur sa barre ; la largeur du graphe, défilable, s'y ajuste.
+  const hasDetailButtons = labels.some((_, labelIndex) =>
+    datasets.some((_, seriesIndex) => canOpenPoint(labelIndex, seriesIndex))
+  );
+  const detailSlotCount = hasDetailButtons ? datasets.length : 0;
+  const detailButtonSize = narrow ? 40 : 28;
+  const chartWidth = Math.max(
+    100,
+    labels.length * Math.max(
+      42,
+      26 + datasets.length * 5,
+      detailSlotCount > 0 ? detailSlotCount * (detailButtonSize + 4) + 8 : 0,
+    ),
+  );
 
   const pointIntent = (labelIndex: number, seriesIndex: number) => ({
     key: pointKey?.(labelIndex, seriesIndex) ??
@@ -205,6 +222,13 @@ export function BarsLevel(
       event.preventDefault();
       onPointDetail?.(labelIndex, seriesIndex);
     }
+  };
+
+  // Même chemin qu'Entrée : jamais le contexte, jamais un second geste.
+  const openPointDetail = (labelIndex: number, seriesIndex: number) => {
+    setPreview(null);
+    setCurrentPoint({ labelIndex, seriesIndex });
+    clickIntent.activateDetail(pointIntent(labelIndex, seriesIndex));
   };
 
   const pointStyle = (point: NestedPoint) => ({
@@ -559,6 +583,46 @@ export function BarsLevel(
                 </span>
               ))}
             </div>
+            {hasDetailButtons && (
+              <div class="mt-0.5 flex gap-2">
+                {labels.map((label, labelIndex) => (
+                  <div
+                    key={labelIndex}
+                    class="flex min-w-0 flex-1 items-center justify-center gap-1"
+                  >
+                    {datasets.map((dataset, seriesIndex) =>
+                      canOpenPoint(labelIndex, seriesIndex)
+                        ? (
+                          <DetailToggleButton
+                            key={seriesIndex}
+                            label={multiSeries
+                              ? `${label} · ${
+                                dataset.label || `#${seriesIndex + 1}`
+                              }`
+                              : label}
+                            hint={t("interaction.detail.button_hint")}
+                            hintSide={labelIndex < labels.length / 2
+                              ? "right"
+                              : "left"}
+                            touch={narrow}
+                            onToggle={() =>
+                              openPointDetail(labelIndex, seriesIndex)}
+                          />
+                        )
+                        : (
+                          <span
+                            key={seriesIndex}
+                            aria-hidden="true"
+                            class={narrow
+                              ? "size-10 shrink-0"
+                              : "size-7 shrink-0"}
+                          />
+                        )
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {chart.xAxisLabel && (
               <div class="mt-1.5 text-right font-mono text-nano text-ink-faint">
                 {chart.xAxisLabel}

@@ -2,9 +2,13 @@ import { assertEquals } from "@std/assert";
 import {
   CLICK_INTENT_REVERT_WINDOW_MS,
   type ClickIntent,
+  type ClickIntentKeyEvent,
   type ClickIntentRevert,
   type ClickIntentSchedule,
   createClickIntentArbiter as createArbiter,
+  type DetailClickIntent,
+  detailOnClickIntent,
+  isDetailClickIntent,
 } from "./click-intent.ts";
 
 function createClickIntentArbiter() {
@@ -387,4 +391,196 @@ Deno.test("click intent - cancel and cleanup release without undoing", async () 
   await Promise.resolve();
 
   assertEquals(events, ["single:A", "single:B", "release:A", "release:B"]);
+});
+
+// ── Matrice : mode de la cible × geste → effet ───────────────────────────────
+//
+// Ce tableau est la grammaire d'interaction. Une cible dont le contexte est
+// disponible réserve le clic simple au contexte (détail = double-clic/Entrée) ;
+// une cible sans contexte n'a rien à réserver, donc clic, Espace et Entrée
+// ouvrent le détail local, une seule fois.
+
+type Gesture =
+  | "click"
+  | "click-detail-0"
+  | "click-detail-2"
+  | "dblclick"
+  | "space"
+  | "enter"
+  | "space-repeat";
+
+function key(name: string, repeat = false) {
+  const calls = { prevented: 0 };
+  const event: ClickIntentKeyEvent = {
+    key: name,
+    repeat,
+    preventDefault: () => {
+      calls.prevented++;
+    },
+  };
+  return { event, calls };
+}
+
+function perform(
+  arbiter: ReturnType<typeof createClickIntentArbiter>,
+  target: ClickIntent,
+  gesture: Gesture,
+) {
+  switch (gesture) {
+    case "click":
+      return arbiter.click(target, 1);
+    case "click-detail-0":
+      return arbiter.click(target, 0);
+    case "click-detail-2":
+      return arbiter.click(target, 2);
+    case "dblclick":
+      return arbiter.doubleClick(target);
+    case "space":
+      return arbiter.keyDown(target, key(" ").event);
+    case "enter":
+      return arbiter.keyDown(target, key("Enter").event);
+    case "space-repeat":
+      return arbiter.keyDown(target, key(" ", true).event);
+  }
+}
+
+function detailIntent(name: string, events: string[]): ClickIntent {
+  return detailOnClickIntent(name, () => events.push(`open:${name}`));
+}
+
+const MATRIX: Array<
+  {
+    mode: "context" | "detail";
+    gesture: Gesture;
+    effects: string[];
+  }
+> = [
+  { mode: "context", gesture: "click", effects: ["single:A"] },
+  { mode: "context", gesture: "click-detail-0", effects: ["single:A"] },
+  { mode: "context", gesture: "space", effects: ["single:A"] },
+  { mode: "context", gesture: "enter", effects: ["double:A"] },
+  { mode: "context", gesture: "space-repeat", effects: [] },
+  { mode: "detail", gesture: "click", effects: ["open:A"] },
+  { mode: "detail", gesture: "click-detail-0", effects: ["open:A"] },
+  { mode: "detail", gesture: "click-detail-2", effects: [] },
+  { mode: "detail", gesture: "dblclick", effects: [] },
+  { mode: "detail", gesture: "space", effects: ["open:A"] },
+  { mode: "detail", gesture: "enter", effects: ["open:A"] },
+  { mode: "detail", gesture: "space-repeat", effects: [] },
+];
+
+for (const { mode, gesture, effects } of MATRIX) {
+  Deno.test(
+    `click intent matrix - ${mode} target, ${gesture} -> ${
+      effects.join(",") || "nothing"
+    }`,
+    () => {
+      const arbiter = createClickIntentArbiter();
+      const events: string[] = [];
+      const target = mode === "detail"
+        ? detailIntent("A", events)
+        : intent("A", events);
+
+      perform(arbiter, target, gesture);
+
+      assertEquals(events, effects);
+    },
+  );
+}
+
+Deno.test("click intent - a detail click opens exactly once through a full native double-click burst", async () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+  const target = detailIntent("A", events);
+
+  // Clics natifs detail=1..4, puis les dblclick émis par le navigateur.
+  for (const count of [1, 2, 3, 4]) arbiter.click(target, count);
+  arbiter.doubleClick(target);
+  arbiter.doubleClick(target);
+  await nextTurn();
+
+  assertEquals(events, ["open:A"]);
+});
+
+Deno.test("click intent - Space and Enter on a detail target prevent default and open once each", () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+  const target = detailIntent("A", events);
+  const space = key(" ");
+  const enter = key("Enter");
+  const other = key("a");
+
+  arbiter.keyDown(target, space.event);
+  arbiter.keyDown(target, enter.event);
+  arbiter.keyDown(target, other.event);
+
+  assertEquals(events, ["open:A", "open:A"]);
+  assertEquals(space.calls.prevented, 1);
+  assertEquals(enter.calls.prevented, 1);
+  assertEquals(other.calls.prevented, 0);
+});
+
+Deno.test("click intent - a detail intent has no single action and no conversation channel", () => {
+  const target = detailOnClickIntent("A", () => {});
+
+  assertEquals(isDetailClickIntent(target), true);
+  assertEquals(target.doublePolicy, "local");
+  assertEquals("onSingle" in target, false);
+  assertEquals("runConversation" in target, false);
+  assertEquals(isDetailClickIntent(intent("A", [])), false);
+});
+
+Deno.test("click intent - a detail click never touches a context sibling nor reverts anything", async () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+
+  arbiter.click(intent("A", events), 1);
+  arbiter.click(detailIntent("B", events), 1);
+  await nextTurn();
+
+  assertEquals(events, ["single:A", "open:B"]);
+});
+
+Deno.test("click intent - the same key switching from context to detail inside the revert window leaves no residual revert", async () => {
+  const arbiter = createClickIntentArbiter();
+  const events: string[] = [];
+
+  arbiter.click(intent("A", events), 1);
+  // La capacité de contexte disparaît : la même cible passe en mode détail.
+  arbiter.click(detailIntent("A", events), 1);
+  arbiter.click(detailIntent("A", events), 2);
+  arbiter.doubleClick(detailIntent("A", events));
+  await nextTurn();
+
+  assertEquals(events, ["single:A", "open:A"]);
+});
+
+Deno.test("click intent - illegal detail intents do not type-check", () => {
+  const conversational: DetailClickIntent = {
+    key: "A",
+    clickAction: "detail",
+    doublePolicy: "local",
+    onDouble: () => {},
+    // @ts-expect-error un clic de détail ne fabrique jamais de message
+    runConversation: async () => true,
+  };
+  const withSingle: DetailClickIntent = {
+    key: "A",
+    clickAction: "detail",
+    doublePolicy: "local",
+    onDouble: () => {},
+    // @ts-expect-error le détail au clic n'a pas d'action simple séparée
+    onSingle: () => {},
+  };
+  const conversationPolicy: DetailClickIntent = {
+    key: "A",
+    clickAction: "detail",
+    // @ts-expect-error seul le détail local est permis
+    doublePolicy: "after-context",
+    onDouble: () => {},
+  };
+  assertEquals(
+    [conversational, withSingle, conversationPolicy].length,
+    3,
+  );
 });

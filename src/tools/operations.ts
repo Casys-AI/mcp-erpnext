@@ -8,9 +8,18 @@
  * @module lib/erpnext/tools/operations
  */
 
-import type { FrappeFile, FrappeFilter } from "../api/types.ts";
-import type { ErpNextTool } from "./types.ts";
+import {
+  getMcpAppsCapability,
+  MCP_APP_MIME_TYPE,
+  MCP_APPS_EXTENSION_ID,
+} from "@casys/mcp-server";
+import type { FrappeFile } from "../api/types.ts";
+import type { ErpNextTool, ErpNextToolContext } from "./types.ts";
 import { createWithDiagnostics } from "./create-diagnostics.ts";
+import {
+  FILE_DOWNLOAD_TOOL_NAME,
+  FileDownloadError,
+} from "./file-download-error.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import {
   roundedTotalFallbackWarning,
@@ -30,12 +39,17 @@ import {
   loadMethodAllowlist,
 } from "./method-allowlist.ts";
 import {
+  DOC_LIST_DEFAULT_LIMIT,
+  FRAPPE_FILTERS_INPUT_SCHEMA,
+  parseFrappeFilters,
+  parsePagination,
+  planListQuery,
+} from "./doc-list-query.ts";
+import { ToolInputError } from "./errors.ts";
+import {
   isPurchaseInvoiceDoctype,
   withPurchaseInvoiceAccountHints,
 } from "./purchase-invoice-hints.ts";
-
-const DOC_LIST_MAX_LIMIT = 5_000;
-const DOC_LIST_MAX_OFFSET = 100_000;
 
 function bytesToBase64(bytes: Uint8Array): string {
   const chunkSize = 32 * 1024;
@@ -46,6 +60,35 @@ function bytesToBase64(bytes: Uint8Array): string {
     );
   }
   return btoa(binary);
+}
+
+/**
+ * Fail-closed guard for `erpnext_file_download`: file bytes are only served to
+ * a client that announced the MCP Apps extension with the app MIME type.
+ *
+ * `visibility: ["app"]` only hides the tool from `tools/list`; `tools/call`
+ * cannot tell an App from a model. This check is therefore a capability gate,
+ * not proof of origin: a host that announces MCP Apps AND lets the model call a
+ * hidden tool is not covered (see docs/tools.md).
+ */
+function assertMcpAppsClient(ctx: ErpNextToolContext): void {
+  const capability = getMcpAppsCapability(ctx.clientCapabilities);
+  if (capability?.mimeTypes?.includes(MCP_APP_MIME_TYPE) === true) return;
+  throw new FileDownloadError(
+    "APP_CONTEXT_REQUIRED",
+    "attachment content is only served to MCP Apps hosts, never to the model",
+    {
+      context: {
+        tool: FILE_DOWNLOAD_TOOL_NAME,
+        requiredExtension: MCP_APPS_EXTENSION_ID,
+        requiredMimeType: MCP_APP_MIME_TYPE,
+        clientAnnouncedExtension: capability !== undefined,
+      },
+      recovery:
+        "open the document in an MCP Apps viewer to download the attachment; " +
+        "use erpnext_file_list to read attachment metadata (name, size, file_url)",
+    },
+  );
 }
 
 async function withPiAccountHintsIfNeeded<T>(
@@ -159,7 +202,7 @@ export const operationsTools: ErpNextTool[] = [
       },
     },
     description:
-      "Download one ERPNext attachment for the document viewer. The tool accepts a File ID, verifies its document attachment, and returns one embedded binary resource.",
+      "Download one ERPNext attachment for the document viewer. The tool accepts a File ID, verifies its document attachment, and returns one embedded binary resource. Refused with APP_CONTEXT_REQUIRED unless the MCP client announces the MCP Apps extension.",
     category: "operations",
     inputSchema: {
       type: "object",
@@ -197,6 +240,8 @@ export const operationsTools: ErpNextTool[] = [
           );
         }
       }
+      // Before any Frappe round-trip: no request, no bytes for non-App clients.
+      assertMcpAppsClient(ctx);
 
       const file = await ctx.client.downloadFile({
         fileId: (input.file_id as string).trim(),
@@ -644,8 +689,9 @@ export const operationsTools: ErpNextTool[] = [
     _meta: DOCLIST_META,
     description:
       "List any ERPNext documents by DocType. Useful for DocTypes not covered " +
-      "by dedicated tools. Supports field selection, filters (as JSON array), " +
-      "bounded pagination, and an optional fresh read.",
+      "by dedicated tools. Supports field selection, filters (as JSON array, " +
+      "including child-table filters), limit/offset pagination, and an optional fresh read. " +
+      "Errors read '[erpnext_doc_list] CODE: message. Recovery: ...'.",
     category: "operations",
     inputSchema: {
       type: "object",
@@ -661,71 +707,20 @@ export const operationsTools: ErpNextTool[] = [
             "Fields to fetch (default: ['name', 'modified']). Use ['*'] for all fields.",
           items: { type: "string" },
         },
-        filters: {
-          type: "array",
-          description:
-            "Frappe filters as array of [fieldname, operator, value] tuples, or " +
-            "[child doctype, fieldname, operator, value] to filter on a child table. " +
-            "Values may be strings, numbers, booleans, null, or string/number arrays for in/not in. " +
-            'Example: [["status","=","Open"],["company","=","Acme"]]',
-          items: {
-            type: "array",
-            anyOf: [
-              {
-                prefixItems: [
-                  { type: "string", minLength: 1 },
-                  { type: "string", minLength: 1 },
-                  {
-                    oneOf: [
-                      { type: ["string", "number", "boolean", "null"] },
-                      {
-                        type: "array",
-                        items: { type: ["string", "number"] },
-                      },
-                    ],
-                  },
-                ],
-                minItems: 3,
-                maxItems: 3,
-              },
-              {
-                prefixItems: [
-                  { type: "string", minLength: 1 },
-                  { type: "string", minLength: 1 },
-                  { type: "string", minLength: 1 },
-                  {
-                    oneOf: [
-                      { type: ["string", "number", "boolean", "null"] },
-                      {
-                        type: "array",
-                        items: { type: ["string", "number"] },
-                      },
-                    ],
-                  },
-                ],
-                minItems: 4,
-                maxItems: 4,
-              },
-              {
-                // 3.0.x advertised arbitrary string arrays. Keep accepting
-                // that legacy surface while describing real 3/4-part Frappe
-                // tuples precisely for modern clients.
-                items: { type: "string" },
-              },
-            ],
-          },
-        },
+        filters: FRAPPE_FILTERS_INPUT_SCHEMA,
         limit: {
           type: "integer",
-          minimum: 1,
-          maximum: DOC_LIST_MAX_LIMIT,
-          description: "Max results (default 20, maximum 5000)",
+          minimum: 0,
+          description:
+            `Max rows (default ${DOC_LIST_DEFAULT_LIMIT}). No server-side cap. ` +
+            "0 = every row (Frappe semantics), potentially very large: prefer limit + offset. " +
+            "limit 0 cannot be combined with offset > 0 (INVALID_PAGINATION).",
         },
         offset: {
           type: "integer",
           minimum: 0,
-          maximum: DOC_LIST_MAX_OFFSET,
-          description: "Pagination offset (default 0, maximum 100000)",
+          description:
+            "Rows to skip (default 0), for pagination with a positive limit.",
         },
         skip_cache: {
           type: "boolean",
@@ -740,51 +735,79 @@ export const operationsTools: ErpNextTool[] = [
       required: ["doctype"],
     },
     handler: async (input, ctx) => {
-      if (!input.doctype) {
-        throw new Error("[erpnext_doc_list] 'doctype' is required");
-      }
-      if (
-        input.limit !== undefined &&
-        (typeof input.limit !== "number" || !Number.isInteger(input.limit) ||
-          input.limit < 1 || input.limit > DOC_LIST_MAX_LIMIT)
-      ) {
-        throw new Error(
-          `[erpnext_doc_list] 'limit' must be an integer between 1 and ${DOC_LIST_MAX_LIMIT}`,
-        );
-      }
-      if (
-        input.offset !== undefined &&
-        (typeof input.offset !== "number" ||
-          !Number.isInteger(input.offset) || input.offset < 0 ||
-          input.offset > DOC_LIST_MAX_OFFSET)
-      ) {
-        throw new Error(
-          `[erpnext_doc_list] 'offset' must be an integer between 0 and ${DOC_LIST_MAX_OFFSET}`,
+      const tool = "erpnext_doc_list";
+      if (typeof input.doctype !== "string" || !input.doctype.trim()) {
+        throw new ToolInputError(
+          tool,
+          "INVALID_INPUT",
+          "'doctype' is required and must be a non-empty string",
+          {
+            recovery: "Pass the DocType name, e.g. doctype: 'Lead'.",
+            context: { field: "doctype" },
+          },
         );
       }
       if (
         input.skip_cache !== undefined && typeof input.skip_cache !== "boolean"
       ) {
-        throw new Error("[erpnext_doc_list] 'skip_cache' must be a boolean");
+        throw new ToolInputError(
+          tool,
+          "INVALID_INPUT",
+          "'skip_cache' must be a boolean",
+          {
+            recovery: "Pass true to bypass the list cache, or omit it.",
+            context: { field: "skip_cache" },
+          },
+        );
       }
-
-      const limit = (input.limit as number) ?? 20;
-      const fields = (input.fields as string[]) ?? ["name", "modified"];
-      const filters = (input.filters as FrappeFilter[]) ?? [];
-      const order_by = (input.order_by as string) ?? "modified desc";
-      const offset = input.offset as number | undefined;
+      if (
+        input.fields !== undefined &&
+        (!Array.isArray(input.fields) ||
+          input.fields.some((field) => typeof field !== "string"))
+      ) {
+        throw new ToolInputError(
+          tool,
+          "INVALID_INPUT",
+          "'fields' must be an array of strings",
+          {
+            recovery: "Pass field names, e.g. ['name', 'status'], or ['*'].",
+            context: { field: "fields" },
+          },
+        );
+      }
+      if (input.order_by !== undefined && typeof input.order_by !== "string") {
+        throw new ToolInputError(
+          tool,
+          "INVALID_INPUT",
+          "'order_by' must be a string",
+          {
+            recovery: "Pass a clause such as 'modified desc', or omit it.",
+            context: { field: "order_by" },
+          },
+        );
+      }
+      const { limit, offset } = parsePagination(tool, input);
+      const filters = parseFrappeFilters(tool, input.filters);
+      const fields = (input.fields as string[] | undefined) ??
+        ["name", "modified"];
+      const { order_by, group_by } = planListQuery(input.doctype, {
+        filters,
+        fields,
+        order_by: input.order_by,
+      });
       const listOptions = {
         fields,
         filters,
         limit,
         ...(offset !== undefined ? { limit_start: offset } : {}),
-        order_by,
+        ...(order_by !== undefined ? { order_by } : {}),
+        ...(group_by !== undefined ? { group_by } : {}),
       };
       const docs = input.skip_cache === true
-        ? await ctx.client.list(input.doctype as string, listOptions, {
+        ? await ctx.client.list(input.doctype, listOptions, {
           skipCache: true,
         })
-        : await ctx.client.list(input.doctype as string, listOptions);
+        : await ctx.client.list(input.doctype, listOptions);
 
       return {
         doctype: input.doctype as string,

@@ -67,28 +67,6 @@ export function nextInvoiceMutationCommitted(
   return event === "mutation-committed";
 }
 
-const SUBMITTABLE_INVOICE_VIEWER_DOCTYPES = new Set([
-  "Quotation",
-  "Sales Order",
-  "Delivery Note",
-  "Sales Invoice",
-  "Purchase Order",
-  "Purchase Receipt",
-  "Purchase Invoice",
-  "Stock Entry",
-  "Journal Entry",
-  "Payment Entry",
-  "Timesheet",
-  "Leave Application",
-  "Salary Slip",
-  "BOM",
-  "Work Order",
-  "Job Card",
-  "Asset",
-  "Asset Movement",
-  "Shipment",
-]);
-
 const DEDICATED_MUTATIONS: Record<
   string,
   { submit?: string; cancel?: string }
@@ -102,8 +80,14 @@ const DEDICATED_MUTATIONS: Record<
 
 /**
  * Résout les mutations réellement enregistrées dans ce serveur.
- * Un outil dédié exact prime ; le générique ne sert qu'aux DocTypes
- * explicitement connus comme submittables.
+ * Un outil dédié exact prime, puis le générique.
+ *
+ * Aucune liste de DocTypes ici : le serveur est la seule source de vérité
+ * (`SUBMITTABLE_VIEWER_DOCTYPES`, src/tools/ui-refresh.ts) et ne publie
+ * `erpnext_doc_submit` / `erpnext_doc_cancel` dans `_availableTools` que pour
+ * un DocType soumettable. Le manifeste absent (payload 3.0.x) reste toléré par
+ * `hasAvailableTool`, comme avant ; sans proxy `serverTools`, l'appelant passe
+ * `[]` et rien n'est proposé.
  */
 export function invoiceMutationActions(
   doctype: string,
@@ -111,11 +95,7 @@ export function invoiceMutationActions(
   availableTools: readonly string[] | undefined,
   mutationCommitted = false,
 ): InvoiceMutationActions {
-  if (
-    mutationCommitted || !SUBMITTABLE_INVOICE_VIEWER_DOCTYPES.has(doctype)
-  ) {
-    return { submit: null, cancel: null };
-  }
+  if (mutationCommitted) return { submit: null, cancel: null };
 
   const dedicated = DEDICATED_MUTATIONS[doctype];
   const submit = dedicated?.submit &&

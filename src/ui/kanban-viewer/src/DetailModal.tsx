@@ -1050,7 +1050,7 @@ export function CardDetailModal({
             ))}
           {/* « Aller à » : les sauts, puis les phrases — sur leur propre ligne, distincts du déplacement */}
           {(hasJumpNav || hasSendMessageNav || onViewList) && (
-            <span class="mt-1 basis-full font-mono text-[10px] uppercase tracking-[0.09em] text-ink-faint">
+            <span class="mt-1 basis-full font-mono text-[10px] uppercase tracking-label text-ink-faint">
               {t("nav.goto")}
             </span>
           )}

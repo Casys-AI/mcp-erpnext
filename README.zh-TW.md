@@ -23,8 +23,8 @@ Code、VS Code Copilot 或自訂代理）。
 
 支援**自行託管**與 **ERPNext Cloud**（frappe.cloud）執行個體。
 
-> 基於 **[@casys/mcp-server](https://github.com/superWorldSavior/mcp-platform)**
-> 構建 — 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。
+> 基於 **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** 構建 —
+> 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。
 
 ## 截圖
 
@@ -86,16 +86,19 @@ Code、VS Code Copilot 或自訂代理）。
 > 導覽跳轉、工具清單）也改經 `_meta` 傳遞，不再進入模型的上下文。 所有功能仍依
 > MCP 主機能力啟用； Buy 證據不會執行採購，也不代表即時 ERP 已通過驗證。
 
+[3.0 至 3.1 遷移指南](docs/migration-3.0-to-3.1.md) 說明原始碼的契約、
+主機需求與部署限制。
+
 ## 文件
 
 依照 [Diátaxis](https://diataxis.fr) 依「你正在做什麼」分類：
 
-|                       |                                                                                                                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **學習** — 第一次接觸 | [第一次工具呼叫](docs/tutorial-first-tool-call.md) — 四個步驟，從零到看見回應                                                                                                               |
-| **執行** — 有明確目標 | [建立主檔資料](docs/fresh-instance-setup.md) · [執行 HTTP 伺服器](docs/http-deployment.md) · [設定 OAuth](docs/oauth-setup.md) · [遷移至 2026-07-28](docs/migration-mcp-spec-2026-07-28.md) |
-| **查閱**              | [工具](docs/tools.md) · [環境變數](docs/environment-variables.md) · [DocType 涵蓋範圍](docs/coverage.md) · [儲存庫結構](docs/architecture.md)                                               |
-| **理解原理**          | [設計概念](docs/concepts.md) — 連結解析、傳輸方式、MRTR，以及各層快取的差異                                                                                                                 |
+|                       |                                                                                                                                                                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **學習** — 第一次接觸 | [第一次工具呼叫](docs/tutorial-first-tool-call.md) — 四個步驟，從零到看見回應                                                                                                                                                                   |
+| **執行** — 有明確目標 | [建立主檔資料](docs/fresh-instance-setup.md) · [執行 HTTP 伺服器](docs/http-deployment.md) · [設定 OAuth](docs/oauth-setup.md) · [從 3.0 遷移至 3.1](docs/migration-3.0-to-3.1.md) · [遷移至 2026-07-28](docs/migration-mcp-spec-2026-07-28.md) |
+| **查閱**              | [工具](docs/tools.md) · [環境變數](docs/environment-variables.md) · [DocType 涵蓋範圍](docs/coverage.md) · [儲存庫結構](docs/architecture.md)                                                                                                   |
+| **理解原理**          | [設計概念](docs/concepts.md) — 連結解析、傳輸方式、MRTR，以及各層快取的差異                                                                                                                                                                     |
 
 ## 快速開始
 
@@ -182,6 +185,17 @@ HTTP 用戶端屬於破壞性變更。
 npx -y @casys/mcp-erpnext --categories=sales,inventory
 ```
 
+另支援排除類別或個別工具，並可使用對應的環境變數：
+
+```bash
+deno run -A server.ts --categories=sales,inventory,operations --exclude-tools=erpnext_file_upload,erpnext_doc_delete
+```
+
+CLI 值會分別覆寫 `ERPNEXT_CATEGORIES`、`ERPNEXT_EXCLUDE_CATEGORIES` 與
+`ERPNEXT_EXCLUDE_TOOLS`。被排除的工具無法呼叫，也不會出現在檢視器操作或快取
+預熱中。請使用 `--flag=value`；無效的排除條件或最終沒有工具時會阻止啟動。
+完整規則請見[工具選擇](docs/environment-variables.md#tool-selection)。
+
 ## 全新執行個體設定
 
 全新的 ERPNext 執行個體沒有主檔資料，因此業務工具會因驗證失敗而無法使用。
@@ -189,19 +203,26 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 
 ## UI 檢視器
 
-八個互動式 [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
+九個互動式 [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)
 檢視器，已登錄為 `ui://mcp-erpnext/{name}`：
 
-| 檢視器           | 說明                                               | 互動功能                                                       |
-| ---------------- | -------------------------------------------------- | -------------------------------------------------------------- |
-| `doc-viewer`     | 顯示欄位與子表格的通用 ERPNext 文件                | 依能力啟用附件、具型別導覽、受保護的提交／取消及原始 JSON。    |
-| `doclist-viewer` | 通用文件表格，支援排序、篩選、分頁與 CSV 匯出      | 內嵌詳情、具型別的巢狀導覽、提交／取消，以及精簡的狀態篩選器。 |
-| `invoice-viewer` | 含交易方、品項及合計的銷售訂單、銷售發票與報價單   | 品項、庫存、交易方與付款導覽，以及受保護的提交／取消操作。     |
-| `stock-viewer`   | 含色碼數量標籤的庫存結餘表格                       | 品項詳情、近期異動、庫存圖表與庫存記錄導覽。                   |
-| `chart-viewer`   | 通用圖表渲染器（透過 Recharts 支援 12 種圖表類型） | 精確的資料點／數列導覽，以及簡單與組合圖表的作用中內容選取。   |
-| `kanban-viewer`  | 可讀寫的 Task、Opportunity、Issue 看板             | 拖放、內嵌編輯、循序儲存，以及具型別的相關文件導覽。           |
-| `kpi-viewer`     | 含差異值、迷你圖與趨勢的大數字卡片                 | 數值與趨勢導覽，以及有上限的作用中內容選取。                   |
-| `funnel-viewer`  | 含轉換率的梯形銷售漏斗                             | 保留期間條件的階段導覽，以及有上限的作用中內容選取。           |
+| 檢視器                | 說明                                               | 互動功能                                                            |
+| --------------------- | -------------------------------------------------- | ------------------------------------------------------------------- |
+| `doc-viewer`          | 顯示欄位與子表格的通用 ERPNext 文件                | 依能力啟用附件、具型別導覽、受保護的提交／取消及原始 JSON。         |
+| `doclist-viewer`      | 通用文件表格，支援排序、篩選、分頁與 CSV 匯出      | 內嵌詳情、具型別的巢狀導覽、提交／取消，以及精簡的狀態篩選器。      |
+| `invoice-viewer`      | 含交易方、品項及合計的銷售訂單、銷售發票與報價單   | 品項、庫存、交易方與付款導覽，以及受保護的提交／取消操作。          |
+| `stock-viewer`        | 含色碼數量標籤的庫存結餘表格                       | 品項詳情、近期異動、庫存圖表與庫存記錄導覽。                        |
+| `chart-viewer`        | 通用圖表渲染器（透過 Recharts 支援 12 種圖表類型） | 精確的資料點／數列導覽，以及簡單與組合圖表的作用中內容選取。        |
+| `kanban-viewer`       | 可讀寫的 Task、Opportunity、Issue 看板             | 拖放、內嵌編輯、循序儲存，以及具型別的相關文件導覽。                |
+| `kpi-viewer`          | 含差異值、迷你圖與趨勢的大數字卡片                 | 數值與趨勢導覽，以及有上限的作用中內容選取。                        |
+| `funnel-viewer`       | 含轉換率的梯形銷售漏斗                             | 保留期間條件的階段導覽，以及有上限的作用中內容選取。                |
+| `buy-evidence-viewer` | 不可變的封存 Buy 證據（僅限已記錄的工作階段）      | 標示完整、部分、未解決或不可用的投影；沒有即時 ERP 重新整理或異動。 |
+
+檢視器與 Buy 結果欄位會使用主機語言：英文、法文、簡體中文、繁體中文、印地語、
+孟加拉語、泰米爾語與烏爾都語。中文的文字系統標記優先於地區標記；未指定文字
+系統時，`zh-TW`、`zh-HK` 與 `zh-MO` 會使用繁體中文。烏爾都語採用由右至左
+的文件方向。主機後續變更語言時，介面會更新語言與方向，無須重新載入。此 Beta 的
+App 等待與拒絕畫面仍使用英文；這些共用畫面的主機語言支援仍待上游 MCP View 補足。
 
 ### 導覽與作用中內容
 
@@ -209,14 +230,17 @@ npx -y @casys/mcp-erpnext --categories=sales,inventory
 
 - `serverTools` 透過 `app.callServerTool()`，直接在目前檢視器內開啟具型別的
   清單、文件或圖表層級。麵包屑與返回導覽會還原各層級的介面狀態。
-- `downloadFile` 讓主機確認並儲存以大小上限保護的內嵌附件。檢視器不會直接開啟
-  ERPNext 的檔案 URL。
+- `downloadFile` 讓主機確認並儲存以大小上限保護的內嵌附件。目前原始碼另要求 MCP
+  用戶端先宣告 MCP Apps 擴充功能與 HTML MIME 類型，才會提供檔案內容。
+  檢視器不會直接開啟 ERPNext 的檔案 URL。
 - `updateModelContext` 可將圖表、KPI 與漏斗中的選取項目加入有上限的作用中內容。
   精簡的內容晶片最多保留八個項目，並可逐項移除或全部清除。傳送的快照只包含
   使用者選取的值，不含給模型的隱藏指令。
 - 無法直接導覽或更新內容時，`message.text` 會保留 `app.sendMessage()` 作為
   對話式後備方式。
 - 主機未提供上述能力時，仍可使用本機檢視功能，不支援的遠端操作則不會顯示。
+- Buy 證據檢視器僅接受已記錄的工作階段，不會呼叫伺服器工具、重新整理即時文件
+  或異動 ERP 狀態。
 
 伺服器會提供具型別的導覽後設資料，以及各檢視器實際可呼叫的
 `_availableTools`，因此在類別篩選的部署中不會顯示未載入的工具。
@@ -236,6 +260,41 @@ cd src/ui
 npm ci
 node build-all.mjs
 ```
+
+開發時，可在儲存庫根目錄執行 `deno task ui:dev-host`。
+[本機測試主機](src/ui/dev-host/README.md) 使用實際的本機 MCP 伺服器及其建置後的
+檢視器，並自動重新建置及載入，無須重新啟動桌面用戶端。 開啟
+`http://127.0.0.1:5177/?viewer=doclist` 即可查看 ERPNext 的實際公司清單。
+此主機會記錄檢視器送出的上下文更新，但沒有連接模型或對話；模型是否使用
+上下文，以及對話操作是否正常，仍須在桌面主機驗證。
+
+## Buy 證據擷取
+
+**一個**唯讀工具與**一個**已記錄的 App。它們不會採購、建立 BOM／RFQ／PO、
+重新整理即時文件、取代通用 ERP 檢視器，或驗證即時 ERPNext 執行個體。
+
+- 工具：`erpnext_buy_capture`。僅限封閉的 DocType 集合：Item、BOM、Item Price、
+  Supplier Quotation、Supplier、Price List、UOM、Currency Exchange。兩次繞過
+  快取的讀取必須具有相同的 `modified` 與封閉投影指紋，才會回傳暫時性的 標準化
+  JSON、SHA-256 與位元組數。呼叫者不能傳入 `sourceInstance`、URL、
+  憑證、`capturedAt` 或摘要。Digital Thread 把這些位元組存入自己的 CAS；
+  此伺服器不另存一份 CAS。
+- App：`io.casys.mcp-erpnext.buy-evidence`，App 版本為 `3.1.0`，
+  與套件版本獨立。資源為 `ui://mcp-erpnext/buy-evidence-viewer`
+  （`text/html;profile=mcp-app`），manifest 為
+  `ui://mcp-erpnext/buy-evidence-manifest`（`application/json`）。只接受
+  `viewer.session.apply`。完整、部分、未解決或不可用的投影會持續標示；沒有 即時
+  DocViewer 重新整理、異動或 `app.callServerTool`。工作階段 `anchor` 指向封存的
+  Digital Thread 產物（`provenance.bundleRef`），不是顯示投影的雜湊。
+- 結果 `/2.0` 保留有上限的 `excludedLines`：未列入已定價明細的選定行 ID、
+  數量、單位與原因。它不含金額、幣別或價格來源；已涵蓋的小計維持封存值，
+  未解決明細仍會顯示。記錄結果 `/1.0` 也繼續接受。
+- 檢視器與其他 MCP Apps 一起建置。JSR/npm 發布產物會包含建置完成的 HTML 與 Buy
+  TypeScript 模組；manifest 使用同一套 App 身分。
+
+Digital Thread 負責組態與封存（`buy-configuration/1.0`、`buy-cost-bundle/1.0`、
+`buy.capture-configuration-cost@1`、`buy.seal-configuration-cost@1`）。派送前
+必須具有已驗證的 `commerce.read-erpnext-buy-source@1` 綁定。
 
 ## 工具
 
@@ -260,6 +319,8 @@ doclist-viewer。通用與專用的文件讀取會使用 doc-viewer，但銷售�
 - **Kanban（看板）** — 支援拖放的 Task、Opportunity、Issue 可讀寫看板。
 - **Analytics（分析）** — 圖表（長條圖、面積圖、樹狀圖、雷達圖、散佈圖、損益表
   等）、含迷你圖的 KPI，以及銷售漏斗。
+- **Buy** — 商業文件的唯讀封存擷取（`erpnext_buy_capture`），以及不可變的
+  已記錄工作階段證據檢視器；不會採購、建立 BOM／RFQ／PO，或驗證即時 ERP。
 - **Setup（設定）** — 公司建立及可指派使用者清單。
 
 完整的各工具參數說明請參閱 [`docs/tools.md`](docs/tools.md)。

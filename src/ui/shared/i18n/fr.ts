@@ -50,6 +50,18 @@ export const fr: Record<string, string> = {
   "document.json": "JSON brut du document",
   "document.action.refresh_pending":
     "Modification enregistrée — le rafraîchissement reste en attente",
+  "document.company.general": "Identité de la société",
+  "document.company.advanced": "Paramètres avancés",
+  "document.company.field.company_name": "Nom",
+  "document.company.field.abbr": "Abréviation",
+  "document.company.field.country": "Pays",
+  "document.company.field.default_currency": "Devise",
+  "document.company.field.domain": "Domaine",
+  "document.company.field.is_group": "Société groupe",
+  "document.company.other": "Autres informations",
+  "document.company.schema_loading": "Chargement des sections ERPNext…",
+  "document.company.schema_unavailable":
+    "Les sections ERPNext ne sont pas accessibles. Tous les champs restent disponibles.",
   "document.purchase_invoice.total": "Total facture",
   "document.purchase_invoice.calculated": "Calculé",
   "document.purchase_invoice.rounding": "Arrondi",
@@ -201,6 +213,12 @@ export const fr: Record<string, string> = {
   "kpi.status.auto_refresh": "Actualisation automatique au focus",
   "kpi.drilldown.title_detail": "Cliquer pour détailler",
   "kpi.drilldown.title_trend": "Cliquer pour voir la tendance",
+  "kpi.secondary.invoices": "Factures",
+  "kpi.secondary.amount": "Montant",
+  "kpi.drilldown.title_message":
+    "Double-clic ou Entrée pour demander dans la conversation",
+  "kpi.drilldown.title_context":
+    "Clic ou Espace pour ajouter ou retirer du contexte · double-clic ou Entrée pour le détail",
   // ── /kpi-viewer ───────────────────────────────────────────────────────────
 
   // ── invoice-viewer ────────────────────────────────────────────────────────
@@ -346,6 +364,7 @@ export const fr: Record<string, string> = {
   "chart.tooltip.click_action_context_only":
     "clic : ajouter/retirer du contexte",
   "chart.tooltip.click_action_fallback": "2× détail",
+  "chart.tooltip.click_action_detail": "clic : détail",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Retour",
   "nav.elided": "…{n}",

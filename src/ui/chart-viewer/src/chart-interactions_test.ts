@@ -6,6 +6,7 @@ import {
   removeActiveContextSelection,
 } from "../../shared/active-context.ts";
 import {
+  chartClickOpensDetail,
   chartContextNamespace,
   chartContextSelection,
   chartCursorCounts,
@@ -19,6 +20,7 @@ import {
   chartSelectionAt,
   chartSeriesFromTarget,
   chartSeriesNames,
+  chartTooltipHintKey,
   chartViewContextCandidates,
   chartVisibleSeriesNames,
   createChartPointContextIndex,
@@ -896,6 +898,61 @@ Deno.test("chart point toggle - exact targets preserve independent category and 
       actions.isSelected(category),
       selection.series !== undefined,
       type,
+    );
+  }
+});
+
+Deno.test("chart click grammar - only pie, donut and treemap open detail on click, and only locally without context", () => {
+  for (const type of ["pie", "donut", "treemap"]) {
+    assertEquals(chartClickOpensDetail(type, false, "inline"), true, type);
+    // Contexte disponible : le clic lui est réservé.
+    assertEquals(chartClickOpensDetail(type, true, "inline"), false, type);
+    // Détail conversationnel : jamais au clic.
+    assertEquals(chartClickOpensDetail(type, false, "message"), false, type);
+    assertEquals(chartClickOpensDetail(type, false, null), false, type);
+  }
+  // Barres, lignes, points : indication déjà portée par leur tooltip.
+  for (
+    const type of [
+      "bar",
+      "stacked-bar",
+      "horizontal-bar",
+      "line",
+      "area",
+      "composed",
+      "radar",
+      "scatter",
+      undefined,
+    ]
+  ) {
+    assertEquals(
+      chartClickOpensDetail(type, false, "inline"),
+      false,
+      `${type}`,
+    );
+  }
+});
+
+Deno.test("chart tooltip hint - the key for the eight context x detail x click-opens combinations", () => {
+  const table: Array<[boolean, boolean, boolean, string | undefined]> = [
+    // contextEnabled, detailEnabled, clickOpensDetail → clé
+    [false, false, false, undefined],
+    [true, false, false, "chart.tooltip.click_action_context_only"],
+    [false, true, false, "chart.tooltip.click_action_fallback"],
+    [true, true, false, "chart.tooltip.click_action_context"],
+    [false, true, true, "chart.tooltip.click_action_detail"],
+    // Combinaisons illégales en pratique : le clic-détail l'emporte, sans exception.
+    [false, false, true, "chart.tooltip.click_action_detail"],
+    [true, false, true, "chart.tooltip.click_action_detail"],
+    [true, true, true, "chart.tooltip.click_action_detail"],
+  ];
+  for (
+    const [contextEnabled, detailEnabled, clickOpensDetail, expected] of table
+  ) {
+    assertEquals(
+      chartTooltipHintKey({ contextEnabled, detailEnabled, clickOpensDetail }),
+      expected,
+      `context=${contextEnabled} detail=${detailEnabled} click=${clickOpensDetail}`,
     );
   }
 });

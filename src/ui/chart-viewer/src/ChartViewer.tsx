@@ -66,6 +66,10 @@ import {
 import { useViewerLayout, type ViewerLayout } from "~/shared/useViewerLayout";
 import { useViewerNav } from "~/shared/useViewerNav";
 import { useClickIntent } from "~/shared/useClickIntent.ts";
+import {
+  type ClickIntent,
+  detailOnClickIntent,
+} from "~/shared/click-intent.ts";
 import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
@@ -94,6 +98,7 @@ import {
 } from "~/shared/active-context.ts";
 import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
 import {
+  chartClickOpensDetail,
   chartContextSelection,
   type ChartCursor,
   chartCursorCounts,
@@ -107,6 +112,7 @@ import {
   chartSelectionAt,
   chartSeriesFromTarget,
   chartSeriesNames,
+  chartTooltipHintKey,
   chartVisibleSeriesNames,
   createChartPointContextIndex,
   filterVisibleChartSeries,
@@ -541,6 +547,9 @@ function ChartTooltip({
   data,
   contextEnabled,
   canDrillDown,
+  series,
+  hintByName,
+  clickOpensDetail,
 }: {
   active?: boolean;
   payload?: Array<{
@@ -553,17 +562,33 @@ function ChartTooltip({
   data: ChartData;
   contextEnabled?: boolean;
   canDrillDown?: ChartSelectionPredicate;
+  /** Série du point, pour les parts de camembert (un seul dataset). */
+  series?: string;
+  /** Camembert : le nom de la part sert de cible du hint, pas d'en-tête. */
+  hintByName?: boolean;
+  clickOpensDetail?: ChartSelectionPredicate;
 }) {
   const t = useT();
   if (!active || !payload?.length) return null;
   const pointLabel = label ?? chartScatterPointLabel(payload[0]);
+  const hintLabel = pointLabel ??
+    (hintByName ? String(payload[0].name ?? "") || undefined : undefined);
   const drilldownEnabled = Boolean(
-    pointLabel &&
-      (canDrillDown?.(pointLabel) ||
-        payload.some((point) =>
-          canDrillDown?.(pointLabel, point.name) === true
-        )),
+    hintLabel &&
+      (hintByName
+        ? canDrillDown?.(hintLabel, series) === true
+        : canDrillDown?.(hintLabel) ||
+          payload.some((point) =>
+            canDrillDown?.(hintLabel, point.name) === true
+          )),
   );
+  const hintKey = chartTooltipHintKey({
+    contextEnabled: Boolean(contextEnabled),
+    detailEnabled: drilldownEnabled,
+    clickOpensDetail: Boolean(
+      hintLabel && clickOpensDetail?.(hintLabel, series),
+    ),
+  });
   return (
     <div
       style={{
@@ -624,7 +649,7 @@ function ChartTooltip({
           </span>
         </div>
       ))}
-      {(contextEnabled || drilldownEnabled) && (
+      {hintKey && (
         <div
           style={{
             borderTop: "1px solid var(--color-line)",
@@ -637,15 +662,7 @@ function ChartTooltip({
             gap: 2,
           }}
         >
-          <span>
-            {t(
-              contextEnabled && drilldownEnabled
-                ? "chart.tooltip.click_action_context"
-                : contextEnabled
-                ? "chart.tooltip.click_action_context_only"
-                : "chart.tooltip.click_action_fallback",
-            )}
-          </span>
+          <span>{t(hintKey)}</span>
         </div>
       )}
     </div>
@@ -1292,6 +1309,7 @@ function PieLegend({
   onDataKeyDown,
   isSelected,
   canDrillDown,
+  clickOpensDetail,
 }: {
   entries: Array<{ name: string; value: number }>;
   series?: string;
@@ -1301,14 +1319,24 @@ function PieLegend({
   onDataKeyDown?: ChartDataKeyDown;
   isSelected?: ChartSelectionPredicate;
   canDrillDown?: ChartSelectionPredicate;
+  clickOpensDetail?: ChartSelectionPredicate;
 }) {
+  const t = useT();
   const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
   return (
     <div class="flex min-w-0 flex-col gap-[7px]">
       {entries.map((entry, i) => {
         const contextEnabled = selectedAt !== undefined;
         const detailEnabled = canDrillDown?.(entry.name, series) === true;
-        const shortcuts = contextEnabled && detailEnabled
+        const opensDetail = clickOpensDetail?.(entry.name, series) === true;
+        const hintKey = chartTooltipHintKey({
+          contextEnabled,
+          detailEnabled,
+          clickOpensDetail: opensDetail,
+        });
+        const shortcuts = opensDetail
+          ? "Enter Space"
+          : contextEnabled && detailEnabled
           ? "Space Enter"
           : contextEnabled
           ? "Space"
@@ -1324,6 +1352,7 @@ function PieLegend({
               ? selectedAt(entry.name, series)
               : undefined}
             aria-keyshortcuts={shortcuts}
+            title={hintKey ? t(hintKey) : undefined}
             onClick={(event) => {
               event.stopPropagation();
               // Enter et Espace emettent aussi un clic detail=0 sur un bouton.
@@ -1338,7 +1367,8 @@ function PieLegend({
               if (event.repeat) return;
               if (
                 (event.key === " " && contextEnabled) ||
-                (event.key === "Enter" && detailEnabled)
+                (event.key === "Enter" && detailEnabled) ||
+                (event.key === " " && opensDetail)
               ) {
                 event.stopPropagation();
                 onDataKeyDown?.(entry.name, series, event);
@@ -1379,6 +1409,7 @@ function PieDonutChart(
     onDataKeyDown,
     isSelected,
     canDrillDown,
+    clickOpensDetail,
   }: {
     data: ChartData;
     isDonut: boolean;
@@ -1386,6 +1417,7 @@ function PieDonutChart(
     onDataKeyDown?: ChartDataKeyDown;
     isSelected?: ChartSelectionPredicate;
     canDrillDown?: ChartSelectionPredicate;
+    clickOpensDetail?: ChartSelectionPredicate;
   },
 ) {
   const t = useT();
@@ -1469,6 +1501,9 @@ function PieDonutChart(
                   data={data}
                   contextEnabled={isSelected !== undefined}
                   canDrillDown={canDrillDown}
+                  series={ds.label || undefined}
+                  hintByName
+                  clickOpensDetail={clickOpensDetail}
                 />
               }
               isAnimationActive={false}
@@ -1508,6 +1543,7 @@ function PieDonutChart(
         onDataKeyDown={onDataKeyDown}
         isSelected={isSelected}
         canDrillDown={canDrillDown}
+        clickOpensDetail={clickOpensDetail}
       />
     </div>
   );
@@ -1789,9 +1825,12 @@ interface TreemapContentProps {
   colors: readonly string[];
   onDataClick?: ChartDataClick;
   isSelected?: ChartSelectionPredicate;
+  canDrillDown?: ChartSelectionPredicate;
+  clickOpensDetail?: ChartSelectionPredicate;
 }
 
 function TreemapContent(props: TreemapContentProps) {
+  const t = useT();
   const selectedAt = useContext(ChartSelectionContext) ?? props.isSelected;
   const {
     x,
@@ -1808,6 +1847,16 @@ function TreemapContent(props: TreemapContentProps) {
   // taille du tracé, le total dessus. On ne dessine que les feuilles.
   if (depth === 0) return null;
   const selected = selectedAt?.(name) === true;
+  const hintKey = chartTooltipHintKey({
+    contextEnabled: selectedAt !== undefined,
+    detailEnabled: props.canDrillDown?.(name) === true,
+    clickOpensDetail: props.clickOpensDetail?.(name) === true,
+  });
+  const tileTitle = [
+    name,
+    formatNumber(props.value, props.value < 10 ? 1 : 0),
+    hintKey ? t(hintKey) : undefined,
+  ].filter(Boolean).join(" · ");
   return (
     <g
       style={{ cursor: onDataClick ? "pointer" : "default" }}
@@ -1824,6 +1873,7 @@ function TreemapContent(props: TreemapContentProps) {
         }
         : undefined}
     >
+      <title>{tileTitle}</title>
       <rect
         x={x}
         y={y}
@@ -1884,10 +1934,12 @@ function flattenTree(
 }
 
 function TreemapView(
-  { data, onDataClick, isSelected }: {
+  { data, onDataClick, isSelected, canDrillDown, clickOpensDetail }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
     isSelected?: ChartSelectionPredicate;
+    canDrillDown?: ChartSelectionPredicate;
+    clickOpensDetail?: ChartSelectionPredicate;
   },
 ) {
   const t = useT();
@@ -1927,6 +1979,8 @@ function TreemapView(
               colors={CATEGORICAL}
               onDataClick={onDataClick}
               isSelected={isSelected}
+              canDrillDown={canDrillDown}
+              clickOpensDetail={clickOpensDetail}
             />
           }
         />
@@ -1955,6 +2009,7 @@ function ChartKeyboardNavigator(
     onKeyActivate,
     contextEnabled,
     canDrillDown,
+    clickOpensDetail,
     isSelected,
     isExpanded,
   }: {
@@ -1967,6 +2022,7 @@ function ChartKeyboardNavigator(
     ) => void;
     contextEnabled: boolean;
     canDrillDown?: ChartSelectionPredicate;
+    clickOpensDetail?: ChartSelectionPredicate;
     isSelected?: (label: string, series?: string) => boolean;
     isExpanded?: (label: string, series?: string) => boolean | undefined;
   },
@@ -2018,6 +2074,10 @@ function ChartKeyboardNavigator(
     selection.label,
     selection.series,
   ) === true;
+  const spaceOpensDetail = clickOpensDetail?.(
+    selection.label,
+    selection.series,
+  ) === true;
   const expandedState = drilldownEnabled
     ? isExpanded?.(selection.label, selection.series)
     : undefined;
@@ -2036,7 +2096,7 @@ function ChartKeyboardNavigator(
     "ArrowUp",
     "ArrowDown",
     ...(drilldownEnabled ? ["Enter"] : []),
-    ...(contextEnabled ? ["Space"] : []),
+    ...(contextEnabled || spaceOpensDetail ? ["Space"] : []),
   ].join(" ");
 
   return (
@@ -2056,7 +2116,7 @@ function ChartKeyboardNavigator(
       title={help}
       onKeyDown={(event) => {
         if (event.key === " ") {
-          if (contextEnabled) {
+          if (contextEnabled || spaceOpensDetail) {
             onKeyActivate(selection.label, selection.series, event);
           } else event.preventDefault();
           return;
@@ -2120,12 +2180,20 @@ function ChartKeyboardNavigator(
 }
 
 function ChartRouter(
-  { data, onDataClick, onDataKeyDown, isSelected, canDrillDown }: {
+  {
+    data,
+    onDataClick,
+    onDataKeyDown,
+    isSelected,
+    canDrillDown,
+    clickOpensDetail,
+  }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
     onDataKeyDown?: ChartDataKeyDown;
     isSelected?: ChartSelectionPredicate;
     canDrillDown?: ChartSelectionPredicate;
+    clickOpensDetail?: ChartSelectionPredicate;
   },
 ) {
   const type = data.type ?? "bar";
@@ -2203,6 +2271,7 @@ function ChartRouter(
           onDataKeyDown={onDataKeyDown}
           isSelected={isSelected}
           canDrillDown={canDrillDown}
+          clickOpensDetail={clickOpensDetail}
         />
       );
     case "donut":
@@ -2214,6 +2283,7 @@ function ChartRouter(
           onDataKeyDown={onDataKeyDown}
           isSelected={isSelected}
           canDrillDown={canDrillDown}
+          clickOpensDetail={clickOpensDetail}
         />
       );
     case "radar":
@@ -2240,6 +2310,8 @@ function ChartRouter(
           data={data}
           onDataClick={onDataClick}
           isSelected={isSelected}
+          canDrillDown={canDrillDown}
+          clickOpensDetail={clickOpensDetail}
         />
       );
     default:
@@ -2440,6 +2512,14 @@ function ChartContent(
   function canDrillDownPoint(label: string, series?: string): boolean {
     return pointDetailMode(label, series) !== null;
   }
+  // Pie, donut, treemap sans contexte : le clic ouvre le détail local.
+  function clickOpensDetailPoint(label: string, series?: string): boolean {
+    return chartClickOpensDetail(
+      data.type,
+      activeContext.supported,
+      pointDetailMode(label, series),
+    );
+  }
   const interactionEnabled = Boolean(
     pointJump || activeContext.supported || fallbackMessageEnabled,
   );
@@ -2472,8 +2552,14 @@ function ChartContent(
     }
   }
 
-  function pointIntent(label: string, series?: string) {
+  function pointIntent(label: string, series?: string): ClickIntent {
     const context = pointContext(label, series);
+    if (clickOpensDetailPoint(label, series)) {
+      return detailOnClickIntent(
+        context.id,
+        () => activatePoint(label, series, "drilldown"),
+      );
+    }
     return {
       key: context.id,
       onSingle: () =>
@@ -2523,12 +2609,14 @@ function ChartContent(
     onDataKeyDown,
     isPointSelected,
     canDrillDownPoint,
+    clickOpensDetailPoint,
   });
   chartHandlers.current = {
     onDataClick,
     onDataKeyDown,
     isPointSelected,
     canDrillDownPoint,
+    clickOpensDetailPoint,
   };
   const stableDataClick = useCallback<ChartDataClick>(
     (...args) => chartHandlers.current.onDataClick?.(...args),
@@ -2544,6 +2632,10 @@ function ChartContent(
   );
   const stableCanDrillDown = useCallback<ChartSelectionPredicate>(
     (...args) => chartHandlers.current.canDrillDownPoint(...args),
+    [],
+  );
+  const stableClickOpensDetail = useCallback<ChartSelectionPredicate>(
+    (...args) => chartHandlers.current.clickOpensDetailPoint(...args),
     [],
   );
   const chartSelected = activeContext.isSelected(chartContext);
@@ -2580,7 +2672,7 @@ function ChartContent(
           {visibleData.subtitle && (
             <span
               class={cx(
-                "font-mono text-ink-faint tracking-[0.04em]",
+                "font-mono text-ink-faint tracking-mono",
                 narrow ? "text-micro" : "text-chip",
               )}
             >
@@ -2705,6 +2797,7 @@ function ChartContent(
                     ? stableIsSelected
                     : undefined}
                   canDrillDown={stableCanDrillDown}
+                  clickOpensDetail={stableClickOpensDetail}
                 />
               </ChartSelectionContext.Provider>
             </div>
@@ -2714,6 +2807,7 @@ function ChartContent(
               onKeyActivate={onDataKeyDown}
               contextEnabled={activeContext.supported}
               canDrillDown={canDrillDownPoint}
+              clickOpensDetail={clickOpensDetailPoint}
               isSelected={activeContext.supported ? isPointSelected : undefined}
               isExpanded={pointExpansionState}
             />

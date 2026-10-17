@@ -1,3 +1,5 @@
+import { moneyScopeFilters, parseMoneyScope } from "./analytics-money.ts";
+
 interface UiMetadata {
   ui?: {
     resourceUri?: string;
@@ -561,17 +563,51 @@ const INVOICE_LIST_FIELDS = [
   "due_date",
   "status",
   "outstanding_amount",
+  "party_account_currency",
 ];
+
+const FINANCIAL_KPI_CURRENCY_FIELDS: Record<string, string> = {
+  erpnext_kpi_revenue: "currency",
+  erpnext_kpi_outstanding: "party_account_currency",
+  erpnext_kpi_overdue: "party_account_currency",
+};
+
+function scopedKpiJumps(
+  toolName: string,
+  jumps: { number?: NavJump; trend?: NavJump },
+  args: Record<string, unknown>,
+): { number?: NavJump; trend?: NavJump } {
+  const currencyField = FINANCIAL_KPI_CURRENCY_FIELDS[toolName];
+  if (!currencyField && toolName !== "erpnext_kpi_orders") return jumps;
+  if (!jumps.number) return jumps;
+  const scopeFilters = moneyScopeFilters(
+    parseMoneyScope(toolName, args),
+    currencyField ?? "currency",
+  );
+  const filters = [
+    ...(Array.isArray(jumps.number.args.filters)
+      ? jumps.number.args.filters
+      : []),
+    ...scopeFilters,
+  ];
+  return {
+    ...jumps,
+    number: { ...jumps.number, args: { ...jumps.number.args, filters } },
+    ...(scopeFilters.length > 0 ? { trend: undefined } : {}),
+  };
+}
 
 /**
  * Les sauts d'un KPI, par outil : le nombre ouvre les pièces qui le
  * composent (une liste, ou des barres pour la marge), la courbe ouvre le
  * graphique qui le prolonge. Les filtres sont ceux du calcul du KPI, pas
  * une approximation ; `range` est le mois courant au moment de la réponse.
+ * Les KPI financiers n'ouvrent pas les anciens graphiques dont la population
+ * ou la devise diffère ; leur sparkline conserve ses sélections de contexte.
  */
 export const KPI_JUMPS: Record<
   string,
-  (range: MonthRange) => { number?: NavJump; trend: NavJump }
+  (range: MonthRange) => { number?: NavJump; trend?: NavJump }
 > = {
   "erpnext_kpi_revenue": (r) => ({
     number: {
@@ -586,23 +622,17 @@ export const KPI_JUMPS: Record<
           "transaction_date",
           "status",
           "grand_total",
+          "currency",
         ],
         filters: [
           ["transaction_date", ">=", r.from],
-          ["transaction_date", "<=", r.to],
+          ["transaction_date", "<=", r.today],
           // comme le KPI : les commandes annulées ne comptent pas
           ["docstatus", "<", 2],
         ],
         limit: 20,
       },
       kind: "list",
-    },
-    trend: {
-      key: "revenue_trend",
-      label: "Revenue trend",
-      tool: "erpnext_revenue_trend",
-      args: { months: 12 },
-      kind: "chart",
     },
   }),
   "erpnext_kpi_outstanding": () => ({
@@ -618,13 +648,6 @@ export const KPI_JUMPS: Record<
       },
       kind: "list",
     },
-    trend: {
-      key: "receivables_aging",
-      label: "Receivables aging",
-      tool: "erpnext_ar_aging",
-      args: {},
-      kind: "chart",
-    },
   }),
   "erpnext_kpi_orders": (r) => ({
     number: {
@@ -639,10 +662,11 @@ export const KPI_JUMPS: Record<
           "transaction_date",
           "status",
           "grand_total",
+          "currency",
         ],
         filters: [
           ["transaction_date", ">=", r.from],
-          ["transaction_date", "<=", r.to],
+          ["transaction_date", "<=", r.today],
           // comme le KPI : les commandes annulées ne comptent pas
           ["docstatus", "<", 2],
         ],
@@ -683,13 +707,6 @@ export const KPI_JUMPS: Record<
         limit: 20,
       },
       kind: "list",
-    },
-    trend: {
-      key: "receivables_aging",
-      label: "Receivables aging",
-      tool: "erpnext_ar_aging",
-      args: {},
-      kind: "chart",
     },
   }),
 };
@@ -843,6 +860,7 @@ const SALES_ORDER_LIST_FIELDS = [
   "transaction_date",
   "status",
   "grand_total",
+  "currency",
 ];
 
 const PURCHASE_ORDER_LIST_FIELDS = [
@@ -913,12 +931,20 @@ export function chartPointJumps(
   switch (toolName) {
     case "erpnext_revenue_trend": {
       const months = Number(args.months ?? 6);
+      const scopeFilters = moneyScopeFilters(
+        parseMoneyScope(toolName, args),
+      );
       for (const { label, range } of monthBuckets(months, now)) {
         if (!labels.includes(label)) continue;
         jumps[label] = docList(label, "Sales Order", SALES_ORDER_LIST_FIELDS, [
           ["transaction_date", ">=", range.from],
-          ["transaction_date", "<=", range.to],
+          [
+            "transaction_date",
+            "<=",
+            label === monthLabel(now) ? monthRange(now).today : range.to,
+          ],
           ["docstatus", "<", 2],
+          ...scopeFilters,
         ]);
       }
       break;
@@ -1121,31 +1147,85 @@ const VIEWER_TOOL_CANDIDATES: Record<string, readonly string[]> = {
 };
 
 /**
- * DocTypes connus comme soumis/annulables dans les surfaces ERPNext couvertes.
- * Une absence est volontairement un refus : les outils génériques ne doivent
- * jamais transformer une fiche maître simplement parce qu'ils sont chargés.
+ * DocTypes core ERPNext / HRMS dont `is_submittable` vaut 1 en version-15 et
+ * qu'un viewer ou un outil de ce dépôt peut ouvrir (outils `*_get` / `*_list`
+ * dédiés, ou `erpnext_doc_get` / `erpnext_doc_list` qui ouvrent n'importe quel
+ * DocType). La preuve de chaque entrée (JSON source du DocType sur GitHub) est
+ * citée dans `ui-refresh_test.ts`.
+ *
+ * C'est la SEULE source de vérité des boutons Soumettre / Annuler des viewers :
+ * elle borne `_availableTools`, et les viewers ne lisent que ce manifeste. Une
+ * absence est volontairement un refus : les outils génériques ne doivent jamais
+ * transformer une fiche maître (Customer, Item, Task…) simplement parce qu'ils
+ * sont chargés, or Frappe donne `docstatus: 0` à TOUT document.
+ *
+ * Ajouter une entrée = vérifier `is_submittable: 1` dans le JSON du DocType
+ * (frappe/erpnext ou frappe/hrms, branche version-15) et l'ajouter au test.
+ * Pas de sonde dynamique ni de gestion des Workflows ici (voir docs/roadmap).
  */
-const SUBMITTABLE_VIEWER_DOCTYPES = new Set([
+export const SUBMITTABLE_VIEWER_DOCTYPES: readonly string[] = [
+  // ERPNext — ventes
   "Quotation",
   "Sales Order",
   "Delivery Note",
   "Sales Invoice",
+  "POS Invoice",
+  "Installation Note",
+  // ERPNext — achats
+  "Request for Quotation",
+  "Supplier Quotation",
   "Purchase Order",
   "Purchase Receipt",
   "Purchase Invoice",
-  "Stock Entry",
+  // ERPNext — comptabilité
   "Journal Entry",
   "Payment Entry",
-  "Timesheet",
-  "Leave Application",
-  "Salary Slip",
+  "Payment Request",
+  "Period Closing Voucher",
+  // ERPNext — stock
+  "Material Request",
+  "Stock Entry",
+  "Stock Reconciliation",
+  "Pick List",
+  "Delivery Trip",
+  "Landed Cost Voucher",
+  "Quality Inspection",
+  "Shipment",
+  // ERPNext — fabrication
   "BOM",
   "Work Order",
   "Job Card",
+  "Blanket Order",
+  // ERPNext — projets et actifs
+  "Timesheet",
   "Asset",
   "Asset Movement",
-  "Shipment",
-]);
+  // HRMS
+  "Attendance",
+  "Leave Application",
+  "Leave Allocation",
+  "Leave Encashment",
+  "Expense Claim",
+  "Employee Advance",
+  "Payroll Entry",
+  "Salary Slip",
+  "Additional Salary",
+];
+
+const SUBMITTABLE_CANONICAL: ReadonlyMap<string, string> = new Map(
+  SUBMITTABLE_VIEWER_DOCTYPES.map((
+    doctype,
+  ) => [doctype.toLowerCase(), doctype]),
+);
+
+/**
+ * Nom canonique d'un DocType soumettable, `undefined` sinon. Tolère la casse
+ * dans le payload du viewer sans préjuger de la résolution du DocType côté
+ * serveur Frappe.
+ */
+export function submittableViewerDoctype(doctype: string): string | undefined {
+  return SUBMITTABLE_CANONICAL.get(doctype.trim().toLowerCase());
+}
 
 const INVOICE_DEDICATED_MUTATION_TOOLS: Record<
   string,
@@ -1163,17 +1243,20 @@ function addDoctypeMutationCandidates(
   uri: string | undefined,
   doctype: string | undefined,
 ): void {
-  if (!doctype || !SUBMITTABLE_VIEWER_DOCTYPES.has(doctype)) return;
+  const submittable = doctype ? submittableViewerDoctype(doctype) : undefined;
+  if (!submittable) return;
+  // Le niveau liste (doclist-viewer) n'expose rien : l'inspecteur inline lit
+  // les capacités de la fiche enfant (le résultat de `erpnext_*_get`), jamais
+  // celles de la liste.
   if (
     uri === "ui://mcp-erpnext/invoice-viewer" ||
-    uri === "ui://mcp-erpnext/doclist-viewer" ||
     uri === "ui://mcp-erpnext/doc-viewer"
   ) {
     target.add("erpnext_doc_submit");
     target.add("erpnext_doc_cancel");
   }
   if (uri === "ui://mcp-erpnext/invoice-viewer") {
-    for (const tool of INVOICE_DEDICATED_MUTATION_TOOLS[doctype] ?? []) {
+    for (const tool of INVOICE_DEDICATED_MUTATION_TOOLS[submittable] ?? []) {
       target.add(tool);
     }
   }
@@ -1411,7 +1494,11 @@ export function withUiRefreshRequest(
       if (kpiHints._drillDown && !enriched._drillDown) {
         enriched._drillDown = kpiHints._drillDown;
       }
-      if (kpiHints._trendDrillDown && !enriched._trendDrillDown) {
+      if (
+        kpiHints._trendDrillDown && !enriched._trendDrillDown &&
+        !FINANCIAL_KPI_CURRENCY_FIELDS[toolName] &&
+        !(args.company || args.currency)
+      ) {
         enriched._trendDrillDown = kpiHints._trendDrillDown;
       }
     }
@@ -1420,7 +1507,9 @@ export function withUiRefreshRequest(
   // Les sauts typés : KPI (nombre → liste, courbe → graphique), funnel (étape → liste)
   if (isKpiViewer(enriched) && !enriched._jumps) {
     const jumps = KPI_JUMPS[toolName];
-    if (jumps) enriched._jumps = jumps(monthRange(now));
+    if (jumps) {
+      enriched._jumps = scopedKpiJumps(toolName, jumps(monthRange(now)), args);
+    }
   }
   if (isFunnelViewer(enriched) && !enriched._stageJumps) {
     enriched._stageJumps = funnelStageJumps(args, now);

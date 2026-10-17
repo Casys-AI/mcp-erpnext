@@ -25,10 +25,9 @@ Frappe instance — documents, workflows, and interactive viewers inside the hos
 
 Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 
-> Built on
-> **[@casys/mcp-server](https://github.com/superWorldSavior/mcp-platform)** —
-> the MCP server framework (concurrency, auth, MCP Apps, observability) that
-> powers this project.
+> Built on **[@casys/mcp-server](https://github.com/Casys-AI/mcp-server)** — the
+> MCP server framework (concurrency, auth, MCP Apps, observability) that powers
+> this project.
 
 ## Screenshots
 
@@ -81,8 +80,8 @@ results.
 ## What's New
 
 See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
-[latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest)
-for the current version's highlights.
+[latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for
+the current version's highlights.
 
 > **3.2.0-beta.3 preview:** the beta includes the creation-error guidance,
 > ERPNext 16 Opportunity compatibility and calendar-date fixes carried into
@@ -92,20 +91,27 @@ for the current version's highlights.
 > corrected, and a viewer that returns to an earlier root no longer lets a late
 > response from that earlier visit overwrite the level opened since. Viewer
 > enrichment (refresh requests, navigation jumps, tool manifests) also stays out
-> of the model's context, travelling in `_meta` instead of the result text.
-> Features remain capability-gated by the MCP host; Buy evidence does not
-> purchase or qualify a live ERP.
+> of the model's context, travelling in `_meta` instead of the result text. This
+> beta also adds tool-selection filters (`ERPNEXT_CATEGORIES`,
+> `ERPNEXT_EXCLUDE_CATEGORIES`, `ERPNEXT_EXCLUDE_TOOLS`) and refuses attachment
+> downloads to clients that do not announce MCP Apps. Features remain
+> capability-gated by the MCP host; Buy evidence does not purchase or qualify a
+> live ERP.
+
+See the [3.0 to 3.1 migration guide](docs/migration-3.0-to-3.1.md) for the
+source contracts, host requirements, and deployment limits carried into this
+beta.
 
 ## Documentation
 
 Organised by what you are doing, following [Diátaxis](https://diataxis.fr):
 
-|                                       |                                                                                                                                                                                                                       |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Learning** — never used this before | [Your first tool call](docs/tutorial-first-tool-call.md) — from nothing to a working response in four steps                                                                                                           |
-| **Doing** — you have a specific goal  | [Seed a blank ERPNext instance](docs/fresh-instance-setup.md) · [Run the HTTP server](docs/http-deployment.md) · [Set up OAuth](docs/oauth-setup.md) · [Migrate to 2026-07-28](docs/migration-mcp-spec-2026-07-28.md) |
-| **Looking something up**              | [Tools](docs/tools.md) · [Environment variables](docs/environment-variables.md) · [DocType coverage](docs/coverage.md)                                                                                                |
-| **Understanding why**                 | [Concepts](docs/concepts.md) — link resolution, transports, MRTR, and which cache does what · [ERPNext quirks](docs/erpnext-quirks.md)                                                                                |
+|                                       |                                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Learning** — never used this before | [Your first tool call](docs/tutorial-first-tool-call.md) — from nothing to a working response in four steps                                                                                                                                                                     |
+| **Doing** — you have a specific goal  | [Seed a blank ERPNext instance](docs/fresh-instance-setup.md) · [Run the HTTP server](docs/http-deployment.md) · [Set up OAuth](docs/oauth-setup.md) · [Migrate from 3.0 to 3.1](docs/migration-3.0-to-3.1.md) · [Migrate to 2026-07-28](docs/migration-mcp-spec-2026-07-28.md) |
+| **Looking something up**              | [Tools](docs/tools.md) · [Environment variables](docs/environment-variables.md) · [DocType coverage](docs/coverage.md)                                                                                                                                                          |
+| **Understanding why**                 | [Concepts](docs/concepts.md) — link resolution, transports, MRTR, and which cache does what · [ERPNext quirks](docs/erpnext-quirks.md)                                                                                                                                          |
 
 ## Quick Start
 
@@ -192,6 +198,19 @@ Load only the categories you need:
 npx -y @casys/mcp-erpnext --categories=sales,inventory
 ```
 
+Category and individual-tool exclusions are also supported, with
+environment-variable equivalents:
+
+```bash
+deno run -A server.ts --categories=sales,inventory,operations --exclude-tools=erpnext_file_upload,erpnext_doc_delete
+```
+
+CLI values override `ERPNEXT_CATEGORIES`, `ERPNEXT_EXCLUDE_CATEGORIES`, and
+`ERPNEXT_EXCLUDE_TOOLS` individually. Excluded tools disappear from calls,
+viewer actions, and cache warm-up. Use `--flag=value`; invalid exclusions or an
+empty server selection fail startup. Full rules:
+[tool selection](docs/environment-variables.md#tool-selection).
+
 ## Fresh Instance Setup
 
 A blank ERPNext instance has no master data, so business tools fail validation
@@ -215,6 +234,15 @@ viewers, registered as `ui://mcp-erpnext/{name}`:
 | `funnel-viewer`       | Trapezoid sales funnel with conversion rates                     | Period-aware stage navigation and bounded active-context selection.                           |
 | `buy-evidence-viewer` | Immutable sealed Buy evidence (recorded session only)            | Complete, partial, unresolved, and unavailable projections; no live ERP refresh or mutation.  |
 
+Viewers and Buy result fields use the host locale: English, French, Simplified
+Chinese, Traditional Chinese, Hindi, Bengali, Tamil and Urdu. Chinese script
+tags take precedence over region tags; `zh-TW`, `zh-HK` and `zh-MO` select
+Traditional Chinese when no script is specified. Urdu uses right-to-left
+document direction, and a later host locale change updates the language and
+direction without reloading the viewer. App-level waiting and rejection screens
+retain English labels in this beta; host-context support for those shared
+surface screens remains an upstream MCP View follow-up.
+
 ### Navigation and active context
 
 Viewers progressively select the best interaction supported by the host:
@@ -223,8 +251,9 @@ Viewers progressively select the best interaction supported by the host:
   viewer through `app.callServerTool()`. Back and breadcrumb navigation restore
   the state of each level.
 - `downloadFile` lets the host confirm and save an attachment returned as a
-  bounded embedded resource. The viewer never opens an ERPNext file URL
-  directly.
+  bounded embedded resource. The server also requires the MCP client to announce
+  the MCP Apps extension and HTML MIME type before serving file bytes. The
+  viewer never opens an ERPNext file URL directly.
 - `updateModelContext` lets chart, KPI, and funnel selections join a bounded
   active-context snapshot. The compact context chip keeps up to eight items and
   lets users remove one item or clear them all. The snapshot contains selected
@@ -258,6 +287,14 @@ npm ci
 node build-all.mjs
 ```
 
+For local iteration, run `deno task ui:dev-host` from the repository root. The
+[local test host](src/ui/dev-host/README.md) uses the actual local MCP server
+and its built viewers, rebuilding and reloading them without restarting the
+desktop client. Open `http://127.0.0.1:5177/?viewer=doclist` for the real
+Company list. The host records viewer context updates but has no connected model
+or conversation; model consumption and conversational actions require a desktop
+host check.
+
 ## Buy evidence capture
 
 **One** read-only tool and **one** recorded App. They do not purchase, create a
@@ -271,8 +308,9 @@ live ERPNext instance.
   caller cannot pass `sourceInstance`, URL, credentials, `capturedAt`, or a
   digest. Digital Thread stores those bytes in its own CAS; this server does not
   keep a second CAS.
-- App: `io.casys.mcp-erpnext.buy-evidence` `3.2.0-beta.3`, resource
-  `ui://mcp-erpnext/buy-evidence-viewer` (`text/html;profile=mcp-app`), manifest
+- App: `io.casys.mcp-erpnext.buy-evidence`, App version `3.1.0` (independent of
+  the package version), resource `ui://mcp-erpnext/buy-evidence-viewer`
+  (`text/html;profile=mcp-app`), manifest
   `ui://mcp-erpnext/buy-evidence-manifest` (`application/json`),
   `acceptedActions` = `viewer.session.apply` only. Complete, partial,
   unresolved, and unavailable projections stay labelled. No live DocViewer
@@ -379,12 +417,3 @@ started, and [AGENTS.md](AGENTS.md) for the full architecture and conventions.
 ## License
 
 MIT
-
-Viewers and Buy result fields use the host locale: English, French, Simplified
-Chinese, Traditional Chinese, Hindi, Bengali, Tamil and Urdu. Chinese script
-tags take precedence over region tags; `zh-TW`, `zh-HK` and `zh-MO` select
-Traditional Chinese when no script is specified. Urdu uses right-to-left
-document direction, and a later host locale change updates the language and
-direction without reloading the viewer. App-level waiting and rejection screens
-retain English labels in this beta; host-context support for those shared
-surface screens remains an upstream MCP View follow-up.

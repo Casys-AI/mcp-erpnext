@@ -51,6 +51,18 @@ export const ta: Record<string, string> = {
   "document.json": "மூல ஆவண JSON",
   "document.action.refresh_pending":
     "மாற்றம் சேமிக்கப்பட்டது — புதுப்பிப்பு நிலுவையில் உள்ளது",
+  "document.company.general": "நிறுவன விவரங்கள்",
+  "document.company.advanced": "மேம்பட்ட அமைப்புகள்",
+  "document.company.field.company_name": "பெயர்",
+  "document.company.field.abbr": "சுருக்கப் பெயர்",
+  "document.company.field.country": "நாடு",
+  "document.company.field.default_currency": "நாணயம்",
+  "document.company.field.domain": "துறை",
+  "document.company.field.is_group": "குழும நிறுவனம்",
+  "document.company.other": "பிற தகவல்கள்",
+  "document.company.schema_loading": "ERPNext பிரிவுகள் ஏற்றப்படுகின்றன…",
+  "document.company.schema_unavailable":
+    "ERPNext பிரிவுகள் கிடைக்கவில்லை. எல்லாப் புலங்களையும் பார்க்கலாம்.",
   "document.purchase_invoice.total": "விலைப்பட்டியல் மொத்தம்",
   "document.purchase_invoice.calculated": "கணக்கிடப்பட்டது",
   "document.purchase_invoice.rounding": "முழுமையாக்கல்",
@@ -193,6 +205,12 @@ export const ta: Record<string, string> = {
   "kpi.status.auto_refresh": "கவனத்தில் தானியங்கிப் புதுப்பிப்பு",
   "kpi.drilldown.title_detail": "விவரங்களைக் காண கிளிக் செய்க",
   "kpi.drilldown.title_trend": "போக்கு விவரத்திற்குக் கிளிக் செய்க",
+  "kpi.secondary.invoices": "விலைப்பட்டியல்கள்",
+  "kpi.secondary.amount": "தொகை",
+  "kpi.drilldown.title_message":
+    "உரையாடலில் கேட்க இரட்டைக் கிளிக் செய்யவும் அல்லது என்டர் அழுத்தவும்",
+  "kpi.drilldown.title_context":
+    "சூழலில் சேர்க்க/நீக்கக் கிளிக் அல்லது ஸ்பேஸ் · விவரத்திற்கு இரட்டைக் கிளிக் அல்லது என்டர்",
   // ── /KPI பார்வையாளர் ───────────────────────────────────────────────────────────
 
   // ── விலைப்பட்டியல் பார்வையாளர் ────────────────────────────────────────────────────────
@@ -330,6 +348,7 @@ export const ta: Record<string, string> = {
   "chart.tooltip.click_action_context": "கிளிக்: சூழலில் சேர்/நீக்கு · 2× விவரம்",
   "chart.tooltip.click_action_context_only": "கிளிக்: சூழலில் சேர்/நீக்கு",
   "chart.tooltip.click_action_fallback": "2× விவரம்",
+  "chart.tooltip.click_action_detail": "கிளிக்: விவரம்",
   // ── வழிசெல் அடுக்கு (தடம், நிலைகள், தாவல்கள்) ──
   "nav.back": "பின் செல்",
   "nav.elided": "…{n}",

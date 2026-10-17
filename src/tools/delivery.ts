@@ -199,8 +199,8 @@ export const deliveryTools: ErpNextTool[] = [
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
     description:
-      "List Shipments. Filterable by status, pickup_from date range. " +
-      "Fields: name, status, pickup_date, delivery_date, carrier, shipment_amount.",
+      "List Shipments. Filterable by status, pickup_date range, and carrier. " +
+      "Fields: name, status, pickup_date, carrier, shipment_amount.",
     category: "delivery",
     inputSchema: {
       type: "object",
@@ -209,7 +209,7 @@ export const deliveryTools: ErpNextTool[] = [
         status: {
           type: "string",
           description:
-            "Filter by status (Draft, Submitted, Booked, Delivered, Cancelled, etc.)",
+            "Filter by status (Draft, Submitted, Booked, Completed, Cancelled)",
         },
         carrier: { type: "string", description: "Filter by carrier name" },
         date_from: {
@@ -243,7 +243,6 @@ export const deliveryTools: ErpNextTool[] = [
           "name",
           "status",
           "pickup_date",
-          "delivery_date",
           "carrier",
           "shipment_amount",
         ],

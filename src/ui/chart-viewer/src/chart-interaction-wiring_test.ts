@@ -115,9 +115,46 @@ Deno.test("chart wiring - detail remains double-click or Enter without a floatin
 
   assertEquals(source.includes("DetailToggleButton"), false);
   assertEquals(source.includes("ChartDetailAffordance"), false);
-  assertStringIncludes(tooltip, '"chart.tooltip.click_action_context"');
+  // Les clés vivent dans chartTooltipHintKey (testé dans chart-interactions_test).
+  assertStringIncludes(tooltip, "chartTooltipHintKey({");
   assertStringIncludes(keyboard, "if (event.detail === 0) return;");
   assertStringIncludes(keyboard, "aria-expanded={expandedState}");
   assertStringIncludes(keyboard, 'if (event.key === "Enter")');
   assertStringIncludes(source, "shouldHandleChartPointActivation(");
+});
+
+Deno.test("chart wiring - the tooltip hint comes from chartTooltipHintKey and the pie tooltip targets the slice", () => {
+  const tooltip = between("function ChartTooltip", "function SharedXAxis");
+  assertStringIncludes(tooltip, "chartTooltipHintKey({");
+  assertEquals(
+    tooltip.includes('"chart.tooltip.click_action_fallback"'),
+    false,
+  );
+
+  const pie = between("function PieDonutChart", "function RadarChartView");
+  assertStringIncludes(pie, "series={ds.label || undefined}");
+  assertStringIncludes(pie, "hintByName");
+  assertStringIncludes(pie, "clickOpensDetail={clickOpensDetail}");
+});
+
+Deno.test("chart wiring - treemap tiles and pie legend rows announce their gesture natively", () => {
+  const treemap = between("function TreemapContent", "function flattenTree");
+  assertStringIncludes(treemap, "<title>{tileTitle}</title>");
+  assertStringIncludes(treemap, "chartTooltipHintKey({");
+
+  const legend = between("function PieLegend", "function PieDonutChart");
+  assertStringIncludes(legend, "title={hintKey ? t(hintKey) : undefined}");
+  assertStringIncludes(legend, '(event.key === " " && opensDetail)');
+});
+
+Deno.test("chart wiring - click opens detail through a detail intent only for pie, donut and treemap without context", () => {
+  const intent = between("function pointIntent", "const onDataClick");
+  assertStringIncludes(intent, "clickOpensDetailPoint(label, series)");
+  assertStringIncludes(intent, "detailOnClickIntent(");
+  const helper = between(
+    "function clickOpensDetailPoint",
+    "function activatePoint",
+  );
+  assertStringIncludes(helper, "chartClickOpensDetail(");
+  assertStringIncludes(helper, "data.type");
 });

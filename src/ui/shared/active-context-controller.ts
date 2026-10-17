@@ -117,7 +117,8 @@ export function createActiveContextController(
       : replaceActiveContext(app, next.map((selection) => selection.item));
   }
   function clear(): Promise<ActiveContextResult> {
-    // Unsupported hosts never received context, so there is nothing to clear.
+    // Host without updateModelContext: nothing was ever shared, nothing to
+    // clear. Neutral outcome: no pending flash, no failure badge.
     if (!canReplaceActiveContext(app.getHostCapabilities())) {
       return Promise.resolve("unsupported");
     }
@@ -131,6 +132,7 @@ export function createActiveContextController(
           mutationLog = [];
           commit([]);
         }
+        // "unsupported" is neutral (defense in depth vs. the guard above).
         finish(result === "unsupported" ? undefined : result === "cleared");
         return result;
       } finally {

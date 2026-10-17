@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 
 import type { ComponentChildren } from "preact";
+import type { App } from "@modelcontextprotocol/ext-apps";
 import { useState } from "preact/hooks";
 import { useT } from "../i18n-hook";
 import type { ViewerLayout } from "../useViewerLayout";
@@ -10,11 +11,17 @@ import {
   ChildTableSection,
 } from "./ChildTableSection";
 import { DocumentHeader } from "./DocumentHeader";
+import { DocumentPreviewFields } from "./DocumentPreviewFields.tsx";
+import { documentPreviewFieldsOf } from "./preview-fields.ts";
 import {
   type DocumentSectionTab,
   DocumentSectionTabs,
 } from "./DocumentSectionTabs";
 import { ScalarFields } from "./ScalarFields";
+import { companySectionsOf } from "./company-sections.ts";
+import { companyFieldLabel } from "./company-field-labels.ts";
+import { companyPreviewFieldsOf } from "./company-preview.ts";
+import { useCompanySections } from "./useCompanySections.ts";
 import type { ChildTableModel, DocumentModel } from "./types.ts";
 import type { ContextInteractionTarget } from "./context-interaction.ts";
 import { PurchaseInvoiceRoundingNote } from "./PurchaseInvoiceRoundingNote.tsx";
@@ -24,8 +31,10 @@ import {
 } from "./purchase-invoice.ts";
 
 export interface DocumentSurfaceProps {
+  app?: App;
   model: DocumentModel;
   layout: ViewerLayout;
+  presentation?: "full" | "preview";
   /** Retour, fil d'Ariane ou fermeture appartenant à la coque hôte. */
   navigation?: ComponentChildren;
   /** Outils courts de l'en-tête, par exemple refresh et JSON. */
@@ -120,9 +129,85 @@ function PurchaseInvoiceSummary({
   );
 }
 
+function CompanyFields({ app, model, layout }: {
+  app?: App;
+  model: DocumentModel;
+  layout: ViewerLayout;
+}) {
+  const t = useT();
+  const schema = useCompanySections(app, model.envelope);
+  const grouped = companySectionsOf(model.fields, schema.schemaFields);
+  const groupValue = companyPreviewFieldsOf(model.envelope.document).find(
+    (field) => field.key === "is_group",
+  )?.value;
+  const general = grouped.general.map((field) => ({
+    ...field,
+    label: companyFieldLabel(field.key, t) ?? field.label,
+    ...(field.key === "is_group" && typeof groupValue === "boolean"
+      ? { value: groupValue, kind: "boolean" as const }
+      : {}),
+  }));
+  const sections = grouped.sections.map((section) => ({
+    ...section,
+    label: section.label || t("document.company.other"),
+  }));
+  return (
+    <div>
+      <ScalarFields
+        fields={general}
+        heading={t("document.company.general")}
+        emphasizeFields
+        layout={layout}
+      />
+      <div class="border-t border-line-soft">
+        <ScalarFields
+          fields={[]}
+          heading={null}
+          fieldSections={sections}
+          longFields={model.longFields}
+          progressFields={model.progressFields}
+          collections={model.collections}
+          systemFields={model.systemFields}
+          layout={layout}
+        />
+      </div>
+      {schema.status !== "ready" && (
+        <p
+          role="status"
+          class="border-t border-line-soft px-4 py-3 text-note text-ink-muted"
+        >
+          {t(
+            schema.status === "loading"
+              ? "document.company.schema_loading"
+              : "document.company.schema_unavailable",
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function DocumentFields(
-  { model, layout }: { model: DocumentModel; layout: ViewerLayout },
+  { app, model, layout, presentation }: {
+    app?: App;
+    model: DocumentModel;
+    layout: ViewerLayout;
+    presentation: "full" | "preview";
+  },
 ) {
+  if (presentation === "preview") {
+    return <DocumentPreviewFields document={model.envelope.document} />;
+  }
+  if (model.envelope.doctype === "Company") {
+    return (
+      <CompanyFields
+        key={model.envelope.name}
+        app={app}
+        model={model}
+        layout={layout}
+      />
+    );
+  }
   return (
     <ScalarFields
       fields={model.fields}
@@ -146,8 +231,10 @@ function SlotSection(
 }
 
 export function DocumentSurface({
+  app,
   model,
   layout,
+  presentation = "full",
   navigation,
   headerActions,
   attachments,
@@ -184,11 +271,14 @@ export function DocumentSurface({
     : "fields";
   const hasAttachments = hasSlot(attachments);
   const hasActions = hasSlot(actions);
+  const preview = presentation === "preview";
   const hasSidebar = hasAttachments || hasActions;
-  const hasFields = model.fields.length > 0 || model.longFields.length > 0 ||
-    model.progressFields.length > 0 || model.collections.length > 0 ||
-    model.systemFields.length > 0;
-  const tableSections: TableSection[] = model.childTables.map((
+  const hasFields = preview
+    ? documentPreviewFieldsOf(model.envelope.document).length > 0
+    : model.fields.length > 0 || model.longFields.length > 0 ||
+      model.progressFields.length > 0 || model.collections.length > 0 ||
+      model.systemFields.length > 0;
+  const tableSections: TableSection[] = (preview ? [] : model.childTables).map((
     table,
     index,
   ) => ({
@@ -238,7 +328,9 @@ export function DocumentSurface({
       name={model.envelope.name}
       title={model.title}
       status={model.status}
-      docstatus={model.docstatus}
+      docstatus={model.envelope.doctype === "Company"
+        ? undefined
+        : model.docstatus}
       layout={layout}
       navigation={navigation}
       trailing={headerActions}
@@ -246,7 +338,7 @@ export function DocumentSurface({
       contextTarget={contextTarget}
     />
   );
-  const purchaseInvoiceSummary = (
+  const purchaseInvoiceSummary = !preview && (
     <PurchaseInvoiceSummary
       model={model}
       layout={layout}
@@ -276,7 +368,14 @@ export function DocumentSurface({
               hasSidebar && "border-r border-line",
             )}
           >
-            {hasFields && <DocumentFields model={model} layout={layout} />}
+            {hasFields && (
+              <DocumentFields
+                app={app}
+                model={model}
+                layout={layout}
+                presentation={presentation}
+              />
+            )}
             {tableSections.map(({ id, table }) => (
               <ChildTableSection
                 key={id}
@@ -326,7 +425,14 @@ export function DocumentSurface({
             contained && "scroll-slim min-h-0 flex-1 overflow-y-auto",
           )}
         >
-          {hasFields && <DocumentFields model={model} layout={layout} />}
+          {hasFields && (
+            <DocumentFields
+              app={app}
+              model={model}
+              layout={layout}
+              presentation={presentation}
+            />
+          )}
           {tableSections.map(({ id, table }) => (
             <ChildTableSection
               key={id}
@@ -380,7 +486,12 @@ export function DocumentSurface({
             role="tabpanel"
             aria-labelledby={`${domPrefix}-tab-fields`}
           >
-            <DocumentFields model={model} layout={layout} />
+            <DocumentFields
+              app={app}
+              model={model}
+              layout={layout}
+              presentation={presentation}
+            />
           </div>
         )}
         {activeTable && (

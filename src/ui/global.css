@@ -33,6 +33,27 @@
   }
 
   /**
+   * Écriture de droite à gauche (ourdou, `dir="rtl"` posé par
+   * applyDocumentLocale) : l'espacement de lettres des labels mono est retiré.
+   * Sur une écriture cursive il n'espace rien de propre — les lettres restent
+   * liées — et Chrome comble l'écart par des allongements (kashida) dans le
+   * mot. La casse haute, elle, est sans effet sur cette écriture : inutile d'y
+   * toucher, et le latin qui s'y mêle (noms de DocType) garde sa charte.
+   *
+   * On remet à zéro les jetons plutôt que chaque classe : tout `tracking-*`
+   * positif de la charte suit, sans cas par cas. Les jetons négatifs
+   * (`--tracking-title`, `--tracking-metric`) serrent des chiffres latins et
+   * restent.
+   */
+  :root[dir="rtl"] {
+    --tracking-mono: 0;
+    --tracking-chip: 0;
+    --tracking-live: 0;
+    --tracking-label: 0;
+    --tracking-eyebrow: 0;
+  }
+
+  /**
    * Les chiffres s'alignent verticalement partout où ils sont en colonne —
    * montants, quantités, totaux. La maquette applique tabular-nums sur chaque
    * cellule numérique ; le poser sur la police mono évite de le répéter.

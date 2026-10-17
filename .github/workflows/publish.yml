@@ -4,7 +4,10 @@ on:
   workflow_call:
     inputs:
       npm_dist_tag:
-        description: npm distribution tag (auto selects next for prereleases)
+        description: >-
+          npm distribution tag. auto selects next for prereleases and latest
+          for stable versions (never moving latest backwards); use maintenance
+          to publish a stable backport below the current latest.
         required: false
         type: string
         default: auto
@@ -19,6 +22,7 @@ on:
           - auto
           - next
           - latest
+          - maintenance
 
 jobs:
   release_guard:
@@ -33,42 +37,15 @@ jobs:
         name: Validate release ref, versions, and npm channel
         env:
           REQUESTED_NPM_DIST_TAG: ${{ inputs.npm_dist_tag }}
+        # scripts/release-guard.mjs owns the policy (unit-tested with
+        # `deno task test:scripts`): deno.json == server.ts, tag ref, dist-tag
+        # channel, and latest never moves backwards. It prints one JSON
+        # document (code + context + recovery on rejection).
         run: |
-          VERSION=$(node -p "JSON.parse(require('node:fs').readFileSync('deno.json', 'utf8')).version")
-          RUNTIME_VERSION=$(node -e '
-            const source = require("node:fs").readFileSync("server.ts", "utf8");
-            const match = source.match(/version:\s*"([^"]+)"/);
-            if (!match) process.exit(1);
-            process.stdout.write(match[1]);
-          ')
-
-          if [ "$VERSION" != "$RUNTIME_VERSION" ]; then
-            echo "::error::deno.json ($VERSION) and server.ts ($RUNTIME_VERSION) versions differ"
-            exit 1
-          fi
-
-          if [ "$GITHUB_REF" != "refs/tags/v$VERSION" ]; then
-            echo "::error::Publish must run from refs/tags/v$VERSION, got $GITHUB_REF"
-            exit 1
-          fi
-
-          if [[ "$VERSION" == *-* ]]; then
-            EXPECTED_NPM_DIST_TAG=next
-          else
-            EXPECTED_NPM_DIST_TAG=latest
-          fi
-
-          NPM_DIST_TAG=${REQUESTED_NPM_DIST_TAG:-auto}
-          if [ "$NPM_DIST_TAG" = auto ]; then
-            NPM_DIST_TAG=$EXPECTED_NPM_DIST_TAG
-          fi
-          if [ "$NPM_DIST_TAG" != "$EXPECTED_NPM_DIST_TAG" ]; then
-            echo "::error::$VERSION must publish with npm tag $EXPECTED_NPM_DIST_TAG, not $NPM_DIST_TAG"
-            exit 1
-          fi
-
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "npm_dist_tag=$NPM_DIST_TAG" >> "$GITHUB_OUTPUT"
+          node scripts/release-guard.mjs release \
+            --ref "$GITHUB_REF" \
+            --requested-tag "${REQUESTED_NPM_DIST_TAG:-auto}" \
+            --github-output "$GITHUB_OUTPUT"
 
   publish-jsr:
     needs: release_guard
@@ -148,6 +125,14 @@ jobs:
       - name: Build Node.js bundle
         run: |
           bash scripts/build-node.sh
+
+      - name: Re-check npm dist-tag (latest must never move backwards)
+        # The release_guard job ran minutes ago; re-verify against the live
+        # registry right before the publish / idempotent dist-tag commands.
+        run: node scripts/release-guard.mjs tag --version "$RELEASE_VERSION" --tag "$NPM_DIST_TAG"
+        env:
+          RELEASE_VERSION: ${{ needs.release_guard.outputs.version }}
+          NPM_DIST_TAG: ${{ needs.release_guard.outputs.npm_dist_tag }}
 
       - name: Publish to npm
         run: |

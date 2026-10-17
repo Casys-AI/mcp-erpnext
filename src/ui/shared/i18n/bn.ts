@@ -50,6 +50,18 @@ export const bn: Record<string, string> = {
   "document.table.no_columns": "দেখানোর মতো কোনো কলাম নেই",
   "document.json": "মূল নথির JSON",
   "document.action.refresh_pending": "পরিবর্তন সংরক্ষিত — রিফ্রেশ এখনও বাকি",
+  "document.company.general": "কোম্পানির পরিচিতি",
+  "document.company.advanced": "উন্নত সেটিংস",
+  "document.company.field.company_name": "নাম",
+  "document.company.field.abbr": "সংক্ষিপ্ত নাম",
+  "document.company.field.country": "দেশ",
+  "document.company.field.default_currency": "মুদ্রা",
+  "document.company.field.domain": "ক্ষেত্র",
+  "document.company.field.is_group": "গ্রুপ কোম্পানি",
+  "document.company.other": "অন্যান্য তথ্য",
+  "document.company.schema_loading": "ERPNext-এর বিভাগগুলো লোড হচ্ছে…",
+  "document.company.schema_unavailable":
+    "ERPNext-এর বিভাগগুলো পাওয়া যাচ্ছে না। সব ফিল্ড এখনও দেখা যাবে।",
   "document.purchase_invoice.total": "চালান মোট",
   "document.purchase_invoice.calculated": "গণনাকৃত",
   "document.purchase_invoice.rounding": "রাউন্ডিং",
@@ -187,6 +199,11 @@ export const bn: Record<string, string> = {
   "kpi.status.auto_refresh": "ফোকাসে স্বয়ংক্রিয় রিফ্রেশ",
   "kpi.drilldown.title_detail": "ড্রিল-ডাউনে ক্লিক করুন",
   "kpi.drilldown.title_trend": "প্রবণতার বিবরণে ক্লিক করুন",
+  "kpi.secondary.invoices": "চালান",
+  "kpi.secondary.amount": "পরিমাণ",
+  "kpi.drilldown.title_message": "কথোপকথনে জিজ্ঞাসা করতে ডাবল-ক্লিক করুন বা এন্টার চাপুন",
+  "kpi.drilldown.title_context":
+    "প্রসঙ্গে যোগ/সরাতে ক্লিক বা স্পেস চাপুন · বিবরণের জন্য ডাবল-ক্লিক বা এন্টার চাপুন",
   // ── /KPI ভিউয়ার ───────────────────────────────────────────────────────────
 
   // ── চালান ভিউয়ার ────────────────────────────────────────────────────────
@@ -324,6 +341,7 @@ export const bn: Record<string, string> = {
   "chart.tooltip.click_action_context": "ক্লিক: প্রসঙ্গ যোগ/সরান · ২× বিবরণ",
   "chart.tooltip.click_action_context_only": "ক্লিক: প্রসঙ্গ যোগ/সরান",
   "chart.tooltip.click_action_fallback": "২× বিবরণ",
+  "chart.tooltip.click_action_detail": "ক্লিক: বিবরণ",
   // ── নেভিগেশন স্ট্যাক (পথ, স্তর, লাফ) ──
   "nav.back": "পেছনে",
   "nav.elided": "…{n}",

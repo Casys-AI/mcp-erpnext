@@ -14,6 +14,12 @@ import type {
 
 export interface ScalarFieldsProps {
   fields: readonly DocumentFieldModel[];
+  fieldSections?: readonly {
+    key: string;
+    label: string;
+    fields: readonly DocumentFieldModel[];
+  }[];
+  emphasizeFields?: boolean;
   longFields?: readonly DocumentFieldModel[];
   progressFields?: readonly DocumentFieldModel[];
   collections?: readonly DocumentCollectionModel[];
@@ -70,30 +76,47 @@ export function DocumentFieldValue(
 }
 
 function FieldsGrid(
-  { fields, layout }: {
+  { fields, layout, emphasized = false }: {
     fields: readonly DocumentFieldModel[];
     layout: ViewerLayout;
+    emphasized?: boolean;
   },
 ) {
   return (
     <dl
       class={cx(
         "grid gap-x-7",
-        layout === "wide" ? "grid-cols-2 gap-y-2" : "grid-cols-1 gap-y-1",
+        layout === "wide"
+          ? "grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-y-2"
+          : "grid-cols-1 gap-y-1",
       )}
     >
       {fields.map((field) => (
         <div
           key={field.key}
           class={cx(
-            "flex min-w-0 items-baseline justify-between gap-2.5",
+            "grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-baseline gap-x-2.5",
             layout !== "wide" && "min-h-6",
           )}
         >
-          <dt class="shrink-0 font-mono text-chip text-ink-faint">
+          <dt
+            class={cx(
+              "min-w-0 [overflow-wrap:anywhere]",
+              emphasized
+                ? "text-note text-ink-muted"
+                : "font-mono text-chip text-ink-faint",
+            )}
+          >
             {field.label}
           </dt>
-          <dd class="min-w-0 truncate text-right text-note text-ink-2">
+          <dd
+            class={cx(
+              "min-w-0 text-right [overflow-wrap:anywhere]",
+              emphasized
+                ? "text-cell font-semibold text-ink"
+                : "text-note text-ink-2",
+            )}
+          >
             <DocumentFieldValue field={field} />
           </dd>
         </div>
@@ -130,6 +153,8 @@ function Section(
 
 export function ScalarFields({
   fields,
+  fieldSections = [],
+  emphasizeFields = false,
   longFields = [],
   progressFields = [],
   collections = [],
@@ -142,7 +167,8 @@ export function ScalarFields({
   const title = heading === undefined ? t("document.fields") : heading;
   const hasContent = fields.length > 0 || longFields.length > 0 ||
     progressFields.length > 0 || collections.length > 0 ||
-    systemFields.length > 0;
+    systemFields.length > 0 ||
+    fieldSections.some((section) => section.fields.length > 0);
   if (!hasContent) return null;
 
   let first = true;
@@ -156,9 +182,47 @@ export function ScalarFields({
     <div class={cx("flex flex-col", klass)}>
       {fields.length > 0 && (
         <Section label={title} first={consumeFirst()}>
-          <FieldsGrid fields={fields} layout={layout} />
+          <FieldsGrid
+            fields={fields}
+            layout={layout}
+            emphasized={emphasizeFields}
+          />
         </Section>
       )}
+
+      {fieldSections.filter((section) => section.fields.length > 0).map((
+        section,
+      ) => (
+        <details
+          key={section.key}
+          class={cx(
+            "group border-t border-line-soft",
+            consumeFirst() && "border-t-0",
+          )}
+        >
+          <summary class="flex min-h-11 cursor-pointer list-none items-center gap-3 px-4 py-3 text-cell font-medium text-ink-2 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              class="h-3.5 w-3.5 shrink-0 text-ink-faint transition-transform group-open:rotate-90"
+            >
+              <path
+                d="m6 3 5 5-5 5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+            </svg>
+            <span class="min-w-0 flex-1 [overflow-wrap:anywhere]">
+              {section.label}
+            </span>
+            <CountBadge narrow>{section.fields.length}</CountBadge>
+          </summary>
+          <div class="px-4 pb-4 pt-1">
+            <FieldsGrid fields={section.fields} layout={layout} />
+          </div>
+        </details>
+      ))}
 
       {longFields.map((field) => (
         <Section key={field.key} label={field.label} first={consumeFirst()}>

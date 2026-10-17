@@ -5,6 +5,12 @@
  * `dblclick`. Le premier clic active donc immédiatement le contexte et garde
  * seulement sa compensation. Si un second clic natif suit sur la même cible,
  * cette compensation continue indépendamment de la consultation locale.
+ *
+ * Une cible sans contexte disponible n'a rien à réserver au clic simple :
+ * `DetailClickIntent` fait du clic, d'Espace et d'Entrée le même geste, l'ouverture
+ * du détail local. Ce mode n'a ni `onSingle` ni `runConversation` : un clic ne
+ * peut jamais fabriquer un message vers la conversation (état illégal
+ * irreprésentable, pas seulement déconseillé).
  */
 
 export interface ClickIntentRevert {
@@ -34,9 +40,11 @@ export type ClickIntentSchedule = (
   delayMs: number,
 ) => () => void;
 
-export interface ClickIntent {
+/** Le clic simple bascule le contexte ; le double-clic ou Entrée ouvre le détail. */
+export interface ContextClickIntent {
   /** Identité stable de la ligne, barre ou point concerné. */
   key: string;
+  clickAction?: "context";
   /** Action immédiate du clic simple, typiquement l'ajout au contexte. */
   onSingle: () => ClickIntentSingleResult;
   /** Action exclusive du double-clic, typiquement le drilldown. */
@@ -50,6 +58,41 @@ export interface ClickIntent {
   ) => Promise<boolean>;
 }
 
+/**
+ * Cible sans contexte disponible : clic, Espace et Entrée ouvrent le détail
+ * local. Le double-clic natif (précédé d'un clic `detail >= 2`) est ignoré,
+ * sinon le détail s'ouvrirait puis se refermerait.
+ */
+export interface DetailClickIntent {
+  key: string;
+  clickAction: "detail";
+  doublePolicy: "local";
+  /** Ouverture du détail local, jamais une conversation. */
+  onDouble: () => void;
+  onSingle?: never;
+  runConversation?: never;
+}
+
+export type ClickIntent = ContextClickIntent | DetailClickIntent;
+
+export function detailOnClickIntent(
+  key: string,
+  onOpen: () => void,
+): DetailClickIntent {
+  return {
+    key,
+    clickAction: "detail",
+    doublePolicy: "local",
+    onDouble: onOpen,
+  };
+}
+
+export function isDetailClickIntent(
+  intent: ClickIntent,
+): intent is DetailClickIntent {
+  return intent.clickAction === "detail";
+}
+
 export interface ClickIntentKeyEvent {
   key: string;
   repeat?: boolean;
@@ -57,11 +100,17 @@ export interface ClickIntentKeyEvent {
 }
 
 export interface ClickIntentArbiter {
-  /** Exécute le simple immédiatement ; `detail >= 2` lance sa compensation. */
+  /**
+   * Exécute le simple immédiatement ; `detail >= 2` lance sa compensation.
+   * Intent de détail : `detail` 0 ou 1 ouvre le détail, `>= 2` est ignoré.
+   */
   click(intent: ClickIntent, clickCount?: number): void;
   /** Opens local detail immediately; conversation waits for compensation. */
   doubleClick(intent: ClickIntent): void;
-  /** Espace exécute le simple ; Entrée exécute le double, sans attente. */
+  /**
+   * Espace exécute le simple ; Entrée exécute le double, sans attente.
+   * Intent de détail : Espace et Entrée ouvrent le détail une seule fois.
+   */
   keyDown(intent: ClickIntent, event: ClickIntentKeyEvent): void;
   /** Libère l'historique réversible d'une cible sans annuler son effet. */
   cancel(key: string): void;
@@ -89,7 +138,7 @@ export function createClickIntentArbiter(
   const delayedDoubles = new Map<string, object>();
   const failedDoubleSequences = new Set<string>();
 
-  function startSingle(intent: ClickIntent): ClickIntentCommit {
+  function startSingle(intent: ContextClickIntent): ClickIntentCommit {
     try {
       const result = intent.onSingle();
       const committed = Promise.resolve(result).then(
@@ -157,7 +206,7 @@ export function createClickIntentArbiter(
     failedDoubleSequences.clear();
   }
 
-  function runSingle(intent: ClickIntent, reversible: boolean) {
+  function runSingle(intent: ContextClickIntent, reversible: boolean) {
     cancel(intent.key);
     const committed = startSingle(intent);
     if (reversible) {
@@ -178,7 +227,7 @@ export function createClickIntentArbiter(
     }
   }
 
-  function runDouble(intent: ClickIntent) {
+  function runDouble(intent: ContextClickIntent) {
     // Plusieurs `dblclick` peuvent être émis pendant une séquence rapide de
     // quatre clics. Aucun suivant ne doit contourner une compensation en vol.
     if (
@@ -216,7 +265,10 @@ export function createClickIntentArbiter(
     });
   }
 
-  function runConversation(intent: ClickIntent, restored: Promise<boolean>) {
+  function runConversation(
+    intent: ContextClickIntent,
+    restored: Promise<boolean>,
+  ) {
     const token = {};
     delayedDoubles.set(intent.key, token);
     const finish = () => {
@@ -229,8 +281,20 @@ export function createClickIntentArbiter(
     }, restored).then(finish, finish);
   }
 
+  function openDetail(intent: DetailClickIntent) {
+    // Un contexte pointeur encore réversible sur cette clé est conservé, pas
+    // annulé : ouvrir le détail ne défait jamais une sélection.
+    cancel(intent.key);
+    intent.onDouble();
+  }
+
   return {
     click(intent, clickCount = 1) {
+      if (isDetailClickIntent(intent)) {
+        // `detail === 0` (technologie d'assistance) est un clic simple.
+        if (clickCount < 2) openDetail(intent);
+        return;
+      }
       if (clickCount >= 2) {
         const retained = retainedSingles.get(intent.key);
         retainedSingles.delete(intent.key);
@@ -249,9 +313,19 @@ export function createClickIntentArbiter(
       pendingReverts.clear();
       runSingle(intent, true);
     },
-    doubleClick: runDouble,
+    doubleClick(intent) {
+      if (isDetailClickIntent(intent)) return;
+      runDouble(intent);
+    },
     keyDown(intent, event) {
       if (event.repeat) return;
+      if (isDetailClickIntent(intent)) {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          openDetail(intent);
+        }
+        return;
+      }
       if (event.key === " ") {
         event.preventDefault();
         // Les commandes clavier sont explicites, pas une séquence à arbitrer.

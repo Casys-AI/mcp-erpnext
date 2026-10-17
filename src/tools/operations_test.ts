@@ -6,10 +6,18 @@
  * @module lib/erpnext/tests/tools/operations_test
  */
 
-import { assertEquals, assertRejects, assertStrictEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertFalse,
+  assertRejects,
+  assertStrictEquals,
+} from "@std/assert";
 import { SchemaValidator } from "@casys/mcp-server";
+import { FileDownloadError } from "./file-download-error.ts";
 import { operationsTools } from "./operations.ts";
 import { FrappeAPIError } from "../api/frappe-client.ts";
+import { parseToolInputError, ToolInputError } from "./errors.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
 
@@ -42,6 +50,17 @@ function makeMockClient(overrides: Record<string, AnyFn> = {}): FrappeClient {
 
 function makeCtx(client: FrappeClient): ErpNextToolContext {
   return { client };
+}
+
+/** Capabilities an MCP Apps host announces at initialize. */
+const MCP_APPS_CAPABILITIES = {
+  extensions: {
+    "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] },
+  },
+};
+
+function makeAppCtx(client: FrappeClient): ErpNextToolContext {
+  return { client, clientCapabilities: MCP_APPS_CAPABILITIES };
 }
 
 function getTool(name: string) {
@@ -470,7 +489,7 @@ Deno.test("erpnext_file_download - returns one embedded blob with one base64 cop
       attached_to_doctype: " Task ",
       attached_to_name: " TASK-001 ",
     },
-    makeCtx(makeMockClient({
+    makeAppCtx(makeMockClient({
       downloadFile: async (input: Record<string, unknown>) => {
         captured = input;
         return {
@@ -506,6 +525,146 @@ Deno.test("erpnext_file_download - returns one embedded blob with one base64 cop
     mimeType: "application/pdf",
     blob: "AP8=",
   });
+  assertEquals(JSON.stringify(result).split("AP8=").length - 1, 1);
+});
+
+const DOWNLOAD_INPUT = {
+  file_id: "FILE-001",
+  attached_to_doctype: "Task",
+  attached_to_name: "TASK-001",
+};
+
+Deno.test("erpnext_file_download - refuses clients that do not announce MCP Apps, before any Frappe call", async () => {
+  const tool = getTool("erpnext_file_download");
+  const capabilitiesCases: Array<
+    [string, ErpNextToolContext["clientCapabilities"]]
+  > = [
+    ["undefined", undefined],
+    ["empty object", {}],
+    ["other extension only", { extensions: { "io.example/other": {} } }],
+    ["extension without mimeTypes", {
+      extensions: { "io.modelcontextprotocol/ui": {} },
+    }],
+    ["extension with empty mimeTypes", {
+      extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [] } },
+    }],
+    ["extension with another mimeType", {
+      extensions: {
+        "io.modelcontextprotocol/ui": { mimeTypes: ["text/plain"] },
+      },
+    }],
+    ["extension not an object", {
+      extensions: { "io.modelcontextprotocol/ui": true },
+    }],
+    ["extension null", { extensions: { "io.modelcontextprotocol/ui": null } }],
+    ["extensions not an object", { extensions: "io.modelcontextprotocol/ui" }],
+    ["mimeTypes not an array", {
+      extensions: {
+        "io.modelcontextprotocol/ui": {
+          mimeTypes: "text/html;profile=mcp-app",
+        },
+      },
+    }],
+    ["elicitation only", { elicitation: {} }],
+  ];
+
+  for (const [label, clientCapabilities] of capabilitiesCases) {
+    let downloads = 0;
+    const client = makeMockClient({
+      downloadFile: async () => {
+        downloads++;
+        throw new Error("Frappe must not be reached");
+      },
+    });
+    const error = await assertRejects(
+      () =>
+        tool.handler(DOWNLOAD_INPUT, {
+          client,
+          ...(clientCapabilities !== undefined ? { clientCapabilities } : {}),
+        }),
+      FileDownloadError,
+      "APP_CONTEXT_REQUIRED",
+      label,
+    );
+    assertEquals(downloads, 0, `${label}: downloadFile must not be called`);
+    assertEquals(error.code, "APP_CONTEXT_REQUIRED", label);
+    assertFalse(error.retryable, label);
+  }
+});
+
+Deno.test("erpnext_file_download - refusal is machine-readable and carries no bytes or secrets", async () => {
+  const error = await assertRejects(
+    () =>
+      getTool("erpnext_file_download").handler(
+        DOWNLOAD_INPUT,
+        makeCtx(makeMockClient()),
+      ),
+    FileDownloadError,
+  );
+  assertEquals(error.code, "APP_CONTEXT_REQUIRED");
+  assertEquals(error.context, {
+    tool: "erpnext_file_download",
+    requiredExtension: "io.modelcontextprotocol/ui",
+    requiredMimeType: "text/html;profile=mcp-app",
+    clientAnnouncedExtension: false,
+  });
+  assert(Object.isFrozen(error.context));
+  assert(error.recovery.includes("erpnext_file_list"));
+  assertEquals(
+    error.message,
+    `[erpnext_file_download] APP_CONTEXT_REQUIRED: ${error.detail}. Recovery: ${error.recovery}`,
+  );
+  // Never a base64 payload, a URL, a credential or an identifier of the file.
+  assert(error.message.length < 400);
+  assertFalse(
+    /base64|blob|https?:\/\/|token|api[_ -]?key|FILE-001/i.test(error.message),
+  );
+});
+
+Deno.test("erpnext_file_download - reports whether the client announced the extension at all", async () => {
+  const error = await assertRejects(
+    () =>
+      getTool("erpnext_file_download").handler(DOWNLOAD_INPUT, {
+        client: makeMockClient(),
+        clientCapabilities: {
+          extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [] } },
+        },
+      }),
+    FileDownloadError,
+  );
+  assertEquals(error.context.clientAnnouncedExtension, true);
+});
+
+Deno.test("erpnext_file_download - validates identifiers before the App-context guard", async () => {
+  await assertRejects(
+    () =>
+      getTool("erpnext_file_download").handler(
+        { ...DOWNLOAD_INPUT, file_id: " " },
+        makeCtx(makeMockClient()),
+      ),
+    Error,
+    "must be a non-empty string",
+  );
+});
+
+Deno.test("erpnext_file_download - an MCP Apps host still receives exactly one blob", async () => {
+  let downloads = 0;
+  const result = await getTool("erpnext_file_download").handler(
+    DOWNLOAD_INPUT,
+    makeAppCtx(makeMockClient({
+      downloadFile: async () => {
+        downloads++;
+        return {
+          fileId: "FILE-001",
+          fileName: "report.pdf",
+          mimeType: "application/pdf",
+          bytes: new Uint8Array([0, 255]),
+          isPrivate: true,
+        };
+      },
+    })),
+  );
+  assertEquals(downloads, 1);
   assertEquals(JSON.stringify(result).split("AP8=").length - 1, 1);
 });
 
@@ -593,10 +752,12 @@ Deno.test("erpnext_doc_list - schema still rejects unsupported filter values", (
   validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
 
   const invalidFilters: unknown[] = [
-    ["docstatus", 1, 1],
     ["status", "=", { unexpected: true }],
     ["status", "in", ["Open", false]],
     ["status", "in", [{ unexpected: true }]],
+    // Not a tuple at all.
+    "status",
+    { status: "Open" },
   ];
 
   for (const filter of invalidFilters) {
@@ -611,7 +772,72 @@ Deno.test("erpnext_doc_list - schema still rejects unsupported filter values", (
   }
 });
 
-Deno.test("erpnext_doc_list - forwards bounded pagination and fresh-read options", async () => {
+Deno.test("erpnext_doc_list - schema leaves filter arity to the handler (portable schema)", () => {
+  const tool = getTool("erpnext_doc_list");
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+
+  // Position/arity errors pass the schema on purpose: a tuple-precise schema
+  // (prefixItems) is rejected by hosts, so the handler answers INVALID_FILTER.
+  for (const filter of [["docstatus", 1, 1], ["status"], []]) {
+    assertEquals(
+      validator.validate(tool.name, {
+        doctype: "Sales Invoice",
+        filters: [filter],
+      }).valid,
+      true,
+      JSON.stringify(filter),
+    );
+  }
+});
+
+Deno.test("erpnext_doc_list - limit/offset schema mirrors Frappe: integers >= 0, no ceiling", () => {
+  const tool = getTool("erpnext_doc_list");
+  const properties = tool.inputSchema.properties as Record<
+    string,
+    Record<string, unknown>
+  >;
+  for (const name of ["limit", "offset"]) {
+    assertEquals(properties[name].type, "integer");
+    assertEquals(properties[name].minimum, 0);
+    assertEquals("maximum" in properties[name], false, `${name} has no cap`);
+  }
+  const description = properties.limit.description as string;
+  assertEquals(description.includes("0 = every row"), true);
+  assertEquals(description.includes("prefer limit + offset"), true);
+
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+  const check = (extra: Record<string, unknown>) =>
+    validator.validate(tool.name, { doctype: "Task", ...extra }).valid;
+
+  for (
+    const ok of [
+      { limit: 0 },
+      { limit: 1 },
+      { limit: 5_001 },
+      { limit: 1_000_000, offset: 250_000 },
+      { offset: 0 },
+    ]
+  ) {
+    assertEquals(check(ok), true, JSON.stringify(ok));
+  }
+  // Rejected before the handler runs, as prose (ajv), not INVALID_PAGINATION:
+  // documented behaviour for non-integers and negatives.
+  for (
+    const bad of [
+      { limit: 20.5 },
+      { limit: -1 },
+      { limit: "20" },
+      { offset: 1.5 },
+      { offset: -1 },
+    ]
+  ) {
+    assertEquals(check(bad), false, JSON.stringify(bad));
+  }
+});
+
+Deno.test("erpnext_doc_list - forwards pagination, fresh-read and a child-table order", async () => {
   let capturedOptions: Record<string, unknown> = {};
   let capturedReadOptions: Record<string, unknown> = {};
   const result = await getTool("erpnext_doc_list").handler(
@@ -642,7 +868,10 @@ Deno.test("erpnext_doc_list - forwards bounded pagination and fresh-read options
     filters: [["Timesheet Detail", "task", "=", "TASK-001"]],
     limit: 200,
     limit_start: 400,
-    order_by: "name asc",
+    // Qualified because the filter joins Timesheet Detail; grouped so a
+    // timesheet with several matching lines counts once against the limit.
+    order_by: "`tabTimesheet`.name asc",
+    group_by: "`tabTimesheet`.name",
   });
   assertEquals(capturedReadOptions, { skipCache: true });
   assertEquals(result.count, 1);
@@ -671,45 +900,163 @@ Deno.test("erpnext_doc_list - preserves defaults when pagination and cache optio
   ]);
 });
 
-Deno.test("erpnext_doc_list - rejects invalid direct-handler pagination and cache inputs", async () => {
+async function listOptionsFor(
+  input: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  let captured: Record<string, unknown> = {};
+  await getTool("erpnext_doc_list").handler(
+    { doctype: "Sales Invoice", ...input },
+    makeCtx(makeMockClient({
+      list: async (_doctype: string, options: Record<string, unknown>) => {
+        captured = options;
+        return [];
+      },
+    })),
+  );
+  return captured;
+}
+
+Deno.test("erpnext_doc_list - limit 0 reaches Frappe as 'every row'", async () => {
+  assertEquals((await listOptionsFor({ limit: 0 })).limit, 0);
+  const withZeroOffset = await listOptionsFor({ limit: 0, offset: 0 });
+  assertEquals(withZeroOffset.limit, 0);
+  assertEquals(withZeroOffset.limit_start, 0);
+});
+
+Deno.test("erpnext_doc_list - a very large limit or offset is not capped", async () => {
+  const options = await listOptionsFor({ limit: 250_000, offset: 1_000_000 });
+  assertEquals(options.limit, 250_000);
+  assertEquals(options.limit_start, 1_000_000);
+});
+
+Deno.test("erpnext_doc_list - filters of 3 and 4 elements and 3.0.x string tuples are forwarded as sent", async () => {
+  const filters = [
+    ["status", "=", "Paid"],
+    ["docstatus", "<", 2],
+    ["is_return", "=", false],
+    ["due_date", "is", null],
+    ["customer", "in", ["A", "B"]],
+    ["Sales Invoice Item", "qty", ">", 5],
+    ["Sales Invoice Item", "item_code", "in", ["X", 1]],
+    ["Sales Invoice Item", "item_code", "=", "X", "trailing"],
+  ];
+  assertEquals((await listOptionsFor({ filters })).filters, filters);
+});
+
+Deno.test("erpnext_doc_list - qualifies the default order_by and groups only when a child table is filtered", async () => {
+  // Frappe v14/v15 answer HTTP 500 ("Column 'modified' in order clause is
+  // ambiguous") to `order_by=modified desc` once a child table is joined.
+  const child = await listOptionsFor({
+    filters: [["Sales Invoice Item", "sales_order", "=", "SO-1"]],
+  });
+  assertEquals(child.order_by, "`tabSales Invoice`.modified desc");
+  assertEquals(child.group_by, "`tabSales Invoice`.name");
+
+  const parentOnly = await listOptionsFor({
+    filters: [["status", "=", "Paid"]],
+  });
+  assertEquals(parentOnly.order_by, "modified desc");
+  assertEquals("group_by" in parentOnly, false);
+});
+
+Deno.test("erpnext_doc_list - qualifies a simple order_by only when a child table is filtered", async () => {
+  const filters = [["Sales Invoice Item", "sales_order", "=", "SO-1"]];
+  for (
+    const [order_by, joined, plain] of [
+      ["modified desc", "`tabSales Invoice`.modified desc", "modified desc"],
+      ["name asc", "`tabSales Invoice`.name asc", "name asc"],
+      ["posting_date", "`tabSales Invoice`.posting_date", "posting_date"],
+    ]
+  ) {
+    assertEquals(
+      (await listOptionsFor({ filters, order_by })).order_by,
+      joined,
+    );
+    assertEquals((await listOptionsFor({ order_by })).order_by, plain);
+  }
+});
+
+Deno.test("erpnext_doc_list - keeps joined rows when child columns are selected", async () => {
+  const options = await listOptionsFor({
+    fields: ["name", "`tabSales Invoice Item`.qty"],
+    filters: [["Sales Invoice Item", "sales_order", "=", "SO-1"]],
+  });
+  assertEquals(options.order_by, "`tabSales Invoice`.modified desc");
+  assertEquals("group_by" in options, false);
+});
+
+async function rejectionOf(input: Record<string, unknown>) {
   let listCalls = 0;
-  const ctx = makeCtx(makeMockClient({
-    list: async () => {
-      listCalls++;
-      return [];
-    },
-  }));
-  const invalid: Array<{
-    value: Record<string, unknown>;
-    message: string;
-  }> = [
-    { value: { limit: 0 }, message: "'limit' must be an integer" },
-    { value: { limit: 1.5 }, message: "'limit' must be an integer" },
-    { value: { limit: 5_001 }, message: "'limit' must be an integer" },
-    { value: { limit: "20" }, message: "'limit' must be an integer" },
-    { value: { offset: -1 }, message: "'offset' must be an integer" },
-    { value: { offset: 1.5 }, message: "'offset' must be an integer" },
-    { value: { offset: 100_001 }, message: "'offset' must be an integer" },
-    { value: { offset: "0" }, message: "'offset' must be an integer" },
+  const error = await assertRejects(
+    () =>
+      getTool("erpnext_doc_list").handler(
+        { doctype: "Task", ...input },
+        makeCtx(makeMockClient({
+          list: async () => {
+            listCalls++;
+            return [];
+          },
+        })),
+      ),
+    ToolInputError,
+  );
+  assertEquals(listCalls, 0, "fast fail: Frappe is never called");
+  return { error, parsed: parseToolInputError(error.message) };
+}
+
+Deno.test("erpnext_doc_list - limit 0 with offset > 0 is INVALID_PAGINATION", async () => {
+  const { error, parsed } = await rejectionOf({ limit: 0, offset: 20 });
+  assertEquals(error.code, "INVALID_PAGINATION");
+  assertEquals(parsed?.tool, "erpnext_doc_list");
+  assertEquals(parsed?.code, "INVALID_PAGINATION");
+  assertEquals(parsed?.recovery.includes("positive 'limit'"), true);
+});
+
+Deno.test("erpnext_doc_list - invalid arity or types are INVALID_FILTER", async () => {
+  for (
+    const filters of [
+      [["status", "="]],
+      [["docstatus", 1, 1]],
+      [["status", "=", { unexpected: true }]],
+      [["a", "b", "c"], null],
+      "status = Open",
+    ]
+  ) {
+    const { error, parsed } = await rejectionOf({ filters });
+    assertEquals(error.code, "INVALID_FILTER", JSON.stringify(filters));
+    assertEquals(parsed?.code, "INVALID_FILTER");
+  }
+});
+
+Deno.test("erpnext_doc_list - rejects invalid direct-handler inputs before calling Frappe", async () => {
+  const invalid: Array<{ value: Record<string, unknown>; code: string }> = [
+    { value: { limit: 1.5 }, code: "INVALID_PAGINATION" },
+    { value: { limit: -1 }, code: "INVALID_PAGINATION" },
+    { value: { limit: "20" }, code: "INVALID_PAGINATION" },
+    { value: { offset: -1 }, code: "INVALID_PAGINATION" },
+    { value: { offset: 1.5 }, code: "INVALID_PAGINATION" },
+    { value: { offset: "0" }, code: "INVALID_PAGINATION" },
+    { value: { skip_cache: "true" }, code: "INVALID_INPUT" },
+    { value: { skip_cache: 1 }, code: "INVALID_INPUT" },
+    { value: { fields: "name" }, code: "INVALID_INPUT" },
+    { value: { fields: ["name", 1] }, code: "INVALID_INPUT" },
+    { value: { doctype: "" }, code: "INVALID_INPUT" },
+    { value: { doctype: undefined }, code: "INVALID_INPUT" },
+    { value: { order_by: 5 }, code: "INVALID_INPUT" },
+    { value: { order_by: ["modified desc"] }, code: "INVALID_INPUT" },
     {
-      value: { skip_cache: "true" },
-      message: "'skip_cache' must be a boolean",
+      value: {
+        order_by: 5,
+        filters: [["Sales Invoice Item", "item_code", "=", "X"]],
+      },
+      code: "INVALID_INPUT",
     },
-    { value: { skip_cache: 1 }, message: "'skip_cache' must be a boolean" },
   ];
 
-  for (const { value, message } of invalid) {
-    await assertRejects(
-      () =>
-        getTool("erpnext_doc_list").handler(
-          { doctype: "Task", ...value },
-          ctx,
-        ),
-      Error,
-      message,
-    );
+  for (const { value, code } of invalid) {
+    const { error } = await rejectionOf(value);
+    assertEquals(error.code, code, JSON.stringify(value));
   }
-  assertEquals(listCalls, 0);
 });
 
 // ── erpnext_doc_update ──────────────────────────────────────────────────────

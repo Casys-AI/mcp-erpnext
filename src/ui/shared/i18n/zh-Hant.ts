@@ -49,6 +49,18 @@ export const zhHant: Record<string, string> = {
   "document.table.no_columns": "無可顯示的欄位",
   "document.json": "原始單據 JSON",
   "document.action.refresh_pending": "變更已提交 — 重新整理尚待處理",
+  "document.company.general": "公司概況",
+  "document.company.advanced": "進階設定",
+  "document.company.field.company_name": "名稱",
+  "document.company.field.abbr": "簡稱",
+  "document.company.field.country": "國家",
+  "document.company.field.default_currency": "幣別",
+  "document.company.field.domain": "業務領域",
+  "document.company.field.is_group": "集團公司",
+  "document.company.other": "其他資訊",
+  "document.company.schema_loading": "正在載入 ERPNext 區段…",
+  "document.company.schema_unavailable":
+    "無法取得 ERPNext 區段。所有欄位仍可查看。",
   "document.purchase_invoice.total": "發票總額",
   "document.purchase_invoice.calculated": "已計算",
   "document.purchase_invoice.rounding": "四捨五入",
@@ -180,6 +192,11 @@ export const zhHant: Record<string, string> = {
   "kpi.status.auto_refresh": "聚焦時自動重新整理",
   "kpi.drilldown.title_detail": "點選以鑽取",
   "kpi.drilldown.title_trend": "點選以檢視趨勢明細",
+  "kpi.secondary.invoices": "發票",
+  "kpi.secondary.amount": "金額",
+  "kpi.drilldown.title_message": "連按兩下或按 Enter 鍵，在對話中詢問",
+  "kpi.drilldown.title_context":
+    "點選或按空白鍵加入／移除上下文 · 連按兩下或按 Enter 鍵查看明細",
   // ── KPI 檢視 ───────────────────────────────────────────────────────────
 
   // ── 發票檢視 ────────────────────────────────────────────────────────
@@ -315,6 +332,7 @@ export const zhHant: Record<string, string> = {
     "點選：加入／移除上下文 · 連按兩下看明細",
   "chart.tooltip.click_action_context_only": "點選：加入／移除上下文",
   "chart.tooltip.click_action_fallback": "連按兩下看明細",
+  "chart.tooltip.click_action_detail": "點選：看明細",
   // ── 導覽堆疊（路徑、層級、跳轉） ──
   "nav.back": "返回",
   "nav.elided": "…{n}",

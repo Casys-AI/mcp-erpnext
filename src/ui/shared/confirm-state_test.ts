@@ -2,6 +2,7 @@ import { translatorForLocale } from "./i18n.ts";
 import { assertEquals } from "@std/assert";
 import {
   confirmPending,
+  confirmTone,
   dismissConfirm,
   pendingConfirmText,
   requestConfirm,
@@ -79,4 +80,16 @@ Deno.test("stored confirmation copy follows locale while preserving the pending 
     pendingConfirmText(pending([]), "title", translatorForLocale("en")),
     "Annuler ?",
   );
+});
+
+Deno.test("confirm-state : le bouton de confirmation est en danger par défaut, en accent sur demande", () => {
+  const calls: string[] = [];
+  assertEquals(confirmTone(pending(calls)), "danger");
+  assertEquals(confirmTone({ ...pending(calls), tone: "danger" }), "danger");
+  const accent = requestConfirm(null, { ...pending(calls), tone: "accent" })!;
+  assertEquals(confirmTone(accent), "accent");
+  // La couleur ne change rien à la mécanique : rien ne part avant « Confirmer ».
+  assertEquals(calls, []);
+  confirmPending(accent).run?.();
+  assertEquals(calls, ["A"]);
 });

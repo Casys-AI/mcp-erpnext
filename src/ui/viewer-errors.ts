@@ -13,7 +13,8 @@
  * bounded (url, host, status, timeoutMs) and never carries a response body.
  * `code`, `retryable`, `context` and `recovery` are also typed properties.
  *
- * This JSON-in-message shape is the wire convention for viewer resource reads.
+ * Unlike `BuyCaptureError` (which stays a plain property bag), this JSON-in-
+ * message shape is a deliberate wire convention for viewer resource reads.
  */
 
 export const VIEWER_RESOURCE_ERROR_CODES = [

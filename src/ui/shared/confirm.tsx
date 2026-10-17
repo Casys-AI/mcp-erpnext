@@ -6,7 +6,9 @@
  * slots dans leur rôle : l'identifiant du document dans l'eyebrow (mono,
  * comme l'inspecteur), la question courte en titre, l'alerte « action
  * irréversible » en badge dans le corps avec la phrase de conséquence, puis
- * « Retour » et le verbe de l'action en danger. Échap et le voile referment.
+ * « Retour » et le verbe de l'action (en danger par défaut, en accent pour
+ * une action constructive comme Soumettre, cf. `PendingConfirm.tone`). Échap
+ * et le voile referment.
  * La mécanique est dans `confirm-state.ts`, testée seule.
  */
 
@@ -14,6 +16,7 @@ import { useState } from "preact/hooks";
 import {
   confirmPending,
   type ConfirmSnapshot,
+  confirmTone,
   dismissConfirm,
   type PendingConfirm,
   pendingConfirmText,
@@ -59,7 +62,11 @@ export function ConfirmSheet({ confirm }: { confirm: ConfirmState }) {
           <Button variant="quiet" onClick={confirm.dismiss}>
             {t("common.back")}
           </Button>
-          <Button variant="danger" class="ml-auto" onClick={confirm.confirm}>
+          <Button
+            variant={confirmTone(pending)}
+            class="ml-auto"
+            onClick={confirm.confirm}
+          >
             {pendingConfirmText(pending, "actionLabel", t)}
           </Button>
         </SheetActions>

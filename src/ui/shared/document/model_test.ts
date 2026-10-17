@@ -301,17 +301,19 @@ Deno.test("documentModelOf - avec mise en page, l'aperçu d'abord puis les secti
     "grand_total",
   ]);
   // Reste des champs scalaires non vides, groupés comme la mise en page.
-  // `due_date` (null) est omis, la section « Notes » (champs absents ou longs)
-  // disparaît, et les champs hors mise en page clôturent la liste.
+  // `due_date` (null) est omis, `remarks` (champ long) se replie dans sa
+  // section « Notes », et les champs hors mise en page clôturent la liste.
   assertEquals(
     model.sections?.map((section) => [
       section.label,
       section.fields.map((field) => field.key),
+      section.longFields.map((field) => field.key),
     ]),
     [
-      [null, ["company"]],
-      ["Totals", ["outstanding_amount"]],
-      [null, ["is_pos", "custom_ref"]],
+      [null, ["company"], []],
+      ["Totals", ["outstanding_amount"], []],
+      ["Notes", [], ["remarks"]],
+      [null, ["is_pos", "custom_ref"], []],
     ],
   );
 });
@@ -326,21 +328,19 @@ Deno.test("documentModelOf - les libellés ERPNext l'emportent, sinon le libell�
     .find((field) => field.key === "outstanding_amount");
   assertEquals(outstanding?.label, "Outstanding Amount");
   // Champs longs, progression et collections relibellés eux aussi.
-  assertEquals(model.longFields[0].label, "Internal Remarks");
+  const remarks = model.sections?.flatMap((section) => section.longFields)
+    .find((field) => field.key === "remarks");
+  assertEquals(remarks?.label, "Internal Remarks");
   assertEquals(model.progressFields[0].label, "Completion");
   assertEquals(model.collections[0].label, "Tag List");
 });
 
-Deno.test("documentModelOf - tables enfants, champs longs, progression, collections et système gardent leur traitement", () => {
+Deno.test("documentModelOf - tables enfants, progression, collections et système gardent leur traitement", () => {
   const withLayout = documentModelOf(invoicePayload());
   const without = documentModelOf({ data: invoicePayload().data });
   assert(withLayout && without);
 
   assertEquals(withLayout.childTables, without.childTables);
-  assertEquals(
-    withLayout.longFields.map((field) => field.key),
-    without.longFields.map((field) => field.key),
-  );
   assertEquals(
     withLayout.progressFields.map((field) => field.key),
     without.progressFields.map((field) => field.key),
@@ -354,6 +354,79 @@ Deno.test("documentModelOf - tables enfants, champs longs, progression, collecti
   assertEquals(
     withLayout.fields.some((field) => field.key === "status"),
     false,
+  );
+});
+
+Deno.test("documentModelOf - un champ long hors aperçu se replie dans « Tous les champs », un champ long d'aperçu reste en section", () => {
+  const data = {
+    ...invoicePayload().data,
+    terms: "Net 30\nNo returns",
+    configuration: { safe: true },
+  };
+  const layout = {
+    ...LAYOUT,
+    preview: [...LAYOUT.preview, "terms"],
+    sections: [
+      ...LAYOUT.sections,
+      { label: "Terms", fields: ["terms", "configuration"] },
+    ],
+  };
+  const model = documentModelOf({ data, _fieldLayout: layout });
+  assert(model);
+
+  // `terms` est dans l'aperçu : traitement de champ long inchangé.
+  assertEquals(model.longFields.map((field) => field.key), ["terms"]);
+  // `remarks` et `configuration` (JSON) se replient dans leur section.
+  assertEquals(
+    model.sections?.flatMap((section) =>
+      section.longFields.map((field) => [section.label, field.key])
+    ),
+    [["Notes", "remarks"], ["Terms", "configuration"]],
+  );
+  // Sans mise en page, tous les champs longs restent des sections à part.
+  const plain = documentModelOf({ data });
+  assertEquals(
+    plain?.longFields.map((field) => field.key),
+    ["remarks", "terms", "configuration"],
+  );
+  assertEquals(plain?.sections, undefined);
+});
+
+Deno.test("documentModelOf - un champ long vide disparaît avec la mise en page seulement", () => {
+  const data = { ...invoicePayload().data, description: "" };
+  const withLayout = documentModelOf({ data, _fieldLayout: LAYOUT });
+  const without = documentModelOf({ data });
+  assert(withLayout && without);
+
+  const everyLong = [
+    ...withLayout.longFields,
+    ...(withLayout.sections ?? []).flatMap((section) => section.longFields),
+  ];
+  assertEquals(everyLong.some((field) => field.key === "description"), false);
+  assertEquals(
+    without.longFields.some((field) => field.key === "description"),
+    true,
+  );
+});
+
+Deno.test("documentModelOf - les collections vides sont masquées avec la mise en page seulement", () => {
+  const data = {
+    ...invoicePayload().data,
+    empty_links: [],
+    pricing_rules: [],
+  };
+  const withLayout = documentModelOf({ data, _fieldLayout: LAYOUT });
+  const without = documentModelOf({ data });
+  assert(withLayout && without);
+
+  // `tags` (non vide) reste ; les collections vides disparaissent.
+  assertEquals(
+    withLayout.collections.map((collection) => collection.key),
+    ["tags"],
+  );
+  assertEquals(
+    without.collections.map((collection) => collection.key),
+    ["tags", "empty_links", "pricing_rules"],
   );
 });
 

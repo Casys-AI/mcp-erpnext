@@ -64,6 +64,7 @@ export const DOC_FIXTURE = {
         fields: ["subject", "project", "company", "priority"],
       },
       { label: "Timeline", fields: ["exp_start_date", "exp_end_date"] },
+      { label: "Details", fields: ["description"] },
     ],
     labels: {
       exp_start_date: "Expected Start Date",

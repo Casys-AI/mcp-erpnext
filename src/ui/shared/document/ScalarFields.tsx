@@ -131,6 +131,21 @@ function FieldsGrid(
   );
 }
 
+function LongFieldValue({ field }: { field: DocumentFieldModel }) {
+  const t = useT();
+  return field.kind === "json"
+    ? (
+      <pre class="scroll-slim max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-control border border-line-soft bg-sunken p-2.5 font-mono text-chip leading-relaxed text-ink-2">
+        {displayValue(field.value, t)}
+      </pre>
+    )
+    : (
+      <p class="whitespace-pre-wrap break-words text-cell leading-[1.55] text-ink-2">
+        {displayValue(field.value, t)}
+      </p>
+    );
+}
+
 function FieldDisclosure(
   { label, count, first, children }: {
     label: string;
@@ -208,7 +223,8 @@ export function ScalarFields({
   const t = useT();
   const title = heading === undefined ? t("document.fields") : heading;
   const layoutFieldCount = layoutSections.reduce(
-    (count, section) => count + section.fields.length,
+    (count, section) =>
+      count + section.fields.length + section.longFields.length,
     0,
   );
   const hasContent = fields.length > 0 || longFields.length > 0 ||
@@ -259,7 +275,17 @@ export function ScalarFields({
             {layoutSections.map((section) => (
               <section key={section.key} class="flex flex-col gap-2">
                 {section.label && <Label>{section.label}</Label>}
-                <FieldsGrid fields={section.fields} layout={layout} />
+                {section.fields.length > 0 && (
+                  <FieldsGrid fields={section.fields} layout={layout} />
+                )}
+                {section.longFields.map((field) => (
+                  <div key={field.key} class="flex flex-col gap-1.5">
+                    <span class="font-mono text-chip text-ink-faint [overflow-wrap:anywhere]">
+                      {field.label}
+                    </span>
+                    <LongFieldValue field={field} />
+                  </div>
+                ))}
               </section>
             ))}
           </div>
@@ -268,17 +294,7 @@ export function ScalarFields({
 
       {longFields.map((field) => (
         <Section key={field.key} label={field.label} first={consumeFirst()}>
-          {field.kind === "json"
-            ? (
-              <pre class="scroll-slim max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-control border border-line-soft bg-sunken p-2.5 font-mono text-chip leading-relaxed text-ink-2">
-                {displayValue(field.value, t)}
-              </pre>
-            )
-            : (
-              <p class="whitespace-pre-wrap break-words text-cell leading-[1.55] text-ink-2">
-                {displayValue(field.value, t)}
-              </p>
-            )}
+          <LongFieldValue field={field} />
         </Section>
       ))}
 

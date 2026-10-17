@@ -58,44 +58,70 @@ export function layoutLabelOf(
 }
 
 /**
- * Répartit les champs scalaires d'une fiche selon la mise en page : l'aperçu
- * dans l'ordre de `preview`, puis le reste par section. Un champ sans valeur
- * n'est affiché nulle part ; un champ que la mise en page ignore (champ
- * personnalisé arrivé depuis) clôt la liste dans un groupe sans titre.
+ * Répartit les champs d'une fiche selon la mise en page : l'aperçu dans
+ * l'ordre de `preview`, puis le reste par section. Un champ sans valeur n'est
+ * affiché nulle part. Un champ long d'aperçu reste un champ long à part
+ * entière (`longFields`) ; les autres se replient dans leur section. Un champ
+ * que la mise en page ignore (champ personnalisé arrivé depuis) clôt la liste
+ * dans un groupe sans titre.
  */
-export function layoutScalarFields(
-  scalars: readonly DocumentFieldModel[],
+export function layoutDocumentFields(
+  candidates: {
+    scalars: readonly DocumentFieldModel[];
+    longFields?: readonly DocumentFieldModel[];
+  },
   layout: DocumentFieldLayout,
-): { fields: DocumentFieldModel[]; sections: DocumentSectionModel[] } {
-  const present = new Map(
-    scalars.filter((field) => field.kind !== "empty").map((
-      field,
-    ) => [field.key, field]),
-  );
+): {
+  fields: DocumentFieldModel[];
+  longFields: DocumentFieldModel[];
+  sections: DocumentSectionModel[];
+} {
+  const withValue = (fields: readonly DocumentFieldModel[] = []) =>
+    new Map(
+      fields.filter((field) => field.kind !== "empty").map((
+        field,
+      ) => [field.key, field]),
+    );
+  const scalars = withValue(candidates.scalars);
+  const longs = withValue(candidates.longFields);
   const placed = new Set<string>();
-  const take = (keys: readonly string[]): DocumentFieldModel[] =>
+  const take = (
+    from: Map<string, DocumentFieldModel>,
+    keys: readonly string[],
+  ): DocumentFieldModel[] =>
     keys.flatMap((key) => {
-      const field = present.get(key);
+      const field = from.get(key);
       if (!field || placed.has(key)) return [];
       placed.add(key);
       return [field];
     });
 
-  const fields = take(layout.preview);
+  const fields = take(scalars, layout.preview);
+  const longFields = take(longs, layout.preview);
   const sections: DocumentSectionModel[] = [];
   layout.sections.forEach((section, index) => {
-    const members = take(section.fields);
-    if (members.length > 0) {
+    const members = take(scalars, section.fields);
+    const longMembers = take(longs, section.fields);
+    if (members.length > 0 || longMembers.length > 0) {
       sections.push({
         key: `section-${index}`,
         label: section.label,
         fields: members,
+        longFields: longMembers,
       });
     }
   });
-  const rest = [...present.values()].filter((field) => !placed.has(field.key));
-  if (rest.length > 0) {
-    sections.push({ key: "section-other", label: null, fields: rest });
+  const rest = [...scalars.values()].filter((field) => !placed.has(field.key));
+  const longRest = [...longs.values()].filter((field) =>
+    !placed.has(field.key)
+  );
+  if (rest.length > 0 || longRest.length > 0) {
+    sections.push({
+      key: "section-other",
+      label: null,
+      fields: rest,
+      longFields: longRest,
+    });
   }
-  return { fields, sections };
+  return { fields, longFields, sections };
 }

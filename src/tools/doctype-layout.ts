@@ -9,8 +9,6 @@
  */
 
 import type { FrappeClient } from "../api/frappe-client.ts";
-import type { Cache } from "../cache/types.ts";
-import { getCache } from "../cache/cache.ts";
 
 export interface DocTypeFieldLayoutSection {
   /** `null` : rupture de section sans libellé dans le DocType. */
@@ -30,7 +28,18 @@ export interface DocTypeFieldLayout {
 
 export const DOCTYPE_LAYOUT_TTL_MS = 60 * 60 * 1000;
 /** Un échec est mémorisé brièvement : pas d'aller-retour raté à chaque fiche. */
-const FAILURE_TTL_MS = 60 * 1000;
+export const DOCTYPE_LAYOUT_FAILURE_TTL_MS = 60 * 1000;
+export const DOCTYPE_LAYOUT_MAX_ENTRIES = 200;
+
+/**
+ * DocTypes dont la vue n'utilise pas la mise en page : Company a sa sélection
+ * dédiée, et un DocType lu par `erpnext_doc_get` est un schéma (le viewer
+ * Company le relit pour ses sections), pas une fiche à résumer.
+ */
+export const DOCTYPE_LAYOUT_SKIPPED: ReadonlySet<string> = new Set([
+  "Company",
+  "DocType",
+]);
 
 const GETDOCTYPE_METHOD = "frappe.desk.form.load.getdoctype";
 
@@ -165,8 +174,72 @@ export function docTypeLayoutOf(response: unknown): DocTypeFieldLayout | null {
   };
 }
 
+/**
+ * Mémo en processus des mises en page, indépendant du cache MCP
+ * (`MCP_CACHE_ENABLED=false` ne le désactive pas) : une mise en page change
+ * rarement, et sa lecture coûte un `getdoctype` de plusieurs centaines de Ko.
+ * `null` mémorise un échec ; `undefined` signale « rien en mémoire ».
+ */
+export interface DocTypeLayoutMemo {
+  get(doctype: string): DocTypeFieldLayout | null | undefined;
+  set(doctype: string, layout: DocTypeFieldLayout | null): void;
+  clear(): void;
+  readonly size: number;
+}
+
+export function createDocTypeLayoutMemo(
+  options: { maxEntries?: number; now?: () => number } = {},
+): DocTypeLayoutMemo {
+  const maxEntries = options.maxEntries ?? DOCTYPE_LAYOUT_MAX_ENTRIES;
+  const now = options.now ?? Date.now;
+  // L'ordre d'insertion de `Map` sert d'ordre d'ancienneté.
+  const entries = new Map<
+    string,
+    { layout: DocTypeFieldLayout | null; expiresAt: number }
+  >();
+
+  return {
+    get(doctype) {
+      const entry = entries.get(doctype);
+      if (!entry) return undefined;
+      if (now() >= entry.expiresAt) {
+        entries.delete(doctype);
+        return undefined;
+      }
+      // Copie : l'appelant peut muter sa mise en page sans toucher la mémoire.
+      return entry.layout === null ? null : structuredClone(entry.layout);
+    },
+    set(doctype, layout) {
+      const at = now();
+      entries.delete(doctype);
+      for (const [key, entry] of entries) {
+        if (at >= entry.expiresAt) entries.delete(key);
+      }
+      entries.set(doctype, {
+        layout,
+        expiresAt: at +
+          (layout === null
+            ? DOCTYPE_LAYOUT_FAILURE_TTL_MS
+            : DOCTYPE_LAYOUT_TTL_MS),
+      });
+      while (entries.size > maxEntries) {
+        entries.delete(entries.keys().next().value as string);
+      }
+    },
+    clear() {
+      entries.clear();
+    },
+    get size() {
+      return entries.size;
+    },
+  };
+}
+
+/** Mémo du processus, partagé par tous les appels d'outils. */
+export const docTypeLayoutMemo: DocTypeLayoutMemo = createDocTypeLayoutMemo();
+
 export interface FetchDocTypeLayoutOptions {
-  cache?: Cache;
+  memo?: DocTypeLayoutMemo;
   /** Trace d'un échec non fatal (stderr par défaut : stdout est le canal MCP). */
   log?: (message: string) => void;
 }
@@ -176,21 +249,21 @@ function logToStderr(message: string): void {
 }
 
 /**
- * Lit la mise en page d'un DocType (cache d'une heure par DocType).
+ * Lit la mise en page d'un DocType (mémo d'une heure par DocType).
  *
  * Fail-soft par contrat : la mise en page est un confort de lecture. Une
  * erreur (permission, 404, réseau) renvoie `null` et ne fait jamais échouer
- * l'outil qui l'attache.
+ * l'outil qui l'attache. Aucune lecture pour `DOCTYPE_LAYOUT_SKIPPED`.
  */
 export async function fetchDocTypeLayout(
   client: FrappeClient,
   doctype: string,
   options: FetchDocTypeLayoutOptions = {},
 ): Promise<DocTypeFieldLayout | null> {
-  const cache = options.cache ?? getCache();
-  const key = `doctype-layout:${doctype}`;
-  const cached = cache.get<DocTypeFieldLayout | null>(key);
-  if (cached !== undefined) return cached;
+  if (DOCTYPE_LAYOUT_SKIPPED.has(doctype)) return null;
+  const memo = options.memo ?? docTypeLayoutMemo;
+  const remembered = memo.get(doctype);
+  if (remembered !== undefined) return remembered;
 
   try {
     const response = await client.callMethodRaw(
@@ -200,7 +273,7 @@ export async function fetchDocTypeLayout(
     );
     const layout = docTypeLayoutOf(response);
     if (!layout) throw new Error("unreadable getdoctype response");
-    cache.set(key, layout, DOCTYPE_LAYOUT_TTL_MS);
+    memo.set(doctype, layout);
     return layout;
   } catch (error) {
     (options.log ?? logToStderr)(
@@ -208,7 +281,7 @@ export async function fetchDocTypeLayout(
         error instanceof Error ? error.message : String(error)
       }`,
     );
-    cache.set(key, null, FAILURE_TTL_MS);
+    memo.set(doctype, null);
     return null;
   }
 }

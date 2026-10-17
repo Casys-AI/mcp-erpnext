@@ -1,7 +1,10 @@
 import { assertEquals } from "@std/assert";
 import type { FrappeClient } from "../api/frappe-client.ts";
-import { MemoryCache } from "../cache/memory.ts";
 import {
+  createDocTypeLayoutMemo,
+  DOCTYPE_LAYOUT_FAILURE_TTL_MS,
+  DOCTYPE_LAYOUT_MAX_ENTRIES,
+  DOCTYPE_LAYOUT_SKIPPED,
   DOCTYPE_LAYOUT_TTL_MS,
   docTypeLayoutOf,
   fetchDocTypeLayout,
@@ -378,6 +381,110 @@ Deno.test("docTypeLayoutOf - déterministe et sérialisable", () => {
   assertEquals(JSON.parse(JSON.stringify(first)), first);
 });
 
+// ── Mémo en processus ─────────────────────────────────────────────────────────
+
+function clock(start = 1_000_000) {
+  let current = start;
+  return {
+    now: () => current,
+    advance: (ms: number) => {
+      current += ms;
+    },
+  };
+}
+
+const SAMPLE_LAYOUT = {
+  version: 1 as const,
+  preview: ["a"],
+  sections: [],
+  labels: {},
+};
+
+Deno.test("constantes du mémo : une heure en succès, 60 s en échec, 200 DocTypes", () => {
+  assertEquals(DOCTYPE_LAYOUT_TTL_MS, 60 * 60 * 1000);
+  assertEquals(DOCTYPE_LAYOUT_FAILURE_TTL_MS, 60 * 1000);
+  assertEquals(DOCTYPE_LAYOUT_MAX_ENTRIES, 200);
+});
+
+Deno.test("mémo - un succès est servi jusqu'à une heure, pas au-delà", () => {
+  const time = clock();
+  const memo = createDocTypeLayoutMemo({ now: time.now });
+  assertEquals(memo.get("Task"), undefined);
+
+  memo.set("Task", SAMPLE_LAYOUT);
+  time.advance(DOCTYPE_LAYOUT_TTL_MS - 1);
+  assertEquals(memo.get("Task"), SAMPLE_LAYOUT);
+  time.advance(1);
+  assertEquals(memo.get("Task"), undefined);
+});
+
+Deno.test("mémo - un échec n'est servi que 60 s", () => {
+  const time = clock();
+  const memo = createDocTypeLayoutMemo({ now: time.now });
+
+  memo.set("Task", null);
+  time.advance(DOCTYPE_LAYOUT_FAILURE_TTL_MS - 1);
+  // `null` mémorisé se distingue de `undefined` (rien en mémoire).
+  assertEquals(memo.get("Task"), null);
+  time.advance(1);
+  assertEquals(memo.get("Task"), undefined);
+});
+
+Deno.test("mémo - borné : le plus ancien est évincé", () => {
+  const memo = createDocTypeLayoutMemo({ maxEntries: 2, now: clock().now });
+  memo.set("A", SAMPLE_LAYOUT);
+  memo.set("B", SAMPLE_LAYOUT);
+  memo.set("C", SAMPLE_LAYOUT);
+
+  assertEquals(memo.size, 2);
+  assertEquals(memo.get("A"), undefined);
+  assertEquals(memo.get("B"), SAMPLE_LAYOUT);
+  assertEquals(memo.get("C"), SAMPLE_LAYOUT);
+});
+
+Deno.test("mémo - réécrire un DocType le rend le plus récent et repart pour un TTL entier", () => {
+  const time = clock();
+  const memo = createDocTypeLayoutMemo({ maxEntries: 2, now: time.now });
+  memo.set("A", SAMPLE_LAYOUT);
+  memo.set("B", SAMPLE_LAYOUT);
+  time.advance(DOCTYPE_LAYOUT_TTL_MS - 1);
+  memo.set("A", SAMPLE_LAYOUT);
+  memo.set("C", SAMPLE_LAYOUT);
+
+  // B était le plus ancien après la réécriture de A.
+  assertEquals(memo.get("B"), undefined);
+  time.advance(DOCTYPE_LAYOUT_TTL_MS - 1);
+  assertEquals(memo.get("A"), SAMPLE_LAYOUT);
+});
+
+Deno.test("mémo - un échec expiré ne compte plus dans la borne", () => {
+  const time = clock();
+  const memo = createDocTypeLayoutMemo({ maxEntries: 2, now: time.now });
+  memo.set("A", null);
+  memo.set("B", SAMPLE_LAYOUT);
+  time.advance(DOCTYPE_LAYOUT_FAILURE_TTL_MS);
+  memo.set("C", SAMPLE_LAYOUT);
+
+  assertEquals(memo.get("B"), SAMPLE_LAYOUT);
+  assertEquals(memo.get("C"), SAMPLE_LAYOUT);
+});
+
+Deno.test("mémo - rend une copie : modifier le résultat ne corrompt pas la mémoire", () => {
+  const memo = createDocTypeLayoutMemo({ now: clock().now });
+  memo.set("Task", structuredClone(SAMPLE_LAYOUT));
+  const first = memo.get("Task");
+  first!.preview.push("mutated");
+  assertEquals(memo.get("Task")?.preview, ["a"]);
+});
+
+Deno.test("mémo - clear vide tout", () => {
+  const memo = createDocTypeLayoutMemo({ now: clock().now });
+  memo.set("A", SAMPLE_LAYOUT);
+  memo.clear();
+  assertEquals(memo.size, 0);
+  assertEquals(memo.get("A"), undefined);
+});
+
 // ── fetchDocTypeLayout ────────────────────────────────────────────────────────
 
 interface Call {
@@ -406,13 +513,18 @@ function fakeClient(
   } as unknown as FrappeClient;
 }
 
-Deno.test("fetchDocTypeLayout - appelle getdoctype en GET et met la mise en page en cache", async () => {
+function freshMemo() {
+  const time = clock();
+  return { time, memo: createDocTypeLayoutMemo({ now: time.now }) };
+}
+
+Deno.test("fetchDocTypeLayout - appelle getdoctype en GET et mémorise la mise en page", async () => {
   const calls: Call[] = [];
   const client = fakeClient(() => SALES_INVOICE_GETDOCTYPE, calls);
-  const cache = new MemoryCache();
+  const { memo } = freshMemo();
 
-  const first = await fetchDocTypeLayout(client, "Sales Invoice", { cache });
-  const second = await fetchDocTypeLayout(client, "Sales Invoice", { cache });
+  const first = await fetchDocTypeLayout(client, "Sales Invoice", { memo });
+  const second = await fetchDocTypeLayout(client, "Sales Invoice", { memo });
 
   assertEquals(first?.preview[0], "customer_name");
   assertEquals(second, first);
@@ -423,37 +535,32 @@ Deno.test("fetchDocTypeLayout - appelle getdoctype en GET et met la mise en page
   }]);
 });
 
-Deno.test("fetchDocTypeLayout - un cache par DocType", async () => {
+Deno.test("fetchDocTypeLayout - relit ERPNext une fois le TTL d'une heure écoulé", async () => {
   const calls: Call[] = [];
   const client = fakeClient(() => SALES_INVOICE_GETDOCTYPE, calls);
-  const cache = new MemoryCache();
+  const { memo, time } = freshMemo();
 
-  await fetchDocTypeLayout(client, "Sales Invoice", { cache });
-  await fetchDocTypeLayout(client, "Quotation", { cache });
+  await fetchDocTypeLayout(client, "Sales Invoice", { memo });
+  time.advance(DOCTYPE_LAYOUT_TTL_MS - 1);
+  await fetchDocTypeLayout(client, "Sales Invoice", { memo });
+  assertEquals(calls.length, 1);
+  time.advance(1);
+  await fetchDocTypeLayout(client, "Sales Invoice", { memo });
+  assertEquals(calls.length, 2);
+});
+
+Deno.test("fetchDocTypeLayout - un mémo par DocType", async () => {
+  const calls: Call[] = [];
+  const client = fakeClient(() => SALES_INVOICE_GETDOCTYPE, calls);
+  const { memo } = freshMemo();
+
+  await fetchDocTypeLayout(client, "Sales Invoice", { memo });
+  await fetchDocTypeLayout(client, "Quotation", { memo });
 
   assertEquals(calls.map((call) => call.args.doctype), [
     "Sales Invoice",
     "Quotation",
   ]);
-});
-
-Deno.test("fetchDocTypeLayout - le TTL de la mise en page est d'une heure", async () => {
-  assertEquals(DOCTYPE_LAYOUT_TTL_MS, 60 * 60 * 1000);
-  const ttls: number[] = [];
-  const cache = new MemoryCache();
-  const set = cache.set.bind(cache);
-  cache.set = <T>(key: string, value: T, ttlMs: number) => {
-    ttls.push(ttlMs);
-    set(key, value, ttlMs);
-  };
-
-  await fetchDocTypeLayout(
-    fakeClient(() => SALES_INVOICE_GETDOCTYPE),
-    "Sales Invoice",
-    { cache },
-  );
-
-  assertEquals(ttls, [DOCTYPE_LAYOUT_TTL_MS]);
 });
 
 Deno.test("fetchDocTypeLayout - fail-soft : une erreur renvoie null et se journalise", async () => {
@@ -463,7 +570,7 @@ Deno.test("fetchDocTypeLayout - fail-soft : une erreur renvoie null et se journa
   });
 
   const layout = await fetchDocTypeLayout(client, "Sales Invoice", {
-    cache: new MemoryCache(),
+    memo: freshMemo().memo,
     log: (message) => logs.push(message),
   });
 
@@ -477,31 +584,73 @@ Deno.test("fetchDocTypeLayout - une réponse inexploitable renvoie null", async 
   const layout = await fetchDocTypeLayout(
     fakeClient(() => ({ docs: [] })),
     "Sales Invoice",
-    { cache: new MemoryCache(), log: () => {} },
+    { memo: freshMemo().memo, log: () => {} },
   );
   assertEquals(layout, null);
 });
 
-Deno.test("fetchDocTypeLayout - un échec est mémorisé brièvement, sans rappeler ERPNext", async () => {
+Deno.test("fetchDocTypeLayout - un échec est mémorisé 60 s puis retenté", async () => {
   const calls: Call[] = [];
+  let fail = true;
   const client = fakeClient(() => {
-    throw new Error("boom");
+    if (fail) throw new Error("boom");
+    return SALES_INVOICE_GETDOCTYPE;
   }, calls);
-  const cache = new MemoryCache();
+  const { memo, time } = freshMemo();
+  const options = { memo, log: () => {} };
 
-  await fetchDocTypeLayout(client, "Sales Invoice", { cache, log: () => {} });
-  const again = await fetchDocTypeLayout(client, "Sales Invoice", {
-    cache,
-    log: () => {},
-  });
+  assertEquals(
+    await fetchDocTypeLayout(client, "Sales Invoice", options),
+    null,
+  );
+  time.advance(DOCTYPE_LAYOUT_FAILURE_TTL_MS - 1);
+  assertEquals(
+    await fetchDocTypeLayout(client, "Sales Invoice", options),
+    null,
+  );
+  assertEquals(calls.length, 1);
 
-  assertEquals(again, null);
+  fail = false;
+  time.advance(1);
+  const layout = await fetchDocTypeLayout(client, "Sales Invoice", options);
+  assertEquals(calls.length, 2);
+  assertEquals(layout?.preview[0], "customer_name");
+});
+
+Deno.test("fetchDocTypeLayout - le mémo est borné et évince le plus ancien DocType", async () => {
+  const calls: Call[] = [];
+  const client = fakeClient(() => SALES_INVOICE_GETDOCTYPE, calls);
+  const memo = createDocTypeLayoutMemo({ maxEntries: 2, now: clock().now });
+
+  for (const doctype of ["A", "B", "C"]) {
+    await fetchDocTypeLayout(client, doctype, { memo });
+  }
+  await fetchDocTypeLayout(client, "A", { memo });
+
+  // A a été évincé par C : relu.
+  assertEquals(calls.map((call) => call.args.doctype), ["A", "B", "C", "A"]);
+});
+
+Deno.test("fetchDocTypeLayout - ne lit aucune mise en page pour DocType ni Company", async () => {
+  assertEquals([...DOCTYPE_LAYOUT_SKIPPED].sort(), ["Company", "DocType"]);
+  const calls: Call[] = [];
+  const client = fakeClient(() => SALES_INVOICE_GETDOCTYPE, calls);
+  const { memo } = freshMemo();
+
+  for (const doctype of ["DocType", "Company"]) {
+    assertEquals(await fetchDocTypeLayout(client, doctype, { memo }), null);
+  }
+  assertEquals(calls, []);
+  assertEquals(memo.size, 0);
+
+  // Les autres DocTypes, même au nom voisin, sont lus.
+  await fetchDocTypeLayout(client, "Company Group", { memo });
   assertEquals(calls.length, 1);
 });
 
 Deno.test("fetchDocTypeLayout - un client sans callMethodRaw ne fait pas échouer l'appelant", async () => {
   const layout = await fetchDocTypeLayout({} as FrappeClient, "Sales Invoice", {
-    cache: new MemoryCache(),
+    memo: freshMemo().memo,
     log: () => {},
   });
   assertEquals(layout, null);

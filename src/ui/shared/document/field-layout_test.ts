@@ -2,8 +2,8 @@ import { assertEquals } from "@std/assert";
 import { documentFieldOf } from "./model.ts";
 import {
   fieldLayoutOf,
+  layoutDocumentFields,
   layoutLabelOf,
-  layoutScalarFields,
 } from "./field-layout.ts";
 import type { DocumentFieldLayout } from "./types.ts";
 
@@ -72,17 +72,19 @@ Deno.test("fieldLayoutOf - écarte les entrées mal formées sans perdre le rest
   );
 });
 
-Deno.test("layoutScalarFields - l'aperçu suit l'ordre du DocType, le reste suit les sections", () => {
+Deno.test("layoutDocumentFields - l'aperçu suit l'ordre du DocType, le reste suit les sections", () => {
   const layout = fieldLayoutOf(LAYOUT) as DocumentFieldLayout;
-  const result = layoutScalarFields(
-    fields({
-      outstanding_amount: 12,
-      po_no: "PO-9",
-      grand_total: 100,
-      company: "Acme",
-      posting_date: "2026-10-01",
-      customer_name: "Ada",
-    }),
+  const result = layoutDocumentFields(
+    {
+      scalars: fields({
+        outstanding_amount: 12,
+        po_no: "PO-9",
+        grand_total: 100,
+        company: "Acme",
+        posting_date: "2026-10-01",
+        customer_name: "Ada",
+      }),
+    },
     layout,
   );
 
@@ -104,25 +106,39 @@ Deno.test("layoutScalarFields - l'aperçu suit l'ordre du DocType, le reste suit
   );
 });
 
-Deno.test("layoutScalarFields - un champ d'aperçu sans valeur n'est pas affiché", () => {
+Deno.test("layoutDocumentFields - un champ d'aperçu sans valeur n'est pas affiché", () => {
   const layout = fieldLayoutOf(LAYOUT) as DocumentFieldLayout;
-  const result = layoutScalarFields(
-    fields({ customer_name: "Ada", posting_date: null, grand_total: "" }),
+  const result = layoutDocumentFields(
+    {
+      scalars: fields({
+        customer_name: "Ada",
+        posting_date: null,
+        grand_total: "",
+      }),
+    },
     layout,
   );
   assertEquals(result.fields.map((field) => field.key), ["customer_name"]);
   assertEquals(result.sections, []);
 });
 
-Deno.test("layoutScalarFields - 0 et false sont des valeurs, null et vide non", () => {
+Deno.test("layoutDocumentFields - 0 et false sont des valeurs, null et vide non", () => {
   const layout = fieldLayoutOf({
     version: 1,
     preview: ["total"],
     sections: [{ label: "Flags", fields: ["is_pos", "rate", "note", "gone"] }],
     labels: {},
   }) as DocumentFieldLayout;
-  const result = layoutScalarFields(
-    fields({ total: 0, is_pos: false, rate: 0, note: "", gone: null }),
+  const result = layoutDocumentFields(
+    {
+      scalars: fields({
+        total: 0,
+        is_pos: false,
+        rate: 0,
+        note: "",
+        gone: null,
+      }),
+    },
     layout,
   );
   assertEquals(result.fields.map((field) => field.key), ["total"]);
@@ -132,10 +148,10 @@ Deno.test("layoutScalarFields - 0 et false sont des valeurs, null et vide non", 
   );
 });
 
-Deno.test("layoutScalarFields - les champs hors mise en page vont dans un dernier groupe sans libellé", () => {
+Deno.test("layoutDocumentFields - les champs hors mise en page vont dans un dernier groupe sans libellé", () => {
   const layout = fieldLayoutOf(LAYOUT) as DocumentFieldLayout;
-  const result = layoutScalarFields(
-    fields({ custom_note: "x", po_no: "PO-9", other_custom: 1 }),
+  const result = layoutDocumentFields(
+    { scalars: fields({ custom_note: "x", po_no: "PO-9", other_custom: 1 }) },
     layout,
   );
   assertEquals(
@@ -151,7 +167,7 @@ Deno.test("layoutScalarFields - les champs hors mise en page vont dans un dernie
   );
 });
 
-Deno.test("layoutScalarFields - un champ cité deux fois n'apparaît qu'une fois", () => {
+Deno.test("layoutDocumentFields - un champ cité deux fois n'apparaît qu'une fois", () => {
   const layout = fieldLayoutOf({
     version: 1,
     preview: ["a", "a"],
@@ -161,7 +177,10 @@ Deno.test("layoutScalarFields - un champ cité deux fois n'apparaît qu'une fois
     ],
     labels: {},
   }) as DocumentFieldLayout;
-  const result = layoutScalarFields(fields({ a: 1, b: 2, c: 3 }), layout);
+  const result = layoutDocumentFields(
+    { scalars: fields({ a: 1, b: 2, c: 3 }) },
+    layout,
+  );
   assertEquals(result.fields.map((field) => field.key), ["a"]);
   assertEquals(
     result.sections.map((section) => section.fields.map((f) => f.key)),
@@ -169,9 +188,13 @@ Deno.test("layoutScalarFields - un champ cité deux fois n'apparaît qu'une fois
   );
 });
 
-Deno.test("layoutScalarFields - sans valeur, ni aperçu ni sections", () => {
+Deno.test("layoutDocumentFields - sans valeur, ni aperçu ni sections", () => {
   const layout = fieldLayoutOf(LAYOUT) as DocumentFieldLayout;
-  assertEquals(layoutScalarFields([], layout), { fields: [], sections: [] });
+  assertEquals(layoutDocumentFields({ scalars: [] }, layout), {
+    fields: [],
+    longFields: [],
+    sections: [],
+  });
 });
 
 Deno.test("layoutLabelOf - seul un libellé propre à la mise en page compte", () => {
@@ -182,4 +205,98 @@ Deno.test("layoutLabelOf - seul un libellé propre à la mise en page compte", (
   assertEquals(layoutLabelOf(layout, "constructor"), undefined);
   assertEquals(layoutLabelOf(layout, "toString"), undefined);
   assertEquals(layoutLabelOf(undefined, "customer_name"), undefined);
+});
+
+const LONG_LAYOUT = fieldLayoutOf({
+  version: 1,
+  preview: ["customer_name", "remarks"],
+  sections: [
+    { label: null, fields: ["customer_name", "company"] },
+    { label: "Terms", fields: ["terms", "tc_name"] },
+    { label: "Notes", fields: ["remarks", "internal_note"] },
+  ],
+  labels: {},
+}) as DocumentFieldLayout;
+
+Deno.test("layoutDocumentFields - un champ long hors aperçu se replie dans sa section ERPNext", () => {
+  const result = layoutDocumentFields(
+    {
+      scalars: fields({ company: "Acme", tc_name: "Net 30" }),
+      longFields: fields({ terms: "Line one\nLine two" }),
+    },
+    LONG_LAYOUT,
+  );
+
+  assertEquals(result.longFields, []);
+  assertEquals(
+    result.sections.map((section) => [
+      section.key,
+      section.label,
+      section.fields.map((field) => field.key),
+      section.longFields.map((field) => field.key),
+    ]),
+    [
+      ["section-0", null, ["company"], []],
+      // Le champ long suit l'ordre du DocType, avec les champs courts à côté.
+      ["section-1", "Terms", ["tc_name"], ["terms"]],
+    ],
+  );
+});
+
+Deno.test("layoutDocumentFields - un champ long d'aperçu garde son traitement de champ long", () => {
+  const result = layoutDocumentFields(
+    {
+      scalars: fields({ customer_name: "Ada" }),
+      longFields: fields({ remarks: "Pinned\nnote", terms: "Folded\nterms" }),
+    },
+    LONG_LAYOUT,
+  );
+
+  assertEquals(result.fields.map((field) => field.key), ["customer_name"]);
+  assertEquals(result.longFields.map((field) => field.key), ["remarks"]);
+  // `remarks` n'est pas répété dans « Tous les champs ».
+  assertEquals(
+    result.sections.flatMap((section) =>
+      section.longFields.map((field) => field.key)
+    ),
+    ["terms"],
+  );
+});
+
+Deno.test("layoutDocumentFields - une section qui n'a que des champs longs est conservée", () => {
+  const result = layoutDocumentFields(
+    { scalars: [], longFields: fields({ internal_note: "a\nb" }) },
+    LONG_LAYOUT,
+  );
+  assertEquals(
+    result.sections.map((section) => [
+      section.label,
+      section.fields.length,
+      section.longFields.length,
+    ]),
+    [["Notes", 0, 1]],
+  );
+});
+
+Deno.test("layoutDocumentFields - un champ long hors mise en page clôt la liste, un champ long vide disparaît", () => {
+  const result = layoutDocumentFields(
+    {
+      scalars: fields({ company: "Acme" }),
+      longFields: fields({ custom_blob: "x\ny", terms: "", remarks: null }),
+    },
+    LONG_LAYOUT,
+  );
+
+  assertEquals(result.longFields, []);
+  assertEquals(
+    result.sections.map((section) => [
+      section.key,
+      section.fields.map((field) => field.key),
+      section.longFields.map((field) => field.key),
+    ]),
+    [
+      ["section-0", ["company"], []],
+      ["section-other", [], ["custom_blob"]],
+    ],
+  );
 });

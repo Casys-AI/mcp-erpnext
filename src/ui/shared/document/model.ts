@@ -8,8 +8,8 @@ import {
 } from "./child-table-model.ts";
 import {
   fieldLayoutOf,
+  layoutDocumentFields,
   layoutLabelOf,
-  layoutScalarFields,
 } from "./field-layout.ts";
 import type {
   DocumentCollectionModel,
@@ -296,7 +296,7 @@ export function documentModelOf(payload: unknown): DocumentModel | null {
   };
 
   const scalars: DocumentFieldModel[] = [];
-  const longFields: DocumentFieldModel[] = [];
+  const longCandidates: DocumentFieldModel[] = [];
   const progressFields: DocumentFieldModel[] = [];
   const collections: DocumentCollectionModel[] = [];
   const childTables = [];
@@ -313,6 +313,8 @@ export function documentModelOf(payload: unknown): DocumentModel | null {
       continue;
     }
     if (Array.isArray(value)) {
+      // Une collection vide n'apporte rien à une fiche résumée par ERPNext.
+      if (layout && value.length === 0) continue;
       collections.push(
         collectionOf(
           key,
@@ -325,12 +327,15 @@ export function documentModelOf(payload: unknown): DocumentModel | null {
 
     const field = fieldOf(key, value);
     if (field.kind === "progress") progressFields.push(field);
-    else if (isLongField(field)) longFields.push(field);
+    else if (isLongField(field)) longCandidates.push(field);
     else scalars.push(field);
   }
 
-  const placed = layout ? layoutScalarFields(scalars, layout) : undefined;
+  const placed = layout
+    ? layoutDocumentFields({ scalars, longFields: longCandidates }, layout)
+    : undefined;
   const fields = placed ? placed.fields : scalars;
+  const longFields = placed ? placed.longFields : longCandidates;
 
   const docstatus = numericValue(envelope.document.docstatus);
   const status = statusOf(envelope.document);

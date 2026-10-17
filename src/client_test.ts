@@ -12,8 +12,7 @@ import {
   ToolFilterError,
 } from "./client.ts";
 import { type FrappeClient, setFrappeClient } from "./api/frappe-client.ts";
-import { MemoryCache } from "./cache/memory.ts";
-import { setCache } from "./cache/cache.ts";
+import { docTypeLayoutMemo } from "./tools/doctype-layout.ts";
 import { AmbiguousLinkError } from "./api/resolve.ts";
 import { linkDisambiguationRequestKey } from "./mrtr/link-disambiguation.ts";
 import {
@@ -869,18 +868,18 @@ type ViewerResult = {
   _meta?: Record<string, unknown>;
 };
 
-/** Fait tourner `run` avec un faux client Frappe et un cache neuf. */
+/** Fait tourner `run` avec un faux client Frappe et un mémo de mises en page vide. */
 async function withFrappe(
   frappe: Record<string, unknown>,
   run: () => Promise<void>,
 ): Promise<void> {
-  setCache(new MemoryCache());
+  docTypeLayoutMemo.clear();
   setFrappeClient(frappe as unknown as FrappeClient);
   try {
     await run();
   } finally {
     setFrappeClient(null);
-    setCache(new MemoryCache());
+    docTypeLayoutMemo.clear();
   }
 }
 
@@ -975,6 +974,39 @@ Deno.test("buildHandlersMap - field layout is fetched once per DocType per hour"
     await handler({ name: "LEAD-001" });
     await handler({ name: "LEAD-001" });
     assertEquals(calls, 1);
+  });
+});
+
+Deno.test("buildHandlersMap - Company and DocType documents never trigger a layout read", async () => {
+  let calls = 0;
+  const probe = (doctype: string): ErpNextTool => ({
+    name: `erpnext_${doctype.toLowerCase()}_document_probe`,
+    description: "Test-only viewer document",
+    category: "setup",
+    inputSchema: { type: "object" },
+    annotations: { readOnlyHint: true },
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doc-viewer" } },
+    handler: async () => ({ data: { doctype, name: "X-001" } }),
+  });
+  await withFrappe({
+    callMethodRaw: () => {
+      calls++;
+      return Promise.resolve(LEAD_GETDOCTYPE);
+    },
+  }, async () => {
+    const tools = [probe("Company"), probe("DocType")];
+    const client = new ErpNextToolsClient();
+    (client as unknown as { tools: ErpNextTool[] }).tools = tools;
+    const handlers = client.buildHandlersMap();
+    for (const tool of tools) {
+      const result = await handlers.get(tool.name)!({}) as ViewerResult;
+      assertEquals(viewerBlock(result)._fieldLayout, undefined);
+      assertEquals(result.structuredContent.data, {
+        doctype: tool.name.includes("company") ? "Company" : "DocType",
+        name: "X-001",
+      });
+    }
+    assertEquals(calls, 0);
   });
 });
 

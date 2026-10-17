@@ -76,11 +76,16 @@ export interface ChildTableModel {
   total?: ChildTableTotal;
 }
 
-/** Un groupe de champs de la mise en page ERPNext ; `label: null` : sans titre. */
+/**
+ * Un groupe de champs de la mise en page ERPNext ; `label: null` : sans titre.
+ * `longFields` : les champs longs (texte multiligne, JSON) du même groupe, à
+ * rendre pleine largeur sous la grille de `fields`.
+ */
 export interface DocumentSectionModel {
   key: string;
   label: string | null;
   fields: readonly DocumentFieldModel[];
+  longFields: readonly DocumentFieldModel[];
 }
 
 export interface DocumentModel {
@@ -91,10 +96,11 @@ export interface DocumentModel {
   /** Avec mise en page : les champs d'aperçu qui ont une valeur. */
   fields: readonly DocumentFieldModel[];
   /**
-   * Présent seulement avec une mise en page : le reste des champs scalaires
-   * non vides, groupés comme le DocType (groupes vides omis).
+   * Présent seulement avec une mise en page : le reste des champs non vides
+   * (courts et longs), groupés comme le DocType (groupes vides omis).
    */
   sections?: readonly DocumentSectionModel[];
+  /** Avec mise en page : seulement les champs longs d'aperçu. */
   longFields: readonly DocumentFieldModel[];
   progressFields: readonly DocumentFieldModel[];
   collections: readonly DocumentCollectionModel[];

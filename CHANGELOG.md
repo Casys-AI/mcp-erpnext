@@ -22,12 +22,14 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   version. This App identity does not announce a stable package release.
 - Document detail views (the document viewer and the details opened from lists
   and charts) first show the fields ERPNext marks as preview or bold in each
-  DocType, under their ERPNext labels. Every other field is folded into a closed
-  "All fields" block grouped by the DocType's own sections. Custom fields follow
-  the same markers, and Company keeps its dedicated sections. The layout is read
-  once an hour per DocType and travels in `_meta["io.casys/viewer"]`, never in
-  the text or structured content the model reads; if ERPNext refuses the
-  metadata, the full field list is shown as before.
+  DocType, under their ERPNext labels. Every other field, including long text
+  fields that are not in the preview, is folded into a closed "All fields" block
+  grouped by the DocType's own sections; empty collections are hidden. Custom
+  fields follow the same markers, and Company keeps its dedicated sections. The
+  layout is read at most once an hour per DocType, whatever the cache settings,
+  and travels in `_meta["io.casys/viewer"]`, never in the text or structured
+  content the model reads; if ERPNext refuses the metadata, the full field list
+  is shown as before.
 
 ### Fixed
 

@@ -180,6 +180,9 @@ in-process implementation — a hand-rolled TTL `Map`, zero dependencies;
   `ctx.client.invalidate(doctype, name)` itself afterward.
 - **Config**: `MCP_CACHE_ENABLED` (`"false"` disables caching entirely, default
   enabled) and `MCP_CACHE_TTL_MS` (default `15000`).
+- **DocType layouts**: `src/tools/doctype-layout.ts` keeps its own in-process
+  memo (bounded to 200 DocTypes, 1 h on success, 60 s on failure), independent
+  of `MCP_CACHE_ENABLED`. Company and DocType are never read.
 - **Warming**: `src/cache/warm.ts`'s `warmCache()` optionally pre-populates the
   cache on startup by calling a configured set of read-only `_list` tool
   handlers with no filters — matching the exact cache key a real unfiltered call

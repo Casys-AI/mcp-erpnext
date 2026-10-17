@@ -5,6 +5,11 @@
  * Sinon : drillDown inchangé (phrase au modèle), ou null si rien n'est dispo.
  */
 
+import {
+  type ClickIntent,
+  type ClickIntentSingleResult,
+  detailOnClickIntent,
+} from "../../shared/click-intent.ts";
 import { type Jump, jumpFromHint, type NavHint } from "../../shared/jumps.ts";
 
 /** La paire de sauts portée par `_jumps` dans la réponse du serveur. */
@@ -25,6 +30,94 @@ export interface KpiInteractionPlan {
   updateContext: boolean;
   toggleLevel: boolean;
   sendMessage: boolean;
+}
+
+/**
+ * Seule une courbe (sparkline) peut être ajoutée au contexte : un KPI scalaire
+ * n'a pas de contexte disponible, même sur un hôte qui sait le recevoir.
+ */
+export function kpiContextEnabled(
+  contextSupported: boolean,
+  hasSparkline: boolean,
+): boolean {
+  return contextSupported && hasSparkline;
+}
+
+/** Ce que déclenche le clic simple sur un élément KPI. */
+export type KpiClickAction = "context" | "detail" | "none";
+
+/**
+ * Règle unique : le clic est réservé au contexte quand l'élément peut être
+ * sélectionné ; sinon il ouvre le détail local (un saut). Un détail purement
+ * conversationnel (message au modèle) ne s'ouvre jamais au clic : le clic
+ * reste sans effet (`none`) et le title annonce double-clic / Entrée.
+ */
+export function kpiClickAction(
+  contextEnabled: boolean,
+  hasJump: boolean,
+  _hasMessage: boolean,
+): KpiClickAction {
+  if (contextEnabled) return "context";
+  return hasJump ? "detail" : "none";
+}
+
+/**
+ * Clé i18n du title de l'élément, ou undefined s'il n'a aucun geste utile.
+ * Le texte dit toujours le geste réellement actif.
+ */
+export function kpiHintKey(
+  target: "number" | "trend",
+  contextEnabled: boolean,
+  hasJump: boolean,
+  hasMessage: boolean,
+): string | undefined {
+  if (!hasJump && !hasMessage) return undefined;
+  if (contextEnabled) return "kpi.drilldown.title_context";
+  if (hasJump) {
+    return target === "number"
+      ? "kpi.drilldown.title_detail"
+      : "kpi.drilldown.title_trend";
+  }
+  return "kpi.drilldown.title_message";
+}
+
+/** aria-keyshortcuts aligné sur les gestes actifs (jamais un raccourci mort). */
+export function kpiKeyShortcuts(
+  contextEnabled: boolean,
+  hasJump: boolean,
+  hasMessage: boolean,
+): string | undefined {
+  if (contextEnabled) return "Space Enter";
+  if (hasJump) return "Enter Space";
+  return hasMessage ? "Enter" : undefined;
+}
+
+/**
+ * L'intent d'arbitre d'un élément KPI. Mode `detail` : intent de détail local
+ * (ni action simple, ni conversation). Sinon : clic = contexte, double-clic ou
+ * Entrée = détail.
+ */
+export function kpiClickIntent(target: {
+  key: string;
+  click: KpiClickAction;
+  hasJump: boolean;
+  onSingle: () => ClickIntentSingleResult;
+  onDouble: () => void;
+  runConversation?: (
+    action: () => void,
+    restored: Promise<boolean>,
+  ) => Promise<boolean>;
+}): ClickIntent {
+  if (target.click === "detail") {
+    return detailOnClickIntent(target.key, target.onDouble);
+  }
+  return {
+    key: target.key,
+    onSingle: target.onSingle,
+    onDouble: target.onDouble,
+    runConversation: target.runConversation,
+    doublePolicy: target.hasJump ? "local" : "after-context",
+  };
 }
 
 /** Les gestes de contexte et de detail restent strictement independants. */

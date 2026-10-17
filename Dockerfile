@@ -6,6 +6,11 @@ WORKDIR /app/src/ui
 COPY src/ui/package.json src/ui/package-lock.json ./
 RUN npm ci
 COPY src/ui/ ./
+# Viewers import shared contracts from outside src/ui (buy-evidence-viewer ->
+# ../../../buy/*.ts). Every top-level src/ directory imported by a viewer must
+# be copied here, or the UI build cannot resolve it. Guarded by
+# src/ui/dockerfile_test.ts.
+COPY src/buy/ /app/src/buy/
 RUN node build-all.mjs
 
 # ── Stage 2: runtime ────────────────────────────────────────────────────────

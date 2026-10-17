@@ -13,6 +13,7 @@ import type {
   DocumentContextController,
 } from "../document/context-interaction.ts";
 import { documentContextItem } from "../document/context-items.ts";
+import type { LifecycleOutcome } from "../document/lifecycle-actions.ts";
 import { interpretHostPurchaseInvoiceSubmit } from "../document/purchase-invoice.ts";
 import { documentModelOf } from "../document/model.ts";
 import { useT } from "../i18n-hook";
@@ -418,7 +419,7 @@ export function DoclistBody(
   async function handleDetailAction(
     toolName: string,
     args: Record<string, unknown>,
-  ): Promise<boolean | { unconfirmed: true } | { transport: true }> {
+  ): Promise<LifecycleOutcome> {
     const actionEnvelope = expandedRef.current.data;
     if (
       fixture ||
@@ -442,14 +443,18 @@ export function DoclistBody(
           await canonicalRereadSameRow(actionEnvelope);
           return { transport: true };
         }
-        return false;
+        // Timeout ou échec d'hôte : le texte est montré, jamais « Action failed » nu.
+        return { error: cause instanceof Error ? cause.message : null };
       }
       if (!actionTargetIsCurrent(actionEnvelope)) return false;
       const decision = interpretHostPurchaseInvoiceSubmit(toolName, args, {
         result,
       });
       if (decision.applies) {
-        if (decision.kind === "error") return false;
+        // Le refus du serveur n'est pas avalé : son texte remonte à l'inspecteur.
+        if (decision.kind === "error") {
+          return { error: extractToolResultText(result) ?? null };
+        }
         if (decision.emitCommittedEvent) {
           const event = documentChangeForTool(
             actionEnvelope,
@@ -460,10 +465,13 @@ export function DoclistBody(
           if (event) notifyDocumentChanged(event);
           else if (expandedId) onMutated?.(expandedId);
         }
-        await canonicalRereadSameRow(actionEnvelope);
-        return decision.claimSubmitted ? true : { unconfirmed: true };
+        const refreshed = await canonicalRereadSameRow(actionEnvelope);
+        if (!decision.claimSubmitted) return { unconfirmed: true };
+        return refreshed ? true : { refreshPending: true };
       }
-      if (result.isError) return false;
+      if (result.isError) {
+        return { error: extractToolResultText(result) ?? null };
+      }
       const currentId = expandedId;
       const event = documentChangeForTool(
         actionEnvelope,
@@ -473,9 +481,12 @@ export function DoclistBody(
       );
       if (event) notifyDocumentChanged(event);
       else if (currentId) onMutated?.(currentId);
-      return await canonicalRereadSameRow(actionEnvelope);
-    } catch {
-      return false;
+      // La mutation a réussi : une relecture ratée n'est pas un échec.
+      return (await canonicalRereadSameRow(actionEnvelope))
+        ? true
+        : { refreshPending: true };
+    } catch (cause) {
+      return { error: cause instanceof Error ? cause.message : null };
     }
   }
 
@@ -533,7 +544,7 @@ export function DoclistBody(
             <button
               type="button"
               onClick={onRefresh}
-              class="ml-auto rounded-[3px] border border-warn/40 px-2 py-0.5 uppercase tracking-[0.08em] text-warn hover:bg-warn/12"
+              class="ml-auto rounded-[3px] border border-warn/40 px-2 py-0.5 uppercase tracking-live text-warn hover:bg-warn/12"
             >
               {t("nav.refresh")}
             </button>

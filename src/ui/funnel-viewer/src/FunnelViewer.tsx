@@ -28,7 +28,6 @@ import {
 } from "~/shared/refresh";
 import { FUNNEL_FIXTURE, isFixtureMode } from "./fixture.ts";
 import type { FunnelData, FunnelStage } from "./types.ts";
-import { formatNumber } from "~/shared/format";
 import { type TFunction, useT } from "~/shared/i18n-hook";
 import { type DrillDownChannel, sharedLabel } from "~/shared/drill-down";
 import { useViewerNav } from "~/shared/useViewerNav";
@@ -211,6 +210,7 @@ function WideFunnelChart(
     isContextActive,
   }: {
     stages: FunnelStage[];
+    /** Devise du payload : symbole des valeurs d'étape. */
     currency?: string;
     contextEnabled: boolean;
     /** Indique si cette étape a un saut serveur disponible. */
@@ -384,7 +384,7 @@ function WideFunnelChart(
                   style={{
                     fontFamily: "var(--font-mono)",
                     fontSize: 10.5,
-                    letterSpacing: "0.06em",
+                    letterSpacing: "var(--tracking-chip)",
                     textTransform: "uppercase",
                     color: "var(--color-ink-muted)",
                   }}
@@ -893,7 +893,7 @@ function FunnelContent(
                     style={{
                       fontFamily: "var(--font-mono)",
                       fontSize: 10.5,
-                      letterSpacing: "0.06em",
+                      letterSpacing: "var(--tracking-chip)",
                       textTransform: "uppercase",
                       color: "var(--color-ink-faint)",
                     }}

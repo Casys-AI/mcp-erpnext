@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { FrappeFilter } from "../api/types.ts";
 import { analyticsTools } from "./analytics.ts";
@@ -61,26 +61,27 @@ for (const timezone of ["America/Los_Angeles", "Asia/Taipei"]) {
         let filters: FrappeFilter[] | undefined;
         const client = mockClient(async (_doctype, options) => {
           filters = options.filters;
+          // Devise explicite sur chaque ligne : les KPI/tendances monétaires
+          // refusent désormais une devise inconnue (MISSING_CURRENCY) au lieu
+          // de deviner. Les dates invalides lèvent INVALID_DATE (test dédié).
           return [
             {
               customer_name: "Acme",
               grand_total: 20,
               transaction_date: "2025-11-01",
+              currency: "EUR",
             },
             {
               customer_name: "Acme",
               grand_total: 50,
               transaction_date: "2025-12-01",
+              currency: "EUR",
             },
             {
               customer_name: "Acme",
               grand_total: 100,
               transaction_date: "2026-01-01",
-            },
-            {
-              customer_name: "Acme",
-              grand_total: 999,
-              transaction_date: "not-a-date",
+              currency: "EUR",
             },
           ];
         });
@@ -93,6 +94,7 @@ for (const timezone of ["America/Los_Angeles", "Asia/Taipei"]) {
         assertEquals(result.datasets[0].values, [20, 50, 100]);
         assertEquals(filters, [
           ["transaction_date", ">=", "2025-11-01"],
+          ["transaction_date", "<=", "2026-01-15"],
           ["docstatus", "!=", 2],
         ]);
       });
@@ -105,10 +107,9 @@ for (const timezone of ["America/Los_Angeles", "Asia/Taipei"]) {
       const client = mockClient(async (_doctype, options) => {
         filters = options.filters;
         return [
-          { grand_total: 10, transaction_date: "2025-08-01" },
-          { grand_total: 50, transaction_date: "2025-12-01" },
-          { grand_total: 100, transaction_date: "2026-01-01" },
-          { grand_total: 999, transaction_date: "not-a-date" },
+          { grand_total: 10, transaction_date: "2025-08-01", currency: "EUR" },
+          { grand_total: 50, transaction_date: "2025-12-01", currency: "EUR" },
+          { grand_total: 100, transaction_date: "2026-01-01", currency: "EUR" },
         ];
       });
       const result = await getTool("erpnext_kpi_revenue").handler({}, {
@@ -133,6 +134,7 @@ for (const timezone of ["America/Los_Angeles", "Asia/Taipei"]) {
       ]);
       assertEquals(filters, [
         ["transaction_date", ">=", "2025-08-01"],
+        ["transaction_date", "<=", "2026-01-15"],
         ["docstatus", "!=", 2],
       ]);
     });
@@ -148,7 +150,11 @@ for (const timezone of ["America/Los_Angeles", "Asia/Taipei"]) {
       await getTool("erpnext_kpi_orders").handler({}, { client });
 
       assertEquals(filters, [
-        [["transaction_date", ">=", "2026-01-01"], ["docstatus", "!=", 2]],
+        [
+          ["transaction_date", ">=", "2026-01-01"],
+          ["transaction_date", "<=", "2026-01-15"],
+          ["docstatus", "!=", 2],
+        ],
         [
           ["transaction_date", ">=", "2025-12-01"],
           ["transaction_date", "<=", "2025-12-31"],
@@ -216,3 +222,27 @@ for (const timezone of ["America/Los_Angeles", "Asia/Taipei"]) {
     });
   });
 }
+
+// Une date illisible n'est plus ignorée en silence : la tendance et le KPI
+// monétaires échouent explicitement (INVALID_DATE) plutôt que de sous-évaluer
+// le total. Le compte de résultat, non monétaire scopé, conserve le saut.
+Deno.test("revenue trend and revenue KPI reject an unreadable transaction_date", async () => {
+  const client = mockClient(async () => [
+    {
+      customer_name: "Acme",
+      grand_total: 999,
+      transaction_date: "not-a-date",
+      currency: "EUR",
+    },
+  ]);
+  await assertRejects(
+    () => getTool("erpnext_revenue_trend").handler({ months: 3 }, { client }),
+    Error,
+    "INVALID_DATE",
+  );
+  await assertRejects(
+    () => getTool("erpnext_kpi_revenue").handler({}, { client }),
+    Error,
+    "INVALID_DATE",
+  );
+});

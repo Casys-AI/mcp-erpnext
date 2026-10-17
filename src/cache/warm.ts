@@ -7,7 +7,8 @@
  * @module lib/erpnext/cache/warm
  */
 
-import { getToolByName } from "../client.ts";
+import { allTools } from "../tools/mod.ts";
+import type { ErpNextTool } from "../tools/types.ts";
 import { getFrappeClient } from "../api/frappe-client.ts";
 import { env } from "../runtime.ts";
 
@@ -20,10 +21,17 @@ import { env } from "../runtime.ts";
  *
  * Configured via MCP_CACHE_WARM_TOOLS (comma-separated tool names). Unset or
  * empty disables warming entirely — no behavior change by default. Never
- * throws: every failure (unknown tool, non-read-only tool, network error) is
- * logged and skipped so one bad entry can't abort the rest or the server.
+ * throws: every failure (unknown tool, tool outside the active selection,
+ * non-read-only tool, network error) is logged and skipped so one bad entry
+ * can't abort the rest or the server.
+ *
+ * Names are resolved against `activeTools` (the tools the server actually
+ * exposes, after --categories/--exclude-*), so an excluded tool is never
+ * executed at startup. Defaults to every tool for standalone callers.
  */
-export async function warmCache(): Promise<void> {
+export async function warmCache(
+  activeTools: readonly ErpNextTool[] = allTools,
+): Promise<void> {
   const configured = env("MCP_CACHE_WARM_TOOLS");
   if (!configured?.trim()) return;
 
@@ -31,10 +39,12 @@ export async function warmCache(): Promise<void> {
   const names = configured.split(",").map((s) => s.trim()).filter(Boolean);
 
   for (const name of names) {
-    const tool = getToolByName(name);
+    const tool = activeTools.find((t) => t.name === name);
     if (!tool) {
       console.error(
-        `[mcp-erpnext] Cache warm: unknown tool "${name}", skipping`,
+        allTools.some((t) => t.name === name)
+          ? `[mcp-erpnext] Cache warm: "${name}" is not in active tool selection, skipping`
+          : `[mcp-erpnext] Cache warm: unknown tool "${name}", skipping`,
       );
       continue;
     }

@@ -173,7 +173,10 @@ export const accountingTools: ErpNextTool[] = [
     _meta: DOCLIST_META,
     description:
       "List Payment Entries. Filterable by payment_type, party_type, date range. " +
-      "Fields: name, payment_type, party_type, party, posting_date, paid_amount, currency. " +
+      "Fields: name, payment_type, party_type, party, posting_date, paid_amount, currency, " +
+      "received_amount, paid_from_account_currency, paid_to_account_currency. " +
+      "currency is an alias of paid_from_account_currency and applies to paid_amount. " +
+      "received_amount uses paid_to_account_currency. The party is the source for Receive and destination for Pay. " +
       "payment_type values: Receive, Pay, Internal Transfer.",
     category: "accounting",
     inputSchema: {
@@ -241,7 +244,9 @@ export const accountingTools: ErpNextTool[] = [
           "party",
           "posting_date",
           "paid_amount",
-          "currency",
+          "received_amount",
+          "paid_from_account_currency",
+          "paid_to_account_currency",
         ],
         filters,
         limit,
@@ -251,7 +256,10 @@ export const accountingTools: ErpNextTool[] = [
       return {
         doctype: "Payment Entry",
         count: docs.length,
-        data: docs,
+        data: docs.map((doc) => ({
+          ...doc,
+          currency: doc.paid_from_account_currency,
+        })),
         _meta: DOCLIST_META,
       };
     },

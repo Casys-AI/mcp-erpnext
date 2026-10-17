@@ -24,6 +24,7 @@ import type {
   ToolHandler,
   ToolHandlerContext,
 } from "@casys/mcp-server";
+import { resolveToolSelection, type ToolSelection } from "./tools/selection.ts";
 import { getFrappeClient } from "./api/frappe-client.ts";
 import { runWithLinkDisambiguation } from "./mrtr/link-disambiguation.ts";
 import {
@@ -143,6 +144,17 @@ export {
 };
 
 export type { ErpNextTool, ErpNextToolCategory };
+export {
+  assertNonEmptySelection,
+  resolveToolSelection,
+  ToolFilterError,
+} from "./tools/selection.ts";
+export type {
+  ToolFilterReason,
+  ToolFilterWarning,
+  ToolSelection,
+  ToolSelectionOptions,
+} from "./tools/selection.ts";
 
 // ============================================================================
 // Wire format types (MCP protocol)
@@ -184,8 +196,22 @@ export interface MCPToolWireFormat {
 
 /** Configuration options for {@link ErpNextToolsClient}. */
 export interface ErpNextToolsClientOptions {
-  /** Restrict tools to specific categories (e.g. `["selling", "stock"]`). Omit to load all. */
+  /**
+   * Restrict tools to specific categories (e.g. `["sales", "inventory"]`; see
+   * `getCategories()`). Omit to load all. Unknown names are ignored and
+   * reported in `ErpNextToolsClient.selection.warnings`.
+   */
   categories?: string[];
+  /**
+   * Remove whole categories from the selection (e.g. `["buy"]`). Applied after
+   * `categories`. Unknown names throw a `ToolFilterError`.
+   */
+  excludeCategories?: string[];
+  /**
+   * Remove individual tools by exact name (e.g. `["erpnext_file_list"]`).
+   * Applied after `categories`. Unknown names throw a `ToolFilterError`.
+   */
+  excludeTools?: string[];
   /** Enable MRTR forms for ambiguous Link-field resolution. Default: false. */
   enableLinkDisambiguation?: boolean;
 }
@@ -197,14 +223,17 @@ export interface ErpNextToolsClientOptions {
 export class ErpNextToolsClient {
   private tools: ErpNextTool[];
   private readonly enableLinkDisambiguation: boolean;
+  /** How the active tool list was resolved (warnings, effective filters). */
+  readonly selection: ToolSelection;
 
   constructor(options?: ErpNextToolsClientOptions) {
     this.enableLinkDisambiguation = options?.enableLinkDisambiguation ?? false;
-    if (options?.categories) {
-      this.tools = options.categories.flatMap((cat) => getToolsByCategory(cat));
-    } else {
-      this.tools = allTools;
-    }
+    this.selection = resolveToolSelection({
+      categories: options?.categories,
+      excludeCategories: options?.excludeCategories,
+      excludeTools: options?.excludeTools,
+    });
+    this.tools = this.selection.tools;
   }
 
   /** List available tools (with handler attached) */
@@ -336,8 +365,13 @@ export class ErpNextToolsClient {
 
   /**
    * Execute a tool by name.
+   *
    * API bibliothèque : renvoie le résultat enrichi complet, clés viewer
-   * incluses, sans le découpage modèle/vue de `buildHandlersMap`.
+   * incluses, sans le découpage modèle/vue de `buildHandlersMap`. Le handler
+   * ne reçoit que le client Frappe, sans capacités MCP du client :
+   * `erpnext_file_download` y est donc toujours refusé (`FileDownloadError`,
+   * `APP_CONTEXT_REQUIRED`) — les octets des pièces jointes ne sont servis
+   * qu'aux hôtes MCP Apps via le serveur MCP.
    */
   async execute(name: string, args: Record<string, unknown>): Promise<unknown> {
     const tool = this.tools.find((t) => t.name === name);

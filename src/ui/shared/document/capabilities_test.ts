@@ -76,3 +76,32 @@ Deno.test("preview needs serverTools but not the host download channel", () => {
   assertEquals(capabilities.canPreviewAttachment, true);
   assertEquals(capabilities.canDownloadAttachment, false);
 });
+
+Deno.test("document capabilities follow the server manifest, never the doctype", () => {
+  const host = { serverTools: {} };
+  // Supplier Quotation, Expense Claim… : le serveur publie les deux outils.
+  const submittable = documentCapabilities(host, [
+    "erpnext_doc_get",
+    "erpnext_doc_submit",
+    "erpnext_doc_cancel",
+  ]);
+  assertEquals(submittable.canSubmit, true);
+  assertEquals(submittable.canCancel, true);
+
+  // Customer, Item, Task… : le serveur les retire, aucune action.
+  const master = documentCapabilities(host, ["erpnext_doc_get"]);
+  assertEquals(master.canSubmit, false);
+  assertEquals(master.canCancel, false);
+
+  // Un seul des deux outils chargé : seule cette action existe.
+  const submitOnly = documentCapabilities(host, ["erpnext_doc_submit"]);
+  assertEquals(submitOnly.canSubmit, true);
+  assertEquals(submitOnly.canCancel, false);
+
+  // Sans proxy d'outils de l'hôte, le manifeste ne suffit pas.
+  assertEquals(
+    documentCapabilities({}, ["erpnext_doc_submit", "erpnext_doc_cancel"])
+      .canSubmit,
+    false,
+  );
+});

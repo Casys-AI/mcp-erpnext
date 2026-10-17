@@ -1,7 +1,13 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
+import { createClickIntentArbiter } from "../../shared/click-intent.ts";
 import {
+  kpiClickAction,
+  kpiClickIntent,
+  kpiContextEnabled,
+  kpiHintKey,
   kpiInteractionPlan,
   type KpiJumps,
+  kpiKeyShortcuts,
   kpiNumberAction,
   kpiTrendAction,
 } from "./kpi-jumps.ts";
@@ -163,7 +169,202 @@ Deno.test("kpi sparkline wires explicit months to independent context targets", 
     source,
     "activeContext.isSelected(trendPointContexts[index])",
   );
-  assertStringIncludes(source, "onDblClick={trendHasDetail");
+  assertStringIncludes(source, "onDblClick={trendDblClickEnabled");
   assertEquals(source.includes('role={trendInteractive ? "button"'), false);
   assertEquals(source.includes("event.detail > 0"), false);
+});
+
+// ── Grammaire du clic : élément × contexte disponible ─────────────────────
+
+Deno.test("kpi-jumps : seule une courbe peut porter un contexte", () => {
+  assertEquals(kpiContextEnabled(true, true), true);
+  assertEquals(kpiContextEnabled(true, false), false); // KPI scalaire, hôte capable
+  assertEquals(kpiContextEnabled(false, true), false); // courbe, hôte sans contexte
+  assertEquals(kpiContextEnabled(false, false), false);
+});
+
+Deno.test("kpi-jumps : table de vérité de kpiClickAction (contexte × saut × message)", () => {
+  const rows: Array<[boolean, boolean, boolean, string]> = [
+    // contextEnabled, hasJump, hasMessage → clic simple
+    [true, true, true, "context"],
+    [true, true, false, "context"],
+    [true, false, true, "context"],
+    [true, false, false, "context"],
+    [false, true, true, "detail"],
+    [false, true, false, "detail"],
+    [false, false, true, "none"], // message seul : jamais au clic
+    [false, false, false, "none"],
+  ];
+  for (const [context, jump, message, expected] of rows) {
+    assertEquals(
+      kpiClickAction(context, jump, message),
+      expected,
+      `context=${context} jump=${jump} message=${message}`,
+    );
+  }
+});
+
+Deno.test("kpi-jumps : le title annonce toujours le geste réellement actif", () => {
+  // Détail local sans contexte : le clic ouvre (clés autrefois mortes).
+  assertEquals(
+    kpiHintKey("number", false, true, false),
+    "kpi.drilldown.title_detail",
+  );
+  assertEquals(
+    kpiHintKey("trend", false, true, false),
+    "kpi.drilldown.title_trend",
+  );
+  // Message seul : double-clic ou Entrée, pas un clic.
+  assertEquals(
+    kpiHintKey("number", false, false, true),
+    "kpi.drilldown.title_message",
+  );
+  assertEquals(
+    kpiHintKey("trend", false, false, true),
+    "kpi.drilldown.title_message",
+  );
+  // Contexte + détail : les deux gestes.
+  assertEquals(
+    kpiHintKey("number", true, true, false),
+    "kpi.drilldown.title_context",
+  );
+  assertEquals(
+    kpiHintKey("trend", true, false, true),
+    "kpi.drilldown.title_context",
+  );
+  // Aucun détail : aucun title trompeur.
+  assertEquals(kpiHintKey("number", false, false, false), undefined);
+  assertEquals(kpiHintKey("number", true, false, false), undefined);
+});
+
+Deno.test("kpi-jumps : aria-keyshortcuts suit les gestes actifs", () => {
+  assertEquals(kpiKeyShortcuts(true, true, false), "Space Enter");
+  assertEquals(kpiKeyShortcuts(true, false, false), "Space Enter");
+  assertEquals(kpiKeyShortcuts(false, true, false), "Enter Space");
+  assertEquals(kpiKeyShortcuts(false, false, true), "Enter");
+  assertEquals(kpiKeyShortcuts(false, false, false), undefined);
+});
+
+/** Rejoue un élément KPI complet : dérivation du mode, intent, arbitre. */
+function kpiElement(options: {
+  sparkline: boolean;
+  contextSupported: boolean;
+  hasJump: boolean;
+  hasMessage: boolean;
+}) {
+  const events: string[] = [];
+  const contextEnabled = kpiContextEnabled(
+    options.contextSupported,
+    options.sparkline,
+  );
+  const click = kpiClickAction(
+    contextEnabled,
+    options.hasJump,
+    options.hasMessage,
+  );
+  const intent = kpiClickIntent({
+    key: "kpi:Revenue:value",
+    click,
+    hasJump: options.hasJump,
+    onSingle: () => {
+      if (!contextEnabled) return;
+      events.push("context");
+      return () => {
+        events.push("revert");
+      };
+    },
+    onDouble: () => events.push(options.hasJump ? "jump" : "message"),
+  });
+  const arbiter = createClickIntentArbiter(() => () => {});
+  return { arbiter, intent, events, click };
+}
+
+const KPI_ELEMENT_MATRIX = [
+  // Scalaire (outstanding, overdue, orders, margin) : jamais de contexte.
+  {
+    name: "scalar, host with context, jump",
+    sparkline: false,
+    contextSupported: true,
+    hasJump: true,
+    hasMessage: false,
+    click: ["jump"],
+    enter: ["jump"],
+  },
+  {
+    name: "scalar, host without context, jump",
+    sparkline: false,
+    contextSupported: false,
+    hasJump: true,
+    hasMessage: false,
+    click: ["jump"],
+    enter: ["jump"],
+  },
+  {
+    name: "scalar, host without context, message only",
+    sparkline: false,
+    contextSupported: false,
+    hasJump: false,
+    hasMessage: true,
+    click: [], // jamais un message fabriqué au clic
+    enter: ["message"],
+  },
+  // Sparkline (revenue) : le contexte réserve le clic quand l'hôte l'accepte.
+  {
+    name: "sparkline, host with context, jump",
+    sparkline: true,
+    contextSupported: true,
+    hasJump: true,
+    hasMessage: false,
+    click: ["context"],
+    enter: ["jump"],
+  },
+  {
+    name: "sparkline, host without context, jump",
+    sparkline: true,
+    contextSupported: false,
+    hasJump: true,
+    hasMessage: false,
+    click: ["jump"],
+    enter: ["jump"],
+  },
+  {
+    name: "sparkline, host without context, message only",
+    sparkline: true,
+    contextSupported: false,
+    hasJump: false,
+    hasMessage: true,
+    click: [],
+    enter: ["message"],
+  },
+] as const;
+
+for (const row of KPI_ELEMENT_MATRIX) {
+  Deno.test(`kpi element matrix - ${row.name}: click, then Enter`, () => {
+    const clicked = kpiElement(row);
+    clicked.arbiter.click(clicked.intent, 1);
+    assertEquals(clicked.events, [...row.click]);
+
+    const entered = kpiElement(row);
+    entered.arbiter.keyDown(entered.intent, {
+      key: "Enter",
+      preventDefault() {},
+    });
+    assertEquals(entered.events, [...row.enter]);
+  });
+}
+
+Deno.test("kpi element matrix - a scalar click on a host with context still opens the detail once through a native double-click", () => {
+  const scalar = kpiElement({
+    sparkline: false,
+    contextSupported: true,
+    hasJump: true,
+    hasMessage: false,
+  });
+  assertEquals(scalar.click, "detail");
+
+  scalar.arbiter.click(scalar.intent, 1);
+  scalar.arbiter.click(scalar.intent, 2);
+  scalar.arbiter.doubleClick(scalar.intent);
+
+  assertEquals(scalar.events, ["jump"]);
 });

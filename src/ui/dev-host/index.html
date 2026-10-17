@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hôte de démonstration · mcp-erpnext</title>
+    <title>Banc d’essai ERPNext · mcp-erpnext</title>
     <style>
     :root {
       color-scheme: dark;
@@ -16,6 +16,7 @@
     }
     header {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 12px;
       padding: 10px 14px;
@@ -28,6 +29,9 @@
     }
     header select,
     header button {
+      box-sizing: border-box;
+      min-width: 0;
+      max-width: 100%;
       background: #1a1e23;
       color: #e6ecf0;
       border: 1px solid #262c33;
@@ -41,23 +45,37 @@
     }
     main {
       display: grid;
-      grid-template-columns: 760px 1fr;
+      grid-template-columns: minmax(0, 960px);
+      justify-content: center;
       gap: 14px;
       padding: 14px;
     }
     iframe {
-      width: 740px;
+      box-sizing: border-box;
+      width: 100%;
       height: 640px;
       border: 1px solid #262c33;
       border-radius: 8px;
       background: #13161a;
     }
-    #log {
+    #diagnostics {
       border: 1px solid #262c33;
       border-radius: 8px;
       background: #13161a;
+      overflow: hidden;
+    }
+    #diagnostics summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 9px 12px;
+      color: #8895a0;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    #log {
+      border-top: 1px solid #262c33;
       padding: 10px 12px;
-      height: 640px;
+      height: 280px;
       overflow: auto;
     }
     #log h2 {
@@ -85,42 +103,37 @@
     .ev small {
       color: #5d6a74;
     }
+    @media (max-width: 720px) {
+      #log {
+        height: 240px;
+      }
+    }
     </style>
   </head>
   <body>
     <header>
-      <h1>Hôte de démonstration</h1>
+      <h1>Banc d’essai ERPNext</h1>
       <select id="viewer">
-        <option value="invoice">invoice-viewer</option>
-        <option value="doclist">doclist-viewer</option>
-        <option value="doc">doc-viewer</option>
-        <option value="kanban">kanban-viewer</option>
-        <option value="stock">stock-viewer</option>
-        <option value="funnel">funnel-viewer</option>
-        <option value="kpi">kpi-viewer</option>
-        <option value="chart">chart-viewer</option>
-      </select>
-      <select id="caps">
-        <option value="full">
-          profil : full (serverTools + download + contexte + message)
-        </option>
-        <option value="serverTools-only">
-          profil : serverTools-only (download refusé)
-        </option>
-        <option value="context-only">profil : context-only</option>
-        <option value="message-only">
-          profil : message-only (ancien hôte)
-        </option>
-        <option value="none">profil : none (aucun canal)</option>
+        <option value="invoice">Facture</option>
+        <option value="doclist" selected>Liste des sociétés</option>
+        <option value="doc">Fiche d’une société</option>
+        <option value="kanban">Tableau des tâches</option>
+        <option value="stock">Stocks</option>
+        <option value="funnel">Entonnoir commercial</option>
+        <option value="kpi">Chiffre d’affaires</option>
+        <option value="chart">Évolution des ventes</option>
       </select>
       <button id="reload">recharger</button>
       <span class="caps" id="status">—</span>
     </header>
     <main>
       <iframe id="frame" title="viewer"></iframe>
-      <section id="log">
-        <h2>journal hôte</h2>
-      </section>
+      <details id="diagnostics">
+        <summary>Détails techniques</summary>
+        <section id="log">
+          <h2>journal hôte</h2>
+        </section>
+      </details>
     </main>
     <script type="module" src="./src/main.ts"></script>
   </body>

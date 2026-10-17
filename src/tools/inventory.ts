@@ -11,6 +11,7 @@ import type { ErpNextTool } from "./types.ts";
 import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOC_META, DOCLIST_META, STOCK_META } from "./viewer-meta.ts";
 import { resolveItem } from "../api/resolve.ts";
+import { parsePagination, planListQuery } from "./doc-list-query.ts";
 
 export const inventoryTools: ErpNextTool[] = [
   // ── Items ─────────────────────────────────────────────────────────────────
@@ -350,7 +351,10 @@ export const inventoryTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      // Keep null's legacy default and limit 0's Frappe semantics.
+      const { limit } = parsePagination("erpnext_stock_entry_list", {
+        limit: input.limit ?? undefined,
+      });
       const filters: FrappeFilter[] = [];
       if (input.item_code) {
         filters.push([
@@ -374,18 +378,28 @@ export const inventoryTools: ErpNextTool[] = [
         filters.push(["posting_date", "<=", input.date_to as string]);
       }
 
+      const fields = [
+        "name",
+        "stock_entry_type",
+        "posting_date",
+        "from_warehouse",
+        "to_warehouse",
+        "total_amount",
+      ];
+      // With item_code the Stock Entry Detail join needs a qualified order_by
+      // (v14/v15 answer HTTP 500 otherwise) and a group_by so that an entry
+      // holding the item on several lines is listed — and counted against
+      // `limit` — once.
+      const { order_by, group_by } = planListQuery("Stock Entry", {
+        filters,
+        fields,
+      });
       const docs = await ctx.client.list("Stock Entry", {
-        fields: [
-          "name",
-          "stock_entry_type",
-          "posting_date",
-          "from_warehouse",
-          "to_warehouse",
-          "total_amount",
-        ],
+        fields,
         filters,
         limit,
-        order_by: "modified desc",
+        ...(order_by !== undefined ? { order_by } : {}),
+        ...(group_by !== undefined ? { group_by } : {}),
       });
 
       return {

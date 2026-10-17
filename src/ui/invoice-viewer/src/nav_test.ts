@@ -531,12 +531,36 @@ Deno.test("invoice actions : manifeste moderne refuse l'absent, payload 3.0.x re
       },
     },
   );
+});
+
+Deno.test("invoice actions : le manifeste serveur est la seule source de vérité des DocTypes", async () => {
+  // Le client ne garde aucune liste de DocTypes soumettables : le serveur ne
+  // publie erpnext_doc_submit / erpnext_doc_cancel que pour un DocType de
+  // SUBMITTABLE_VIEWER_DOCTYPES (src/tools/ui-refresh.ts, testé là-bas).
+  const source = await Deno.readTextFile(new URL("./nav.ts", import.meta.url));
+  assertEquals(/const\s+SUBMITTABLE_/.test(source), false);
+
+  // Manifeste sans les outils génériques : rien à proposer, quel que soit le
+  // DocType (le filtre serveur a déjà retiré les outils d'un maître).
   assertEquals(
-    invoiceMutationActions("Customer", "CUST-1", [
+    invoiceMutationActions("Customer", "CUST-1", ["erpnext_customer_get"]),
+    { submit: null, cancel: null },
+  );
+  assertEquals(
+    invoiceMutationActions("Supplier Quotation", "SQ-1", [
       "erpnext_doc_submit",
       "erpnext_doc_cancel",
     ]),
-    { submit: null, cancel: null },
+    {
+      submit: {
+        toolName: "erpnext_doc_submit",
+        args: { doctype: "Supplier Quotation", name: "SQ-1" },
+      },
+      cancel: {
+        toolName: "erpnext_doc_cancel",
+        args: { doctype: "Supplier Quotation", name: "SQ-1" },
+      },
+    },
   );
 });
 

@@ -53,6 +53,18 @@ export const en: Record<string, string> = {
   "document.json": "Raw document JSON",
   "document.action.refresh_pending":
     "Change committed — refresh is still pending",
+  "document.company.general": "Company overview",
+  "document.company.advanced": "Advanced settings",
+  "document.company.field.company_name": "Name",
+  "document.company.field.abbr": "Abbreviation",
+  "document.company.field.country": "Country",
+  "document.company.field.default_currency": "Currency",
+  "document.company.field.domain": "Domain",
+  "document.company.field.is_group": "Group company",
+  "document.company.other": "Other information",
+  "document.company.schema_loading": "Loading ERPNext sections…",
+  "document.company.schema_unavailable":
+    "ERPNext sections are unavailable. All fields remain available.",
   "document.purchase_invoice.total": "Invoice total",
   "document.purchase_invoice.calculated": "Calculated",
   "document.purchase_invoice.rounding": "Rounding",
@@ -200,6 +212,12 @@ export const en: Record<string, string> = {
   "kpi.status.auto_refresh": "Auto-refresh on focus",
   "kpi.drilldown.title_detail": "Click to drill down",
   "kpi.drilldown.title_trend": "Click to see trend details",
+  "kpi.secondary.invoices": "Invoices",
+  "kpi.secondary.amount": "Amount",
+  "kpi.drilldown.title_message":
+    "Double-click or press Enter to ask in the conversation",
+  "kpi.drilldown.title_context":
+    "Click or Space to add or remove from context · double-click or Enter for details",
   // ── /kpi-viewer ───────────────────────────────────────────────────────────
 
   // ── invoice-viewer ────────────────────────────────────────────────────────
@@ -341,6 +359,7 @@ export const en: Record<string, string> = {
     "click: add/remove context · 2× details",
   "chart.tooltip.click_action_context_only": "click: add/remove context",
   "chart.tooltip.click_action_fallback": "2× details",
+  "chart.tooltip.click_action_detail": "click: details",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Back",
   "nav.elided": "…{n}",

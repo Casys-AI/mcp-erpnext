@@ -33,6 +33,11 @@
 
 import { launchInspector, MCP_APP_MIME_TYPE, McpApp } from "@casys/mcp-server";
 import { ErpNextToolsClient } from "./src/client.ts";
+import {
+  assertNonEmptySelection,
+  isToolFilterError,
+} from "./src/tools/selection.ts";
+import { readSelectionConfig } from "./src/tools/selection-config.ts";
 import { FrappeAPIError } from "./src/api/frappe-client.ts";
 import { UI_VIEWERS, withViewerResourceMeta } from "./src/ui/viewers.ts";
 import {
@@ -100,11 +105,13 @@ async function main() {
     return;
   }
 
-  // Category filtering
-  const categoriesArg = args.find((arg) => arg.startsWith("--categories="));
-  const categories = categoriesArg
-    ? categoriesArg.split("=")[1].split(",")
-    : undefined;
+  // Tool filtering (--categories, --exclude-categories, --exclude-tools and the
+  // ERPNEXT_* equivalents). Read once at startup; invalid input fails here,
+  // before anything is registered.
+  const selectionConfig = readSelectionConfig(args);
+  for (const warning of selectionConfig.warnings) {
+    console.error(warning.message);
+  }
 
   // HTTP mode
   const httpFlag = args.includes("--http");
@@ -131,10 +138,22 @@ async function main() {
   // Initialize tools client
   const toolsClient = new ErpNextToolsClient(
     {
-      ...(categories ? { categories } : {}),
+      ...(selectionConfig.categories
+        ? { categories: selectionConfig.categories }
+        : {}),
+      ...(selectionConfig.excludeCategories
+        ? { excludeCategories: selectionConfig.excludeCategories }
+        : {}),
+      ...(selectionConfig.excludeTools
+        ? { excludeTools: selectionConfig.excludeTools }
+        : {}),
       enableLinkDisambiguation: mrtrConfig !== undefined,
     },
   );
+  for (const warning of toolsClient.selection.warnings) {
+    console.error(warning.message);
+  }
+  assertNonEmptySelection(toolsClient.selection);
 
   // Build MCP server
   const server = new McpApp({
@@ -167,6 +186,9 @@ async function main() {
 
   // Register UI resources (MCP Apps viewers)
   // Built by: cd lib/erpnext/src/ui && node build-all.mjs
+  // Remote (JSR) viewers are only announced when the net permission for their
+  // host is already granted; otherwise resources/list would advertise viewers
+  // whose read fails. Skipped viewers are reported in ONE warning below.
   const skippedRemoteViewers: string[] = [];
   let skippedRemoteHost = "";
   for (const viewerName of UI_VIEWERS) {
@@ -188,7 +210,7 @@ async function main() {
       !isViewerNetAllowed(netPermission(remoteTarget))
     ) {
       skippedRemoteViewers.push(viewerName);
-      skippedRemoteHost = new URL(distPath).hostname;
+      skippedRemoteHost = remoteTarget;
     } else if (distPath) {
       server.registerResource(
         withViewerResourceMeta({
@@ -206,7 +228,11 @@ async function main() {
           });
         },
       );
-      console.error(`[mcp-erpnext] Registered UI resource: ${resourceUri}`);
+      console.error(
+        remoteTarget !== null
+          ? `[mcp-erpnext] Registered UI resource (remote, fetched on first read, cached): ${resourceUri}`
+          : `[mcp-erpnext] Registered UI resource: ${resourceUri}`,
+      );
     } else {
       console.error(
         `[mcp-erpnext] Warning: UI not built for ${resourceUri}. ` +
@@ -216,23 +242,45 @@ async function main() {
   }
 
   if (skippedRemoteViewers.length > 0) {
-    console.error(`[mcp-erpnext] ${
-      JSON.stringify({
-        code: "VIEWER_REMOTE_PERMISSION_DENIED",
-        context: { host: skippedRemoteHost, viewers: skippedRemoteViewers },
-        recovery: viewerNetRecovery(skippedRemoteHost),
-      })
-    }`);
+    console.error(
+      `[mcp-erpnext] ${
+        JSON.stringify({
+          level: "warn",
+          code: "VIEWER_REMOTE_PERMISSION_DENIED",
+          context: {
+            host: skippedRemoteHost,
+            viewers: skippedRemoteViewers,
+          },
+          recovery: viewerNetRecovery(skippedRemoteHost.split(":")[0]),
+        })
+      }`,
+    );
   }
 
+  const { sources } = selectionConfig;
+  const filterSummary = [
+    selectionConfig.categories &&
+    `categories: ${
+      selectionConfig.categories.join(", ")
+    } [${sources.categories}]`,
+    selectionConfig.excludeCategories &&
+    `excluded categories: ${
+      selectionConfig.excludeCategories.join(", ")
+    } [${sources.excludeCategories}]`,
+    selectionConfig.excludeTools &&
+    `excluded tools: ${
+      selectionConfig.excludeTools.join(", ")
+    } [${sources.excludeTools}]`,
+  ].filter(Boolean).join("; ");
   console.error(
     `[mcp-erpnext] Initialized — ${toolsClient.count} tools${
-      categories ? ` (categories: ${categories.join(", ")})` : ""
+      filterSummary ? ` (${filterSummary})` : ""
     }`,
   );
 
   // Fire-and-forget — must never block or fail startup (see warmCache() docs).
-  warmCache().catch((err) => {
+  // Only the active selection may be warmed: an excluded tool is never run.
+  warmCache(toolsClient.listTools()).catch((err) => {
     console.error("[mcp-erpnext] Cache warm failed (non-fatal):", err);
   });
 
@@ -293,6 +341,22 @@ async function main() {
 }
 
 main().catch((err) => {
+  if (isToolFilterError(err)) {
+    // One compact diagnostic, with the same fields as viewer resource errors.
+    // stderr only — stdout carries the MCP protocol in stdio mode.
+    console.error(
+      `[mcp-erpnext] ${
+        JSON.stringify({
+          code: err.code,
+          message: err.detail,
+          retryable: err.retryable,
+          context: err.context,
+          recovery: err.recovery,
+        })
+      }`,
+    );
+    exit(1);
+  }
   console.error("[mcp-erpnext] Fatal error:", err);
   exit(1);
 });

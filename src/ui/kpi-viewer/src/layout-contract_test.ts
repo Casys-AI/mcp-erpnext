@@ -25,3 +25,15 @@ Deno.test("KPI interaction - context-only values forward a fast second click", (
     "clickIntent.click(interactionIntent(selection, action), clickCount)",
   );
 });
+
+Deno.test("KPI formatting - the viewer renders through kpi-format.ts and never reads formattedValue itself", () => {
+  assertStringIncludes(source, 'from "./kpi-format.ts"');
+  assertEquals(source.includes("function formatKpiParts"), false);
+  assertEquals(source.includes("data.formattedValue"), false);
+});
+
+Deno.test("KPI hints - the drill-down titles are wired to the interactive elements", () => {
+  assertStringIncludes(source, "kpiHintKey(");
+  assertStringIncludes(source, "title={numberTitle}");
+  assertStringIncludes(source, "title={trendTitle}");
+});

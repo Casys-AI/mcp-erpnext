@@ -13,6 +13,7 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { accountingTools } from "./accounting.ts";
 import { FrappeAPIError, type FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
+import type { FrappeListOptions } from "../api/types.ts";
 
 type AnyFn = (...args: any[]) => any;
 
@@ -80,6 +81,78 @@ Deno.test("erpnext_payment_entry_list - works without party/party_type at all", 
     unknown
   >;
   assertEquals(result.doctype, "Payment Entry");
+});
+
+Deno.test("erpnext_payment_entry_list - pairs amounts with their source and destination currencies", async () => {
+  const docs = [
+    {
+      name: "RECEIVE-001",
+      payment_type: "Receive",
+      paid_amount: 101.25,
+      received_amount: 93.5,
+      paid_from_account_currency: "USD",
+      paid_to_account_currency: "EUR",
+    },
+    {
+      name: "PAY-001",
+      payment_type: "Pay",
+      paid_amount: 0,
+      received_amount: 0,
+      paid_from_account_currency: "TWD",
+      paid_to_account_currency: "JPY",
+    },
+    {
+      name: "TRANSFER-001",
+      payment_type: "Internal Transfer",
+      paid_amount: 93.5,
+      received_amount: 101.25,
+      paid_from_account_currency: "EUR",
+      paid_to_account_currency: "USD",
+    },
+  ];
+  const client = makeMockClient({
+    list: async (doctype: string, options: FrappeListOptions) => {
+      assertEquals(doctype, "Payment Entry");
+      assertEquals(options.fields, [
+        "name",
+        "payment_type",
+        "party_type",
+        "party",
+        "posting_date",
+        "paid_amount",
+        "received_amount",
+        "paid_from_account_currency",
+        "paid_to_account_currency",
+      ]);
+      return docs;
+    },
+  });
+
+  const result = await getTool("erpnext_payment_entry_list").handler(
+    {},
+    makeCtx(client),
+  ) as { count: number; data: Record<string, unknown>[] };
+
+  assertEquals(result.count, docs.length);
+  assertEquals(
+    result.data,
+    docs.map((doc) => ({ ...doc, currency: doc.paid_from_account_currency })),
+  );
+});
+
+Deno.test("erpnext_payment_entry_list - propagates list failures", async () => {
+  const failure = new FrappeAPIError("Permission denied", 403, null);
+  const client = makeMockClient({
+    list: async () => {
+      throw failure;
+    },
+  });
+  assertEquals(
+    await assertRejects(() =>
+      getTool("erpnext_payment_entry_list").handler({}, makeCtx(client))
+    ),
+    failure,
+  );
 });
 
 // ── erpnext_account_list ─────────────────────────────────────────────────────

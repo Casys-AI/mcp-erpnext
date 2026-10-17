@@ -10,6 +10,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { assertEquals, assertRejects } from "@std/assert";
+import { ToolInputError } from "./errors.ts";
 import { inventoryTools } from "./inventory.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
@@ -192,6 +193,98 @@ Deno.test("erpnext_stock_entry_list - declares and applies the exact child item_
     ["Stock Entry Detail", "item_code", "=", "WIDGET-1"],
     ["stock_entry_type", "=", "Material Issue"],
   ]);
+});
+
+Deno.test("erpnext_stock_entry_list - item_code lists each entry once, with a qualified order_by", async () => {
+  // A Stock Entry holding the item on two lines matches the Stock Entry Detail
+  // join twice; Frappe has no DISTINCT in its REST API, so the tool groups on
+  // the parent's primary key. Unqualified `modified desc` is ambiguous on
+  // Frappe v14/v15 (HTTP 500, MariaDB 1052).
+  let capturedOptions: Record<string, unknown> = {};
+  const client = makeMockClient({
+    list: async (_doctype: string, opts: Record<string, unknown>) => {
+      capturedOptions = opts;
+      return [];
+    },
+  });
+
+  await getTool("erpnext_stock_entry_list").handler(
+    { item_code: "WIDGET-1", limit: 10 },
+    makeCtx(client),
+  );
+
+  assertEquals(capturedOptions.order_by, "`tabStock Entry`.modified desc");
+  assertEquals(capturedOptions.group_by, "`tabStock Entry`.name");
+  assertEquals(capturedOptions.limit, 10);
+});
+
+Deno.test("erpnext_stock_entry_list - without item_code the query is the 3.0.x one", async () => {
+  let capturedOptions: Record<string, unknown> = {};
+  const client = makeMockClient({
+    list: async (_doctype: string, opts: Record<string, unknown>) => {
+      capturedOptions = opts;
+      return [];
+    },
+  });
+
+  await getTool("erpnext_stock_entry_list").handler(
+    { stock_entry_type: "Material Issue", date_from: "2026-01-01" },
+    makeCtx(client),
+  );
+
+  assertEquals(capturedOptions.order_by, "modified desc");
+  assertEquals("group_by" in capturedOptions, false);
+  assertEquals(capturedOptions.limit, 20);
+});
+
+Deno.test("erpnext_stock_entry_list - invalid limits fail before any Frappe request", async () => {
+  let calls = 0;
+  const client = makeMockClient({
+    list: async () => {
+      calls++;
+      return [];
+    },
+  });
+  const tool = getTool("erpnext_stock_entry_list");
+  for (
+    const limit of [
+      -1,
+      2.5,
+      NaN,
+      Infinity,
+      Number.MAX_SAFE_INTEGER + 1,
+      "10",
+      true,
+      [],
+      {},
+    ]
+  ) {
+    const error = await assertRejects(
+      () => tool.handler({ limit }, makeCtx(client)),
+      ToolInputError,
+    );
+    assertEquals(error.code, "INVALID_PAGINATION");
+    assertEquals(error.tool, "erpnext_stock_entry_list");
+    assertEquals(error.context.field, "limit");
+    assertEquals(error.retryable, false);
+  }
+  assertEquals(calls, 0);
+});
+
+Deno.test("erpnext_stock_entry_list - keeps default, unbounded and positive limits", async () => {
+  const limits: unknown[] = [];
+  const client = makeMockClient({
+    list: async (_doctype: string, options: { limit: number }) => {
+      limits.push(options.limit);
+      return [];
+    },
+  });
+  const tool = getTool("erpnext_stock_entry_list");
+  for (const input of [{}, { limit: null }, { limit: 0 }, { limit: 5 }]) {
+    await tool.handler(input, makeCtx(client));
+  }
+  assertEquals(limits, [20, 20, 0, 5]);
+  assertEquals(tool.inputSchema.properties?.limit?.type, "number");
 });
 
 // ── erpnext_stock_entry_create ───────────────────────────────────────────────

@@ -162,3 +162,35 @@ Deno.test("funnel context-only stages forward a fast second click", async () => 
     2,
   );
 });
+
+Deno.test("funnel stage value - carries the payload currency symbol, never a bare number", () => {
+  setLocaleSource(() => "en-US");
+  try {
+    assertEquals(funnelStageValueText(4000, "EUR"), "€4,000.00");
+    assertEquals(funnelStageValueText(3500.5, "GBP"), "£3,500.50");
+  } finally {
+    setLocaleSource(() => undefined);
+  }
+});
+
+Deno.test("funnel stage value - no amount is a dash, no currency is a plain number, a bad currency degrades", () => {
+  setLocaleSource(() => "en-US");
+  try {
+    assertEquals(funnelStageValueText(undefined, "EUR"), "—");
+    assertEquals(funnelStageValueText(null, "EUR"), "—");
+    assertEquals(funnelStageValueText(0, "EUR"), "—");
+    assertEquals(funnelStageValueText(1200, undefined), "1,200.00");
+    assertEquals(funnelStageValueText(1200, "EURO"), "1,200.00 EURO");
+  } finally {
+    setLocaleSource(() => undefined);
+  }
+});
+
+Deno.test("funnel wide layout - stage values are formatted with the payload currency", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./FunnelViewer.tsx", import.meta.url),
+  );
+
+  assertStringIncludes(source, "funnelStageValueText(stage.value, currency)");
+  assertStringIncludes(source, "currency={data.currency}");
+});

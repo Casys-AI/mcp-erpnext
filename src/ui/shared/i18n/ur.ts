@@ -51,6 +51,18 @@ export const ur: Record<string, string> = {
   "document.json": "اصل دستاویز JSON",
   "document.action.refresh_pending":
     "تبدیلی محفوظ ہو گئی — ریفریش ابھی باقی ہے",
+  "document.company.general": "کمپنی کا تعارف",
+  "document.company.advanced": "اعلیٰ ترتیبات",
+  "document.company.field.company_name": "نام",
+  "document.company.field.abbr": "مختصر نام",
+  "document.company.field.country": "ملک",
+  "document.company.field.default_currency": "کرنسی",
+  "document.company.field.domain": "شعبہ",
+  "document.company.field.is_group": "گروپ کمپنی",
+  "document.company.other": "دیگر معلومات",
+  "document.company.schema_loading": "ERPNext کے حصے لوڈ ہو رہے ہیں…",
+  "document.company.schema_unavailable":
+    "ERPNext کے حصے دستیاب نہیں ہیں۔ تمام فیلڈز اب بھی دستیاب ہیں۔",
   "document.purchase_invoice.total": "انوائس کا کل",
   "document.purchase_invoice.calculated": "حسابی",
   "document.purchase_invoice.rounding": "راؤنڈنگ",
@@ -195,6 +207,12 @@ export const ur: Record<string, string> = {
   "kpi.status.auto_refresh": "فوکس پر خودکار ریفریش",
   "kpi.drilldown.title_detail": "ڈرل ڈاؤن کے لیے کلک کریں",
   "kpi.drilldown.title_trend": "رجحان کی تفصیل کے لیے کلک کریں",
+  "kpi.secondary.invoices": "انوائسز",
+  "kpi.secondary.amount": "رقم",
+  "kpi.drilldown.title_message":
+    "گفتگو میں پوچھنے کے لیے ڈبل کلک کریں یا انٹر دبائیں",
+  "kpi.drilldown.title_context":
+    "سیاق میں شامل/خارج کرنے کے لیے کلک یا اسپیس دبائیں · تفصیل کے لیے ڈبل کلک یا انٹر دبائیں",
   // ── /KPI ویوور ───────────────────────────────────────────────────────────
 
   // ── انوائس ویوور ────────────────────────────────────────────────────────
@@ -334,6 +352,7 @@ export const ur: Record<string, string> = {
   "chart.tooltip.click_action_context": "کلک: سیاق شامل/خارج کریں · 2× تفصیل",
   "chart.tooltip.click_action_context_only": "کلک: سیاق شامل/خارج کریں",
   "chart.tooltip.click_action_fallback": "2× تفصیل",
+  "chart.tooltip.click_action_detail": "کلک: تفصیل",
   // ── نیویگیشن اسٹیک (راستہ، سطحیں، چھلانگ) ──
   "nav.back": "واپس",
   "nav.elided": "…{n}",

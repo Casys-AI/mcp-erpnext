@@ -14,6 +14,15 @@
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { CHART_META, FUNNEL_META, KPI_META } from "./viewer-meta.ts";
+import {
+  AnalyticsDataError,
+  formatMoney,
+  moneyScopeFilters,
+  moneyScopeSchema,
+  moneyValues,
+  parseMoneyScope,
+  sumMoney,
+} from "./analytics-money.ts";
 
 /**
  * Upper bound on the item codes `erpnext_product_radar` will compare.
@@ -322,11 +331,15 @@ export const analyticsTools: ErpNextTool[] = [
       "Sales revenue trend over time. Returns a line chart (or area if type='area') " +
       "with monthly revenue from Sales Orders. " +
       "Add group_by='customer' for multi-line per customer. " +
-      "Use type='stacked-area' to stack customers.",
+      "Use type='stacked-area' to stack customers. " +
+      "Uses the Sales Order document currency without conversion; mixed currencies require a currency filter.",
     category: "analytics",
     inputSchema: {
       type: "object",
       properties: {
+        ...(moneyScopeSchema(
+          "Filter by Sales Order document currency (e.g. USD); no conversion",
+        ).properties ?? {}),
         months: {
           type: "number",
           description: "How many months back to include (default 6)",
@@ -344,6 +357,8 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const tool = "erpnext_revenue_trend";
+      const scope = parseMoneyScope(tool, input);
       const monthsBack = (input.months as number) ?? 6;
       const chartType = (input.type as string) ?? "line";
       const groupBy = (input.group_by as string) ?? "total";
@@ -358,35 +373,69 @@ export const analyticsTools: ErpNextTool[] = [
       const startStr = localCalendarDate(startDate);
 
       const orders = await ctx.client.list("Sales Order", {
-        fields: ["customer_name", "grand_total", "transaction_date"],
-        filters: [["transaction_date", ">=", startStr], ["docstatus", "!=", 2]],
-        limit: 1000,
+        fields: [
+          "name",
+          "customer_name",
+          "grand_total",
+          "transaction_date",
+          "company",
+          "currency",
+        ],
+        filters: [
+          ["transaction_date", ">=", startStr],
+          ["transaction_date", "<=", localCalendarDate(now)],
+          ["docstatus", "!=", 2],
+          ...moneyScopeFilters(scope),
+        ],
+        limit: 0,
         order_by: "transaction_date asc",
-      });
+      }, { skipCache: true });
+      const { currency, amounts } = moneyValues(
+        tool,
+        orders,
+        "grand_total",
+        "currency",
+        scope.currency,
+      );
 
       const months = monthlyLabels(now, monthsBack);
 
       if (groupBy === "customer") {
         // Multi-line: one dataset per customer
-        const byCustomerMonth: Record<string, number[]> = {};
-        for (const order of orders) {
+        const byCustomerMonth: Record<string, number[][]> = {};
+        for (const [index, order] of orders.entries()) {
           const calendarMonth = frappeCalendarMonth(order.transaction_date);
-          if (!calendarMonth) continue;
+          if (!calendarMonth) {
+            throw new AnalyticsDataError(
+              tool,
+              "INVALID_DATE",
+              "A Sales Order has no valid transaction_date",
+              "Inspect the source Sales Order before calculating the revenue trend.",
+              { name: order.name },
+            );
+          }
           const mIdx = (calendarMonth.year - startDate.getFullYear()) * 12 +
             calendarMonth.month - startDate.getMonth();
           if (mIdx < 0 || mIdx >= monthsBack) continue;
           const cust = (order.customer_name as string) ?? "Unknown";
           if (!byCustomerMonth[cust]) {
-            byCustomerMonth[cust] = new Array(monthsBack).fill(0);
+            byCustomerMonth[cust] = Array.from(
+              { length: monthsBack },
+              () => [],
+            );
           }
-          byCustomerMonth[cust][mIdx] += Number(order.grand_total) || 0;
+          byCustomerMonth[cust][mIdx].push(amounts[index]);
         }
 
         // Top 5 customers by total
         const sorted = Object.entries(byCustomerMonth)
-          .sort(([, a], [, b]) =>
-            b.reduce((s, v) => s + v, 0) - a.reduce((s, v) => s + v, 0)
+          .map(([name, monthAmounts]) =>
+            [
+              name,
+              monthAmounts.map((values) => sumMoney(tool, values)),
+            ] as const
           )
+          .sort(([, a], [, b]) => sumMoney(tool, b) - sumMoney(tool, a))
           .slice(0, 5);
 
         const COLORS = ["#60a5fa", "#4ade80", "#fbbf24", "#c084fc", "#f472b6"];
@@ -402,23 +451,37 @@ export const analyticsTools: ErpNextTool[] = [
             showDots: chartType === "line",
             ...(chartType === "stacked-area" ? { stack: "revenue" } : {}),
           })),
-          currency: "EUR",
+          ...(currency ? { currency } : {}),
           yAxisLabel: "Revenue",
           _meta: CHART_META,
         };
       }
 
       // Single line: total revenue per month
-      const monthlyTotals = new Array(monthsBack).fill(0);
-      for (const order of orders) {
+      const monthlyAmounts: number[][] = Array.from(
+        { length: monthsBack },
+        () => [],
+      );
+      for (const [index, order] of orders.entries()) {
         const calendarMonth = frappeCalendarMonth(order.transaction_date);
-        if (!calendarMonth) continue;
+        if (!calendarMonth) {
+          throw new AnalyticsDataError(
+            tool,
+            "INVALID_DATE",
+            "A Sales Order has no valid transaction_date",
+            "Inspect the source Sales Order before calculating the revenue trend.",
+            { name: order.name },
+          );
+        }
         const mIdx = (calendarMonth.year - startDate.getFullYear()) * 12 +
           calendarMonth.month - startDate.getMonth();
         if (mIdx >= 0 && mIdx < monthsBack) {
-          monthlyTotals[mIdx] += Number(order.grand_total) || 0;
+          monthlyAmounts[mIdx].push(amounts[index]);
         }
       }
+      const monthlyTotals = monthlyAmounts.map((values) =>
+        sumMoney(tool, values)
+      );
 
       return {
         title: "Revenue Trend",
@@ -431,7 +494,7 @@ export const analyticsTools: ErpNextTool[] = [
           color: "#60a5fa",
           showDots: true,
         }],
-        currency: "EUR",
+        ...(currency ? { currency } : {}),
         yAxisLabel: "Revenue",
         _meta: CHART_META,
       };
@@ -933,38 +996,62 @@ export const analyticsTools: ErpNextTool[] = [
     annotations: { readOnlyHint: true },
     _meta: KPI_META,
     description: "KPI card: total Sales Order revenue for the current month, " +
-      "with delta % vs previous month and sparkline of last 6 months.",
+      "with delta % vs previous month and sparkline of last 6 months. " +
+      "Uses the document currency, with complete fresh reads. Mixed currencies require a currency filter.",
     category: "analytics",
-    inputSchema: { type: "object", properties: {} },
-    handler: async (_input, ctx) => {
+    inputSchema: moneyScopeSchema(
+      "Filter by Sales Order document currency (e.g. USD); no conversion",
+    ),
+    handler: async (input, ctx) => {
+      const tool = "erpnext_kpi_revenue";
+      const scope = parseMoneyScope(tool, input);
       const now = new Date();
       // Single API call: fetch all orders from 6 months ago to today
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
       const sinceStr = localCalendarDate(sixMonthsAgo);
 
       const allOrders = await ctx.client.list("Sales Order", {
-        fields: ["grand_total", "transaction_date"],
+        fields: ["name", "grand_total", "transaction_date", "currency"],
         filters: [
           ["transaction_date", ">=", sinceStr],
+          ["transaction_date", "<=", localCalendarDate(now)],
           ["docstatus", "!=", 2],
+          ...moneyScopeFilters(scope),
         ],
-        limit: 5000,
-      });
+        // Frappe limit 0 fetches every match, without a silent total cap.
+        limit: 0,
+      }, { skipCache: true });
+      const { currency, amounts } = moneyValues(
+        tool,
+        allOrders,
+        "grand_total",
+        "currency",
+        scope.currency,
+      );
 
       // Bucket into 6 monthly bins
-      const sparkline: number[] = [0, 0, 0, 0, 0, 0];
-      const sparklineLabels = monthlyLabels(now, sparkline.length);
-      for (const o of allOrders) {
+      const monthlyAmounts: number[][] = [[], [], [], [], [], []];
+      const sparklineLabels = monthlyLabels(now, monthlyAmounts.length);
+      for (const [index, o] of allOrders.entries()) {
         const calendarMonth = frappeCalendarMonth(o.transaction_date);
-        if (!calendarMonth) continue;
+        if (!calendarMonth) {
+          throw new AnalyticsDataError(
+            tool,
+            "INVALID_DATE",
+            "A Sales Order has no valid transaction_date",
+            "Inspect the source Sales Order before calculating the monthly revenue.",
+            { name: o.name },
+          );
+        }
         // Month index: 0 = oldest (5 months ago), 5 = current month
         const monthDiff = (now.getFullYear() - calendarMonth.year) * 12 +
           (now.getMonth() - calendarMonth.month);
         const idx = 5 - monthDiff;
         if (idx >= 0 && idx < 6) {
-          sparkline[idx] += Number(o.grand_total) || 0;
+          monthlyAmounts[idx].push(amounts[index]);
         }
       }
+      const sparkline = monthlyAmounts.map((month) => sumMoney(tool, month));
 
       const currentTotal = sparkline[5];
       const prevTotal = sparkline[4];
@@ -976,7 +1063,7 @@ export const analyticsTools: ErpNextTool[] = [
       return {
         label: "Revenue MTD",
         value: currentTotal,
-        currency: "EUR",
+        ...(currency ? { currency } : {}),
         delta: Math.round(delta * 10) / 10,
         deltaLabel: "vs last month",
         trend: delta > 0 ? "up" : delta < 0 ? "down" : "flat",
@@ -997,32 +1084,40 @@ export const analyticsTools: ErpNextTool[] = [
     _meta: KPI_META,
     description:
       "KPI card: total outstanding receivables from submitted Sales Invoices " +
-      "with outstanding_amount > 0. Shows count of open invoices.",
+      "with outstanding_amount > 0. Shows count of open invoices. " +
+      "Amounts use the receivable party account currency; mixed currencies require a currency filter. Complete fresh read.",
     category: "analytics",
-    inputSchema: { type: "object", properties: {} },
-    handler: async (_input, ctx) => {
+    inputSchema: moneyScopeSchema(
+      "Filter by receivable party account currency, not invoice currency (e.g. USD)",
+    ),
+    handler: async (input, ctx) => {
+      const tool = "erpnext_kpi_outstanding";
+      const scope = parseMoneyScope(tool, input);
       const invoices = await ctx.client.list("Sales Invoice", {
-        fields: ["outstanding_amount"],
+        fields: ["name", "outstanding_amount", "party_account_currency"],
         filters: [
           ["outstanding_amount", ">", 0],
           ["docstatus", "=", 1],
+          ...moneyScopeFilters(scope, "party_account_currency"),
         ],
-        limit: 1000,
-      });
-
-      const total = invoices.reduce(
-        (sum, inv) => sum + (Number(inv.outstanding_amount) || 0),
-        0,
+        limit: 0,
+      }, { skipCache: true });
+      const { currency, amounts } = moneyValues(
+        tool,
+        invoices,
+        "outstanding_amount",
+        "party_account_currency",
+        scope.currency,
       );
+      const total = sumMoney(tool, amounts);
       const count = invoices.length;
 
       return {
         label: "Outstanding Receivables",
         value: total,
-        formattedValue: `${count} inv. / ${
-          total.toLocaleString("en-US", { style: "currency", currency: "EUR" })
-        }`,
-        currency: "EUR",
+        formattedValue: `${count} inv. / ${formatMoney(total, currency)}`,
+        ...(currency ? { currency } : {}),
+        secondary: { kind: "invoice_count", value: count },
         trend: total > 0 ? "up" : "flat",
         trendIsGood: false,
         color: "#fbbf24",
@@ -1038,11 +1133,14 @@ export const analyticsTools: ErpNextTool[] = [
     annotations: { readOnlyHint: true },
     _meta: KPI_META,
     description:
-      "KPI card: count and total value of Sales Orders created this month, " +
-      "with delta % vs last month.",
+      "KPI card: count of non-cancelled Sales Orders dated this month through today, " +
+      "with delta % vs last month. Complete fresh reads, optionally scoped by company and document currency.",
     category: "analytics",
-    inputSchema: { type: "object", properties: {} },
-    handler: async (_input, ctx) => {
+    inputSchema: moneyScopeSchema(
+      "Filter by Sales Order document currency (e.g. USD)",
+    ),
+    handler: async (input, ctx) => {
+      const scope = parseMoneyScope("erpnext_kpi_orders", input);
       const now = new Date();
       const thisMonthStart = `${now.getFullYear()}-${
         String(now.getMonth() + 1).padStart(2, "0")
@@ -1053,24 +1151,27 @@ export const analyticsTools: ErpNextTool[] = [
       const lastMonthEndStr = localCalendarDate(lastMonthEnd);
 
       const currentOrders = await ctx.client.list("Sales Order", {
-        fields: ["grand_total"],
+        fields: ["name"],
         filters: [
           ["transaction_date", ">=", thisMonthStart],
+          ["transaction_date", "<=", localCalendarDate(now)],
           ["docstatus", "!=", 2],
+          ...moneyScopeFilters(scope),
         ],
-        limit: 1000,
-      });
+        limit: 0,
+      }, { skipCache: true });
       const currentCount = currentOrders.length;
 
       const prevOrders = await ctx.client.list("Sales Order", {
-        fields: ["grand_total"],
+        fields: ["name"],
         filters: [
           ["transaction_date", ">=", lastMonthStartStr],
           ["transaction_date", "<=", lastMonthEndStr],
           ["docstatus", "!=", 2],
+          ...moneyScopeFilters(scope),
         ],
-        limit: 1000,
-      });
+        limit: 0,
+      }, { skipCache: true });
       const prevCount = prevOrders.length;
 
       const delta = prevCount > 0
@@ -1168,10 +1269,15 @@ export const analyticsTools: ErpNextTool[] = [
     annotations: { readOnlyHint: true },
     _meta: KPI_META,
     description: "KPI card: count and total value of overdue Sales Invoices " +
-      "(due_date < today, outstanding_amount > 0, submitted).",
+      "(due_date < today, outstanding_amount > 0, submitted). " +
+      "Amounts use the receivable party account currency; mixed currencies require a currency filter. Complete fresh read.",
     category: "analytics",
-    inputSchema: { type: "object", properties: {} },
-    handler: async (_input, ctx) => {
+    inputSchema: moneyScopeSchema(
+      "Filter by receivable party account currency, not invoice currency (e.g. USD)",
+    ),
+    handler: async (input, ctx) => {
+      const tool = "erpnext_kpi_overdue";
+      const scope = parseMoneyScope(tool, input);
       // Heure locale, comme `monthRange` côté sauts : le KPI et sa liste
       // « en retard » regardent le même jour.
       const now = new Date();
@@ -1181,27 +1287,40 @@ export const analyticsTools: ErpNextTool[] = [
       }`;
 
       const invoices = await ctx.client.list("Sales Invoice", {
-        fields: ["outstanding_amount", "due_date"],
+        fields: [
+          "name",
+          "outstanding_amount",
+          "due_date",
+          "party_account_currency",
+        ],
         filters: [
           ["due_date", "<", today],
           ["outstanding_amount", ">", 0],
           ["docstatus", "=", 1],
+          ...moneyScopeFilters(scope, "party_account_currency"),
         ],
-        limit: 1000,
-      });
+        limit: 0,
+      }, { skipCache: true });
 
       const count = invoices.length;
-      const total = invoices.reduce(
-        (sum, inv) => sum + (Number(inv.outstanding_amount) || 0),
-        0,
+      const { currency, amounts } = moneyValues(
+        tool,
+        invoices,
+        "outstanding_amount",
+        "party_account_currency",
+        scope.currency,
       );
+      const total = sumMoney(tool, amounts);
 
       return {
         label: "Overdue Invoices",
         value: count,
-        formattedValue: `${count} inv. / ${
-          total.toLocaleString("en-US", { style: "currency", currency: "EUR" })
-        }`,
+        formattedValue: `${count} inv. / ${formatMoney(total, currency)}`,
+        secondary: {
+          kind: "amount",
+          value: total,
+          ...(currency ? { currency } : {}),
+        },
         trend: count > 0 ? "up" : "flat",
         trendIsGood: false,
         color: "#f87171",

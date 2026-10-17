@@ -158,7 +158,7 @@ export function PathBar(
           ? (
             <span class="flex items-center gap-1.5">
               <span class="size-[5px] rounded-full bg-accent" />
-              <span class="font-mono text-[10px] uppercase tracking-[0.08em] text-accent">
+              <span class="font-mono text-[10px] uppercase tracking-live text-accent">
                 {t("nav.loading")}
               </span>
             </span>
@@ -167,7 +167,7 @@ export function PathBar(
             <>
               <span
                 class={cx(
-                  "rounded-[3px] border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.09em]",
+                  "rounded-[3px] border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-label",
                   // Seul le graphique passe en brand : c'est le signal qui
                   // prépare un retour vers autre chose qu'une liste.
                   level.kind === "chart"

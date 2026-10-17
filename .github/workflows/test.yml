@@ -33,6 +33,9 @@ jobs:
       - name: Tests
         run: deno test --allow-all src/
 
+      - name: Release script tests (publish guard, third-party notices)
+        run: deno task test:scripts
+
       - name: Built Buy App bundle
         run: deno task check:buy-evidence-bundle
 

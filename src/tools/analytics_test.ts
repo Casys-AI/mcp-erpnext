@@ -9,7 +9,7 @@
 
 // deno-lint-ignore-file no-explicit-any
 
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { SchemaValidator } from "@casys/mcp-server";
 import {
   analyticsTools,
@@ -219,14 +219,18 @@ Deno.test("erpnext_revenue_trend - returns line chart with monthly data", async 
   const mockClient = makeMockClient({
     list: async () => [
       {
+        name: "SO-CURRENT",
         customer_name: "Acme",
         grand_total: 5000,
         transaction_date: relativeMonth(0, 10),
+        currency: "USD",
       },
       {
+        name: "SO-PREVIOUS",
         customer_name: "Acme",
         grand_total: 3000,
         transaction_date: relativeMonth(1, 15),
+        currency: "USD",
       },
     ],
   });
@@ -242,6 +246,7 @@ Deno.test("erpnext_revenue_trend - returns line chart with monthly data", async 
   assertEquals(result.datasets.length, 1); // total mode
   assertEquals(result.datasets[0].values.at(-1), 5000);
   assertEquals(result.datasets[0].values.at(-2), 3000);
+  assertEquals(result.currency, "USD");
   assertChartMeta(result);
 });
 
@@ -249,14 +254,18 @@ Deno.test("erpnext_revenue_trend - customer grouping produces multiple datasets"
   const mockClient = makeMockClient({
     list: async () => [
       {
+        name: "SO-ACME",
         customer_name: "Acme",
         grand_total: 5000,
         transaction_date: relativeMonth(0, 10),
+        currency: "CAD",
       },
       {
+        name: "SO-GLOBEX",
         customer_name: "Globex",
         grand_total: 3000,
         transaction_date: relativeMonth(1, 15),
+        currency: "CAD",
       },
     ],
   });
@@ -268,7 +277,107 @@ Deno.test("erpnext_revenue_trend - customer grouping produces multiple datasets"
   ) as any;
 
   assert(result.datasets.length >= 2, "Should have dataset per customer");
+  assertEquals(result.currency, "CAD");
   assertChartMeta(result);
+});
+
+Deno.test("erpnext_revenue_trend - refuses mixed currencies and honors an exact currency filter", async () => {
+  const tool = getTool("erpnext_revenue_trend");
+  const mixedRows = [
+    {
+      name: "SO-USD",
+      customer_name: "Acme",
+      grand_total: 100,
+      transaction_date: relativeMonth(0),
+      currency: "USD",
+    },
+    {
+      name: "SO-TWD",
+      customer_name: "Globex",
+      grand_total: 200,
+      transaction_date: relativeMonth(0),
+      currency: "TWD",
+    },
+  ];
+
+  await assertRejects(
+    () =>
+      tool.handler(
+        {},
+        makeCtx(makeMockClient({ list: async () => mixedRows })),
+      ),
+    Error,
+    "MIXED_CURRENCIES",
+  );
+
+  const result = await tool.handler(
+    { currency: "usd" },
+    makeCtx(makeMockClient({
+      list: async (
+        _doctype: string,
+        options: { filters: unknown[][] },
+      ) => {
+        assert(
+          options.filters.some((filter) =>
+            JSON.stringify(filter) ===
+              JSON.stringify(["currency", "=", "USD"])
+          ),
+        );
+        return [mixedRows[0]];
+      },
+    })),
+  ) as any;
+
+  assertEquals(result.currency, "USD");
+  assertEquals(result.datasets[0].values.at(-1), 100);
+});
+
+Deno.test("erpnext_revenue_trend - reads the complete fresh scoped period through today", async () => {
+  const now = new Date();
+  const expectedStart = localCalendarDate(
+    new Date(now.getFullYear(), now.getMonth() - 2, 1),
+  );
+  const expectedEnd = localCalendarDate(now);
+  let reads = 0;
+  const result = await getTool("erpnext_revenue_trend").handler(
+    {
+      months: 3,
+      company: " Casys Industries ",
+      currency: "twd",
+    },
+    makeCtx(makeMockClient({
+      list: async (
+        doctype: string,
+        options: {
+          fields: string[];
+          filters: unknown[][];
+          limit: number;
+          order_by: string;
+        },
+        readOptions?: { skipCache?: boolean },
+      ) => {
+        reads++;
+        assertEquals(doctype, "Sales Order");
+        assert(options.fields.includes("currency"));
+        assert(options.fields.includes("company"));
+        assertEquals(options.limit, 0);
+        assertEquals(options.order_by, "transaction_date asc");
+        assertEquals(readOptions?.skipCache, true);
+        assertEquals(options.filters, [
+          ["transaction_date", ">=", expectedStart],
+          ["transaction_date", "<=", expectedEnd],
+          ["docstatus", "!=", 2],
+          ["company", "=", "Casys Industries"],
+          ["currency", "=", "TWD"],
+        ]);
+        return [];
+      },
+    })),
+  ) as any;
+
+  assertEquals(reads, 1);
+  assertEquals(result.currency, "TWD");
+  assertEquals(result.datasets[0].values, [0, 0, 0]);
 });
 
 // ── erpnext_order_breakdown ─────────────────────────────────────────────────
@@ -517,8 +626,8 @@ Deno.test("erpnext_kpi_revenue - returns KPI with sparkline (single API call)", 
 
   const mockClient = makeMockClient({
     list: async () => [
-      { grand_total: 5000, transaction_date: thisMonth },
-      { grand_total: 3000, transaction_date: lastMonth },
+      { grand_total: 5000, currency: "EUR", transaction_date: thisMonth },
+      { grand_total: 3000, currency: "EUR", transaction_date: lastMonth },
     ],
   });
 
@@ -548,8 +657,8 @@ Deno.test("erpnext_kpi_revenue - returns KPI with sparkline (single API call)", 
 Deno.test("erpnext_kpi_outstanding - sums outstanding invoices", async () => {
   const mockClient = makeMockClient({
     list: async () => [
-      { outstanding_amount: 2000 },
-      { outstanding_amount: 3000 },
+      { outstanding_amount: 2000, party_account_currency: "EUR" },
+      { outstanding_amount: 3000, party_account_currency: "EUR" },
     ],
   });
 
@@ -560,6 +669,39 @@ Deno.test("erpnext_kpi_outstanding - sums outstanding invoices", async () => {
   assertEquals(result.value, 5000);
   assert(result.trendIsGood === false);
   assertChartMeta(result, "kpi-viewer");
+});
+
+Deno.test("erpnext_kpi_outstanding - additive secondary carries the invoice count, existing fields unchanged", async () => {
+  const mockClient = makeMockClient({
+    list: async () => [
+      { outstanding_amount: 2000, party_account_currency: "EUR" },
+      { outstanding_amount: 300.5, party_account_currency: "EUR" },
+      { outstanding_amount: 0, party_account_currency: "EUR" },
+    ],
+  });
+
+  const tool = getTool("erpnext_kpi_outstanding");
+  const result = await tool.handler({}, makeCtx(mockClient)) as any;
+
+  assertEquals(result.secondary, { kind: "invoice_count", value: 3 });
+  // Contrat 3.0.4 : value = total, currency racine, formattedValue texte.
+  assertEquals(result.value, 2300.5);
+  assertEquals(result.currency, "EUR");
+  assertEquals(result.formattedValue, "3 inv. / €2,300.50");
+  assertEquals("unit" in result, false);
+});
+
+Deno.test("erpnext_kpi_outstanding - empty list yields a zero count, no crash", async () => {
+  const tool = getTool("erpnext_kpi_outstanding");
+  const result = await tool.handler(
+    {},
+    makeCtx(makeMockClient({
+      list: async () => [],
+    })),
+  ) as any;
+
+  assertEquals(result.secondary, { kind: "invoice_count", value: 0 });
+  assertEquals(result.value, 0);
 });
 
 // ── erpnext_kpi_orders ──────────────────────────────────────────────────────
@@ -616,8 +758,16 @@ Deno.test("erpnext_kpi_gross_margin - computes margin from SO items and Bin", as
 Deno.test("erpnext_kpi_overdue - counts overdue invoices", async () => {
   const mockClient = makeMockClient({
     list: async () => [
-      { outstanding_amount: 1500, due_date: "2026-01-01" },
-      { outstanding_amount: 500, due_date: "2025-12-15" },
+      {
+        outstanding_amount: 1500,
+        party_account_currency: "EUR",
+        due_date: "2026-01-01",
+      },
+      {
+        outstanding_amount: 500,
+        party_account_currency: "EUR",
+        due_date: "2025-12-15",
+      },
     ],
   });
 
@@ -628,6 +778,76 @@ Deno.test("erpnext_kpi_overdue - counts overdue invoices", async () => {
   assertEquals(result.value, 2);
   assert(result.trendIsGood === false);
   assertChartMeta(result, "kpi-viewer");
+});
+
+Deno.test("erpnext_kpi_overdue - additive secondary carries the overdue amount, no root unit or currency", async () => {
+  const mockClient = makeMockClient({
+    list: async () => [
+      {
+        outstanding_amount: 1500,
+        party_account_currency: "EUR",
+        due_date: "2026-01-01",
+      },
+      {
+        outstanding_amount: 800.5,
+        party_account_currency: "EUR",
+        due_date: "2025-12-15",
+      },
+    ],
+  });
+
+  const tool = getTool("erpnext_kpi_overdue");
+  const result = await tool.handler({}, makeCtx(mockClient)) as any;
+
+  assertEquals(result.secondary, {
+    kind: "amount",
+    value: 2300.5,
+    currency: "EUR",
+  });
+  // value reste le compte : ni unit ni currency racine (sinon rendu comme un montant).
+  assertEquals(result.value, 2);
+  assertEquals("unit" in result, false);
+  assertEquals("currency" in result, false);
+  assertEquals(result.formattedValue, "2 inv. / €2,300.50");
+});
+
+Deno.test("erpnext_kpi_overdue - empty list yields count 0 and amount 0, no crash", async () => {
+  const tool = getTool("erpnext_kpi_overdue");
+  const result = await tool.handler(
+    {},
+    makeCtx(makeMockClient({
+      list: async () => [],
+    })),
+  ) as any;
+
+  assertEquals(result.value, 0);
+  assertEquals(result.secondary, {
+    kind: "amount",
+    value: 0,
+  });
+});
+
+Deno.test("KPI tools - only outstanding and overdue expose secondary", async () => {
+  const withSecondary = new Set([
+    "erpnext_kpi_outstanding",
+    "erpnext_kpi_overdue",
+  ]);
+  for (
+    const name of [
+      "erpnext_kpi_outstanding",
+      "erpnext_kpi_overdue",
+      "erpnext_kpi_orders",
+      "erpnext_kpi_gross_margin",
+    ]
+  ) {
+    const result = await getTool(name).handler(
+      {},
+      makeCtx(makeMockClient({
+        list: async () => [],
+      })),
+    ) as any;
+    assertEquals("secondary" in result, withSecondary.has(name), name);
+  }
 });
 
 // ── erpnext_sales_funnel ────────────────────────────────────────────────────
@@ -665,6 +885,338 @@ Deno.test("erpnext_sales_funnel - returns 4-stage funnel with conversion rates",
   assertEquals(result.stages[2].conversionRate, 50); // 1/2
   assertEquals(result.stages[3].conversionRate, 100); // 1/1
   assertChartMeta(result, "funnel-viewer");
+});
+
+Deno.test("financial KPI - revenue retains the Sales Order document currency", async () => {
+  const result = await getTool("erpnext_kpi_revenue").handler(
+    {},
+    makeCtx(makeMockClient({
+      list: async () => [{
+        grand_total: 50,
+        currency: "USD",
+        transaction_date: relativeMonth(0),
+      }],
+    })),
+  ) as any;
+  assertEquals(result.value, 50);
+  assertEquals(result.currency, "USD");
+});
+
+Deno.test("financial KPI - receivables use the party account currency instead of the invoice currency", async () => {
+  const client = makeMockClient({
+    list: async () => [{
+      outstanding_amount: 60,
+      currency: "EUR",
+      party_account_currency: "CAD",
+    }],
+  });
+  const outstanding = await getTool("erpnext_kpi_outstanding").handler(
+    {},
+    makeCtx(client),
+  ) as any;
+  assertEquals(outstanding.currency, "CAD");
+  assertEquals(outstanding.value, 60);
+  const overdue = await getTool("erpnext_kpi_overdue").handler(
+    {},
+    makeCtx(client),
+  ) as any;
+  assertEquals(overdue.value, 1);
+  assertEquals(overdue.secondary, {
+    kind: "amount",
+    value: 60,
+    currency: "CAD",
+  });
+  assertEquals("currency" in overdue, false);
+});
+
+Deno.test("financial KPI - mixed currencies are refused with an actionable error", async () => {
+  for (
+    const name of [
+      "erpnext_kpi_revenue",
+      "erpnext_kpi_outstanding",
+      "erpnext_kpi_overdue",
+    ]
+  ) {
+    const client = makeMockClient({
+      list: async () =>
+        ["USD", "TWD"].map((currency) => ({
+          grand_total: 100,
+          currency,
+          party_account_currency: currency,
+          outstanding_amount: 100,
+          transaction_date: relativeMonth(0),
+        })),
+    });
+    const error = await assertRejects(
+      () => getTool(name).handler({}, makeCtx(client)),
+      Error,
+      "MIXED_CURRENCIES",
+    );
+    assert(error.message.includes("currency"));
+    assert(error.message.includes("Recovery:"));
+  }
+});
+
+Deno.test("financial KPI - missing currency never falls back to EUR or document currency", async () => {
+  for (
+    const name of [
+      "erpnext_kpi_revenue",
+      "erpnext_kpi_outstanding",
+      "erpnext_kpi_overdue",
+    ]
+  ) {
+    const row = name === "erpnext_kpi_revenue"
+      ? { grand_total: 50, transaction_date: relativeMonth(0) }
+      : { outstanding_amount: 50, currency: "EUR" };
+    await assertRejects(
+      () =>
+        getTool(name).handler(
+          {},
+          makeCtx(makeMockClient({
+            list: async () => [row],
+          })),
+        ),
+      Error,
+      "MISSING_CURRENCY",
+    );
+  }
+});
+
+Deno.test("financial KPI - empty populations do not claim a currency without evidence", async () => {
+  for (
+    const name of [
+      "erpnext_kpi_revenue",
+      "erpnext_kpi_outstanding",
+      "erpnext_kpi_overdue",
+    ]
+  ) {
+    const result = await getTool(name).handler(
+      {},
+      makeCtx(makeMockClient({ list: async () => [] })),
+    ) as any;
+    assertEquals(result.value, 0);
+    assertEquals("currency" in result, false);
+    if (name === "erpnext_kpi_overdue") {
+      assertEquals("currency" in result.secondary, false);
+    }
+    assertEquals(String(result.formattedValue ?? "").includes("€"), false);
+  }
+});
+
+Deno.test("financial KPI - company and currency filters target the stored amount unit", async () => {
+  for (
+    const name of [
+      "erpnext_kpi_revenue",
+      "erpnext_kpi_outstanding",
+      "erpnext_kpi_overdue",
+    ]
+  ) {
+    const currencyField = name === "erpnext_kpi_revenue"
+      ? "currency"
+      : "party_account_currency";
+    const client = makeMockClient({
+      list: async (
+        _doctype: string,
+        options: { filters: unknown[][]; fields: string[] },
+      ) => {
+        assert(options.fields.includes(currencyField));
+        assert(
+          options.filters.some((f) =>
+            JSON.stringify(f) === JSON.stringify([currencyField, "=", "TWD"])
+          ),
+        );
+        assert(
+          options.filters.some((f) =>
+            JSON.stringify(f) ===
+              JSON.stringify(["company", "=", "Taiwan Company"])
+          ),
+        );
+        return [];
+      },
+    });
+    const result = await getTool(name).handler({
+      company: " Taiwan Company ",
+      currency: "twd",
+    }, makeCtx(client)) as any;
+    assertEquals(
+      name === "erpnext_kpi_overdue"
+        ? result.secondary.currency
+        : result.currency,
+      "TWD",
+    );
+  }
+});
+
+Deno.test("financial KPI - malformed scope is rejected before reading Frappe", async () => {
+  let calls = 0;
+  const client = makeMockClient({
+    list: async () => {
+      calls++;
+      return [];
+    },
+  });
+  for (
+    const name of [
+      "erpnext_kpi_revenue",
+      "erpnext_kpi_outstanding",
+      "erpnext_kpi_overdue",
+      "erpnext_kpi_orders",
+    ]
+  ) {
+    for (
+      const input of [{ company: " " }, { company: true }, { currency: "" }, {
+        currency: 12,
+      }]
+    ) {
+      await assertRejects(
+        () => getTool(name).handler(input, makeCtx(client)),
+        Error,
+        "INVALID_INPUT",
+      );
+    }
+  }
+  assertEquals(calls, 0);
+});
+
+Deno.test("financial KPI - invalid amounts never turn into zero", async () => {
+  for (const raw of [null, undefined, "", "wrong", Infinity, NaN, true]) {
+    const row = {
+      currency: "USD",
+      party_account_currency: "USD",
+      grand_total: raw,
+      outstanding_amount: raw,
+      transaction_date: relativeMonth(0, 1),
+    };
+    for (
+      const name of [
+        "erpnext_kpi_revenue",
+        "erpnext_kpi_outstanding",
+        "erpnext_kpi_overdue",
+      ]
+    ) {
+      await assertRejects(
+        () =>
+          getTool(name).handler(
+            {},
+            makeCtx(makeMockClient({ list: async () => [row] })),
+          ),
+        Error,
+        "INVALID_AMOUNT",
+      );
+    }
+  }
+});
+
+Deno.test("financial KPI - Revenue and Orders stop at today and compare complete local calendar months", async () => {
+  const now = new Date();
+  const today = localCalendarDate(now);
+  const previousStart = localCalendarDate(
+    new Date(now.getFullYear(), now.getMonth() - 1, 1),
+  );
+  const previousEnd = localCalendarDate(
+    new Date(now.getFullYear(), now.getMonth(), 0),
+  );
+  const orderReads: unknown[][][] = [];
+  const client = makeMockClient({
+    list: async (
+      _doctype: string,
+      options: { filters: unknown[][]; limit: number; fields: string[] },
+      readOptions?: { skipCache?: boolean },
+    ) => {
+      assertEquals(options.limit, 0);
+      assertEquals(readOptions?.skipCache, true);
+      orderReads.push(options.filters);
+      return [];
+    },
+  });
+  await getTool("erpnext_kpi_revenue").handler({}, makeCtx(client));
+  await getTool("erpnext_kpi_orders").handler({}, makeCtx(client));
+  assert(
+    orderReads[0].some((f) =>
+      JSON.stringify(f) === JSON.stringify(["transaction_date", "<=", today])
+    ),
+  );
+  assert(
+    orderReads[1].some((f) =>
+      JSON.stringify(f) === JSON.stringify(["transaction_date", "<=", today])
+    ),
+  );
+  assert(
+    orderReads[2].some((f) =>
+      JSON.stringify(f) ===
+        JSON.stringify(["transaction_date", ">=", previousStart])
+    ),
+  );
+  assert(
+    orderReads[2].some((f) =>
+      JSON.stringify(f) ===
+        JSON.stringify(["transaction_date", "<=", previousEnd])
+    ),
+  );
+});
+
+Deno.test("financial KPI - order counts remain complete beyond 1000 rows", async () => {
+  const rows = Array.from({ length: 1001 }, (_, i) => ({ name: `SO-${i}` }));
+  const result = await getTool("erpnext_kpi_orders").handler(
+    {},
+    makeCtx(makeMockClient({
+      list: async (_doctype: string, options: { limit: number }) =>
+        options.limit === 0 ? rows : rows.slice(0, options.limit),
+    })),
+  ) as any;
+  assertEquals(result.value, 1001);
+});
+
+Deno.test("financial KPI - a foreign currency beyond the former cap still prevents a false total", async () => {
+  const rows = Array.from({ length: 1001 }, (_, index) => ({
+    outstanding_amount: 1,
+    party_account_currency: index === 1000 ? "CAD" : "USD",
+  }));
+  const client = makeMockClient({
+    list: async (_doctype: string, options: { limit: number }) =>
+      options.limit === 0 ? rows : rows.slice(0, options.limit),
+  });
+  await assertRejects(
+    () => getTool("erpnext_kpi_outstanding").handler({}, makeCtx(client)),
+    Error,
+    "MIXED_CURRENCIES",
+  );
+});
+
+Deno.test("financial KPI - totals include populations beyond the former 1000 and 5000 caps", async () => {
+  for (
+    const name of [
+      "erpnext_kpi_revenue",
+      "erpnext_kpi_outstanding",
+      "erpnext_kpi_overdue",
+    ]
+  ) {
+    const count = name === "erpnext_kpi_revenue" ? 5001 : 1001;
+    const rows = Array.from({ length: count }, () => ({
+      grand_total: 1,
+      outstanding_amount: 1,
+      currency: "USD",
+      party_account_currency: "USD",
+      transaction_date: relativeMonth(0),
+    }));
+    const result = await getTool(name).handler(
+      {},
+      makeCtx(makeMockClient({
+        list: async (
+          _doctype: string,
+          options: { limit: number },
+          readOptions?: { skipCache?: boolean },
+        ) => {
+          assertEquals(readOptions?.skipCache, true);
+          return options.limit === 0 ? rows : rows.slice(0, options.limit);
+        },
+      })),
+    ) as any;
+    assertEquals(result.value, count, name);
+    if (name === "erpnext_kpi_overdue") {
+      assertEquals(result.secondary.value, count);
+    }
+  }
 });
 
 // ── erpnext_ar_aging ────────────────────────────────────────────────────────

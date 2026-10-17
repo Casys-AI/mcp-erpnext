@@ -103,7 +103,7 @@
 | `erpnext_doc_unassign`  | Any     | Remove one user's native assignment              | -              |
 | `erpnext_file_list`     | File    | List files attached to an exact document         | -              |
 | `erpnext_file_upload`   | File    | Upload and attach private-by-default file data   | -              |
-| `erpnext_file_download` | File    | App-only authenticated bounded download          | doc-viewer     |
+| `erpnext_file_download` | File    | MCP Apps only, authenticated bounded download    | doc-viewer     |
 
 ### Kanban (2 tools)
 
@@ -218,7 +218,7 @@ for any ERPNext DocType:
 | **Unassign** | `erpnext_doc_unassign`  | Remove a user's native assignment                       |
 | **Files**    | `erpnext_file_list`     | List files attached to an exact document                |
 | **Upload**   | `erpnext_file_upload`   | Attach base64 bytes as a private File by default        |
-| **Download** | `erpnext_file_download` | App-only authenticated and bounded host download        |
+| **Download** | `erpnext_file_download` | MCP Apps only, authenticated and bounded host download  |
 
 Specific DocTypes also have dedicated submit/cancel tools:
 `erpnext_sales_order_submit/cancel`, `erpnext_sales_invoice_submit`.

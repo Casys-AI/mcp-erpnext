@@ -807,6 +807,9 @@ export class FrappeClient {
     if (options.order_by) {
       params.set("order_by", options.order_by);
     }
+    if (options.group_by) {
+      params.set("group_by", options.group_by);
+    }
     if (options.limit !== undefined) {
       params.set("limit", String(options.limit));
     }

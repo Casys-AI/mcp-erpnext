@@ -622,6 +622,43 @@ export function shouldHandleChartPointActivation(
   return activation === "context" || detailEnabled;
 }
 
+/**
+ * Pie, donut et treemap n'ont ni infobulle de détail ni chevron : sans
+ * contexte disponible, le clic n'aurait aucun effet ni indice. Sur ces
+ * surfaces, quand le contexte est absent et que le détail est local (un saut),
+ * le clic ouvre le détail. Un détail conversationnel (message) ne s'ouvre
+ * jamais au clic. Les barres et points gardent leur tooltip « 2× détail ».
+ */
+export function chartClickOpensDetail(
+  chartType: string | undefined,
+  contextSupported: boolean,
+  detailMode: "inline" | "message" | null,
+): boolean {
+  return (chartType === "pie" || chartType === "donut" ||
+    chartType === "treemap") &&
+    !contextSupported && detailMode === "inline";
+}
+
+/**
+ * Clé i18n de l'indication de geste (tooltip, title de tuile ou de légende),
+ * ou undefined quand la cible n'a aucun geste utile.
+ */
+export function chartTooltipHintKey(
+  options: {
+    contextEnabled: boolean;
+    detailEnabled: boolean;
+    clickOpensDetail: boolean;
+  },
+): string | undefined {
+  const { contextEnabled, detailEnabled, clickOpensDetail } = options;
+  if (clickOpensDetail) return "chart.tooltip.click_action_detail";
+  if (contextEnabled && detailEnabled) {
+    return "chart.tooltip.click_action_context";
+  }
+  if (contextEnabled) return "chart.tooltip.click_action_context_only";
+  return detailEnabled ? "chart.tooltip.click_action_fallback" : undefined;
+}
+
 /** Un fallback conversationnel est une action, jamais un disclosure ARIA. */
 export function chartPointExpansionState(
   hasInlineJump: boolean,

@@ -4,7 +4,7 @@
 
 [![JSR](https://jsr.io/badges/@casys/mcp-erpnext)](https://jsr.io/@casys/mcp-erpnext)
 [![npm](https://img.shields.io/npm/v/@casys/mcp-erpnext?logo=npm&color=cb3837)](https://www.npmjs.com/package/@casys/mcp-erpnext)
-[![CI](https://github.com/superWorldSavior/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/superWorldSavior/mcp-erpnext/actions/workflows/test.yml)
+[![CI](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml/badge.svg)](https://github.com/Casys-AI/mcp-erpnext/actions/workflows/test.yml)
 [![MCP](https://img.shields.io/badge/MCP-server-1f6feb?logo=modelcontextprotocol&logoColor=white)](https://modelcontextprotocol.io)
 [![M8ven Score](https://m8ven.ai/badge/mcp/casys-ai-mcp-erpnext-1kev4k)](https://m8ven.ai/mcp/casys-ai-mcp-erpnext-1kev4k)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -76,7 +76,7 @@ Code、VS Code Copilot 或自訂代理）。
 ## 最新異動
 
 完整的發布歷程請參閱
-[CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/superWorldSavior/mcp-erpnext/releases/latest)。
+[CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
 
 > **3.2.0-beta.3 預覽版：** 此版同步納入穩定版 3.1.0 的建立錯誤修復指引、
 > ERPNext 16 商機相容性及日期修正，並保留通用文件檢視器、子表格、附件、

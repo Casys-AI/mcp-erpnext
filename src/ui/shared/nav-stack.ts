@@ -96,6 +96,12 @@ export interface NavStack {
   rootIdentity: string;
   /** Le prochain id : un niveau repoussé après un retour n'hérite jamais de l'ancien. */
   nextId: number;
+  /**
+   * Combien de racines cette pile a remplacées. Les ids ne sont uniques
+   * qu'au sein d'une pile : après A→B→A, « 1:Orders » revient, et seule
+   * la génération distingue l'ancienne pile A de la nouvelle.
+   */
+  generation: number;
 }
 
 export type LevelInit =
@@ -116,7 +122,16 @@ export function createStack(root: LevelInit): NavStack {
     }],
     rootIdentity: navRootIdentity(root),
     nextId: 1,
+    generation: 0,
   };
+}
+
+/**
+ * L'instance de pile qu'une réponse asynchrone doit retrouver : sa racine
+ * et sa génération. Un id de niveau n'a de sens que sous la même époque.
+ */
+export function stackEpoch(stack: NavStack): string {
+  return `${stack.generation}:${stack.rootIdentity}`;
 }
 
 /**
@@ -138,7 +153,9 @@ export function navRootIdentity(root: LevelInit): string {
 
 /** Garde la pile pour la même racine ; repart proprement pour une autre. */
 export function reconcileRoot(stack: NavStack, root: LevelInit): NavStack {
-  if (stack.rootIdentity !== navRootIdentity(root)) return createStack(root);
+  if (stack.rootIdentity !== navRootIdentity(root)) {
+    return { ...createStack(root), generation: stack.generation + 1 };
+  }
   const current = stack.levels[0];
   const presentation = {
     title: root.title,
@@ -167,13 +184,13 @@ export function reconcileRoot(stack: NavStack, root: LevelInit): NavStack {
 
 export function pushLevel(stack: NavStack, level: LevelInit): NavStack {
   return {
+    ...stack,
     levels: [...stack.levels, {
       ui: {},
       loading: false,
       ...level,
       id: levelId(stack.nextId, level.title),
     }],
-    rootIdentity: stack.rootIdentity,
     nextId: stack.nextId + 1,
   };
 }

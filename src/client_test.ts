@@ -3,12 +3,27 @@ import { ErpNextToolsClient, getToolByName } from "./client.ts";
 import { type FrappeClient, setFrappeClient } from "./api/frappe-client.ts";
 import { AmbiguousLinkError } from "./api/resolve.ts";
 import { linkDisambiguationRequestKey } from "./mrtr/link-disambiguation.ts";
+import {
+  VIEWER_META_KEY,
+  VIEWER_ONLY_RESULT_KEYS,
+} from "./tools/model-visible.ts";
 import type { ErpNextTool, ErpNextToolContext } from "./tools/types.ts";
 import type { ToolHandlerContext } from "@casys/mcp-server";
 
 // Note: Error handling previously tested here (isError wrapping) has been moved
 // to the server layer via toolErrorMapper in server.ts. Handlers now throw
 // naturally and the server converts errors to isError results.
+
+/** Bloc d'enrichissement viewer d'un résultat pré-formaté (`_meta["io.casys/viewer"]`). */
+function viewerBlock(
+  result: { _meta?: Record<string, unknown> },
+): Record<string, unknown> {
+  const viewer = result._meta?.[VIEWER_META_KEY] as
+    | Record<string, unknown>
+    | undefined;
+  assert(viewer, "result should carry the viewer enrichment block");
+  return viewer;
+}
 
 Deno.test("buildHandlersMap - returns a handler for each registered tool", () => {
   const client = new ErpNextToolsClient();
@@ -150,10 +165,13 @@ Deno.test("buildHandlersMap - uses resolved Link IDs in UI refresh requests", as
         },
         retryVerified: true,
       },
-    ) as { structuredContent: Record<string, unknown> };
+    ) as {
+      structuredContent: Record<string, unknown>;
+      _meta?: Record<string, unknown>;
+    };
 
     assertEquals(
-      (result.structuredContent.refreshRequest as {
+      (viewerBlock(result).refreshRequest as {
         arguments: Record<string, unknown>;
       }).arguments,
       { customer: "CUST-002" },
@@ -188,10 +206,14 @@ Deno.test("buildHandlersMap - mutating viewer tools cannot refresh by replaying 
   try {
     const result = await client.buildHandlersMap().get(tool.name)!({
       name: "SINV-001",
-    }) as { structuredContent: Record<string, unknown> };
+    }) as {
+      structuredContent: Record<string, unknown>;
+      _meta?: Record<string, unknown>;
+    };
 
     assertEquals(result.structuredContent.refreshRequest, undefined);
-    assertEquals(result.structuredContent._availableTools, []);
+    assertEquals(viewerBlock(result).refreshRequest, undefined);
+    assertEquals(viewerBlock(result)._availableTools, []);
   } finally {
     setFrappeClient(null);
   }
@@ -223,9 +245,10 @@ Deno.test("buildHandlersMap - mutating viewer tools preserve an explicit read-on
   try {
     const result = await client.buildHandlersMap().get(tool.name)!({}) as {
       structuredContent: Record<string, unknown>;
+      _meta?: Record<string, unknown>;
     };
 
-    assertEquals(result.structuredContent.refreshRequest, safeRefresh);
+    assertEquals(viewerBlock(result).refreshRequest, safeRefresh);
   } finally {
     setFrappeClient(null);
   }
@@ -249,12 +272,13 @@ Deno.test("buildHandlersMap - category-scoped clients omit jumps to unavailable 
     const result = await client.buildHandlersMap().get(tool.name)!({}) as {
       content: Array<{ text: string }>;
       structuredContent: Record<string, unknown>;
+      _meta?: Record<string, unknown>;
     };
     assertEquals(result.structuredContent._jumps, undefined);
-    assertEquals(result.structuredContent._availableTools, [tool.name]);
+    assertEquals(viewerBlock(result)._jumps, undefined);
+    assertEquals(viewerBlock(result)._availableTools, [tool.name]);
     assertEquals(
-      (result.structuredContent._meta as { ui: { resourceUri: string } }).ui
-        .resourceUri,
+      (result._meta?.ui as { resourceUri: string }).resourceUri,
       "ui://mcp-erpnext/kpi-viewer",
     );
     assertEquals(JSON.parse(result.content[0].text), result.structuredContent);
@@ -283,8 +307,9 @@ Deno.test("buildHandlersMap - sales category advertises only usable invoice acti
     )!({ name: "SINV-001" }) as {
       content: Array<{ text: string }>;
       structuredContent: Record<string, unknown>;
+      _meta?: Record<string, unknown>;
     };
-    assertEquals(result.structuredContent._availableTools, [
+    assertEquals(viewerBlock(result)._availableTools, [
       "erpnext_customer_get",
       "erpnext_sales_invoice_get",
       "erpnext_sales_invoice_submit",
@@ -313,8 +338,9 @@ Deno.test("buildHandlersMap - sales-only Sales Order advertises its exact submit
       "erpnext_sales_order_get",
     )!({ name: "SO-001" }) as {
       structuredContent: Record<string, unknown>;
+      _meta?: Record<string, unknown>;
     };
-    assertEquals(result.structuredContent._availableTools, [
+    assertEquals(viewerBlock(result)._availableTools, [
       "erpnext_customer_get",
       "erpnext_sales_order_cancel",
       "erpnext_sales_order_get",
@@ -339,8 +365,11 @@ Deno.test("buildHandlersMap - full server never advertises submit or cancel for 
   try {
     const result = await client.buildHandlersMap().get(
       "erpnext_customer_list",
-    )!({}) as { structuredContent: Record<string, unknown> };
-    const tools = result.structuredContent._availableTools as string[];
+    )!({}) as {
+      structuredContent: Record<string, unknown>;
+      _meta?: Record<string, unknown>;
+    };
+    const tools = viewerBlock(result)._availableTools as string[];
     assert(!tools.includes("erpnext_doc_submit"));
     assert(!tools.includes("erpnext_doc_cancel"));
   } finally {
@@ -361,12 +390,84 @@ Deno.test("buildHandlersMap - kanban category advertises move but no operations/
     )!({ doctype: "Task" }) as {
       content: Array<{ text: string }>;
       structuredContent: Record<string, unknown>;
+      _meta?: Record<string, unknown>;
     };
-    assertEquals(result.structuredContent._availableTools, [
+    assertEquals(viewerBlock(result)._availableTools, [
       "erpnext_kanban_get_board",
       "erpnext_kanban_move_card",
     ]);
     assertEquals(JSON.parse(result.content[0].text), result.structuredContent);
+  } finally {
+    setFrappeClient(null);
+  }
+});
+
+Deno.test("buildHandlersMap - viewer enrichment stays out of model context", async () => {
+  const tool: ErpNextTool = {
+    name: "erpnext_viewer_split_probe",
+    description: "Test-only viewer/model split probe",
+    category: "setup",
+    inputSchema: { type: "object" },
+    annotations: { readOnlyHint: true },
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    handler: async () => ({
+      doctype: "Sales Invoice",
+      count: 1,
+      data: [{ name: "SINV-001" }],
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+    }),
+  };
+  const client = new ErpNextToolsClient();
+  (client as unknown as { tools: ErpNextTool[] }).tools = [tool];
+
+  setFrappeClient({} as FrappeClient);
+  try {
+    const result = await client.buildHandlersMap().get(tool.name)!({}) as {
+      content: Array<{ type: string; text: string }>;
+      structuredContent: Record<string, unknown>;
+      _meta?: Record<string, unknown>;
+    };
+
+    const textPayload = JSON.parse(result.content[0].text) as Record<
+      string,
+      unknown
+    >;
+    for (const key of VIEWER_ONLY_RESULT_KEYS) {
+      assertEquals(
+        key in result.structuredContent,
+        false,
+        `${key} must not reach structuredContent`,
+      );
+      assertEquals(
+        key in textPayload,
+        false,
+        `${key} must not reach the model text`,
+      );
+    }
+    assertEquals(result.structuredContent, {
+      doctype: "Sales Invoice",
+      count: 1,
+      data: [{ name: "SINV-001" }],
+    });
+    assertEquals(textPayload, result.structuredContent);
+
+    assert(result._meta, "viewer result should carry _meta");
+    assertEquals(
+      (result._meta.ui as { resourceUri: string }).resourceUri,
+      "ui://mcp-erpnext/doclist-viewer",
+    );
+    const viewer = result._meta["io.casys/viewer"] as Record<
+      string,
+      unknown
+    >;
+    assert(viewer, 'enrichment should live under _meta["io.casys/viewer"]');
+    assertEquals(viewer.version, 1);
+    assertEquals(
+      (viewer.refreshRequest as { toolName: string }).toolName,
+      tool.name,
+    );
+    assertEquals(viewer._availableTools, [tool.name]);
+    assertEquals("_meta" in viewer, false);
   } finally {
     setFrappeClient(null);
   }

@@ -264,6 +264,39 @@ Deno.test("interpretPurchaseInvoiceSubmitResult - native submitted identity is s
   assertEquals(callFailure.refresh, false);
 });
 
+Deno.test("interpretPurchaseInvoiceSubmitResult - reads the _meta viewer format", () => {
+  // Nouveau format : données métier seules dans structuredContent,
+  // l'enrichissement viewer vit sous _meta["io.casys/viewer"].
+  const feedback = interpretPurchaseInvoiceSubmitResult({
+    structuredContent: {
+      message: "Purchase Invoice PINV-001 submitted successfully",
+      data: {
+        name: "PINV-001",
+        doctype: "Purchase Invoice",
+        docstatus: 1,
+      },
+    },
+    _meta: {
+      ui: { resourceUri: "ui://mcp-erpnext/invoice-viewer" },
+      "io.casys/viewer": {
+        version: 1,
+        refreshRequest: {
+          toolName: "erpnext_purchase_invoice_get",
+          arguments: { name: "PINV-001" },
+        },
+        _availableTools: ["erpnext_purchase_invoice_get"],
+      },
+    },
+  }, "PINV-001");
+  assertEquals(feedback.kind, "success");
+  assertEquals(
+    feedback.message,
+    "Purchase Invoice PINV-001 submitted successfully",
+  );
+  assertEquals(feedback.refresh, true);
+  assertEquals(feedback.invoice?.name, "PINV-001");
+});
+
 Deno.test("interpretPurchaseInvoiceSubmitResult - malformed or unconfirmed stay attention", () => {
   const unconfirmed = interpretPurchaseInvoiceSubmitResult({
     structuredContent: {

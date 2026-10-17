@@ -4,6 +4,17 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.2.0-beta.3] - 2026-10-17
+
+### Fixed
+
+- Tool results no longer leak viewer-only enrichment into the model context: the
+  text and structured content read by the model now carry domain data only,
+  while refresh requests, navigation jumps and the viewer's tool manifest travel
+  in `_meta["io.casys/viewer"]`, which hosts keep out of the model context and
+  viewers merge back on read. A 12-month profit-and-loss result shrinks from
+  about 4.4 KB to about 0.3 KB of model-visible text.
+
 ## [3.2.0-beta.2] - 2026-10-17
 
 ### Fixed

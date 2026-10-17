@@ -30,6 +30,7 @@ import {
   withUiRefreshRequest,
   withViewerToolCapabilities,
 } from "./tools/ui-refresh.ts";
+import { splitViewerResult, VIEWER_META_KEY } from "./tools/model-visible.ts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -232,8 +233,11 @@ export class ErpNextToolsClient {
    *
    * Object results are returned as pre-formatted MCP results with both
    * `content` (text JSON for model clients) and `structuredContent` (the exact
-   * machine-readable value). Viewer metadata is attached only when declared.
-   * McpApp passes these results through unchanged.
+   * machine-readable value). Both carry only domain data : l'enrichissement
+   * viewer (refresh, sauts, `_availableTools`…) part dans
+   * `_meta["io.casys/viewer"]`, le seul canal caché au modèle sur tous les
+   * hôtes, que la vue refusionne à la lecture. McpApp passes these results
+   * through unchanged.
    */
   buildHandlersMap(): Map<string, ToolHandler> {
     const handlers = new Map<string, ToolHandler>();
@@ -302,10 +306,25 @@ export class ErpNextToolsClient {
         const hasViewer = resultUi || toolMeta?.ui;
 
         if (r) {
+          // Le modèle ne lit que le métier : l'enrichissement viewer part
+          // dans `_meta`, caché au modèle mais livré à la vue avec le
+          // CallToolResult complet. Sans enrichissement, le `_meta` déclaré
+          // passe inchangé, comme avant.
+          const { data, viewer } = splitViewerResult(r);
+          const declaredMeta = r._meta ?? toolMeta;
+          const hasEnrichment = Object.keys(viewer).length > 0;
+          const meta = hasEnrichment
+            ? {
+              ...(isRecord(declaredMeta) ? declaredMeta : {}),
+              [VIEWER_META_KEY]: { version: 1, ...viewer },
+            }
+            : hasViewer
+            ? declaredMeta
+            : undefined;
           return {
-            content: [{ type: "text", text: JSON.stringify(result) }],
-            structuredContent: r,
-            ...(hasViewer ? { _meta: r._meta ?? toolMeta } : {}),
+            content: [{ type: "text", text: JSON.stringify(data) }],
+            structuredContent: data,
+            ...(meta !== undefined ? { _meta: meta } : {}),
           };
         }
 
@@ -315,7 +334,11 @@ export class ErpNextToolsClient {
     return handlers;
   }
 
-  /** Execute a tool by name */
+  /**
+   * Execute a tool by name.
+   * API bibliothèque : renvoie le résultat enrichi complet, clés viewer
+   * incluses, sans le découpage modèle/vue de `buildHandlersMap`.
+   */
   async execute(name: string, args: Record<string, unknown>): Promise<unknown> {
     const tool = this.tools.find((t) => t.name === name);
     if (!tool) {

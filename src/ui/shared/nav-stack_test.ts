@@ -23,6 +23,7 @@ import {
   pushLevel,
   reconcileRoot,
   reportDocumentChange,
+  stackEpoch,
   viewerRootKey,
 } from "./nav-stack.ts";
 
@@ -96,6 +97,21 @@ Deno.test("reconcileRoot - même identité conserve le parcours ; une autre raci
   });
   assertEquals(changed.levels.map((level) => level.title), ["SINV-2"]);
   assertEquals(changed.nextId, 1);
+});
+
+Deno.test("reconcileRoot - A→B→A : même identité, mêmes ids, mais une autre époque", () => {
+  const a = { title: "A", kind: "root" as const };
+  const first = pushLevel(createStack(a), list("Orders"));
+  assertEquals(reconcileRoot(first, a), first);
+
+  const back = pushLevel(
+    reconcileRoot(reconcileRoot(first, { title: "B", kind: "root" }), a),
+    list("Orders"),
+  );
+  assertEquals(back.rootIdentity, first.rootIdentity);
+  assertEquals(currentLevel(back).id, currentLevel(first).id);
+  assertEquals(stackEpoch(back) === stackEpoch(first), false);
+  assertEquals(stackEpoch(createStack(a)), stackEpoch(createStack(a)));
 });
 
 Deno.test("viewerRootKey - canonicalise la requête et ignore les données rafraîchies", () => {

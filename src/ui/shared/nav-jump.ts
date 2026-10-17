@@ -23,6 +23,7 @@ import {
   patchLevel,
   popToLevel,
   pushLevel,
+  stackEpoch,
 } from "./nav-stack.ts";
 
 /**
@@ -49,7 +50,7 @@ export async function jumpInto(
   const decision = {
     outcome: "ignored" as JumpOutcome,
     id: "",
-    rootIdentity: "",
+    epoch: "",
   };
   // Tout se décide sur l'état que l'écrivain fournit — jamais sur une
   // lecture d'avant : deux sauts du même tick voient chacun le précédent.
@@ -64,7 +65,7 @@ export async function jumpInto(
     }
     const next = pushLevel(s, init);
     decision.id = currentLevel(next).id;
-    decision.rootIdentity = s.rootIdentity;
+    decision.epoch = stackEpoch(s);
     decision.outcome = "pushed";
     return next;
   });
@@ -73,7 +74,7 @@ export async function jumpInto(
   const loaded = await loadLevelBody(host, jump.tool);
   // `patchLevel` ne fait rien si le niveau a disparu entre-temps.
   store.set((s) => {
-    if (s.rootIdentity !== decision.rootIdentity) return s;
+    if (stackEpoch(s) !== decision.epoch) return s;
     return patchLevel(s, id, {
       loading: false,
       body: loaded.body,
@@ -102,7 +103,7 @@ export async function toggleRootJump(
   const decision = {
     outcome: "pushed" as RootJumpOutcome,
     id: "",
-    rootIdentity: "",
+    epoch: "",
   };
   store.set((s) => {
     const rootChild = s.levels[1];
@@ -114,7 +115,7 @@ export async function toggleRootJump(
     const rootOnly = replaced ? popToLevel(s, 0) : s;
     const next = pushLevel(rootOnly, init);
     decision.id = currentLevel(next).id;
-    decision.rootIdentity = s.rootIdentity;
+    decision.epoch = stackEpoch(s);
     decision.outcome = replaced ? "replaced" : "pushed";
     return next;
   });
@@ -122,7 +123,7 @@ export async function toggleRootJump(
 
   const loaded = await loadLevelBody(host, jump.tool);
   store.set((s) => {
-    if (s.rootIdentity !== decision.rootIdentity) return s;
+    if (stackEpoch(s) !== decision.epoch) return s;
     return patchLevel(s, decision.id, {
       loading: false,
       body: loaded.body,
@@ -143,36 +144,34 @@ export async function refreshCurrent(
 ): Promise<boolean> {
   const target: {
     id: string;
-    rootIdentity: string;
+    epoch: string;
     tool?: NonNullable<NavLevel["tool"]>;
   } = {
     id: "",
-    rootIdentity: "",
+    epoch: "",
   };
   store.set((s) => {
     const level = currentLevel(s);
     if (!level.tool) return s;
     target.id = level.id;
-    target.rootIdentity = s.rootIdentity;
+    target.epoch = stackEpoch(s);
     target.tool = level.tool;
     return patchLevel(s, level.id, { loading: true });
   });
   if (!target.tool) return false;
-  const { id, rootIdentity, tool } = target;
+  const { id, epoch, tool } = target;
   const loaded = await loadLevelBody(host, tool);
   if (loaded.error) {
     // L'ancien corps reste exploitable et son bandeau périmé garde le bouton
     // de retry. Une erreur de refresh ne transforme pas une valeur connue en
     // écran vide.
     store.set((s) =>
-      s.rootIdentity === rootIdentity
-        ? patchLevel(s, id, { loading: false })
-        : s
+      stackEpoch(s) === epoch ? patchLevel(s, id, { loading: false }) : s
     );
     return false;
   }
   store.set((s) => {
-    if (s.rootIdentity !== rootIdentity) return s;
+    if (stackEpoch(s) !== epoch) return s;
     return clearStale(
       patchLevel(s, id, {
         loading: false,

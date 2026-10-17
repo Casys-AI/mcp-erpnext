@@ -127,6 +127,79 @@ Deno.test("jumpInto - une réponse de l'ancienne racine ne touche pas la nouvell
   assertEquals(currentLevel(store.stack).count, 2);
 });
 
+/** Les commandes d'un client : même titre de niveau, autre donnée. */
+const orders = (customer: string): Jump => ({
+  label: "Orders",
+  kind: "list",
+  tool: {
+    name: "erpnext_doc_list",
+    args: { doctype: "Sales Order", customer },
+  },
+});
+
+/** La racine passe à B puis revient à A : même identité, nouvelle pile. */
+function leaveAndReturn(store: StackStore, a: string, b: string) {
+  store.set((s) => reconcileRoot(s, { title: b, kind: "root" }));
+  store.set((s) => reconcileRoot(s, { title: a, kind: "root" }));
+}
+
+Deno.test("jumpInto - A→B→A : la réponse tardive de l'ancienne pile A ne touche pas la nouvelle", async () => {
+  const store = memoryStore(createStack({ title: "A", kind: "root" }));
+  const { host, resolve } = deferredHost();
+  const old = jumpInto(store, host, orders("X"));
+  const oldId = currentLevel(store.stack).id;
+  leaveAndReturn(store, "A", "B");
+  const current = jumpInto(store, host, orders("Y"));
+  // Même titre, même rang : l'id seul ne distingue pas les deux niveaux.
+  assertEquals(currentLevel(store.stack).id, oldId);
+
+  resolve(0, { count: 1, data: [{ name: "SO-X" }] });
+  await old;
+  assertEquals(currentLevel(store.stack).loading, true);
+  assertEquals(currentLevel(store.stack).body, undefined);
+
+  resolve(1, { count: 2, data: [{ name: "SO-Y1" }, { name: "SO-Y2" }] });
+  await current;
+  assertEquals(currentLevel(store.stack).count, 2);
+});
+
+Deno.test("toggleRootJump - A→B→A : la réponse tardive de l'ancienne pile A ne touche pas la nouvelle", async () => {
+  const store = memoryStore(createStack({ title: "A", kind: "root" }));
+  const { host, resolve } = deferredHost();
+  const old = toggleRootJump(store, host, orders("X"));
+  leaveAndReturn(store, "A", "B");
+  const current = toggleRootJump(store, host, orders("Y"));
+
+  resolve(0, { count: 1, data: [{ name: "SO-X" }] });
+  await old;
+  assertEquals(currentLevel(store.stack).loading, true);
+  assertEquals(currentLevel(store.stack).body, undefined);
+
+  resolve(1, { count: 2, data: [{}, {}] });
+  await current;
+  assertEquals(currentLevel(store.stack).count, 2);
+});
+
+Deno.test("refreshCurrent - A→B→A : un refresh de l'ancienne pile A ne touche pas la nouvelle", async () => {
+  const store = memoryStore(createStack({ title: "A", kind: "root" }));
+  const { host, resolve } = deferredHost();
+  const first = jumpInto(store, host, orders("X"));
+  resolve(0, { count: 1, data: [{ name: "SO-X" }] });
+  await first;
+  const refresh = refreshCurrent(store, host);
+  leaveAndReturn(store, "A", "B");
+  const current = jumpInto(store, host, orders("Y"));
+
+  resolve(1, { count: 9, data: [{ name: "SO-X-frais" }] });
+  await refresh;
+  assertEquals(currentLevel(store.stack).loading, true);
+  assertEquals(currentLevel(store.stack).body, undefined);
+
+  resolve(2, { count: 2, data: [{}, {}] });
+  await current;
+  assertEquals(currentLevel(store.stack).count, 2);
+});
+
 Deno.test("jumpInto - un outil en erreur remplit `error`, pas `body`", async () => {
   const store = memoryStore(createStack({ title: "Racine", kind: "root" }));
   const host: ToolHost = {

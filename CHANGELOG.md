@@ -14,7 +14,8 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 ### Fixed
 
 - Third-party notices now cover JSR packages vendored inside npm dependencies
-  (such as @std/yaml)
+  (such as @std/yaml), including the MIT notice of js-yaml, which @std/yaml is
+  ported from
 
 ## [3.2.0] - 2026-10-17
 

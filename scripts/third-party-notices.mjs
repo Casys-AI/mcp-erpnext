@@ -21,6 +21,9 @@
  * scope without a license file fails with JSR_LICENSE_MISSING — never silently.
  * The LICENSE of the carrying npm package is deliberately NOT used: it states
  * the carrier's own terms and holder, not those of the vendored code.
+ * Some JSR packages are themselves ports of an upstream work whose MIT notice
+ * must travel with them (@std/yaml is ported from js-yaml): JSR_DERIVED_NOTICES
+ * adds that work as its own entry, flagged "ported into" in the index.
  *
  * Manual part: the three embedded webfonts are not npm packages. Their OFL
  * texts live in scripts/third-party-notices.fonts.txt and are appended as-is
@@ -105,6 +108,55 @@ export const JSR_SCOPE_LICENSES = new Map([
     author: "the Deno authors",
     repository: "https://github.com/denoland/std",
   }],
+]);
+
+/**
+ * MIT text of js-yaml, reproduced verbatim from the LICENSE of js-yaml 4.3.2
+ * (npm cache, checked locally). Its copyright line is the one the vendored
+ * @std/yaml files carry in their header: `Ported from js-yaml v3.13.1 ...
+ * Copyright 2011-2015 by Vitaly Puzrin. All rights reserved. MIT license.`
+ */
+export const JS_YAML_MIT_LICENSE = [
+  "(The MIT License)",
+  "",
+  "Copyright (C) 2011-2015 by Vitaly Puzrin",
+  "",
+  "Permission is hereby granted, free of charge, to any person obtaining a copy",
+  'of this software and associated documentation files (the "Software"), to deal',
+  "in the Software without restriction, including without limitation the rights",
+  "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell",
+  "copies of the Software, and to permit persons to whom the Software is",
+  "furnished to do so, subject to the following conditions:",
+  "",
+  "The above copyright notice and this permission notice shall be included in",
+  "all copies or substantial portions of the Software.",
+  "",
+  'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR',
+  "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,",
+  "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE",
+  "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER",
+  "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,",
+  "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN",
+  "THE SOFTWARE.",
+].join("\n");
+
+/**
+ * Upstream works that vendored JSR packages are ported from, keyed by JSR
+ * package name (every version). The ported work gets its own notice entry
+ * with a fixed license text: the port keeps the original copyright notice in
+ * its file headers, but bundlers strip those comments from the output.
+ * `version` is the one named by the `Ported from ... vX` header of the files.
+ * @type {Map<string, Array<{name: string, version: string, license: string, text: string, author: string, repository: string}>>}
+ */
+export const JSR_DERIVED_NOTICES = new Map([
+  ["@std/yaml", [{
+    name: "js-yaml",
+    version: "3.13.1",
+    license: "MIT",
+    text: JS_YAML_MIT_LICENSE,
+    author: "Vitaly Puzrin",
+    repository: "https://github.com/nodeca/js-yaml",
+  }]],
 ]);
 
 /** Licenses that must not ship, detected in the text of a vendored license file. */
@@ -426,6 +478,13 @@ export function buildEntries(
     const key = `${pkg.name}@${pkg.version}`;
     if (!byKey.has(key)) byKey.set(key, jsrEntry(pkg));
     byKey.get(key).sources.add("node");
+    for (const work of JSR_DERIVED_NOTICES.get(pkg.name) ?? []) {
+      const workKey = `${work.name}@${work.version}`;
+      if (!byKey.has(workKey)) byKey.set(workKey, derivedEntry(work));
+      const entry = byKey.get(workKey);
+      entry.sources.add("node");
+      entry.portedInto?.add(key);
+    }
   };
   for (const root of [...ui.keys()].sort()) add(root, "ui");
   for (const root of [...node].sort()) add(root, "node");
@@ -471,6 +530,21 @@ function jsrEntry(pkg) {
       licenseSource: vendoredText !== null ? "vendored-file" : "scope-table",
       vendoredIn: packageIdOf(pkg.carrier),
     },
+  };
+}
+
+/** Notice entry of an upstream work ported into a vendored JSR package. */
+function derivedEntry(work) {
+  return {
+    name: work.name,
+    version: work.version,
+    license: work.license,
+    licenseText: work.text,
+    hasLicenseText: true,
+    author: work.author,
+    repository: work.repository,
+    sources: new Set(),
+    portedInto: new Set(),
   };
 }
 
@@ -553,9 +627,10 @@ export function renderNotices(entries, fontsText) {
     "",
     "This package embeds the third-party software listed below: the interactive",
     "viewers (ui) and the bundled Node.js server (node), including JSR packages",
-    "(such as @std/yaml) vendored inside npm dependencies. Each license text is",
-    "reproduced as shipped by the package's authors, or taken from the upstream",
-    "repository of the JSR scope when the vendored copy ships none.",
+    "(such as @std/yaml) vendored inside npm dependencies and the works they are",
+    "ported from (js-yaml). Each license text is reproduced as shipped by the",
+    "package's authors, or taken from the upstream repository of the JSR scope or",
+    "of the ported work when the vendored copy ships none.",
     "",
     "Generated by scripts/third-party-notices.mjs from the build metadata of the",
     "viewers and of the Node bundle. Do not edit by hand; regenerate with:",
@@ -569,7 +644,10 @@ export function renderNotices(entries, fontsText) {
     "",
   );
   for (const e of entries) {
-    out.push(`- ${e.name}@${e.version} (${e.license}) [${where(e)}]`);
+    const ported = e.portedInto?.size
+      ? ` (ported into ${[...e.portedInto].sort().join(", ")})`
+      : "";
+    out.push(`- ${e.name}@${e.version} (${e.license}) [${where(e)}]${ported}`);
   }
   out.push("", "", "2. License texts", "-".repeat(78), "");
   for (const [text, group] of orderedGroups) {
@@ -683,6 +761,11 @@ export function run(mode, root) {
       license: e.license,
       license_source: e.jsr.licenseSource,
       vendored_in: e.jsr.vendoredIn,
+    })),
+    derived_notices: entries.filter((e) => e.portedInto).map((e) => ({
+      package: `${e.name}@${e.version}`,
+      license: e.license,
+      ported_into: [...e.portedInto].sort(),
     })),
   };
 

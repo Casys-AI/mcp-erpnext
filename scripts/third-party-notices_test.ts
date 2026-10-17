@@ -14,6 +14,8 @@ import {
   diffNotices,
   FONTS_FILE,
   forbiddenEntries,
+  JS_YAML_MIT_LICENSE,
+  JSR_DERIVED_NOTICES,
   JSR_SCOPE_LICENSES,
   jsrPackageOf,
   missingFontNotices,
@@ -554,7 +556,7 @@ Deno.test("a vendored @std package gets the fixed MIT text, never the carrier LI
     );
     assertEquals(
       entries.map((e: { name: string }) => e.name),
-      ["@mcpview/server", "@std/yaml"],
+      ["@mcpview/server", "@std/yaml", "js-yaml"],
     );
     const yaml = entries[1];
     assertEquals(yaml.license, "MIT");
@@ -581,7 +583,7 @@ Deno.test("a vendored @std package gets the fixed MIT text, never the carrier LI
     assert(!text.includes(root));
     assertEquals(
       parseIndex(text),
-      new Set(["@mcpview/server@0.29.0", "@std/yaml@1.3.0"]),
+      new Set(["@mcpview/server@0.29.0", "@std/yaml@1.3.0", "js-yaml@3.13.1"]),
     );
   } finally {
     Deno.removeSync(root, { recursive: true });
@@ -714,7 +716,13 @@ Deno.test("multiple versions list one entry each and a shared version a single o
       entries.map((e: { name: string; version: string }) =>
         `${e.name}@${e.version}`
       ),
-      ["@std/yaml@1.2.5", "@std/yaml@1.3.0", "a@0.29.0", "b@2.0.0"],
+      [
+        "@std/yaml@1.2.5",
+        "@std/yaml@1.3.0",
+        "a@0.29.0",
+        "b@2.0.0",
+        "js-yaml@3.13.1", // one derived notice for both @std/yaml versions
+      ],
     );
     // One MIT group, listing both versions, and the text appears once.
     const text = renderNotices(entries, "x");
@@ -739,12 +747,17 @@ Deno.test("run: vendored JSR packages are reported, then drift when a new one ap
     };
     write("dist-node/esbuild-metafile.json", metafileOf(inputs));
     const written = run("write", root);
-    assertEquals(written.packages, { total: 5, ui: 2, node: 4 });
+    assertEquals(written.packages, { total: 6, ui: 2, node: 5 });
     assertEquals(written.jsr_packages, [{
       package: "@std/yaml@1.3.0",
       license: "MIT",
       license_source: "scope-table",
       vendored_in: "@mcpview/server@0.29.0",
+    }]);
+    assertEquals(written.derived_notices, [{
+      package: "js-yaml@3.13.1",
+      license: "MIT",
+      ported_into: ["@std/yaml@1.3.0"],
     }]);
     assertEquals(run("check", root).changed, false);
 
@@ -762,7 +775,133 @@ Deno.test("run: vendored JSR packages are reported, then drift when a new one ap
       assert(error instanceof NoticesError, String(error));
       assertEquals(error.code, "NOTICES_DRIFT");
       assertEquals(error.context.missing, ["@std/path@1.0.0"]);
+      assertEquals(error.context.stale, []);
     }
+  } finally {
+    Deno.removeSync(root, { recursive: true });
+  }
+});
+
+Deno.test("@std/yaml carries the js-yaml notice it is ported from, once per run", () => {
+  assertEquals(
+    [...JSR_DERIVED_NOTICES.keys()],
+    ["@std/yaml"],
+  );
+  assertEquals(
+    JSR_DERIVED_NOTICES.get("@std/yaml")?.[0].text,
+    JS_YAML_MIT_LICENSE,
+  );
+  assertStringIncludes(
+    JS_YAML_MIT_LICENSE,
+    "Copyright (C) 2011-2015 by Vitaly Puzrin",
+  );
+
+  const { root, write } = fixture();
+  try {
+    carrier(write, "a");
+    const file = (pkg: string) => `node_modules/a/${VENDOR}/${pkg}/parse.js`;
+    write(
+      "dist-node/esbuild-metafile.json",
+      metafileOf({
+        [file("@std/yaml/1.3.0")]: 5,
+        [file("@std/yaml/1.2.5")]: 5,
+        [file("@std/path/1.0.0")]: 5, // not ported from anything
+      }),
+    );
+    const meta = `${root}/dist-node/esbuild-metafile.json`;
+    const entries = buildEntries(
+      new Map(),
+      new Set(),
+      null,
+      collectJsrPackages(meta, `${root}/dist-node`),
+    );
+    assertEquals(
+      entries.map((e: { name: string; version: string }) =>
+        `${e.name}@${e.version}`
+      ),
+      [
+        "@std/path@1.0.0",
+        "@std/yaml@1.2.5",
+        "@std/yaml@1.3.0",
+        "js-yaml@3.13.1",
+      ],
+    );
+    const work = entries[3];
+    assertEquals(work.license, "MIT");
+    assertEquals(work.licenseText, JS_YAML_MIT_LICENSE);
+    assertEquals(work.author, "Vitaly Puzrin");
+    assertEquals([...work.sources], ["node"]);
+    assertEquals([...work.portedInto].sort(), [
+      "@std/yaml@1.2.5",
+      "@std/yaml@1.3.0",
+    ]);
+    // The regular JSR entries are not flagged as ported works.
+    assertEquals(entries[0].portedInto, undefined);
+
+    const text = renderNotices(entries, "x");
+    assertStringIncludes(
+      text,
+      "- js-yaml@3.13.1 (MIT) [node] (ported into @std/yaml@1.2.5, @std/yaml@1.3.0)",
+    );
+    assertStringIncludes(text, "Copyright (C) 2011-2015 by Vitaly Puzrin");
+    assertEquals(text.split("Vitaly Puzrin").length - 1, 1);
+    assertEquals(text, renderNotices(entries, "x"));
+    // The ported work is listed alongside @std/yaml, never instead of it.
+    assertEquals(
+      parseIndex(text),
+      new Set([
+        "@std/path@1.0.0",
+        "@std/yaml@1.2.5",
+        "@std/yaml@1.3.0",
+        "js-yaml@3.13.1",
+      ]),
+    );
+  } finally {
+    Deno.removeSync(root, { recursive: true });
+  }
+});
+
+Deno.test("a real js-yaml package keeps its own entry next to the ported notice", () => {
+  const { root, write } = fixture();
+  try {
+    write(
+      "dist-node/node_modules/js-yaml/package.json",
+      JSON.stringify({ name: "js-yaml", version: "4.3.2", license: "MIT" }),
+    );
+    write("dist-node/node_modules/js-yaml/LICENSE", "npm js-yaml terms");
+    write(
+      "dist-node/node_modules/a/package.json",
+      JSON.stringify({
+        name: "a",
+        version: "1.0.0",
+        license: "MIT",
+      }),
+    );
+    write(
+      "dist-node/esbuild-metafile.json",
+      metafileOf({
+        "node_modules/js-yaml/index.js": 7,
+        [`node_modules/a/${VENDOR}/@std/yaml/1.3.0/parse.js`]: 5,
+      }),
+    );
+    const meta = `${root}/dist-node/esbuild-metafile.json`;
+    const base = `${root}/dist-node`;
+    const entries = buildEntries(
+      new Map(),
+      collectNodePackages(meta, base),
+      null,
+      collectJsrPackages(meta, base),
+    );
+    const versions = entries.filter((e: { name: string }) =>
+      e.name === "js-yaml"
+    );
+    assertEquals(
+      versions.map((e: { version: string }) => e.version),
+      ["3.13.1", "4.3.2"],
+    );
+    assertEquals(versions[0].licenseText, JS_YAML_MIT_LICENSE);
+    assertEquals(versions[1].licenseText, "npm js-yaml terms");
+    assertEquals(versions[1].portedInto, undefined);
   } finally {
     Deno.removeSync(root, { recursive: true });
   }

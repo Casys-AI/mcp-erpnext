@@ -39,6 +39,7 @@ export const bn: Record<string, string> = {
   "document.docstatus": "নথির অবস্থা {value}",
   "document.sections": "নথির বিভাগ",
   "document.fields": "ফিল্ড",
+  "document.all_fields": "সব ফিল্ড",
   "document.attachments": "সংযুক্তি",
   "document.surface": "নথি {name}",
   "document.sidebar": "নথির কাজ ও সংযুক্তি",

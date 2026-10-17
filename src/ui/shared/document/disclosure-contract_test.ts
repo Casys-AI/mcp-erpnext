@@ -59,3 +59,31 @@ Deno.test("a breadcrumb document level exposes actions without another disclosur
 
   assertStringIncludes(level, 'childRowActionsPlacement="visible"');
 });
+
+Deno.test("an ERPNext layout folds the other fields under one closed disclosure", async () => {
+  const scalar = await Deno.readTextFile(
+    new URL("./ScalarFields.tsx", import.meta.url),
+  );
+  const surface = await Deno.readTextFile(
+    new URL("./DocumentSurface.tsx", import.meta.url),
+  );
+
+  assertStringIncludes(scalar, 'label={t("document.all_fields")}');
+  // Même repliable que les sections Company, fermé par défaut.
+  assertEquals([...scalar.matchAll(/<FieldDisclosure/g)].length, 2);
+  assertEquals(/<details[^>]*\sopen[\s>=]/.test(scalar), false);
+  assertStringIncludes(surface, "layoutSections={model.sections}");
+});
+
+Deno.test("Company keeps its dedicated sections ahead of the ERPNext layout", async () => {
+  const surface = await Deno.readTextFile(
+    new URL("./DocumentSurface.tsx", import.meta.url),
+  );
+  const company = surface.slice(
+    surface.indexOf("function CompanyFields"),
+    surface.indexOf("function DocumentFields"),
+  );
+
+  assertStringIncludes(company, "companySectionsOf(");
+  assertEquals(company.includes("layoutSections"), false);
+});

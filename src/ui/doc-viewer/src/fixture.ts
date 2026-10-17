@@ -48,6 +48,28 @@ export const DOC_FIXTURE = {
     toolName: "erpnext_task_get",
     arguments: { name: "TASK-2026-0142" },
   },
+  // Mise en page ERPNext du DocType Task, réduite (voir `doctype-layout.ts`).
+  _fieldLayout: {
+    version: 1,
+    preview: [
+      "subject",
+      "project",
+      "priority",
+      "exp_start_date",
+      "exp_end_date",
+    ],
+    sections: [
+      {
+        label: null,
+        fields: ["subject", "project", "company", "priority"],
+      },
+      { label: "Timeline", fields: ["exp_start_date", "exp_end_date"] },
+    ],
+    labels: {
+      exp_start_date: "Expected Start Date",
+      exp_end_date: "Expected End Date",
+    },
+  },
   _availableTools: [
     "erpnext_task_get",
     "erpnext_file_list",

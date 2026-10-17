@@ -39,6 +39,7 @@ export const ur: Record<string, string> = {
   "document.docstatus": "دستاویز کی حیثیت {value}",
   "document.sections": "دستاویز کے حصے",
   "document.fields": "فیلڈز",
+  "document.all_fields": "تمام فیلڈز",
   "document.attachments": "منسلکات",
   "document.surface": "دستاویز {name}",
   "document.sidebar": "دستاویز کے اقدامات اور منسلکات",

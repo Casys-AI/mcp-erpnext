@@ -148,8 +148,9 @@ singleton. The client is lazily initialized from env vars on first use.
 
 `src/api/frappe-client.ts` is a zero-dependency HTTP client wrapping the Frappe
 REST API. Key methods: `list()`, `get()`, `create()`, `update()`, `delete()`,
-`callMethod()`, `invalidate()`. All errors throw `FrappeAPIError` with HTTP
-status and parsed body — no silent fallbacks.
+`callMethod()` (returns `message`), `callMethodRaw()` (whole body, for methods
+that fill `frappe.response` such as `getdoctype`), `invalidate()`. All errors
+throw `FrappeAPIError` with HTTP status and parsed body — no silent fallbacks.
 
 **Submit handlers must GET the doc first** to pass `modified` for Frappe's
 optimistic locking (see `docs/erpnext-quirks.md`), and must pass

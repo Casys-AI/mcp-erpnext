@@ -211,6 +211,8 @@ function DocumentFields(
   return (
     <ScalarFields
       fields={model.fields}
+      layoutSections={model.sections}
+      emphasizeFields={model.sections !== undefined}
       longFields={model.longFields}
       progressFields={model.progressFields}
       collections={model.collections}
@@ -275,9 +277,9 @@ export function DocumentSurface({
   const hasSidebar = hasAttachments || hasActions;
   const hasFields = preview
     ? documentPreviewFieldsOf(model.envelope.document).length > 0
-    : model.fields.length > 0 || model.longFields.length > 0 ||
-      model.progressFields.length > 0 || model.collections.length > 0 ||
-      model.systemFields.length > 0;
+    : model.fields.length > 0 || (model.sections?.length ?? 0) > 0 ||
+      model.longFields.length > 0 || model.progressFields.length > 0 ||
+      model.collections.length > 0 || model.systemFields.length > 0;
   const tableSections: TableSection[] = (preview ? [] : model.childTables).map((
     table,
     index,

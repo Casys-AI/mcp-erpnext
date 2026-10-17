@@ -1080,6 +1080,25 @@ export class FrappeClient {
     args: Record<string, unknown> = {},
     httpMethod: "GET" | "POST" = "POST",
   ): Promise<T> {
+    const res = await this.callMethodRaw<FrappeMethodResponse<T>>(
+      method,
+      args,
+      httpMethod,
+    );
+    return res.message;
+  }
+
+  /**
+   * Same call as `callMethod`, but returns the whole response body instead of
+   * its `message`. Needed for methods that fill `frappe.response` rather than
+   * returning a value, such as `frappe.desk.form.load.getdoctype` (`docs` at
+   * the top level, no `message`).
+   */
+  async callMethodRaw<T = unknown>(
+    method: string,
+    args: Record<string, unknown> = {},
+    httpMethod: "GET" | "POST" = "POST",
+  ): Promise<T> {
     if (httpMethod === "GET") {
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(args)) {
@@ -1090,19 +1109,10 @@ export class FrappeClient {
         );
       }
       const query = params.toString() ? `?${params.toString()}` : "";
-      const res = await this.request<FrappeMethodResponse<T>>(
-        "GET",
-        `/api/method/${method}${query}`,
-      );
-      return res.message;
+      return await this.request<T>("GET", `/api/method/${method}${query}`);
     }
 
-    const res = await this.request<FrappeMethodResponse<T>>(
-      "POST",
-      `/api/method/${method}`,
-      args,
-    );
-    return res.message;
+    return await this.request<T>("POST", `/api/method/${method}`, args);
   }
 }
 

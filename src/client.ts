@@ -31,6 +31,7 @@ import {
   withUiRefreshRequest,
   withViewerToolCapabilities,
 } from "./tools/ui-refresh.ts";
+import { fetchDocTypeLayout } from "./tools/doctype-layout.ts";
 import { splitViewerResult, VIEWER_META_KEY } from "./tools/model-visible.ts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -62,6 +63,27 @@ function isSingleEmbeddedBlobResult(value: unknown): boolean {
     resource.uri.startsWith("file:///") &&
     typeof resource.mimeType === "string" &&
     typeof resource.blob === "string";
+}
+
+/**
+ * Le DocType d'un résultat qui est une fiche unique : `data` porte `doctype`
+ * et `name` (forme normale), ou le résultat est lui-même l'enregistrement
+ * (forme directe lue par `documentEnvelopeOf` côté vue). Une liste (`data` en
+ * tableau) n'en est pas une.
+ */
+function singleDocumentDoctypeOf(
+  result: Record<string, unknown>,
+): string | undefined {
+  const nonEmpty = (value: unknown): value is string =>
+    typeof value === "string" && value.trim().length > 0;
+  const document = isRecord(result.data) && nonEmpty(result.data.doctype) &&
+      nonEmpty(result.data.name)
+    ? result.data
+    : !Array.isArray(result.data) && nonEmpty(result.doctype) &&
+        nonEmpty(result.name)
+    ? result
+    : undefined;
+  return document ? (document.doctype as string).trim() : undefined;
 }
 
 /**
@@ -335,11 +357,21 @@ export class ErpNextToolsClient {
         const hasViewer = resultUi || toolMeta?.ui;
 
         if (r) {
+          // Fiche unique avec viewer : la vue reçoit la mise en page ERPNext
+          // du DocType (fail-soft : `null` ne change rien au résultat).
+          const layoutDoctype = hasViewer
+            ? singleDocumentDoctypeOf(r)
+            : undefined;
+          const fieldLayout = layoutDoctype
+            ? await fetchDocTypeLayout(client, layoutDoctype)
+            : null;
           // Le modèle ne lit que le métier : l'enrichissement viewer part
           // dans `_meta`, caché au modèle mais livré à la vue avec le
           // CallToolResult complet. Sans enrichissement, le `_meta` déclaré
           // passe inchangé, comme avant.
-          const { data, viewer } = splitViewerResult(r);
+          const { data, viewer } = splitViewerResult(
+            fieldLayout ? { ...r, _fieldLayout: fieldLayout } : r,
+          );
           const declaredMeta = r._meta ?? toolMeta;
           const hasEnrichment = Object.keys(viewer).length > 0;
           const meta = hasEnrichment

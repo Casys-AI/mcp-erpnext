@@ -38,6 +38,7 @@ export const zhHant: Record<string, string> = {
   "document.docstatus": "單據狀態 {value}",
   "document.sections": "單據區段",
   "document.fields": "欄位",
+  "document.all_fields": "所有欄位",
   "document.attachments": "附件",
   "document.surface": "單據 {name}",
   "document.sidebar": "單據操作與附件",

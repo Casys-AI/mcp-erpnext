@@ -41,6 +41,7 @@ export const en: Record<string, string> = {
   "document.docstatus": "docstatus {value}",
   "document.sections": "Document sections",
   "document.fields": "Fields",
+  "document.all_fields": "All fields",
   "document.attachments": "Attachments",
   "document.surface": "Document {name}",
   "document.sidebar": "Document actions and attachments",

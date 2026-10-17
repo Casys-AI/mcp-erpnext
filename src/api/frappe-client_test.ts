@@ -1466,6 +1466,55 @@ Deno.test("FrappeClient.callMethod() - GET with no args omits the query string",
   }
 });
 
+Deno.test("FrappeClient.callMethodRaw() - returns the whole body for methods that fill frappe.response", async () => {
+  const original = globalThis.fetch;
+  let seen: { url: string; method: string } | undefined;
+  globalThis.fetch = async (
+    url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    seen = { url: String(url), method: init?.method ?? "GET" };
+    // `getdoctype` ne renvoie rien : il écrit `docs` dans frappe.response.
+    return jsonResponse({ docs: [{ name: "Task", fields: [] }] });
+  };
+
+  try {
+    const client = makeClient();
+    const body = await client.callMethodRaw(
+      "frappe.desk.form.load.getdoctype",
+      { doctype: "Task" },
+      "GET",
+    );
+    assertEquals(body, { docs: [{ name: "Task", fields: [] }] });
+    assertEquals(seen?.method, "GET");
+    assertEquals(
+      new URL(seen!.url).searchParams.get("doctype"),
+      "Task",
+    );
+    assertEquals(
+      await client.callMethod("frappe.desk.form.load.getdoctype", {}, "GET"),
+      undefined,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.callMethodRaw() - propagates HTTP errors as FrappeAPIError", async () => {
+  const restore = mockFetch([{
+    status: 403,
+    body: { exc_type: "PermissionError", message: "No permission" },
+  }]);
+  try {
+    await assertRejects(
+      () => makeClient().callMethodRaw("my_app.api.secret", {}, "GET"),
+      FrappeAPIError,
+    );
+  } finally {
+    restore();
+  }
+});
+
 Deno.test("normalizeFrappeSiteUrl strips credentials, query, fragment, and trailing slash", () => {
   assertEquals(
     normalizeFrappeSiteUrl(

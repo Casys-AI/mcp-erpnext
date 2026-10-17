@@ -39,6 +39,7 @@ export const hi: Record<string, string> = {
   "document.docstatus": "दस्तावेज़ स्थिति {value}",
   "document.sections": "दस्तावेज़ अनुभाग",
   "document.fields": "फ़ील्ड",
+  "document.all_fields": "सभी फ़ील्ड",
   "document.attachments": "अटैचमेंट",
   "document.surface": "दस्तावेज़ {name}",
   "document.sidebar": "दस्तावेज़ क्रियाएँ और अटैचमेंट",

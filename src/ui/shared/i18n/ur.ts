@@ -316,7 +316,6 @@ export const ur: Record<string, string> = {
   "doclist.detail.back_list_label": "‹ فہرست",
   // ── /دستاویز فہرست ویوور ───────────────────────────────────────────────────────
   // ── ڈرل ڈاؤن (انتخاب شیئر کرنا) ──
-  "drill.context": "“{view}” میں فعال انتخاب: {label}{value}۔",
   "drill.shared": "انتخاب شیئر ہوا — گفتگو میں تفصیل پوچھیں",
   "drill.sent": "گفتگو میں بھیجا گیا",
   "message.sending": "بھیجا جا رہا ہے…",
@@ -437,6 +436,7 @@ export const ur: Record<string, string> = {
   "common.error.no_payload": "ٹول کال سے کوئی متنی ڈیٹا نہیں ملا",
   "common.error.tool_failed": "ٹول کال ناکام ہوئی",
   "common.error.no_proxy": "ہوسٹ پراکسی سرور ٹول کالز کی حمایت نہیں کرتا",
+  "common.error.connect_failed": "MCP ہوسٹ سے جڑنے میں ناکامی",
   "kanban.error.user_list": "سرور سے ملی صارفین کی فہرست پڑھی نہ جا سکی",
   "common.yes": "جی ہاں",
   "common.no": "نہیں",
@@ -470,7 +470,6 @@ export const ur: Record<string, string> = {
   "kanban.live.move_not_allowed": "{label} میں منتقلی کی اجازت نہیں",
   "kanban.error.no_payload": "کوئی کانبن ڈیٹا موصول نہیں ہوا",
   "kanban.error.parse_failed": "کانبن ڈیٹا پڑھنے میں ناکامی",
-  "kanban.error.connect_failed": "MCP ہوسٹ سے جڑنے میں ناکامی",
   "kanban.error.detail_no_payload": "کوئی تفصیلی ڈیٹا موصول نہیں ہوا",
   "kanban.error.detail_fetch_failed": "کارڈ کی تفصیل لوڈ کرنے میں ناکامی",
   "kanban.error.drag_drop": "ڈریگ ڈراپ پر کارروائی میں ناکامی",

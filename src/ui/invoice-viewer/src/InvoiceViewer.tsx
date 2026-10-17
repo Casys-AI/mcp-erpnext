@@ -156,6 +156,7 @@ export function InvoiceViewer() {
     initialEnvelope,
   );
   const [loading, setLoading] = useState(!fixture);
+  const [connectFailed, setConnectFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -527,7 +528,9 @@ export function InvoiceViewer() {
     app.ontoolinputpartial = () => {
       if (!envelopeRef.current) setLoading(true);
     };
-    app.connect().then(() => bindHostContext(app)).catch(() => {});
+    app.connect().then(() => bindHostContext(app)).catch(() =>
+      setConnectFailed(true)
+    );
   }, [fixture]);
 
   useEffect(() => {
@@ -549,10 +552,15 @@ export function InvoiceViewer() {
   /* ── Early returns ────────────────────────────────────────────────────── */
 
   if (loading || !envelope) {
+    const connectError = connectFailed && !envelope;
     return (
       <ViewerShell containerRef={loadingRef}>
-        <StateMessage>
-          {loading ? t("invoice.loading") : t("invoice.no_data")}
+        <StateMessage tone={connectError ? "bad" : "neutral"}>
+          {connectError
+            ? t("common.error.connect_failed")
+            : loading
+            ? t("invoice.loading")
+            : t("invoice.no_data")}
         </StateMessage>
         <ConfirmSheet confirm={confirm} />
       </ViewerShell>

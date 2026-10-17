@@ -44,7 +44,7 @@ import type { DocumentEnvelope } from "~/shared/document/types.ts";
 import { useAttachments } from "~/shared/document/useAttachments.ts";
 import { bindHostContext } from "~/shared/host-context-hook.ts";
 import { useT } from "~/shared/i18n-hook.ts";
-import { jumpFromHint } from "~/shared/jumps.ts";
+import { fillTemplate, jumpFromHint } from "~/shared/jumps.ts";
 import { JumpList } from "~/shared/levels/JumpList.tsx";
 import { LevelBody } from "~/shared/levels/LevelBody.tsx";
 import { viewerRootKey } from "~/shared/nav-stack.ts";
@@ -104,6 +104,7 @@ export function DocViewer() {
     fixtureEnvelope,
   );
   const [loading, setLoading] = useState(!fixture);
+  const [connectFailed, setConnectFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rootFreshEvent, setRootFreshEvent] = useState(fixture ? 1 : 0);
@@ -245,7 +246,9 @@ export function DocViewer() {
     app.ontoolinputpartial = () => {
       if (!envelopeRef.current) setLoading(true);
     };
-    app.connect().then(() => bindHostContext(app)).catch(() => {});
+    app.connect().then(() => bindHostContext(app)).catch(() =>
+      setConnectFailed(true)
+    );
   }, [fixture]);
 
   useEffect(() => {
@@ -263,10 +266,15 @@ export function DocViewer() {
   }, [fixture]);
 
   if (loading || !envelope) {
+    const connectError = connectFailed && !envelope;
     return (
       <ViewerShell class="h-screen">
-        <StateMessage>
-          {loading ? t("common.loading") : t("common.no_data")}
+        <StateMessage tone={connectError ? "bad" : "neutral"}>
+          {connectError
+            ? t("common.error.connect_failed")
+            : loading
+            ? t("common.loading")
+            : t("common.no_data")}
         </StateMessage>
       </ViewerShell>
     );
@@ -476,9 +484,11 @@ function DocumentContent({
       hint.message
         ? [{
           label: hint.label,
-          message: hint.message
-            .replace(/\{id\}/g, envelope.name)
-            .replace(/\{doctype\}/g, envelope.doctype),
+          // Nom et doctype sont des données ERP : jamais interprétés (`$&`).
+          message: fillTemplate(hint.message, {
+            id: envelope.name,
+            doctype: envelope.doctype,
+          }),
         }]
         : []
     )

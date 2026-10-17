@@ -1770,7 +1770,7 @@ export function KanbanViewer() {
     };
 
     app.connect().then(() => bindHostContext(app)).catch(() => {
-      setError(t("kanban.error.connect_failed"));
+      setError(t("common.error.connect_failed"));
     });
   }, [fixture]);
 

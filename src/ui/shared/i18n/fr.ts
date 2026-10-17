@@ -325,7 +325,6 @@ export const fr: Record<string, string> = {
   "doclist.detail.back_list_label": "‹ liste",
   // ── /doclist-viewer ───────────────────────────────────────────────────────
   // ── drill-down (partage d'une sélection) ──
-  "drill.context": "Sélection active dans « {view} » : {label}{value}.",
   "drill.shared":
     "Sélection partagée — demandez le détail dans la conversation",
   "drill.sent": "Envoyé à la conversation",
@@ -448,6 +447,7 @@ export const fr: Record<string, string> = {
   "common.error.no_payload": "Aucun contenu renvoyé par l'outil",
   "common.error.tool_failed": "Échec de l'appel d'outil",
   "common.error.no_proxy": "L'hôte ne relaie pas les appels d'outils serveur",
+  "common.error.connect_failed": "Connexion à l'hôte MCP échouée",
   "kanban.error.user_list":
     "Impossible de lire la liste des utilisateurs renvoyée par le serveur",
   "common.yes": "Oui",
@@ -488,7 +488,6 @@ export const fr: Record<string, string> = {
   "kanban.live.move_not_allowed": "Déplacement vers {label} non autorisé",
   "kanban.error.no_payload": "Aucune donnée kanban reçue",
   "kanban.error.parse_failed": "Impossible de lire les données kanban",
-  "kanban.error.connect_failed": "Connexion à l'hôte MCP échouée",
   "kanban.error.detail_no_payload": "Aucune donnée de détail reçue",
   "kanban.error.detail_fetch_failed": "Chargement du détail impossible",
   "kanban.error.drag_drop": "Impossible de lire la carte déplacée",

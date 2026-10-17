@@ -8,7 +8,7 @@ import {
   formatNumber,
   formatPercent,
 } from "../../shared/format.ts";
-import type { NavHint } from "../../shared/jumps.ts";
+import { fillTemplate, type NavHint } from "../../shared/jumps.ts";
 import { chartSeriesFormat } from "../../shared/levels/bodies.ts";
 import type { ChartData, Dataset } from "./types.ts";
 
@@ -583,6 +583,21 @@ export function chartJumpHint(
 ): NavHint | undefined {
   return (series ? data._seriesPointJumps?.[label]?.[series] : undefined) ??
     data._pointJumps?.[label];
+}
+
+/**
+ * Le message de drill-down d'un point : le gabarit serveur (`_drillDown`) où
+ * `{label}` et `{series}` sont remplacés. Libellé et série sont des données
+ * ERP : `fillTemplate` les insère telles quelles, sans interpréter `$&`/`$1`.
+ */
+export function chartDrillDownMessage(
+  template: string | undefined,
+  label: string,
+  series?: string,
+): string | undefined {
+  if (template === undefined) return undefined;
+  return fillTemplate(template, { label, series: series ?? "" }).trim() ||
+    undefined;
 }
 
 /**

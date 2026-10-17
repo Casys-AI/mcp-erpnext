@@ -309,7 +309,6 @@ export const hi: Record<string, string> = {
   "doclist.detail.back_list_label": "‹ सूची",
   // ── /दस्तावेज़-सूची व्यूअर ───────────────────────────────────────────────────────
   // ── ड्रिल-डाउन (चयन साझा करना) ──
-  "drill.context": "“{view}” में सक्रिय चयन: {label}{value}।",
   "drill.shared": "चयन साझा किया गया — बातचीत में विवरण पूछें",
   "drill.sent": "बातचीत में भेजा गया",
   "message.sending": "भेजा जा रहा है…",
@@ -429,6 +428,7 @@ export const hi: Record<string, string> = {
   "common.error.no_payload": "टूल कॉल से कोई टेक्स्ट डेटा नहीं मिला",
   "common.error.tool_failed": "टूल कॉल विफल रहा",
   "common.error.no_proxy": "होस्ट प्रॉक्सी सर्वर टूल कॉल समर्थित नहीं करता",
+  "common.error.connect_failed": "MCP होस्ट से जुड़ने में विफल",
   "kanban.error.user_list": "सर्वर से मिली उपयोगकर्ता सूची पढ़ी नहीं जा सकी",
   "common.yes": "हाँ",
   "common.no": "नहीं",
@@ -462,7 +462,6 @@ export const hi: Record<string, string> = {
   "kanban.live.move_not_allowed": "{label} में ले जाना अनुमत नहीं",
   "kanban.error.no_payload": "कोई कांबन डेटा नहीं मिला",
   "kanban.error.parse_failed": "कांबन डेटा पढ़ने में विफल",
-  "kanban.error.connect_failed": "MCP होस्ट से जुड़ने में विफल",
   "kanban.error.detail_no_payload": "कोई विवरण डेटा नहीं मिला",
   "kanban.error.detail_fetch_failed": "कार्ड विवरण लोड करने में विफल",
   "kanban.error.drag_drop": "ड्रैग-ड्रॉप संसाधित करने में विफल",

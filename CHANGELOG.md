@@ -89,6 +89,15 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 - Compiled binaries embed the built viewers. Docker includes Buy modules, and
   published JSR artifacts retain the runtime modules and built HTML while
   excluding viewer source trees and fixtures.
+- Every viewer now shows "Failed to connect to MCP host" (translated in all
+  eight languages) when its connection to the host fails, instead of staying
+  blank or on a loading state. The message is a shared `common.error` string.
+- Chart drill-down and document question messages keep ERP labels, document
+  names, and doctypes containing `$&`, `$1`, or `$$` exactly as written instead
+  of corrupting them during template filling.
+- The viewer handshake test now derives its viewer list from the registry, so
+  `doc-viewer` is covered and a future viewer cannot be skipped. It also fails
+  when a viewer swallows a failed connection.
 
 ## [3.2.0-beta.2] - 2026-10-17
 

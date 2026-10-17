@@ -1313,6 +1313,7 @@ export function KpiViewer() {
     fixture ? kpiFixtureFromSearch() : null,
   );
   const [loading, setLoading] = useState(!fixture);
+  const [connectFailed, setConnectFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [rootFreshEvent, setRootFreshEvent] = useState(0);
   const [rootMutationEvent, setRootMutationEvent] = useState(0);
@@ -1447,7 +1448,9 @@ export function KpiViewer() {
     app.ontoolinputpartial = () => {
       if (!dataRef.current) setLoading(true);
     };
-    app.connect().then(() => bindHostContext(app)).catch(() => {});
+    app.connect().then(() => bindHostContext(app)).catch(() =>
+      setConnectFailed(true)
+    );
   }, [fixture]);
 
   useEffect(() => {
@@ -1467,6 +1470,17 @@ export function KpiViewer() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [fixture]);
+
+  /* ── Connexion impossible — bande inline (doctrine KPI), pas de StateMessage ── */
+  if (connectFailed && !data) {
+    return (
+      <ViewerShell>
+        <div class="p-4">
+          <InlineError message={t("common.error.connect_failed")} />
+        </div>
+      </ViewerShell>
+    );
+  }
 
   /* ── État chargement — H3 : skeleton KPI-shaped, pas un StateMessage ── */
   if (loading) {

@@ -1,6 +1,6 @@
 # Repository layout
 
-Where things live. Tool counts are per file and sum to 126.
+Where things live. Tool counts are per file and sum to 128.
 
 ```
 server.ts           # MCP server (stdio + HTTP + inspector)
@@ -25,9 +25,10 @@ src/
     manufacturing.ts  # 7 manufacturing tools
     crm.ts            # 8 CRM tools
     assets.ts         # 8 asset tools
-    operations.ts     # 12 generic operations and file tools
+    operations.ts     # 13 generic operations and file tools
     setup.ts          # 3 company/setup tools
     kanban.ts         # 2 read-write kanban tools
+    buy.ts            # 1 read-only Buy evidence capture tool
     analytics.ts      # 17 analytics tools (charts, KPIs, funnel)
     ui-refresh.ts     # Auto-inject _rowAction, _sendMessageHints, _drillDown
     mod.ts            # Tool registry
@@ -46,6 +47,7 @@ src/
     kanban-viewer/    # Read-write kanban (drag, edit, sendMessage)
     kpi-viewer/       # KPI card (clickable number + sparkline)
     funnel-viewer/    # Sales funnel (trapezoid stages, click-through)
+    buy-evidence-viewer/ # Sealed Buy evidence (read-only, surface runtime)
     viewers.ts        # Viewer registry
 docs/
   ROADMAP.md          # Feature roadmap

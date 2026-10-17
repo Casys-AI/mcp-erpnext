@@ -58,6 +58,7 @@ export function DoclistViewer() {
     fixtureData,
   );
   const [loading, setLoading] = useState(!fixture);
+  const [connectFailed, setConnectFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rootFreshEvent, setRootFreshEvent] = useState(0);
@@ -201,7 +202,9 @@ export function DoclistViewer() {
     app.ontoolinputpartial = () => {
       if (!dataRef.current) setLoading(true);
     };
-    app.connect().then(() => bindHostContext(app)).catch(() => {});
+    app.connect().then(() => bindHostContext(app)).catch(() =>
+      setConnectFailed(true)
+    );
   }, [fixture]);
 
   useEffect(() => {
@@ -219,6 +222,12 @@ export function DoclistViewer() {
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [fixture]);
+
+  if (connectFailed && !data) {
+    return (
+      <StateMessage tone="bad">{t("common.error.connect_failed")}</StateMessage>
+    );
+  }
 
   if (loading) {
     return <LoadingSkeleton />;

@@ -312,7 +312,6 @@ export const ta: Record<string, string> = {
   "doclist.detail.back_list_label": "‹ பட்டியல்",
   // ── /ஆவணப் பட்டியல் பார்வையாளர் ───────────────────────────────────────────────────────
   // ── துளையிடல் (தேர்வைப் பகிர்தல்) ──
-  "drill.context": "“{view}” இல் செயல் தேர்வு: {label}{value}.",
   "drill.shared": "தேர்வு பகிரப்பட்டது — உரையாடலில் விவரம் கேளுங்கள்",
   "drill.sent": "உரையாடலுக்கு அனுப்பப்பட்டது",
   "message.sending": "அனுப்புகிறது…",
@@ -432,6 +431,7 @@ export const ta: Record<string, string> = {
   "common.error.no_payload": "கருவி அழைப்பு உரைத் தரவைத் தரவில்லை",
   "common.error.tool_failed": "கருவி அழைப்பு தோல்வி",
   "common.error.no_proxy": "ஹோஸ்ட் பதிலி சேவையகக் கருவி அழைப்புகளை ஆதரிக்கவில்லை",
+  "common.error.connect_failed": "MCP ஹோஸ்டுடன் இணைய முடியவில்லை",
   "kanban.error.user_list": "சேவையகம் தந்த பயனர் பட்டியலைப் படிக்க முடியவில்லை",
   "common.yes": "ஆம்",
   "common.no": "இல்லை",
@@ -465,7 +465,6 @@ export const ta: Record<string, string> = {
   "kanban.live.move_not_allowed": "{label} க்கு நகர்த்த அனுமதியில்லை",
   "kanban.error.no_payload": "கான்பன் தரவு வரவில்லை",
   "kanban.error.parse_failed": "கான்பன் தரவைப் படிக்க முடியவில்லை",
-  "kanban.error.connect_failed": "MCP ஹோஸ்டுடன் இணைய முடியவில்லை",
   "kanban.error.detail_no_payload": "விவரத் தரவு வரவில்லை",
   "kanban.error.detail_fetch_failed": "அட்டை விவரத்தை ஏற்ற முடியவில்லை",
   "kanban.error.drag_drop": "இழுத்துவிடுதலைச் செயலாக்க முடியவில்லை",

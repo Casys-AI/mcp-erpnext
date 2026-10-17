@@ -17,15 +17,15 @@ workflows, and interactive UI viewers. Published as `@casys/mcp-erpnext` on npm
 - **Entry points**: `mod.ts` (JSR public API), `server.ts` (MCP server — stdio +
   HTTP).
 - **Config**: `deno.json` is the primary config (version, tasks, import map).
-  `src/ui/package.json` manages UI-only npm deps (React, Vite, Recharts).
+  `src/ui/package.json` manages UI-only npm deps (Preact, Vite, Recharts).
 - **Source code**: all under `src/`. Server-side TypeScript uses Deno
-  conventions; UI viewers use Vite/React with standard npm imports.
+  conventions; UI viewers use Vite/Preact with standard npm imports.
 - **Tool categories**: one file per category under `src/tools/` (`sales.ts`,
   `inventory.ts`, `accounting.ts`, etc.). All registered in `src/tools/mod.ts`.
 - **Tests**: colocated with source files (Deno convention) — `foo.ts` /
   `foo_test.ts`. Not all modules have tests yet; the convention is the target,
   not a guarantee.
-- **UI viewers**: each viewer is a standalone React app under
+- **UI viewers**: each viewer is a standalone Preact app under
   `src/ui/{viewer-name}/`, bundled to a single HTML file. Built output goes to
   `src/ui/dist/` (gitignored but included in published artifacts via `deno.json`
   publish config).
@@ -261,13 +261,14 @@ Card design conventions:
 
 ### UI viewers
 
-7 React viewers built with Vite, bundled as single HTML files via
-`vite-plugin-singlefile`. Located under `src/ui/{viewer-name}/`. Built output
-goes to `src/ui/dist/{viewer-name}/index.html`.
+9 Preact viewers (`UI_VIEWERS` in `src/ui/viewers.ts`) built with Vite, bundled
+as single HTML files via `vite-plugin-singlefile`. Located under
+`src/ui/{viewer-name}/`. Built output goes to
+`src/ui/dist/{viewer-name}/index.html`.
 
-Viewers: `invoice-viewer`, `stock-viewer`, `doclist-viewer`, `chart-viewer`,
-`kpi-viewer`, `funnel-viewer`, `kanban-viewer`. Resource URIs:
-`ui://mcp-erpnext/{viewer-name}`.
+Viewers: `invoice-viewer`, `stock-viewer`, `doclist-viewer`, `doc-viewer`,
+`chart-viewer`, `kpi-viewer`, `funnel-viewer`, `kanban-viewer`,
+`buy-evidence-viewer`. Resource URIs: `ui://mcp-erpnext/{viewer-name}`.
 
 Viewers use the MCP Apps SDK (`@modelcontextprotocol/ext-apps`). Interactive
 viewers use `app.callServerTool()` for mutations and typed in-view navigation,
@@ -332,8 +333,8 @@ framework itself.
   (e.g. `import { ... } from "@casys/mcp-server"`). Never add bare npm
   specifiers in server-side files.
 - **UI viewer code** (`src/ui/`): standard npm imports resolved by Vite (e.g.
-  `import { ... } from "react"`). These follow `src/ui/package.json` deps, not
-  the Deno import map.
+  `import { ... } from "preact/hooks"`). These follow `src/ui/package.json`
+  deps, not the Deno import map.
 - Use `import type { ... }` for type-only imports everywhere.
 - Tool names: `erpnext_{entity}_{operation}` — snake_case, always prefixed with
   `erpnext_`.
@@ -494,7 +495,7 @@ Rules:
 `Dockerfile` is a two-stage build:
 
 1. **`ui-builder`** (`node:20-slim`) — `npm ci` + `node build-all.mjs` in
-   `src/ui/`, producing `src/ui/dist/{viewer-name}/index.html` for all 7
+   `src/ui/`, producing `src/ui/dist/{viewer-name}/index.html` for all 9
    viewers.
 2. **Runtime** (`denoland/deno:2.3.3`) — copies the app source plus the built
    `src/ui/dist/` from stage 1, pre-caches deps with
@@ -505,8 +506,8 @@ Skipping the UI build stage (e.g. a naive single-stage Dockerfile that never
 runs `npm ci && node build-all.mjs`) silently degrades every viewer — tools
 still work, but `resolveViewerDistPath` finds nothing, each viewer logs
 `Warning: UI not built for ui://mcp-erpnext/{name}` at startup, and
-`Resources: 0` instead of `7`. Check for that count in the startup log after any
-Dockerfile change.
+`Resources: 1` (the Buy App manifest alone) instead of `10` (9 viewers plus that
+manifest). Check for that count in the startup log after any Dockerfile change.
 
 `docker-compose.yml` reads config from `.env` (not baked into the image) and
 binds port 7654 to `127.0.0.1` by default. Expose it beyond the host only with
@@ -560,8 +561,8 @@ running in its own compose project), join that stack's external network instead
 
 ### Add a new UI viewer
 
-1. Create `src/ui/{viewer-name}/` with a Vite React app (copy an existing viewer
-   as template)
+1. Create `src/ui/{viewer-name}/` with a Vite Preact app (copy an existing
+   viewer as template)
 2. Add the viewer name to `src/ui/viewers.ts`
 3. Add a `VIEWER_META` constant in `src/tools/viewer-meta.ts`
 4. Add a build entry in `src/ui/build-all.mjs`

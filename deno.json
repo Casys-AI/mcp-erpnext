@@ -5,7 +5,7 @@
   "minimumDependencyAge": {
     "age": "PT24H",
     "exclude": [
-      "jsr:@casys/mcp-server"
+      "jsr:@mcpview/server"
     ]
   },
   "tasks": {
@@ -82,7 +82,7 @@
     ]
   },
   "imports": {
-    "@casys/mcp-server": "jsr:@casys/mcp-server@^0.26.1",
+    "@mcpview/server": "jsr:@mcpview/server@^0.29.0",
     "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
     "@std/yaml": "jsr:@std/yaml@^1",
     "@std/assert": "jsr:@std/assert@^1"

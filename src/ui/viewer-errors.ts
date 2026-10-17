@@ -1,7 +1,7 @@
 /**
  * Machine-readable failures when reading a remote (JSR) MCP Apps viewer.
  *
- * Wire format: `@casys/mcp-server` relays a plain `Error` thrown by a
+ * Wire format: `@mcpview/server` relays a plain `Error` thrown by a
  * resource handler as JSON-RPC `-32603` carrying ONLY `error.message`. So the
  * message of a {@link ViewerResourceError} is itself a compact JSON string:
  *

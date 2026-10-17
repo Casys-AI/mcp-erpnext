@@ -1,4 +1,4 @@
-import type { MrtrOptions } from "@casys/mcp-server";
+import type { MrtrOptions } from "@mcpview/server";
 import { env } from "../runtime.ts";
 
 function normalize(value: string | undefined): string | undefined {

@@ -132,13 +132,12 @@ doesn't. Feature mechanics live in code + tests; user-facing changes go in
 `CHANGELOG.md`. Keep additions terse — `AGENTS.md` should stay high-signal, not
 grow a section per PR.
 
-## Built on @casys/mcp-server
+## Built on @mcpview/server
 
-This server runs on
-**[@casys/mcp-server](https://github.com/superWorldSavior/mcp-platform)**, the
-MCP framework that handles concurrency, auth, MCP Apps, and observability. If a
-change is about server / auth / transport plumbing rather than ERPNext tools, it
-may belong there instead — happy to help figure out which repo fits.
+This server runs on **[@mcpview/server](https://github.com/mcpview/mcpview)**,
+the MCP framework that handles concurrency, auth, MCP Apps, and observability.
+If a change is about server / auth / transport plumbing rather than ERPNext
+tools, it may belong there instead — happy to help figure out which repo fits.
 
 ## Reporting security issues
 

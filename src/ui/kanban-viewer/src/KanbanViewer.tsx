@@ -5,7 +5,7 @@
  * Présentation : primitives de ~/shared/ui + markup Tailwind natif.
  * Logique métier : handshake ext-apps, file de déplacements, refresh.
  *
- * Aucun import de @casys/mcp-view.
+ * Aucun import de @mcpview/view.
  */
 import type { ComponentChildren, JSX, Ref } from "preact";
 import {

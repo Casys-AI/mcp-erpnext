@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { createStaticTokenAuthProvider } from "@casys/mcp-server";
+import { createStaticTokenAuthProvider } from "@mcpview/server";
 import { resourceMetadataRoute } from "./resource-metadata-route.ts";
 
 Deno.test("resourceMetadataRoute: serves RFC 9728 metadata for a path resource", async () => {

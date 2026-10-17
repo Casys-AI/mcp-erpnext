@@ -31,7 +31,7 @@
  * @module lib/erpnext/server
  */
 
-import { launchInspector, MCP_APP_MIME_TYPE, McpApp } from "@casys/mcp-server";
+import { launchInspector, MCP_APP_MIME_TYPE, McpApp } from "@mcpview/server";
 import { ErpNextToolsClient } from "./src/client.ts";
 import {
   assertNonEmptySelection,

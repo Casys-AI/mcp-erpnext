@@ -10,7 +10,7 @@
  * Tailwind élague les tokens qu'aucune classe ne référence, et un token élagué
  * garde sa valeur sombre en perdant sa valeur claire. Voir shared/status.ts.
  *
- * Destinées à remonter dans @casys/mcp-view comme charte maison une fois
+ * Destinées à remonter dans @mcpview/view comme charte maison une fois
  * éprouvées ici ; d'où l'absence de toute dépendance à ce paquet.
  */
 

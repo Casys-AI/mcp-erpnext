@@ -12,7 +12,7 @@ import {
   getMcpAppsCapability,
   MCP_APP_MIME_TYPE,
   MCP_APPS_EXTENSION_ID,
-} from "@casys/mcp-server";
+} from "@mcpview/server";
 import type { FrappeFile } from "../api/types.ts";
 import type { ErpNextTool, ErpNextToolContext } from "./types.ts";
 import { createWithDiagnostics } from "./create-diagnostics.ts";

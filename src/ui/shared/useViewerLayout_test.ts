@@ -1,11 +1,11 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 
-Deno.test("useViewerLayout delegates to @casys/mcp-view-components/layout and keeps no local matchMedia or ResizeObserver", async () => {
+Deno.test("useViewerLayout delegates to @mcpview/components/layout and keeps no local matchMedia or ResizeObserver", async () => {
   const source = await Deno.readTextFile(
     new URL("./useViewerLayout.ts", import.meta.url),
   );
 
-  assertStringIncludes(source, "@casys/mcp-view-components/layout");
+  assertStringIncludes(source, "@mcpview/components/layout");
   assertStringIncludes(source, "useKitViewerLayout");
   assertEquals(
     source.includes("matchMedia"),

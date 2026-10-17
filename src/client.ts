@@ -23,7 +23,7 @@ import type {
   MCPToolMeta,
   ToolHandler,
   ToolHandlerContext,
-} from "@casys/mcp-server";
+} from "@mcpview/server";
 import { resolveToolSelection, type ToolSelection } from "./tools/selection.ts";
 import { getFrappeClient } from "./api/frappe-client.ts";
 import { runWithLinkDisambiguation } from "./mrtr/link-disambiguation.ts";

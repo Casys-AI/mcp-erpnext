@@ -9,9 +9,9 @@ export async function viewerTestDenoConfig(): Promise<unknown> {
   const imports: Record<string, string> = {};
   for (
     const name of [
-      "@casys/mcp-view",
-      "@casys/mcp-view-contracts",
-      "@casys/mcp-view-components",
+      "@mcpview/view",
+      "@mcpview/contracts",
+      "@mcpview/components",
       "preact",
       "@modelcontextprotocol/ext-apps",
     ]
@@ -36,11 +36,22 @@ export async function viewerTestDenoConfig(): Promise<unknown> {
     }
   }
   // This test-only helper is deliberately absent from the runtime npm package.
-  imports["@casys/mcp-view-components/testing"] =
-    "https://raw.githubusercontent.com/Casys-AI/mcp-server/b08802df353bb25d25a1c8d64b22ea61b5287ae0/packages/view-components/src/testing/surface-app-double.ts";
+  imports["@mcpview/components/testing"] =
+    "https://raw.githubusercontent.com/mcpview/mcpview/50756aaf062794f08bf412cf0762a4aa8988b28d/packages/view-components/src/testing/surface-app-double.ts";
 
   return {
-    minimumDependencyAge: { age: "P1D" },
+    // The @mcpview/* family is released in lockstep, so these exact versions
+    // are too fresh for the one-day delay; the exemption mirrors the
+    // `jsr:@mcpview/server` one in the root deno.json. Every other dependency
+    // keeps the delay.
+    minimumDependencyAge: {
+      age: "P1D",
+      exclude: [
+        "npm:@mcpview/view",
+        "npm:@mcpview/contracts",
+        "npm:@mcpview/components",
+      ],
+    },
     unstable: ["sloppy-imports"],
     compilerOptions: {
       jsx: "react-jsx",

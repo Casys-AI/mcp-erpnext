@@ -3,7 +3,7 @@ import {
   type AuthInfo,
   AuthProvider,
   type ProtectedResourceMetadata,
-} from "@casys/mcp-server";
+} from "@mcpview/server";
 import { CompositeAuthProvider } from "./composite-provider.ts";
 
 interface MetadataFixture {

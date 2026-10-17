@@ -51,7 +51,7 @@ const MAX_LICENSE_BYTES = 200_000;
  * reuses the repository LICENSE text; every other package without a license
  * file falls back to its package.json metadata and is reported by the run.
  */
-export const OWN_PACKAGES_WITHOUT_LICENSE_FILE = ["@casys/mcp-server"];
+export const OWN_PACKAGES_WITHOUT_LICENSE_FILE = ["@mcpview/server"];
 
 /** Structured failure: code + context + recovery (AX machine-readable error). */
 export class NoticesError extends Error {

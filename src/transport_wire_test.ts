@@ -15,8 +15,8 @@
  */
 
 import { assert, assertEquals } from "@std/assert";
-import { McpApp } from "@casys/mcp-server";
-import type { FetchHandler } from "@casys/mcp-server";
+import { McpApp } from "@mcpview/server";
+import type { FetchHandler } from "@mcpview/server";
 import { FrappeAPIError, setFrappeClient } from "./api/frappe-client.ts";
 import type { FrappeClient } from "./api/frappe-client.ts";
 import { MemoryCache } from "./cache/memory.ts";
@@ -590,7 +590,8 @@ Deno.test("server.ts configures the stateless transport", async () => {
   assert(
     /transport:\s*"stateless"/.test(source),
     'server.ts must pass transport: "stateless" to McpApp — without it the ' +
-      "default is stateful, and @casys/mcp-server 0.24 removes that mode entirely",
+      "default is stateful, and the framework (now @mcpview/server) removed " +
+      "that mode entirely in 0.24",
   );
   assert(
     !/transport:\s*"stateful"/.test(source),

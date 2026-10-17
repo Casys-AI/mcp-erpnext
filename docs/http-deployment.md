@@ -49,7 +49,7 @@ deno run -A npm:@casys/mcp-erpnext --http --port=3012
 ```
 
 > **Note:** Versions ≤ 2.3.1 of the npm bundle crashed with
-> `ReferenceError: Deno is not defined` in HTTP mode — fixed in 2.4.0
-> (`@casys/mcp-server` ≥ 0.21.1). If you hit this error, upgrade with
-> `npx -y @casys/mcp-erpnext@latest`, or use the Deno runner above. See
-> [`erpnext-quirks.md`](erpnext-quirks.md).
+> `ReferenceError: Deno is not defined` in HTTP mode — fixed in 2.4.0 (framework
+> 0.21.1 or later, now published as `@mcpview/server`). If you hit this error,
+> upgrade with `npx -y @casys/mcp-erpnext@latest`, or use the Deno runner above.
+> See [`erpnext-quirks.md`](erpnext-quirks.md).

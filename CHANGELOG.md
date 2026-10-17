@@ -4,6 +4,13 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Depends on `@mcpview/*` instead of the deprecated `@casys/mcp-*` packages
+  (`@mcpview/server` 0.29, `@mcpview/components` 0.10). APIs are unchanged.
+  Moving from components 0.7 to 0.10 also localizes the Buy evidence viewer's
+  generic states (loading, empty, rejected) to the host's locale.
+
 ## [3.2.0] - 2026-10-17
 
 First stable release of the 3.2 line. Highlights since 3.1.0:

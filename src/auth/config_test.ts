@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { StaticTokenAuthProvider } from "@casys/mcp-server";
+import { StaticTokenAuthProvider } from "@mcpview/server";
 import { buildAuthProvider, loadAuthConfig } from "./config.ts";
 import { CompositeAuthProvider } from "./composite-provider.ts";
 

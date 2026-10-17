@@ -2,7 +2,7 @@
  * MCP HTTP Authentication Configuration
  *
  * Reads auth settings from environment variables and builds an
- * `@casys/mcp-server` `AuthProvider` — static bearer tokens, OAuth 2.0 JWT
+ * `@mcpview/server` `AuthProvider` — static bearer tokens, OAuth 2.0 JWT
  * (JWKS), or both combined via `CompositeAuthProvider`.
  *
  *   1. Static bearer tokens  — MCP_AUTH_TOKEN or MCP_AUTH_TOKENS (comma-separated)
@@ -19,7 +19,7 @@ import {
   type AuthProvider,
   createOIDCAuthProvider,
   createStaticTokenAuthProvider,
-} from "@casys/mcp-server";
+} from "@mcpview/server";
 import { env } from "../runtime.ts";
 import { CompositeAuthProvider } from "./composite-provider.ts";
 

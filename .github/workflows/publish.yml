@@ -147,3 +147,25 @@ jobs:
         env:
           NPM_DIST_TAG: ${{ needs.release_guard.outputs.npm_dist_tag }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Align next with a newer stable release
+        # A stable release supersedes the prereleases of its own line: `next`
+        # must not keep pointing at an older beta. A prerelease of a later
+        # line (for example 3.3.0-beta.1 while 3.2.1 ships) is left alone.
+        if: needs.release_guard.outputs.npm_dist_tag == 'latest'
+        run: |
+          NEXT=$(npm view @casys/mcp-erpnext dist-tags.next 2>/dev/null || true)
+          if [ -z "$NEXT" ] || node -e '
+            const base = (v) => v.split("-")[0].split(".").map(Number);
+            const [n, r] = [base(process.argv[1]), base(process.argv[2])];
+            const cmp = n[0] - r[0] || n[1] - r[1] || n[2] - r[2];
+            process.exit(cmp <= 0 ? 0 : 1);
+          ' "$NEXT" "$RELEASE_VERSION"; then
+            echo "Aligning next (${NEXT:-none}) with $RELEASE_VERSION"
+            npm dist-tag add "@casys/mcp-erpnext@$RELEASE_VERSION" next
+          else
+            echo "Keeping next at $NEXT (newer line than $RELEASE_VERSION)"
+          fi
+        env:
+          RELEASE_VERSION: ${{ needs.release_guard.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,5 +1,7 @@
 /** UI-only Purchase Invoice amount/submit helpers. Do not import server tools. */
 
+import { mergeViewerEnrichment } from "../refresh.ts";
+
 export const PURCHASE_INVOICE_DOCTYPE = "Purchase Invoice";
 export const DISABLE_ROUNDED_TOTAL_LABEL = "Disable Rounded Total";
 
@@ -18,6 +20,7 @@ export type InvoiceSubmitSource = {
 export type ToolResultLike = {
   isError?: boolean;
   structuredContent?: Record<string, unknown>;
+  _meta?: Record<string, unknown>;
   content?: Array<{ type: string; text?: string }>;
 };
 
@@ -302,19 +305,24 @@ function finiteNumber(value: unknown): number | null {
 function parseActionPayload(
   result: ToolResultLike,
 ): Record<string, unknown> | null {
+  // Même point de lecture que les viewers : l'enrichissement porté par
+  // `_meta["io.casys/viewer"]` est refusionné dans les données.
   if (
     result.structuredContent &&
     typeof result.structuredContent === "object" &&
     !Array.isArray(result.structuredContent)
   ) {
-    return result.structuredContent;
+    return mergeViewerEnrichment(result.structuredContent, result);
   }
   const text = result.content?.find((entry) => entry.type === "text")?.text;
   if (!text) return null;
   try {
     const parsed = JSON.parse(text);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
+      return mergeViewerEnrichment(
+        parsed as Record<string, unknown>,
+        result,
+      );
     }
   } catch {
     return null;

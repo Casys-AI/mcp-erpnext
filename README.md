@@ -12,7 +12,7 @@ English | [繁體中文](README.zh-TW.md)
 > [!IMPORTANT]
 > **Installing the 3.2 beta:** for npm/Node use
 > `npx -y @casys/mcp-erpnext@next`; for Deno use
-> `deno run -A jsr:@casys/mcp-erpnext@3.2.0-beta.2/server`. npm's `next` tag
+> `deno run -A jsr:@casys/mcp-erpnext@3.2.0-beta.3/server`. npm's `next` tag
 > follows the current prerelease; the JSR command pins this exact beta because
 > JSR has no dist-tags. Stable **3.1.0** is available through npm's `latest`
 > tag. The beta retains the generic document viewer and attachment workflows, so
@@ -84,15 +84,17 @@ See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
 [latest release](https://github.com/superWorldSavior/mcp-erpnext/releases/latest)
 for the current version's highlights.
 
-> **3.2.0-beta.2 preview:** the beta includes the creation-error guidance,
+> **3.2.0-beta.3 preview:** the beta includes the creation-error guidance,
 > ERPNext 16 Opportunity compatibility and calendar-date fixes carried into
 > stable 3.1.0, alongside its generic document viewer, child tables,
 > attachments, in-view navigation and recorded Buy evidence. KPI percentage
 > changes, funnel currencies and context clearing on unsupported hosts are also
 > corrected, and a viewer that returns to an earlier root no longer lets a late
-> response from that earlier visit overwrite the level opened since. Features
-> remain capability-gated by the MCP host; Buy evidence does not purchase or
-> qualify a live ERP.
+> response from that earlier visit overwrite the level opened since. Viewer
+> enrichment (refresh requests, navigation jumps, tool manifests) also stays out
+> of the model's context, travelling in `_meta` instead of the result text.
+> Features remain capability-gated by the MCP host; Buy evidence does not
+> purchase or qualify a live ERP.
 
 ## Documentation
 
@@ -269,7 +271,7 @@ live ERPNext instance.
   caller cannot pass `sourceInstance`, URL, credentials, `capturedAt`, or a
   digest. Digital Thread stores those bytes in its own CAS; this server does not
   keep a second CAS.
-- App: `io.casys.mcp-erpnext.buy-evidence` `3.2.0-beta.2`, resource
+- App: `io.casys.mcp-erpnext.buy-evidence` `3.2.0-beta.3`, resource
   `ui://mcp-erpnext/buy-evidence-viewer` (`text/html;profile=mcp-app`), manifest
   `ui://mcp-erpnext/buy-evidence-manifest` (`application/json`),
   `acceptedActions` = `viewer.session.apply` only. Complete, partial,

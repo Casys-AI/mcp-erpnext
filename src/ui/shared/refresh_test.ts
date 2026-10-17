@@ -98,6 +98,89 @@ Deno.test("shared ui refresh - extracts text payloads from tool results", () => 
   assertEquals(extractToolResultText({ content: [] }), null);
 });
 
+Deno.test("shared ui refresh - refusionne le bloc _meta viewer dans structuredContent", () => {
+  const text = extractToolResultText({
+    structuredContent: { doctype: "Sales Invoice", data: [] },
+    _meta: {
+      ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" },
+      "io.casys/viewer": {
+        version: 1,
+        refreshRequest: {
+          toolName: "erpnext_sales_invoice_list",
+          arguments: { limit: 20 },
+        },
+        _availableTools: ["erpnext_sales_invoice_get"],
+      },
+    },
+  });
+  assertEquals(JSON.parse(text!), {
+    doctype: "Sales Invoice",
+    data: [],
+    refreshRequest: {
+      toolName: "erpnext_sales_invoice_list",
+      arguments: { limit: 20 },
+    },
+    _availableTools: ["erpnext_sales_invoice_get"],
+  });
+});
+
+Deno.test("shared ui refresh - sans bloc _meta, l'ancien format est lu tel quel", () => {
+  const legacy = {
+    doctype: "Sales Invoice",
+    data: [],
+    refreshRequest: {
+      toolName: "erpnext_sales_invoice_list",
+      arguments: {},
+    },
+    _availableTools: ["erpnext_sales_invoice_get"],
+  };
+  assertEquals(
+    extractToolResultText({ structuredContent: legacy }),
+    JSON.stringify(legacy),
+  );
+  assertEquals(
+    extractToolResultText({
+      content: [{ type: "text", text: JSON.stringify(legacy) }],
+    }),
+    JSON.stringify(legacy),
+  );
+});
+
+Deno.test("shared ui refresh - refusionne le bloc _meta dans le texte seul", () => {
+  const text = extractToolResultText({
+    content: [{
+      type: "text",
+      text: '{"doctype":"Sales Invoice","data":[]}',
+    }],
+    _meta: {
+      "io.casys/viewer": {
+        version: 1,
+        refreshRequest: {
+          toolName: "erpnext_sales_invoice_list",
+          arguments: {},
+        },
+      },
+    },
+  });
+  assertEquals(JSON.parse(text!), {
+    doctype: "Sales Invoice",
+    data: [],
+    refreshRequest: {
+      toolName: "erpnext_sales_invoice_list",
+      arguments: {},
+    },
+  });
+
+  // Un texte non-JSON (erreur) reste inchangé malgré le bloc.
+  assertEquals(
+    extractToolResultText({
+      content: [{ type: "text", text: "Account missing" }],
+      _meta: { "io.casys/viewer": { version: 1, _availableTools: [] } },
+    }),
+    "Account missing",
+  );
+});
+
 Deno.test("shared ui refresh - une payload hôte invalide la réponse racine plus ancienne", () => {
   const started = beginUiRefresh(createUiRefreshSequence());
   const generation = started.generation!;

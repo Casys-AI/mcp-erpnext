@@ -8,7 +8,38 @@ export interface UiRefreshRequestData {
 export interface ToolResultPayload {
   content?: Array<{ type: string; text?: string }>;
   structuredContent?: Record<string, unknown>;
+  _meta?: Record<string, unknown>;
   isError?: boolean;
+}
+
+/** Même clé que `VIEWER_META_KEY` côté serveur (`src/tools/model-visible.ts`). */
+export const VIEWER_META_KEY = "io.casys/viewer";
+
+/**
+ * Enrichissement viewer porté par `_meta` (caché au modèle), sans son champ
+ * `version`. `null` quand le bloc est absent : ancien format, où
+ * l'enrichissement vivait dans `structuredContent` — la lecture reste alors
+ * identique à avant.
+ */
+export function viewerEnrichment(
+  result: ToolResultPayload,
+): Record<string, unknown> | null {
+  const block = result._meta?.[VIEWER_META_KEY];
+  if (!block || typeof block !== "object" || Array.isArray(block)) {
+    return null;
+  }
+  const enrichment = { ...(block as Record<string, unknown>) };
+  delete enrichment.version;
+  return enrichment;
+}
+
+/** Refusionne l'enrichissement `_meta` dans les données métier du résultat. */
+export function mergeViewerEnrichment(
+  data: Record<string, unknown>,
+  result: ToolResultPayload,
+): Record<string, unknown> {
+  const enrichment = viewerEnrichment(result);
+  return enrichment ? { ...data, ...enrichment } : data;
 }
 
 export interface UiRefreshableData {
@@ -142,7 +173,27 @@ export function extractToolResultText(
   result: ToolResultPayload,
 ): string | null {
   if (result.structuredContent) {
-    return JSON.stringify(result.structuredContent);
+    return JSON.stringify(
+      mergeViewerEnrichment(result.structuredContent, result),
+    );
   }
-  return result.content?.find((entry) => entry.type === "text")?.text ?? null;
+  const text = result.content?.find((entry) => entry.type === "text")?.text ??
+    null;
+  if (text === null) return null;
+  // Même refusion quand l'hôte ne relaie que le texte : le JSON métier
+  // retrouve refreshRequest, sauts et manifeste avant d'être parsé.
+  const enrichment = viewerEnrichment(result);
+  if (!enrichment) return text;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return JSON.stringify({
+        ...(parsed as Record<string, unknown>),
+        ...enrichment,
+      });
+    }
+  } catch {
+    // Texte non-JSON (message d'erreur…) : renvoyé tel quel.
+  }
+  return text;
 }

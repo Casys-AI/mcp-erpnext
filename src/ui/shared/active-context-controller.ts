@@ -18,10 +18,9 @@ import {
   sameActiveContextSelections,
 } from "./active-context.ts";
 import {
-  activateContextWithFallback,
+  activateContext,
   type ActiveContextActivation,
   type ActiveContextFlowHost,
-  contextFallbackForConfirmedContext,
 } from "./active-context-flow.ts";
 import type { ClickIntentCommit, ClickIntentRevert } from "./click-intent.ts";
 
@@ -52,7 +51,6 @@ export function createActiveContextController(
   const pending = new Set<number>();
   let nextOperation = 0;
   let lastPresentation = 0;
-  let remoteEmpty = true;
   let mutationBase: ActiveContextSelection[] = [];
   let mutationLog: ActiveContextMutation[] = [];
   let nextMutation = 0;
@@ -108,7 +106,6 @@ export function createActiveContextController(
   }
   function commit(next: ActiveContextSelection[]) {
     // An acknowledged write remains host truth even after a root change.
-    remoteEmpty = next.length === 0;
     publish({ selections: next });
   }
   function replace(next: readonly ActiveContextSelection[]) {
@@ -179,7 +176,6 @@ export function createActiveContextController(
     }
     function activate(
       next: ContextSelectionItem,
-      fallbackMessage?: string,
       toggling = false,
     ): Promise<ActiveContextActivation> {
       const finish = beginOperation(actionGeneration);
@@ -194,14 +190,9 @@ export function createActiveContextController(
             : undefined;
           const result: ActiveContextActivation = mutation.removing
             ? removal === "shared" || removal === "cleared" ? "context" : "none"
-            : await activateContextWithFallback(
+            : await activateContext(
               app,
               mutation.selections.map((selection) => selection.item),
-              contextFallbackForConfirmedContext(
-                fallbackMessage,
-                state.selections.length > 0,
-                remoteEmpty,
-              ),
               current,
             );
           if (result === "context") {
@@ -376,7 +367,7 @@ export function createActiveContextController(
     return {
       activate,
       activateReversible,
-      toggle: (next: ContextSelectionItem) => activate(next, undefined, true),
+      toggle: (next: ContextSelectionItem) => activate(next, true),
       toggleReversible: (next: ContextSelectionItem) =>
         activateReversible(next, true),
       remove,
@@ -429,7 +420,6 @@ export function createActiveContextController(
       if (scope === next) return;
       scope = next;
       generation += 1;
-      remoteEmpty = false;
       // Keep acknowledged history until the queued root clear succeeds.
     },
     clearPreviousScope() {

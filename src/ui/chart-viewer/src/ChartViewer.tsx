@@ -103,6 +103,7 @@ import {
   type ChartCursor,
   chartCursorCounts,
   type ChartCursorMove,
+  chartDrillDownMessage,
   chartJumpHint,
   chartPointActionPlan,
   type ChartPointActivation,
@@ -2477,10 +2478,7 @@ function ChartContent(
   ]);
 
   function pointFallback(label: string, series?: string): string | undefined {
-    const fallback = data._drillDown
-      ?.replace(/\{label\}/g, label)
-      .replace(/\{series\}/g, series ?? "");
-    return fallback?.trim() || undefined;
+    return chartDrillDownMessage(data._drillDown, label, series);
   }
 
   function isPointSelected(label: string, series?: string): boolean {
@@ -2877,6 +2875,7 @@ export function ChartViewer() {
     fixture ? fixtureFromSearch() : null,
   );
   const [loading, setLoading] = useState(!fixture);
+  const [connectFailed, setConnectFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [rootFreshEvent, setRootFreshEvent] = useState(0);
   const [rootMutationEvent, setRootMutationEvent] = useState(0);
@@ -3023,7 +3022,9 @@ export function ChartViewer() {
       }
     };
 
-    app.connect().then(() => bindHostContext(app)).catch(() => {});
+    app.connect().then(() => bindHostContext(app)).catch(() =>
+      setConnectFailed(true)
+    );
   }, [fixture]);
 
   useEffect(() => {
@@ -3046,6 +3047,16 @@ export function ChartViewer() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [fixture]);
+
+  if (connectFailed && !data) {
+    return (
+      <ViewerShell containerRef={containerRef} style={boundsStyle}>
+        <StateMessage tone="bad">
+          {t("common.error.connect_failed")}
+        </StateMessage>
+      </ViewerShell>
+    );
+  }
 
   if (loading) {
     return (

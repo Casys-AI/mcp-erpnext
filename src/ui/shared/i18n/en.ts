@@ -322,7 +322,6 @@ export const en: Record<string, string> = {
   "doclist.detail.back_list_label": "‹ list",
   // ── /doclist-viewer ───────────────────────────────────────────────────────
   // ── drill-down (partage d'une sélection) ──
-  "drill.context": "Active selection in “{view}”: {label}{value}.",
   "drill.shared": "Selection shared — ask for details in the conversation",
   "drill.sent": "Sent to the conversation",
   "message.sending": "Sending…",
@@ -444,6 +443,7 @@ export const en: Record<string, string> = {
   "common.error.no_payload": "No text payload returned by tool call",
   "common.error.tool_failed": "Tool call failed",
   "common.error.no_proxy": "Host does not support proxied server tool calls",
+  "common.error.connect_failed": "Failed to connect to MCP host",
   "kanban.error.user_list":
     "Could not read the user list returned by the server",
   "common.yes": "Yes",
@@ -478,7 +478,6 @@ export const en: Record<string, string> = {
   "kanban.live.move_not_allowed": "Move to {label} is not allowed",
   "kanban.error.no_payload": "No kanban data received",
   "kanban.error.parse_failed": "Failed to parse kanban data",
-  "kanban.error.connect_failed": "Failed to connect to MCP host",
   "kanban.error.detail_no_payload": "No detail data received",
   "kanban.error.detail_fetch_failed": "Failed to load card detail",
   "kanban.error.drag_drop": "Failed to process drag and drop",

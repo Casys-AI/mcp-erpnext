@@ -10,6 +10,7 @@ import {
   chartContextNamespace,
   chartContextSelection,
   chartCursorCounts,
+  chartDrillDownMessage,
   chartJumpHint,
   chartNavigationGroups,
   chartPointActionPlan,
@@ -185,6 +186,31 @@ Deno.test("chart jump - exact series takes priority over the category fallback",
   assertStrictEquals(chartJumpHint(data, "Aug 26", "Income"), category);
   assertStrictEquals(chartJumpHint(data, "Aug 26"), category);
   assertEquals(chartJumpHint(data, "Missing", "Expenses"), undefined);
+});
+
+Deno.test("chart drill-down - le gabarit est rempli par libellé et série", () => {
+  assertEquals(
+    chartDrillDownMessage("Détail de {label} ({series})", "Aug 26", "Income"),
+    "Détail de Aug 26 (Income)",
+  );
+  assertEquals(
+    chartDrillDownMessage("Détail de {label}{series}", "Aug 26"),
+    "Détail de Aug 26",
+  );
+  assertEquals(chartDrillDownMessage(undefined, "Aug 26"), undefined);
+  assertEquals(chartDrillDownMessage("  {series}  ", "Aug 26"), undefined);
+});
+
+Deno.test("chart drill-down - un libellé avec $& ou $1 est inséré tel quel", () => {
+  assertEquals(
+    chartDrillDownMessage("Show {label} / {series}", "R&D $& Co $1 $$", "$`x"),
+    "Show R&D $& Co $1 $$ / $`x",
+  );
+  // Un libellé n'est jamais re-développé par le remplacement suivant.
+  assertEquals(
+    chartDrillDownMessage("Show {label} / {series}", "{series}", "S"),
+    "Show {series} / S",
+  );
 });
 
 Deno.test("chart jump - a derived series can remain context-only", () => {

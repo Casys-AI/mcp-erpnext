@@ -39,6 +39,18 @@ Deno.test("jumps : fillTemplate remplit chaînes et tableaux, laisse l'inconnu",
   );
 });
 
+Deno.test("jumps : fillTemplate insère les données telles quelles ($&, $1, $$)", () => {
+  assertEquals(
+    fillTemplate("Ouvrir {doctype} {id}", { doctype: "X$1", id: "A$&B$$" }),
+    "Ouvrir X$1 A$&B$$",
+  );
+  // Passe unique : une valeur qui ressemble à un gabarit n'est pas re-remplie.
+  assertEquals(
+    fillTemplate("{id} / {doctype}", { id: "{doctype}", doctype: "Sales" }),
+    "{doctype} / Sales",
+  );
+});
+
 Deno.test("jumps : un hint avec outil devient un saut, libellé traduit", () => {
   setLangSource(() => "fr-FR");
   const jump = jumpFromHint(HINT, { id: "SINV-1" }, "liées à SINV-1");

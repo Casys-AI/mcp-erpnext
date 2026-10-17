@@ -299,7 +299,6 @@ export const zhHant: Record<string, string> = {
   "doclist.detail.back_list_label": "‹ 清單",
   // ── 單據檢視 ───────────────────────────────────────────────────────
   // ── 下鑽（分享選取） ──
-  "drill.context": "「{view}」中的作用中選取：{label}{value}。",
   "drill.shared": "已分享選取 — 請於對話中詢問明細",
   "drill.sent": "已傳送至對話",
   "message.sending": "傳送中…",
@@ -416,6 +415,7 @@ export const zhHant: Record<string, string> = {
   "common.error.no_payload": "工具呼叫未回傳文字資料",
   "common.error.tool_failed": "工具呼叫失敗",
   "common.error.no_proxy": "主機不支援代理伺服器工具呼叫",
+  "common.error.connect_failed": "連線 MCP 主機失敗",
   "kanban.error.user_list": "無法讀取伺服器回傳的使用者清單",
   "common.yes": "是",
   "common.no": "否",
@@ -448,7 +448,6 @@ export const zhHant: Record<string, string> = {
   "kanban.live.move_not_allowed": "不允許移至 {label}",
   "kanban.error.no_payload": "未收到看板資料",
   "kanban.error.parse_failed": "解析看板資料失敗",
-  "kanban.error.connect_failed": "連線 MCP 主機失敗",
   "kanban.error.detail_no_payload": "未收到明細資料",
   "kanban.error.detail_fetch_failed": "載入卡片明細失敗",
   "kanban.error.drag_drop": "處理拖放失敗",

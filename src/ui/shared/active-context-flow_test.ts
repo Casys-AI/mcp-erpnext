@@ -1,10 +1,9 @@
 import { assertEquals } from "@std/assert";
 import type { ContextSelectionItem } from "./active-context.ts";
 import {
-  activateContextWithFallback,
+  activateContext,
   type ActiveContextFlowHost,
   activeContextPresentationEffect,
-  contextFallbackForConfirmedContext,
   contextFallbackForInlineJump,
 } from "./active-context-flow.ts";
 
@@ -17,16 +16,13 @@ const ITEM: ContextSelectionItem = {
 
 type Result = "ok" | "isError" | "throw";
 
-function host(
-  context: Result,
-  message: Result = "ok",
-  messageText = true,
-) {
+/** Hôte qui annonce aussi `message.text` : le flux ne doit jamais l'utiliser. */
+function host(context: Result) {
   const calls: string[] = [];
   const fake: ActiveContextFlowHost = {
     getHostCapabilities: () => ({
       updateModelContext: { structuredContent: {} },
-      ...(messageText ? { message: { text: {} } } : {}),
+      message: { text: {} },
     }),
     updateModelContext: () => {
       calls.push("context");
@@ -35,58 +31,34 @@ function host(
     },
     sendMessage: () => {
       calls.push("message");
-      if (message === "throw") return Promise.reject(new Error("message"));
-      return Promise.resolve(message === "isError" ? { isError: true } : {});
+      return Promise.resolve({});
     },
   };
   return { fake, calls };
 }
 
-Deno.test("activation : succès contexte sans double envoi", async () => {
+Deno.test("activation : succès contexte, aucun message envoyé", async () => {
   const { fake, calls } = host("ok");
-  assertEquals(
-    await activateContextWithFallback(fake, [ITEM], "Show August"),
-    "context",
-  );
+  assertEquals(await activateContext(fake, [ITEM]), "context");
   assertEquals(calls, ["context"]);
 });
 
-Deno.test("activation : refus contexte → message.text seulement", async () => {
+Deno.test("activation : refus contexte → none, jamais de message de repli", async () => {
+  // L'hôte annonce message.text : le repli conversationnel n'existe plus.
   for (const context of ["isError", "throw"] as const) {
     const { fake, calls } = host(context);
-    assertEquals(
-      await activateContextWithFallback(fake, [ITEM], "Show August"),
-      "message",
-    );
-    assertEquals(calls, ["context", "message"]);
+    assertEquals(await activateContext(fake, [ITEM]), "none");
+    assertEquals(calls, ["context"]);
   }
 });
 
-Deno.test("activation : aucun message sans message.text", async () => {
-  const { fake, calls } = host("isError", "ok", false);
-  assertEquals(
-    await activateContextWithFallback(fake, [ITEM], "Show August"),
-    "none",
-  );
-  assertEquals(calls, ["context"]);
-});
-
-Deno.test("activation : requête dépassée ne déclenche pas son fallback", async () => {
+Deno.test("activation : requête dépassée → superseded", async () => {
   const { fake, calls } = host("isError");
   assertEquals(
-    await activateContextWithFallback(fake, [ITEM], "Show August", () => false),
+    await activateContext(fake, [ITEM], () => false),
     "superseded",
   );
   assertEquals(calls, ["context"]);
-});
-
-Deno.test("activation : refus du message reste un échec visible", async () => {
-  const { fake, calls } = host("isError", "isError");
-  assertEquals(
-    await activateContextWithFallback(fake, [ITEM], "Show August"),
-    "none",
-  );
-  assertEquals(calls, ["context", "message"]);
 });
 
 Deno.test("présentation : un fallback message reste un échec de contexte", () => {
@@ -104,36 +76,7 @@ Deno.test("navigation : un saut inline supprime toujours le fallback message", (
   );
 });
 
-Deno.test("fallback : exige un panier confirmé vide et un distant vide connu", () => {
-  assertEquals(
-    contextFallbackForConfirmedContext("Show August", false, true),
-    "Show August",
-  );
-  assertEquals(
-    contextFallbackForConfirmedContext("Show August", true, false),
-    undefined,
-  );
-  assertEquals(
-    contextFallbackForConfirmedContext("Show August", false, false),
-    undefined,
-  );
-});
-
-Deno.test("fallback : l'échec de B avec A confirmé n'envoie aucun message B", async () => {
-  const { fake, calls } = host("isError");
-  const fallback = contextFallbackForConfirmedContext(
-    "Show September",
-    true,
-    false,
-  );
-  assertEquals(
-    await activateContextWithFallback(fake, [ITEM], fallback),
-    "none",
-  );
-  assertEquals(calls, ["context"]);
-});
-
-Deno.test("génération : un changement pendant l'update bloque le fallback", async () => {
+Deno.test("génération : un changement pendant l'update ne produit aucun repli", async () => {
   let current = true;
   const calls: string[] = [];
   const fake: ActiveContextFlowHost = {
@@ -153,12 +96,7 @@ Deno.test("génération : un changement pendant l'update bloque le fallback", as
   };
 
   assertEquals(
-    await activateContextWithFallback(
-      fake,
-      [ITEM],
-      "Show August",
-      () => current,
-    ),
+    await activateContext(fake, [ITEM], () => current),
     "superseded",
   );
   assertEquals(calls, ["context"]);
@@ -184,12 +122,7 @@ Deno.test("génération : un contexte confirmé reste observable après changeme
   };
 
   assertEquals(
-    await activateContextWithFallback(
-      fake,
-      [ITEM],
-      "Show August",
-      () => current,
-    ),
+    await activateContext(fake, [ITEM], () => current),
     "context",
   );
   assertEquals(calls, ["context"]);

@@ -305,7 +305,6 @@ export const bn: Record<string, string> = {
   "doclist.detail.back_list_label": "‹ তালিকা",
   // ── /নথি-তালিকা ভিউয়ার ───────────────────────────────────────────────────────
   // ── ড্রিল-ডাউন (নির্বাচন শেয়ার) ──
-  "drill.context": "“{view}”-এ সক্রিয় নির্বাচন: {label}{value}।",
   "drill.shared": "নির্বাচন শেয়ার হয়েছে — কথোপকথনে বিবরণ জিজ্ঞাসা করুন",
   "drill.sent": "কথোপকথনে পাঠানো হয়েছে",
   "message.sending": "পাঠানো হচ্ছে…",
@@ -425,6 +424,7 @@ export const bn: Record<string, string> = {
   "common.error.no_payload": "টুল কল থেকে কোনো টেক্সট ডেটা আসেনি",
   "common.error.tool_failed": "টুল কল ব্যর্থ হয়েছে",
   "common.error.no_proxy": "হোস্ট প্রক্সি সার্ভার টুল কল সমর্থন করে না",
+  "common.error.connect_failed": "MCP হোস্টে সংযোগ ব্যর্থ",
   "kanban.error.user_list": "সার্ভারের ব্যবহারকারী তালিকা পড়া যায়নি",
   "common.yes": "হ্যাঁ",
   "common.no": "না",
@@ -457,7 +457,6 @@ export const bn: Record<string, string> = {
   "kanban.live.move_not_allowed": "{label}-এ সরানো যাবে না",
   "kanban.error.no_payload": "কোনো কানবান ডেটা আসেনি",
   "kanban.error.parse_failed": "কানবান ডেটা পড়া যায়নি",
-  "kanban.error.connect_failed": "MCP হোস্টে সংযোগ ব্যর্থ",
   "kanban.error.detail_no_payload": "কোনো বিবরণ ডেটা আসেনি",
   "kanban.error.detail_fetch_failed": "কার্ড বিবরণ লোড করা যায়নি",
   "kanban.error.drag_drop": "ড্র্যাগ-ড্রপ প্রক্রিয়া ব্যর্থ",

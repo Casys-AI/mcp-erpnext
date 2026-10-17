@@ -300,7 +300,6 @@ export const zh: Record<string, string> = {
   "doclist.detail.back_list_label": "‹ 列表",
   // ── 单据视图 ───────────────────────────────────────────────────────
   // ── 下钻（共享选择） ──
-  "drill.context": "“{view}”中的活动选择：{label}{value}。",
   "drill.shared": "已共享选择 — 请在对话中询问详情",
   "drill.sent": "已发送至对话",
   "message.sending": "发送中…",
@@ -416,6 +415,7 @@ export const zh: Record<string, string> = {
   "common.error.no_payload": "工具调用未返回文本数据",
   "common.error.tool_failed": "工具调用失败",
   "common.error.no_proxy": "宿主不支持代理服务器工具调用",
+  "common.error.connect_failed": "连接 MCP 宿主失败",
   "kanban.error.user_list": "无法读取服务器返回的用户列表",
   "common.yes": "是",
   "common.no": "否",
@@ -448,7 +448,6 @@ export const zh: Record<string, string> = {
   "kanban.live.move_not_allowed": "不允许移动到 {label}",
   "kanban.error.no_payload": "未收到看板数据",
   "kanban.error.parse_failed": "解析看板数据失败",
-  "kanban.error.connect_failed": "连接 MCP 宿主失败",
   "kanban.error.detail_no_payload": "未收到详情数据",
   "kanban.error.detail_fetch_failed": "加载卡片详情失败",
   "kanban.error.drag_drop": "处理拖放失败",

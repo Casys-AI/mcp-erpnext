@@ -132,6 +132,7 @@ export function StockViewer() {
     fixture ? STOCK_FIXTURE : null,
   );
   const [loading, setLoading] = useState(!fixture);
+  const [connectFailed, setConnectFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [rootFreshEvent, setRootFreshEvent] = useState(0);
   const [rootMutationEvent, setRootMutationEvent] = useState(0);
@@ -273,7 +274,9 @@ export function StockViewer() {
     app.ontoolinputpartial = () => {
       if (!dataRef.current) setLoading(true);
     };
-    app.connect().then(() => bindHostContext(app)).catch(() => {});
+    app.connect().then(() => bindHostContext(app)).catch(() =>
+      setConnectFailed(true)
+    );
   }, [fixture]);
 
   useEffect(() => {
@@ -293,6 +296,16 @@ export function StockViewer() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [fixture]);
+
+  if (connectFailed && !data) {
+    return (
+      <ViewerShell>
+        <StateMessage tone="bad">
+          {t("common.error.connect_failed")}
+        </StateMessage>
+      </ViewerShell>
+    );
+  }
 
   if (loading) {
     return (

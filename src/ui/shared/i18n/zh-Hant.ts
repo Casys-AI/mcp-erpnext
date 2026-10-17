@@ -316,6 +316,13 @@ export const zhHant: Record<string, string> = {
   "interaction.detail.close": "關閉 {label} 明細",
   "interaction.detail.open_hint": "明細 · 連按兩下",
   "interaction.detail.close_hint": "關閉 · 連按兩下",
+  // ── détail sans double-clic : boutons visibles (tactile) ──
+  "interaction.detail.button_hint": "明細",
+  "interaction.detail.ask": "詢問 {label}",
+  "kpi.drilldown.aria_trend_ask": "詢問 {label} 趨勢",
+  "chart.detail_bar.open": "開啟明細：{label}",
+  "chart.detail_bar.close": "關閉明細：{label}",
+  "chart.detail_bar.ask": "詢問：{label}",
   "document.row.open_actions":
     "點選或按空白鍵將 {label} 加入上下文或自其中移除 · 連按兩下或按 Enter 鍵顯示其操作",
   "document.row.close_actions":

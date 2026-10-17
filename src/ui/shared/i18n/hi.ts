@@ -326,6 +326,13 @@ export const hi: Record<string, string> = {
   "interaction.detail.close": "{label} का विवरण बंद करें",
   "interaction.detail.open_hint": "विवरण · दोहरा क्लिक",
   "interaction.detail.close_hint": "बंद करें · दोहरा क्लिक",
+  // ── détail sans double-clic : boutons visibles (tactile) ──
+  "interaction.detail.button_hint": "विवरण",
+  "interaction.detail.ask": "{label} के बारे में पूछें",
+  "kpi.drilldown.aria_trend_ask": "{label} के रुझान के बारे में पूछें",
+  "chart.detail_bar.open": "विवरण खोलें: {label}",
+  "chart.detail_bar.close": "विवरण बंद करें: {label}",
+  "chart.detail_bar.ask": "पूछें: {label}",
   "document.row.open_actions":
     "{label} को संदर्भ में जोड़ने या हटाने के लिए क्लिक या स्पेस दबाएँ · कार्रवाइयाँ देखने के लिए दोहरा क्लिक या एंटर दबाएँ",
   "document.row.close_actions":

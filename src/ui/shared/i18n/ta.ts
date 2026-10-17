@@ -329,6 +329,13 @@ export const ta: Record<string, string> = {
   "interaction.detail.close": "{label} விவரத்தை மூடுக",
   "interaction.detail.open_hint": "விவரம் · இரட்டைக் கிளிக்",
   "interaction.detail.close_hint": "மூடுக · இரட்டைக் கிளிக்",
+  // ── détail sans double-clic : boutons visibles (tactile) ──
+  "interaction.detail.button_hint": "விவரம்",
+  "interaction.detail.ask": "{label} பற்றிக் கேள்",
+  "kpi.drilldown.aria_trend_ask": "{label} போக்கைப் பற்றிக் கேள்",
+  "chart.detail_bar.open": "விவரத்தைத் திற: {label}",
+  "chart.detail_bar.close": "விவரத்தை மூடுக: {label}",
+  "chart.detail_bar.ask": "கேள்: {label}",
   "document.row.open_actions":
     "{label} ஐச் சூழலில் சேர்க்க அல்லது நீக்கக் கிளிக் அல்லது ஸ்பேஸ் · செயல்களைப் பார்க்க இரட்டைக் கிளிக் அல்லது என்டர்",
   "document.row.close_actions":

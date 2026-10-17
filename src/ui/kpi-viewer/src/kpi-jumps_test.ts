@@ -1,9 +1,12 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { createClickIntentArbiter } from "../../shared/click-intent.ts";
+import { en } from "../../shared/i18n/en.ts";
 import {
+  type KpiClickAction,
   kpiClickAction,
   kpiClickIntent,
   kpiContextEnabled,
+  kpiDetailButtonSpec,
   kpiHintKey,
   kpiInteractionPlan,
   type KpiJumps,
@@ -146,7 +149,8 @@ Deno.test("kpi navigation detail is an action, not a mounted disclosure", async 
 
   assertEquals(source.includes("expandedTriggerKey"), false);
   assertEquals(source.includes("aria-expanded"), false);
-  assertEquals(source.includes("DetailToggleButton"), false);
+  // Le bouton visible est une action : jamais de prop `expanded`.
+  assertEquals(source.includes("expanded="), false);
   assertStringIncludes(source, "onOpenJump");
   assertStringIncludes(source, "void nav.jump(jump)");
 });
@@ -367,4 +371,101 @@ Deno.test("kpi element matrix - a scalar click on a host with context still open
   scalar.arbiter.doubleClick(scalar.intent);
 
   assertEquals(scalar.events, ["jump"]);
+});
+
+// ── Bouton de détail visible (tactile, sans double-clic) ──────────────────
+
+Deno.test("kpi-jumps : le bouton de détail existe exactement quand le double-clic est câblé", () => {
+  // click, hasJump, hasMessage → bouton ?
+  const rows: Array<[KpiClickAction, boolean, boolean, boolean]> = [
+    // Contexte actif : le clic est réservé, le détail n'a que le bouton.
+    ["context", true, false, true],
+    ["context", false, true, true],
+    // Message seul sans contexte : le clic ne fait rien, le bouton est la seule voie tactile.
+    ["none", false, true, true],
+    // Le clic ouvre déjà le détail local : un bouton serait redondant.
+    ["detail", true, false, false],
+    // Aucun détail possible : pas de bouton.
+    ["none", false, false, false],
+    ["context", false, false, false],
+  ];
+  for (const [click, hasJump, hasMessage, visible] of rows) {
+    assertEquals(
+      kpiDetailButtonSpec("number", click, hasJump, hasMessage) !== null,
+      visible,
+      `${click} jump=${hasJump} message=${hasMessage}`,
+    );
+    assertEquals(
+      kpiDetailButtonSpec("trend", click, hasJump, hasMessage) !== null,
+      visible,
+      `trend ${click} jump=${hasJump} message=${hasMessage}`,
+    );
+  }
+});
+
+Deno.test("kpi-jumps : libellés du bouton — saut = ouvrir, message = demander", () => {
+  assertEquals(kpiDetailButtonSpec("number", "context", true, false), {
+    actionLabelKey: "interaction.detail.open",
+    hintKey: "interaction.detail.button_hint",
+  });
+  assertEquals(kpiDetailButtonSpec("trend", "context", true, false), {
+    actionLabelKey: "kpi.drilldown.aria_trend",
+    hintKey: "interaction.detail.button_hint",
+  });
+  assertEquals(kpiDetailButtonSpec("number", "none", false, true), {
+    actionLabelKey: "interaction.detail.ask",
+    hintKey: "nav.ask",
+  });
+  assertEquals(kpiDetailButtonSpec("trend", "context", false, true), {
+    actionLabelKey: "kpi.drilldown.aria_trend_ask",
+    hintKey: "nav.ask",
+  });
+});
+
+Deno.test("kpi-jumps : le bouton n'ouvre jamais le détail par le clic simple ni ne bascule le contexte", () => {
+  // Chemin du bouton : activateDetail sur le même intent que le double-clic.
+  const arbiter = createClickIntentArbiter(() => () => {});
+  const events: string[] = [];
+  const intent = kpiClickIntent({
+    key: "kpi:CA:value",
+    click: "context",
+    hasJump: true,
+    onSingle: () => {
+      events.push("context");
+    },
+    onDouble: () => events.push("detail"),
+  });
+
+  arbiter.activateDetail(intent);
+
+  assertEquals(events, ["detail"]);
+});
+
+Deno.test("kpi viewer - les boutons de détail sont câblés sur les mêmes actions que le double-clic", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./KpiViewer.tsx", import.meta.url),
+  );
+
+  assertStringIncludes(
+    source,
+    'import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx"',
+  );
+  assertStringIncludes(source, "kpiDetailButtonSpec(");
+  assertStringIncludes(source, "clickIntent.activateDetail(");
+  // Le libellé et l'indice viennent de la spec pure, jamais d'un défaut muet.
+  assertStringIncludes(source, "actionLabel={");
+  assertStringIncludes(source, "hint={");
+  // Le bouton de la sparkline reçoit les clics malgré `pointer-events-none`.
+  assertStringIncludes(source, "pointer-events-auto");
+});
+
+Deno.test("kpi-jumps : chaque clé du bouton de détail existe dans le catalogue", () => {
+  for (const target of ["number", "trend"] as const) {
+    for (const [hasJump, hasMessage] of [[true, false], [false, true]]) {
+      const spec = kpiDetailButtonSpec(target, "context", hasJump, hasMessage)!;
+      assertEquals(spec.actionLabelKey in en, true, spec.actionLabelKey);
+      assertEquals(spec.hintKey in en, true, spec.hintKey);
+      assertStringIncludes(en[spec.actionLabelKey], "{label}");
+    }
+  }
 });

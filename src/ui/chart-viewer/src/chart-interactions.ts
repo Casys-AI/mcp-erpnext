@@ -8,7 +8,11 @@ import {
   formatNumber,
   formatPercent,
 } from "../../shared/format.ts";
-import { fillTemplate, type NavHint } from "../../shared/jumps.ts";
+import {
+  fillTemplate,
+  jumpFromHint,
+  type NavHint,
+} from "../../shared/jumps.ts";
 import { chartSeriesFormat } from "../../shared/levels/bodies.ts";
 import type { ChartData, Dataset } from "./types.ts";
 
@@ -598,6 +602,96 @@ export function chartDrillDownMessage(
   if (template === undefined) return undefined;
   return fillTemplate(template, { label, series: series ?? "" }).trim() ||
     undefined;
+}
+
+/** Libellé (et série) d'un point, tel que l'affichent contexte et détail. */
+export function chartPointTarget(label: string, series?: string): string {
+  return series ? `${label} · ${series}` : label;
+}
+
+/** Ce que l'hôte sait relayer : outils (sauts) et/ou messages (repli). */
+export interface ChartDetailCapabilities {
+  jumpsEnabled: boolean;
+  messagesEnabled: boolean;
+}
+
+/** `inline` ouvre un niveau sous le graphe ; `message` interroge le modèle. */
+export type ChartDetailMode = "inline" | "message";
+
+/** Le dernier point (et segment de série) activé par l'utilisateur. */
+export interface ChartFocus {
+  label: string;
+  series?: string;
+}
+
+export interface ChartDetailAction extends ChartFocus {
+  mode: ChartDetailMode;
+}
+
+/**
+ * Règle unique du détail d'un point, partagée par le double-clic, Entrée et
+ * le bouton visible. Le segment exact prime sur la catégorie (`chartJumpHint`) ;
+ * un saut inutilisable (sans outil) ne retombe pas sur la catégorie. Sans
+ * saut, le message de drill-down n'est qu'un repli explicite.
+ */
+export function chartPointDetailMode(
+  data: Pick<ChartData, "_pointJumps" | "_seriesPointJumps" | "_drillDown">,
+  capabilities: ChartDetailCapabilities,
+  label: string,
+  series?: string,
+): ChartDetailMode | null {
+  if (
+    capabilities.jumpsEnabled && (data._pointJumps || data._seriesPointJumps)
+  ) {
+    const hint = chartJumpHint(data, label, series);
+    if (hint && jumpFromHint(hint, {})) return "inline";
+  }
+  return capabilities.messagesEnabled && data._drillDown !== undefined &&
+      chartDrillDownMessage(data._drillDown, label, series)
+    ? "message"
+    : null;
+}
+
+/** Le point existe encore dans la grille réelle (série masquée, refresh). */
+function chartFocusExists(data: ChartData, focus: ChartFocus): boolean {
+  return chartNavigationGroups(data).some((group) =>
+    group.some((selection) =>
+      selection.label === focus.label &&
+      (!focus.series || selection.series === focus.series)
+    )
+  );
+}
+
+/**
+ * Action de la barre « Ouvrir le détail » pour le dernier point activé. `data`
+ * est le graphe visible : un point disparu n'offre plus aucune action. Sans
+ * détail pour ce point, il n'y a pas de barre (`null`).
+ */
+export function chartFocusedDetailAction(
+  data: ChartData,
+  capabilities: ChartDetailCapabilities,
+  focus: ChartFocus | null | undefined,
+): ChartDetailAction | null {
+  if (!focus?.label || !chartFocusExists(data, focus)) return null;
+  const mode = chartPointDetailMode(
+    data,
+    capabilities,
+    focus.label,
+    focus.series,
+  );
+  return mode ? { label: focus.label, series: focus.series, mode } : null;
+}
+
+/**
+ * Clé i18n du bouton : ouvrir ou fermer le niveau, ou demander au modèle. Un
+ * message n'ouvre aucun panneau, il ne se « ferme » donc jamais.
+ */
+export function chartDetailBarLabelKey(
+  action: ChartDetailAction,
+  expanded: boolean,
+): string {
+  if (action.mode === "message") return "chart.detail_bar.ask";
+  return expanded ? "chart.detail_bar.close" : "chart.detail_bar.open";
 }
 
 /**

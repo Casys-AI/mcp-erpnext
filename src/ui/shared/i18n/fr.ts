@@ -343,6 +343,13 @@ export const fr: Record<string, string> = {
   "interaction.detail.close": "Fermer le détail de {label}",
   "interaction.detail.open_hint": "Détail · double-clic",
   "interaction.detail.close_hint": "Fermer · double-clic",
+  // ── détail sans double-clic : boutons visibles (tactile) ──
+  "interaction.detail.button_hint": "Détail",
+  "interaction.detail.ask": "Demander le détail de {label}",
+  "kpi.drilldown.aria_trend_ask": "Demander la tendance de {label}",
+  "chart.detail_bar.open": "Ouvrir le détail : {label}",
+  "chart.detail_bar.close": "Fermer le détail : {label}",
+  "chart.detail_bar.ask": "Demander le détail : {label}",
   "document.row.open_actions":
     "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour afficher ses actions",
   "document.row.close_actions":

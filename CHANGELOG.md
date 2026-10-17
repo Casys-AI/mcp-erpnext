@@ -67,6 +67,12 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 - Scalar KPIs open available local details on a single click. Pie, donut, and
   treemap charts offer the same fallback when context selection is unavailable;
   conversational actions keep their explicit activation gesture.
+- Chart, KPI, and nested-chart details are reachable without a double-click,
+  which helps on touch screens: a visible button sits beside each KPI value and
+  trend, an "Open details" bar under a chart follows the last selected point or
+  segment, and nested bar charts show a button under each bar that has a detail.
+  Clicking still toggles the active context; double-click and Enter open the
+  same details as before.
 - KPI values, comparison values, and secondary invoice counts or amounts use the
   host locale; older payloads retain their supplied caption. Selected KPI
   context preserves those secondary values.

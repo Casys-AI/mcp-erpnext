@@ -8,6 +8,8 @@ export interface DetailToggleButtonProps {
   /** Absent pour une action de repli (message), qui n'ouvre aucun panneau. */
   expanded?: boolean;
   label: string;
+  actionLabel?: string;
+  hint?: string;
   onToggle: () => void;
   controls?: string;
   touch?: boolean;
@@ -23,6 +25,8 @@ export interface DetailToggleButtonProps {
 export function DetailToggleButton({
   expanded,
   label,
+  actionLabel: actionLabelOverride,
+  hint: hintOverride,
   onToggle,
   controls,
   touch = false,
@@ -31,11 +35,11 @@ export function DetailToggleButton({
 }: DetailToggleButtonProps) {
   const t = useT();
   const disclosure = expanded !== undefined;
-  const actionLabel = t(
+  const actionLabel = actionLabelOverride ?? t(
     expanded === true ? "interaction.detail.close" : "interaction.detail.open",
     { label },
   );
-  const hint = t(
+  const hint = hintOverride ?? t(
     expanded === true
       ? "interaction.detail.close_hint"
       : "interaction.detail.open_hint",

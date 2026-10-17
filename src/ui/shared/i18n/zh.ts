@@ -317,6 +317,13 @@ export const zh: Record<string, string> = {
   "interaction.detail.close": "关闭 {label} 详情",
   "interaction.detail.open_hint": "详情 · 双击",
   "interaction.detail.close_hint": "关闭 · 双击",
+  // ── détail sans double-clic : boutons visibles (tactile) ──
+  "interaction.detail.button_hint": "详情",
+  "interaction.detail.ask": "询问 {label}",
+  "kpi.drilldown.aria_trend_ask": "询问 {label} 趋势",
+  "chart.detail_bar.open": "打开详情：{label}",
+  "chart.detail_bar.close": "关闭详情：{label}",
+  "chart.detail_bar.ask": "询问：{label}",
   "document.row.open_actions":
     "单击或空格键将 {label} 加入或移出上下文 · 双击或回车键显示操作",
   "document.row.close_actions":

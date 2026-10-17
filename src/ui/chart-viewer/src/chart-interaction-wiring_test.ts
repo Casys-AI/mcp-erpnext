@@ -106,7 +106,7 @@ Deno.test("chart wiring - full chart and legend expose the visible subset", () =
   assertStringIncludes(treemap, "data-chart-whole-gutter");
 });
 
-Deno.test("chart wiring - detail remains double-click or Enter without a floating button", () => {
+Deno.test("chart wiring - detail stays on double-click or Enter, with no floating button on the chart", () => {
   const tooltip = between("function ChartTooltip", "function SharedXAxis");
   const keyboard = between(
     "function ChartKeyboardNavigator",
@@ -157,4 +157,31 @@ Deno.test("chart wiring - click opens detail through a detail intent only for pi
   );
   assertStringIncludes(helper, "chartClickOpensDetail(");
   assertStringIncludes(helper, "data.type");
+});
+
+Deno.test("chart wiring - le dernier point activé alimente une barre d'action sous le graphe", () => {
+  const content = between(
+    "function ChartContent",
+    "export function ChartViewer",
+  );
+  const bar = between("function ChartDetailBar", "function ChartRouter");
+
+  // La décision est pure et partagée avec le double-clic / Entrée.
+  assertStringIncludes(content, "chartFocusedDetailAction(");
+  assertStringIncludes(content, "chartPointDetailMode(");
+  assertStringIncludes(content, "focusDetailPoint(label, series)");
+  assertStringIncludes(content, "setDetailFocus((current)");
+  assertStringIncludes(content, "<ChartDetailBar");
+  // Le bouton passe par l'arbitre : même chemin qu'Entrée, jamais le contexte.
+  assertStringIncludes(content, "clickIntent.activateDetail(");
+  // Hors de la scène du graphe (hauteur fixe) : elle ne redimensionne rien.
+  const stage = content.indexOf("resolveChartStageHeight(data.height, narrow)");
+  assertEquals(stage > 0 && content.indexOf("<ChartDetailBar") > stage, true);
+  // Pas d'infobulle Recharts cliquable : un vrai bouton HTML.
+  assertStringIncludes(bar, "<button");
+  assertStringIncludes(bar, "chartDetailBarLabelKey(");
+  assertStringIncludes(bar, "acceptsDetailToggleClick(event.detail)");
+  assertStringIncludes(bar, "aria-expanded={expanded}");
+  assertStringIncludes(bar, "aria-controls=");
+  assertEquals(source.includes("DetailToggleButton"), false);
 });

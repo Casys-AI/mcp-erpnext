@@ -322,6 +322,13 @@ export const bn: Record<string, string> = {
   "interaction.detail.close": "{label}-এর বিবরণ বন্ধ করুন",
   "interaction.detail.open_hint": "বিবরণ · ডাবল-ক্লিক",
   "interaction.detail.close_hint": "বন্ধ · ডাবল-ক্লিক",
+  // ── détail sans double-clic : boutons visibles (tactile) ──
+  "interaction.detail.button_hint": "বিবরণ",
+  "interaction.detail.ask": "{label} নিয়ে জিজ্ঞাসা করুন",
+  "kpi.drilldown.aria_trend_ask": "{label}-এর প্রবণতা নিয়ে জিজ্ঞাসা করুন",
+  "chart.detail_bar.open": "বিবরণ খুলুন: {label}",
+  "chart.detail_bar.close": "বিবরণ বন্ধ করুন: {label}",
+  "chart.detail_bar.ask": "জিজ্ঞাসা করুন: {label}",
   "document.row.open_actions":
     "{label} প্রসঙ্গে যোগ বা সরাতে ক্লিক বা স্পেস চাপুন · কাজ দেখতে ডাবল-ক্লিক বা এন্টার চাপুন",
   "document.row.close_actions":

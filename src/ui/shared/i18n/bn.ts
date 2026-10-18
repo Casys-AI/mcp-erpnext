@@ -312,6 +312,7 @@ export const bn: Record<string, string> = {
   "message.send_error": "কথোপকথনে পাঠানো যায়নি",
   "context.active.label": "প্রসঙ্গ",
   "context.active.items": "সক্রিয় প্রসঙ্গ নির্বাচন",
+  "context.active.attachment": "{name} · {size} · এই ফাইলটি মডেলে পাঠানো হবে",
   "context.active.select": "{label} সক্রিয় প্রসঙ্গে যোগ করুন",
   "context.active.clear": "{label} সক্রিয় প্রসঙ্গ থেকে সরান",
   "context.active.clear_all": "সব মুছুন",

@@ -319,6 +319,8 @@ export const ta: Record<string, string> = {
   "message.send_error": "உரையாடலுக்கு அனுப்ப முடியவில்லை",
   "context.active.label": "சூழல்",
   "context.active.items": "செயல் சூழல் தேர்வுகள்",
+  "context.active.attachment":
+    "{name} · {size} · இந்தக் கோப்பு மாதிரிக்கு அனுப்பப்படும்",
   "context.active.select": "{label} ஐச் செயல் சூழலில் சேர்",
   "context.active.clear": "{label} ஐச் செயல் சூழலிலிருந்து நீக்கு",
   "context.active.clear_all": "அனைத்தையும் நீக்கு",

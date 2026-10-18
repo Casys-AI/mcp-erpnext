@@ -307,6 +307,7 @@ export const zh: Record<string, string> = {
   "message.send_error": "无法发送至对话",
   "context.active.label": "上下文",
   "context.active.items": "活动上下文选择",
+  "context.active.attachment": "{name} · {size} · 此文件将发送给模型",
   "context.active.select": "将 {label} 加入活动上下文",
   "context.active.clear": "将 {label} 移出活动上下文",
   "context.active.clear_all": "全部清除",

@@ -306,6 +306,7 @@ export const zhHant: Record<string, string> = {
   "message.send_error": "無法傳送至對話",
   "context.active.label": "上下文",
   "context.active.items": "作用中上下文選取",
+  "context.active.attachment": "{name} · {size} · 此檔案將傳送給模型",
   "context.active.select": "將 {label} 加入作用中上下文",
   "context.active.clear": "將 {label} 移出作用中上下文",
   "context.active.clear_all": "全部清除",

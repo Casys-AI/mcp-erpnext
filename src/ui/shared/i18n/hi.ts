@@ -316,6 +316,7 @@ export const hi: Record<string, string> = {
   "message.send_error": "बातचीत में नहीं भेजा जा सका",
   "context.active.label": "संदर्भ",
   "context.active.items": "सक्रिय संदर्भ चयन",
+  "context.active.attachment": "{name} · {size} · यह फ़ाइल मॉडल को भेजी जाएगी",
   "context.active.select": "{label} को सक्रिय संदर्भ में जोड़ें",
   "context.active.clear": "{label} को सक्रिय संदर्भ से हटाएँ",
   "context.active.clear_all": "सभी हटाएँ",

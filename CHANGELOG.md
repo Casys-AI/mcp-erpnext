@@ -15,6 +15,13 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 - Frappe request timeouts now cover both response headers and body with a single
   deadline per attempt, so a stalled response body cannot hang indefinitely.
   Existing retry rules and caller cancellation behavior are preserved.
+- Active context snapshots strip control characters, normalize whitespace and
+  visibly mark truncation in displayed fields (view, label, value) within the
+  existing length limits. IDs are never rewritten. The snapshot schema is
+  unchanged.
+- The active context chip identifies attached local resources by name and size
+  and states that they will be sent to the model, in all eight supported
+  languages.
 
 ## [3.2.2] - 2026-10-18
 

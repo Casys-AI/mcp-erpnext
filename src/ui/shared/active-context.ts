@@ -534,20 +534,35 @@ export function createActiveContextQueue(): ActiveContextQueue {
   };
 }
 
+function boundText(value: string, limit: number): string {
+  const normalized = value
+    .replace(/[\n\r\t]/g, " ")
+    .replace(/\p{Cc}/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const points = Array.from(normalized);
+  return points.length > limit
+    ? `${points.slice(0, limit - 1).join("")}…`
+    : normalized;
+}
+
 function boundRequired(
   value: string,
   field: keyof typeof ACTIVE_CONTEXT_LIMITS,
 ): string {
-  const normalized = value.trim();
+  // L'identifiant n'est jamais réécrit : le modèle le repasse aux outils
+  // `*_get` et la réconciliation le compare tel quel. Seuls les champs
+  // affichés (view, label) sont nettoyés et marqués à la troncature.
+  const normalized = field === "id"
+    ? Array.from(value.trim()).slice(0, ACTIVE_CONTEXT_LIMITS.id).join("")
+    : boundText(value, ACTIVE_CONTEXT_LIMITS[field]);
   if (!normalized) throw new TypeError(`Active context ${field} is empty`);
-  return Array.from(normalized).slice(0, ACTIVE_CONTEXT_LIMITS[field]).join("");
+  return normalized;
 }
 
 function boundOptional(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
-  const normalized = value.trim();
-  if (!normalized) return undefined;
-  return Array.from(normalized).slice(0, ACTIVE_CONTEXT_LIMITS.value).join("");
+  return boundText(value, ACTIVE_CONTEXT_LIMITS.value) || undefined;
 }
 
 /** Borne un point avant son entrée dans le snapshot canonique. */

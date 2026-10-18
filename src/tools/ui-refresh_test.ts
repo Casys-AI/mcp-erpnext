@@ -4,6 +4,11 @@ import {
   assertStrictEquals,
 } from "@std/assert";
 import { SchemaValidator } from "@mcpview/server";
+import {
+  emptySelectionState,
+  projectSelection,
+  setSelectionGroupMembers,
+} from "../ui/shared/selection-projection.ts";
 import { allTools } from "./mod.ts";
 import {
   availableViewerToolNames,
@@ -457,6 +462,44 @@ Deno.test("ui refresh - every KPI and funnel jump targets a real tool with valid
   }
 });
 
+Deno.test("selection query - projected args match the registered doc_list schema", () => {
+  const tool = allTools.find((candidate) =>
+    candidate.name === "erpnext_doc_list"
+  )!;
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+  for (const count of [9, 100, 230]) {
+    const state = setSelectionGroupMembers(
+      emptySelectionState(),
+      {
+        scopeKey: "list:invoices",
+        reconcileKey: "invoices",
+        doctype: "Sales Invoice",
+        view: "Invoices",
+        fields: ["name", "customer", "posting_date", "grand_total", "currency"],
+      },
+      Array.from({ length: count }, (_, index) => ({
+        name: `SINV-${index + 1}`,
+        label: `Invoice ${index + 1}`,
+        fieldsSource: "row" as const,
+      })),
+    );
+    const query = projectSelection(state)[0].query!;
+    assertEquals(query.tool, tool.name);
+    const validation = validator.validate(
+      tool.name,
+      structuredClone(query.args),
+    );
+    assertEquals(validation.valid, true, JSON.stringify(validation.errors));
+    assertEquals(query.args.filters[0][0], "name");
+    assertEquals(query.args.filters[0][1], "in");
+    assertEquals(query.args.filters[0][2].length, Math.min(count, 100));
+    assertEquals(query.args.limit, query.includedCount);
+    assertEquals(query.selectedCount, count);
+    assertEquals(query.truncated, count > 100);
+  }
+});
+
 Deno.test("ui refresh - monthRange covers the civil month of `now`, local clock", () => {
   assertEquals(monthRange(new Date(2026, 1, 10, 12)), {
     from: "2026-02-01",
@@ -739,6 +782,30 @@ Deno.test("ui refresh - viewer capabilities expose only referenced registered to
       "erpnext_sales_invoice_submit",
     ],
   );
+});
+
+Deno.test("ui refresh - doclist exposes exact selection queries only when registered", () => {
+  const payload = {
+    doctype: "Task",
+    data: [],
+    _meta: { ui: { resourceUri: "ui://mcp-erpnext/doclist-viewer" } },
+  };
+  assertEquals(
+    availableViewerToolNames(
+      payload,
+      new Set(["erpnext_doc_list", "unrelated_tool"]),
+    ),
+    ["erpnext_doc_list"],
+  );
+  assertEquals(availableViewerToolNames(payload, new Set()), []);
+  const withoutQueries = withUiRefreshRequest(
+    payload,
+    "erpnext_task_list",
+    {},
+    new Date(2026, 9, 18),
+    new Set(["erpnext_task_list"]),
+  ) as { _availableTools?: string[] };
+  assertEquals(withoutQueries._availableTools, ["erpnext_task_list"]);
 });
 
 Deno.test("ui refresh - doc viewer exposes only registered document actions", () => {

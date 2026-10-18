@@ -4,6 +4,26 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Active context can share compact record fields for small selections and exact
+  `erpnext_doc_list` queries for groups, with explicit counts when the query's
+  100-name limit is reached. Doclist viewers advertise this tool only when it is
+  registered.
+
+### Changed
+
+- Active context snapshots use version 3, preserve exact identifiers, and
+  project selections within eight entries and an 8 KiB UTF-8 budget by default.
+  Chart and KPI series resources accompany single-entry selections; explicit
+  attachments take priority.
+- Selected record fields refresh by modification time and source quality; list
+  refreshes retain group selections outside an incomplete result window (list
+  checkboxes, coming in the next phase).
+- Stock row identities use `stock:<item>:<warehouse>`, escaping only `%` and
+  `:`; identities longer than 512 code points use a stable `stock:#<hash>`
+  fallback.
+
 ## [3.2.3] - 2026-10-18
 
 ### Added

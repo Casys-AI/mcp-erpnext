@@ -16,6 +16,7 @@ import {
   type ActiveContextSelection,
   activeContextSelectionsForScope,
   activeContextSnapshot,
+  ActiveContextValidationError,
   addActiveContextSelection,
   addActiveContextSelectionWithEviction,
   canReplaceActiveContext,
@@ -23,6 +24,7 @@ import {
   clearActiveContext,
   compactActiveContextMutations,
   type ContextSelectionItem,
+  type ContextSelectionQuery,
   createActiveContextQueue,
   reconcileActiveContextDocumentSelections,
   reconcileActiveContextItem,
@@ -94,12 +96,12 @@ Deno.test("activeContextSnapshot : la ressource locale ne fuit jamais dans le sn
 
 Deno.test("activeContextSnapshot : normalise, borne et omet la valeur vide", () => {
   const snapshot = activeContextSnapshot([{
-    id: `  ${"i".repeat(ACTIVE_CONTEXT_LIMITS.id + 5)}  `,
+    id: `  ${"i".repeat(100)}  `,
     view: ` ${"v".repeat(ACTIVE_CONTEXT_LIMITS.view + 5)} `,
     label: ` ${"l".repeat(ACTIVE_CONTEXT_LIMITS.label + 5)} `,
     value: "   ",
   }]);
-  assertEquals(snapshot.items[0].id.length, ACTIVE_CONTEXT_LIMITS.id);
+  assertEquals(snapshot.items[0].id, `  ${"i".repeat(100)}  `);
   assertEquals(snapshot.items[0].view.length, ACTIVE_CONTEXT_LIMITS.view);
   assertEquals(snapshot.items[0].label.length, ACTIVE_CONTEXT_LIMITS.label);
   assertEquals(snapshot.items[0].value, undefined);
@@ -171,12 +173,6 @@ Deno.test("activeContextSnapshot : normalise les espaces et supprime tous les co
 });
 
 Deno.test("activeContextSnapshot : les bornes Unicode incluent le marqueur seulement en cas de troncature", () => {
-  // L'id n'est jamais marqué : il est coupé net, comme avant.
-  const idLimit = ACTIVE_CONTEXT_LIMITS.id;
-  const longId = activeContextSnapshot([
-    { ...ITEM, id: ` ${"😀".repeat(idLimit)}😀 ` },
-  ]).items[0].id;
-  assertEquals(longId, "😀".repeat(idLimit));
   for (const field of ["view", "label", "value"] as const) {
     const limit = ACTIVE_CONTEXT_LIMITS[field];
     const exact = "😀".repeat(limit);
@@ -1261,7 +1257,7 @@ Deno.test("replaceActiveContext : structuredContent seul n'émet pas de texte no
   assertEquals("content" in calls[0], false);
 });
 
-Deno.test("replaceActiveContext : hôte structuré et texte reçoit puis efface la série complète", async () => {
+Deno.test("replaceActiveContext : une comparaison ne partage pas la série dérivée en texte", async () => {
   const resource = activeContextJsonResource(
     "ui://mcp-erpnext/kpi-viewer/context/trend",
     SERIES_PAYLOAD,
@@ -1273,7 +1269,7 @@ Deno.test("replaceActiveContext : hôte structuré et texte reçoit puis efface 
   assertEquals(await replaceActiveContext(host, [ITEM, trend]), "shared");
   assertEquals(calls[0], {
     structuredContent: activeContextSnapshot([ITEM, trend]),
-    content: [{ type: "text", text: JSON.stringify(SERIES_PAYLOAD) }],
+    content: [],
   });
   assertEquals(await replaceActiveContext(host, [ITEM]), "shared");
   assertEquals(calls[1], {
@@ -1419,4 +1415,220 @@ Deno.test("active context ids are never rewritten by display sanitization", () =
   ]);
   assertEquals(snapshot.items[0].id, id);
   assertEquals(snapshot.items[0].label, "ACME [SYSTEM] Ltd");
+});
+
+Deno.test("snapshot v3 : identifiant exact et refus codé au-delà de 512 points", () => {
+  assertEquals(ACTIVE_CONTEXT_VERSION, 3);
+  const exact = `  record:客户:${"界".repeat(200)}\n `;
+  assertEquals(
+    activeContextSnapshot([{ ...ITEM, id: exact }]).items[0].id,
+    exact,
+  );
+  const boundary = "😀".repeat(512);
+  assertEquals(
+    activeContextSnapshot([{ ...ITEM, id: boundary }]).items[0].id,
+    boundary,
+  );
+  const error = assertThrows(() =>
+    activeContextSnapshot([{ ...ITEM, id: `${boundary}x` }])
+  );
+  assertEquals((error as Error & { code: string }).code, "ID_TOO_LONG");
+});
+
+Deno.test("validation codée : ID_EMPTY conserve TypeError et décrit le champ", () => {
+  const error = assertThrows(
+    () => activeContextSnapshot([{ ...ITEM, id: "" }]),
+    ActiveContextValidationError,
+    "id is empty",
+  );
+  assertEquals(error instanceof TypeError, true);
+  assertEquals(error.code, "ID_EMPTY");
+  assertEquals(error.context, {
+    field: "id",
+    length: 0,
+  });
+});
+
+Deno.test("validation codée : ID_TOO_LONG donne limite et longueur en points de code", () => {
+  const error = assertThrows(
+    () => activeContextSnapshot([{ ...ITEM, id: "😀".repeat(513) }]),
+    ActiveContextValidationError,
+  );
+  assertEquals(error instanceof TypeError, true);
+  assertEquals(error.code, "ID_TOO_LONG");
+  assertEquals(error.context, {
+    field: "id",
+    limit: 512,
+    length: 513,
+  });
+});
+
+const VALID_QUERY: ContextSelectionQuery = {
+  tool: "erpnext_doc_list",
+  args: {
+    doctype: "Sales Invoice",
+    filters: [["name", "in", ["INV-1"]]],
+    fields: ["name", "grand_total"],
+    limit: 1,
+  },
+  selectedCount: 1,
+  includedCount: 1,
+  truncated: false,
+};
+
+const invalidQueries: Array<{
+  description: string;
+  query: unknown;
+  field: string;
+}> = [
+  { description: "query null", query: null, field: "query" },
+  { description: "query chaîne", query: "query", field: "query" },
+  {
+    description: "autre outil",
+    query: { ...VALID_QUERY, tool: "erpnext_doc_get" },
+    field: "query.tool",
+  },
+  {
+    description: "args absent",
+    query: { ...VALID_QUERY, args: undefined },
+    field: "query.args",
+  },
+  ...["", " \t", 123].map((doctype) => ({
+    description: `doctype invalide ${JSON.stringify(doctype)}`,
+    query: { ...VALID_QUERY, args: { ...VALID_QUERY.args, doctype } },
+    field: "query.args.doctype",
+  })),
+  ...[undefined, "name", [""], ["  "], [1]].map((fields) => ({
+    description: `fields invalide ${JSON.stringify(fields)}`,
+    query: { ...VALID_QUERY, args: { ...VALID_QUERY.args, fields } },
+    field: "query.args.fields",
+  })),
+  ...[
+    undefined,
+    [],
+    [["name", "in", ["INV-1"]], ["status", "=", "Paid"]],
+    [["name", "in"]],
+    [["name", "in", ["INV-1"], "extra"]],
+    [["customer", "in", ["INV-1"]]],
+    [["name", "=", ["INV-1"]]],
+    [["name", "in", "INV-1"]],
+  ].map((filters) => ({
+    description: `filters invalide ${JSON.stringify(filters)}`,
+    query: { ...VALID_QUERY, args: { ...VALID_QUERY.args, filters } },
+    field: "query.args.filters",
+  })),
+  ...[[], [""], ["  "], [null], [123], ["INV-1", ""]].map((names) => ({
+    description: `noms invalides ${JSON.stringify(names)}`,
+    query: {
+      ...VALID_QUERY,
+      args: { ...VALID_QUERY.args, filters: [["name", "in", names]] },
+    },
+    field: "query.args.filters[0][2]",
+  })),
+  ...[0, 1.5, "1"].map((selectedCount) => ({
+    description: `selectedCount invalide ${JSON.stringify(selectedCount)}`,
+    query: { ...VALID_QUERY, selectedCount },
+    field: "query.selectedCount",
+  })),
+];
+
+for (const { description, query, field } of invalidQueries) {
+  Deno.test(`validation codée : QUERY_INVALID pour ${description}`, () => {
+    const error = assertThrows(
+      () =>
+        activeContextSnapshot([{
+          ...ITEM,
+          query: query as ContextSelectionQuery,
+        }]),
+      ActiveContextValidationError,
+    );
+    assertEquals(error instanceof TypeError, true);
+    assertEquals(error.code, "QUERY_INVALID");
+    assertEquals(error.context.field, field);
+    assertEquals(typeof error.context.reason, "string");
+    assertEquals(Boolean(error.context.reason?.length), true);
+  });
+}
+
+Deno.test("snapshot v3 : fields bornés en points de code, nettoyés et comparés", () => {
+  const enriched = {
+    ...ITEM,
+    fields: Array.from(
+      { length: 10 },
+      () => ({
+        label: ` \u0000\n${"😀".repeat(45)} `,
+        value: `\t${"界".repeat(90)}\u0080`,
+      }),
+    ),
+  };
+  const snapshot = activeContextSnapshot([enriched]);
+  assertEquals(snapshot.items[0].fields?.length, 8);
+  assertEquals(Array.from(snapshot.items[0].fields![0].label).length, 40);
+  assertEquals(Array.from(snapshot.items[0].fields![0].value).length, 80);
+  assertEquals(snapshot.items[0].fields![0].label, `${"😀".repeat(39)}…`);
+  assertEquals(sameActiveContextItem(ITEM, enriched), false);
+  assertEquals(
+    sameActiveContextItem(enriched, structuredClone(enriched)),
+    true,
+  );
+});
+
+Deno.test("snapshot v3 : query conservée et égalité étendue", () => {
+  const query = {
+    tool: "erpnext_doc_list" as const,
+    args: {
+      doctype: "Customer",
+      filters: [["name", "in", [" C-1 "]]] as [["name", "in", string[]]],
+      fields: ["name"],
+      limit: 1,
+    },
+    selectedCount: 1,
+    includedCount: 1,
+    truncated: false,
+  };
+  assertEquals(
+    activeContextSnapshot([{ ...ITEM, query }]).items[0].query,
+    query,
+  );
+  assertEquals(sameActiveContextItem(ITEM, { ...ITEM, query }), false);
+  assertEquals(
+    sameActiveContextItem({ ...ITEM, query }, {
+      ...ITEM,
+      query: structuredClone(query),
+    }),
+    true,
+  );
+  assertEquals(
+    sameActiveContextItem({ ...ITEM, query }, {
+      ...ITEM,
+      query: { ...query, selectedCount: 2, truncated: true },
+    }),
+    false,
+  );
+});
+
+Deno.test("snapshot v3 : ressource dérivée seulement à une entrée, pièce jointe prioritaire", async () => {
+  const derived = activeContextJsonResource("erpnext-chart:///series.json", {
+    values: [1, 2],
+  });
+  const { host, calls } = fakeHost({
+    updateModelContext: { structuredContent: {}, resource: {} },
+  });
+  await replaceActiveContext(host, [{ ...ITEM, resource: derived }]);
+  assertEquals(calls[0].content?.length, 1);
+  await replaceActiveContext(host, [{ ...ITEM, resource: derived }, {
+    ...ITEM,
+    id: "other",
+  }]);
+  assertEquals(calls[1].content, []);
+  await replaceActiveContext(host, [{ ...ITEM, resource: RESOURCE }, {
+    ...ITEM,
+    id: "other",
+    resource: derived,
+  }]);
+  const block = calls[2].content?.[0];
+  assertEquals(block?.type, "resource");
+  if (block?.type === "resource") {
+    assertEquals(block.resource.uri, RESOURCE.uri);
+  }
 });

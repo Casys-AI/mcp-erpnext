@@ -215,8 +215,12 @@ refresh never downgrades fresh record fields.
 - **Leading checkbox column**, visible only when the host supports the active
   context. The header checkbox selects or clears every row matching the current
   local filters, all loaded pages included. A row checkbox toggles that row.
-- **Shift + click on a row checkbox** selects the range from the last anchor, in
-  the current local sort order.
+- **Shift + click on a row or its checkbox** selects the range from the last
+  anchor, in the current local sort order. Shift-click on a row prevents browser
+  text selection; normal text selection remains available.
+- **Ctrl + click (Windows/Linux) or Cmd + click (macOS) on a row** toggles the
+  row and sets the range anchor, without opening detail. On macOS, Ctrl +
+  primary click does the same; a normal right-click keeps the browser menu.
 - **Unchanged**: a row click toggles context, double-click, `›` and Enter open
   the detail, and Space toggles the row.
 - **Chip**:
@@ -224,6 +228,23 @@ refresh never downgrades fresh record fields.
     button;
   - « details shared » appears when compact records are being sent;
   - « partly shared » appears when rule 2 applies.
+
+### Chart point gestures
+
+- **Click or tap in a category/time plot** selects the nearest column and the
+  visible series closest to the pointer vertically. Grouped bars select the bar
+  under the pointer, otherwise the nearest bar. This applies to line, area,
+  vertical bar, stacked bar/area and composed charts; hidden series are ignored.
+- **Ctrl/Cmd + click** selects the same point, including Ctrl + primary click on
+  macOS. **Shift + click in the plot** selects the whole chart, as does a click
+  outside the plot in the chart frame. An ordinary plot click never selects it.
+- **Double-click** uses the same snapped point for the existing drill-down when
+  available, preserving the prior context through click/double-click
+  arbitration.
+- Horizontal bars and radar have no horizontal category columns and keep their
+  existing precise-target gestures. Scatter, pie/donut, treemap and the separate
+  funnel viewer, keyboard controls, legend and tooltip keep their existing
+  gestures.
 
 ### Phase B: charts (separate design, with mockups)
 

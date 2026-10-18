@@ -89,6 +89,7 @@ Deno.test("chart keyboard cursor - arrows move labels and series with wrapping",
 
 Deno.test("chart keyboard cursor - exposes the exact series value", () => {
   assertEquals(chartSelectionAt(DATA, { labelIndex: 1, seriesIndex: 1 }), {
+    index: 1,
     label: "Aug 26",
     series: "Expenses",
     value: 7,
@@ -764,9 +765,12 @@ Deno.test("chart refresh context - aggregates repeated labels in payload order",
       { label: "Expenses", values: [4, 7] },
     ],
   };
-  const points = chartViewContextCandidates(data, [], "Visible", "root").slice(
-    1,
-  );
+  const index = createChartPointContextIndex(data, "root");
+  const points = [
+    index.get("July"),
+    index.get("July", "Income"),
+    index.get("July", "Expenses"),
+  ];
   assertEquals(points.map((point) => point.label), [
     "July",
     "July · Income",

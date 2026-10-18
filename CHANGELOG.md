@@ -6,6 +6,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Added
 
+- Doclist rows support Shift-click ranges and Ctrl/Cmd-click toggles, including
+  Ctrl-click on macOS; charts also accept Ctrl/Cmd-click point selection.
+
 - Doclist checkboxes support selecting all locally filtered rows across loaded
   pages and Shift-click ranges in the current sort order. Active-context chips
   show one removable chip per group, with counts and summaries whether shared as
@@ -31,6 +34,11 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 - Stock row identities use `stock:<item>:<warehouse>`, escaping only `%` and
   `:`; identities longer than 512 code points use a stable `stock:#<hash>`
   fallback.
+
+### Fixed
+
+- Category/time charts snap plot clicks and taps to the nearest column and
+  visible series instead of selecting the whole chart; Shift-click selects it.
 
 ## [3.2.3] - 2026-10-18
 

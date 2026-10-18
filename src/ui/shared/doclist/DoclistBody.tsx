@@ -28,10 +28,18 @@ import { InlineDetailPanel } from "./InlineDetailPanel";
 import { SearchRow } from "./SearchControl";
 import type { DoclistData } from "./types";
 import type { DoclistState, Row } from "./useDoclist";
-import { canCallViewerTool } from "../viewer-tools";
+import { canCallViewerTool, hasExplicitAvailableTool } from "../viewer-tools";
 import { doclistDetailPanelId } from "./detail-panel.ts";
 import { nearestScrollDelta } from "./scroll-nearest.ts";
 import { doclistRowContextItem } from "./context-items.ts";
+import {
+  doclistFilteredSelectionOperation,
+  doclistGroupMember,
+  doclistHeaderSelection,
+  doclistQueryFields,
+  extendDoclistRange,
+  isDoclistResultComplete,
+} from "./selection.ts";
 
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 const CANONICAL_READBACK_DELAY_MS = 1_500;
@@ -140,6 +148,92 @@ export function DoclistBody(
   const listContextView = contextView ?? data._title ?? data.doctype ??
     "Document";
   const listContextKey = contextKey ?? listContextView;
+  const selectionAnchor = useRef<{ key: string; name: string } | null>(null);
+
+  function groupMemberForRow(row: Row, rowIndex: number) {
+    if (!data.doctype) return null;
+    const name = resolveRowId(row, rowAction, String(rowIndex));
+    const envelope = recordOf(row, { doctype: data.doctype, name });
+    return envelope
+      ? doclistGroupMember(
+        documentModelOf(envelope),
+        list.tableColumns,
+        listContextView,
+        listContextKey,
+      )
+      : null;
+  }
+
+  const groupConfig = context?.supported && data.doctype
+    ? {
+      reconcileKey: listContextKey,
+      doctype: data.doctype,
+      view: listContextView,
+      doctypeLabel: data.doctype,
+      fields: doclistQueryFields(data),
+      queryAvailable: hasExplicitAvailableTool(
+        data._availableTools,
+        "erpnext_doc_list",
+      ),
+    }
+    : undefined;
+  // Le tri porte sur toutes les pages chargées, avant le découpage d'affichage.
+  const filteredMembers = groupConfig
+    ? list.sorted.flatMap((row, index) => {
+      const member = groupMemberForRow(row, index);
+      return member ? [member] : [];
+    })
+    : [];
+  const selectedMembers = groupConfig && context
+    ? list.sorted.flatMap((row, index) => {
+      const item = contextItemForRow(row, index);
+      const member = groupMemberForRow(row, index);
+      return item && member && context.isSelected(item) ? [member] : [];
+    })
+    : [];
+  const headerSelection = doclistHeaderSelection(
+    filteredMembers,
+    selectedMembers,
+  );
+  const selection = groupConfig && context
+    ? {
+      ...headerSelection,
+      isSelected: (row: Row, index: number) => {
+        const item = contextItemForRow(row, index);
+        return item ? context.isSelected(item) : false;
+      },
+      onToggle: (row: Row, index: number, shiftKey: boolean) => {
+        const member = groupMemberForRow(row, index);
+        if (!member) return;
+        if (shiftKey) {
+          const anchor = selectionAnchor.current;
+          void context.addGroupMembers(
+            groupConfig,
+            extendDoclistRange(
+              [],
+              filteredMembers,
+              anchor?.key === listContextKey ? anchor.name : null,
+              member.name,
+            ),
+          );
+        } else {
+          selectionAnchor.current = { key: listContextKey, name: member.name };
+          void context.toggleGroupMember(groupConfig, member);
+        }
+      },
+      onToggleAll: () => {
+        const operation = doclistFilteredSelectionOperation(
+          headerSelection.checked,
+          filteredMembers,
+        );
+        if (operation.kind === "remove") {
+          void context.removeGroupMembers(groupConfig, operation.names);
+        } else {
+          void context.addGroupMembers(groupConfig, operation.members);
+        }
+      },
+    }
+    : undefined;
 
   function contextItemForRow(
     row: Row,
@@ -159,6 +253,9 @@ export function DoclistBody(
   }
 
   const reconcileView = context?.supported ? context.reconcileView : undefined;
+  const reconcileGroup = context?.supported
+    ? context.reconcileGroup
+    : undefined;
   useEffect(() => {
     if (!reconcileView) return;
     const candidates = rows.flatMap((row, rowIndex) => {
@@ -166,12 +263,20 @@ export function DoclistBody(
       return item ? [item] : [];
     });
     void reconcileView(listContextKey, candidates);
+    const members = rows.flatMap((row, rowIndex) => {
+      const member = groupMemberForRow(row, rowIndex);
+      return member ? [member] : [];
+    });
+    void reconcileGroup?.(listContextKey, members, {
+      complete: isDoclistResultComplete(data),
+    });
   }, [
-    data.doctype,
+    data,
     listContextKey,
     listContextView,
     list.tableColumns,
     reconcileView,
+    reconcileGroup,
     rowAction,
     rows,
   ]);
@@ -569,6 +674,7 @@ export function DoclistBody(
             sortDir={list.sortDir}
             onSort={list.handleSort}
             interactionTarget={rowInteractionTarget}
+            selection={selection}
             layout={layout}
             amountKey={list.amountKey}
             detail={inlineDetail}

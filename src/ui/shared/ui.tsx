@@ -58,6 +58,20 @@ export function ViewerShell(
   );
 }
 
+export function ContextChipRow(
+  { reserve, children }: { reserve: boolean; children: ComponentChildren },
+) {
+  if (!reserve) return null;
+  return (
+    <div
+      data-context-chip-row
+      class="flex h-8 min-h-8 min-w-0 w-full shrink-0 items-center"
+    >
+      {children}
+    </div>
+  );
+}
+
 /**
  * En-tête de vue : titre, compteur, pastille live à gauche ; actions à droite.
  *
@@ -66,12 +80,22 @@ export function ViewerShell(
  * CSV ne sont pas ce qu'on vient chercher dans un panneau latéral.
  */
 export function ViewerHeader(
-  { title, count, live, actions, layout = "wide" }: {
+  {
+    title,
+    count,
+    live,
+    actions,
+    contextChip,
+    contextSupported = false,
+    layout = "wide",
+  }: {
     title: string;
     count?: number;
     live?: boolean;
     /** Actions de droite : la barre complète en large, l'icône seule en mobile. */
     actions?: ComponentChildren;
+    contextChip?: ComponentChildren;
+    contextSupported?: boolean;
     layout?: ViewerLayout;
   },
 ) {
@@ -79,39 +103,43 @@ export function ViewerHeader(
   return (
     <header
       class={cx(
-        "flex shrink-0 items-center justify-between gap-4 border-b border-line",
+        "flex shrink-0 flex-col border-b border-line",
         narrow ? "px-3.5 py-3" : "px-4 py-[13px]",
       )}
     >
-      <div
-        class={cx("flex min-w-0 items-center", narrow ? "gap-2.5" : "gap-3")}
-      >
-        <h2
-          class={cx(
-            "truncate font-display font-semibold text-ink",
-            layout === "mobile"
-              ? "text-card-title"
-              : layout === "panel"
-              ? "text-[15px]"
-              : "text-title tracking-title",
-          )}
+      <div class="flex min-w-0 items-center justify-between gap-4">
+        <div
+          class={cx("flex min-w-0 items-center", narrow ? "gap-2.5" : "gap-3")}
         >
-          {title}
-        </h2>
-        {count !== undefined && <CountBadge narrow={narrow}>{count}
-        </CountBadge>}
-        {live && !narrow && <LiveDot />}
+          <h2
+            class={cx(
+              "truncate font-display font-semibold text-ink",
+              layout === "mobile"
+                ? "text-card-title"
+                : layout === "panel"
+                ? "text-[15px]"
+                : "text-title tracking-title",
+            )}
+          >
+            {title}
+          </h2>
+          {count !== undefined && (
+            <CountBadge narrow={narrow}>{count}</CountBadge>
+          )}
+          {live && !narrow && <LiveDot />}
+        </div>
+        <div class="flex shrink-0 items-center gap-1.5">
+          {layout !== "panel" && actions}
+          {narrow && live && (
+            <span
+              class={`shrink-0 rounded-full bg-ok ${
+                layout === "mobile" ? "size-1.5" : "size-[5px]"
+              }`}
+            />
+          )}
+        </div>
       </div>
-      <div class="flex shrink-0 items-center gap-1.5">
-        {layout !== "panel" && actions}
-        {narrow && live && (
-          <span
-            class={`shrink-0 rounded-full bg-ok ${
-              layout === "mobile" ? "size-1.5" : "size-[5px]"
-            }`}
-          />
-        )}
-      </div>
+      <ContextChipRow reserve={contextSupported}>{contextChip}</ContextChipRow>
     </header>
   );
 }

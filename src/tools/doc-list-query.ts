@@ -24,10 +24,11 @@
  */
 
 import type { FrappeFilter } from "../api/types.ts";
+import { DOC_LIST_DEFAULT_LIMIT } from "../ui/doc-list-defaults.ts";
 import type { JSONSchema } from "./types.ts";
 import { ToolInputError } from "./errors.ts";
 
-export const DOC_LIST_DEFAULT_LIMIT = 20;
+export { DOC_LIST_DEFAULT_LIMIT };
 export const DEFAULT_ORDER_BY = "modified desc";
 
 const FILTER_FORMS =

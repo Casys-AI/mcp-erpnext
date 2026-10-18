@@ -362,6 +362,14 @@ function DocumentContent({
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
+    pending: activeContext.pending,
+    selection: activeContext.selection,
+    toggleGroupMember: activeContext.toggleGroupMember,
+    setGroupMembers: activeContext.setGroupMembers,
+    addGroupMembers: activeContext.addGroupMembers,
+    removeGroupMembers: activeContext.removeGroupMembers,
+    reconcileGroup: activeContext.reconcileGroup,
+    isGroupMemberSelected: activeContext.isGroupMemberSelected,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
     canShareResource: (resource) =>
@@ -783,17 +791,21 @@ function DocumentContent({
       />
     )
     : undefined;
+  const activeContextChip = (
+    <ActiveContextChip
+      selections={activeContext.selections}
+      selection={activeContext.selection}
+      onRemoveGroup={activeContext.removeGroup}
+      failed={activeContext.failed}
+      pending={activeContext.pending}
+      evictedLabel={activeContext.evictedLabel}
+      onRemove={activeContext.remove}
+      onClear={activeContext.clear}
+      compact={layout !== "wide"}
+    />
+  );
   const headerActions = (
     <>
-      <ActiveContextChip
-        selections={activeContext.selections}
-        failed={activeContext.failed}
-        pending={activeContext.pending}
-        evictedLabel={activeContext.evictedLabel}
-        onRemove={activeContext.remove}
-        onClear={activeContext.clear}
-        compact={layout !== "wide"}
-      />
       {rootStale && (
         <span
           role="status"
@@ -850,6 +862,8 @@ function DocumentContent({
               layout={layout}
               live={capabilities.canRefresh && !error}
               headerActions={headerActions}
+              contextChip={activeContextChip}
+              contextSupported={context.supported}
               attachments={attachmentSurface}
               actions={mutationActions}
               footer={footer}

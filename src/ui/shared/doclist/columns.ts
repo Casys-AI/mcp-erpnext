@@ -30,13 +30,23 @@ const AMOUNT_FIELDS = [
  * comptable, mais garde ses nombres à droite.
  */
 export function pickAmountColumn(
-  columns: { id: string; numeric: boolean }[],
+  columns: readonly { id: string; numeric: boolean }[],
 ): string | undefined {
   for (const field of AMOUNT_FIELDS) {
     if (columns.some((column) => column.id === field)) return field;
   }
   const numeric = columns.filter((column) => column.numeric);
   return numeric.at(-1)?.id;
+}
+
+/** Date métier visible servant aux bornes du résumé d'une sélection. */
+export function pickDateColumn(
+  columns: readonly { id: string }[],
+): string | undefined {
+  for (const field of ["posting_date", "transaction_date", "date"]) {
+    if (columns.some((column) => column.id === field)) return field;
+  }
+  return columns.find((column) => column.id.endsWith("_date"))?.id;
 }
 
 /** Somme d'une colonne sur l'ensemble des lignes, en ignorant les trous. */

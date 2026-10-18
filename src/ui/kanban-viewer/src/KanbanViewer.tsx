@@ -23,6 +23,7 @@ import type { DocumentContextController } from "~/shared/document/context-intera
 import {
   Button,
   CasysCredit,
+  ContextChipRow,
   CountBadge,
   cx,
   StateMessage,
@@ -1028,6 +1029,14 @@ function KanbanBoardWithNav({
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
+    pending: activeContext.pending,
+    selection: activeContext.selection,
+    toggleGroupMember: activeContext.toggleGroupMember,
+    setGroupMembers: activeContext.setGroupMembers,
+    addGroupMembers: activeContext.addGroupMembers,
+    removeGroupMembers: activeContext.removeGroupMembers,
+    reconcileGroup: activeContext.reconcileGroup,
+    isGroupMemberSelected: activeContext.isGroupMemberSelected,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
     canShareResource: (resource) =>
@@ -1140,26 +1149,90 @@ function KanbanBoardWithNav({
         {/* En-tête : titre du niveau courant + count */}
         <header
           class={cx(
-            "flex shrink-0 items-center justify-between border-b border-line",
-            narrow ? "px-3 py-[11px] gap-[10px]" : "px-4 py-[13px] gap-3",
+            "flex shrink-0 flex-col border-b border-line",
+            narrow ? "px-3 py-[11px]" : "px-4 py-[13px]",
           )}
         >
-          <div class={cx("flex items-center", narrow ? "gap-2" : "gap-3")}>
-            <h2
-              class={cx(
-                "m-0 font-display font-semibold text-ink",
-                narrow ? "text-card-title" : "text-title tracking-title",
+          <div class="flex min-w-0 items-center justify-between gap-3">
+            <div class={cx("flex items-center", narrow ? "gap-2" : "gap-3")}>
+              <h2
+                class={cx(
+                  "m-0 font-display font-semibold text-ink",
+                  narrow ? "text-card-title" : "text-title tracking-title",
+                )}
+              >
+                {nav.isRoot ? board.title : nav.current.title}
+              </h2>
+              {headerCount !== undefined && (
+                <CountBadge narrow={narrow}>{headerCount}</CountBadge>
               )}
-            >
-              {nav.isRoot ? board.title : nav.current.title}
-            </h2>
-            {headerCount !== undefined && (
-              <CountBadge narrow={narrow}>{headerCount}</CountBadge>
-            )}
+            </div>
+            <div class="ml-auto flex min-w-0 shrink-0 items-center gap-2">
+              {!narrow && nav.isRoot && (
+                <div class="flex shrink-0 items-center gap-2">
+                  {nav.current.stale && (
+                    <div
+                      role="status"
+                      title={t("nav.stale_title")}
+                      class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+                    >
+                      <span
+                        aria-hidden="true"
+                        class="size-[5px] rounded-full bg-warn"
+                      />
+                      <span>
+                        {t("nav.stale_values", { at: nav.current.stale.at })}
+                      </span>
+                      {canRefreshRoot && (
+                        <button
+                          type="button"
+                          disabled={refreshing}
+                          onClick={onRefreshRoot}
+                          aria-label={t("nav.refresh")}
+                          title={t("nav.refresh")}
+                          class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                        >
+                          {refreshing ? "…" : "↻"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <span class="font-mono text-chip text-ink-faint">
+                    {actionCapabilities.canMove ? board.moveToolName : null}
+                  </span>
+                </div>
+              )}
+              {narrow && nav.isRoot && nav.current.stale && (
+                <div
+                  role="status"
+                  title={t("nav.stale_title")}
+                  class="ml-auto flex shrink-0 items-center gap-1 font-mono text-warn"
+                >
+                  <span
+                    aria-hidden="true"
+                    class="size-[5px] rounded-full bg-warn"
+                  />
+                  {canRefreshRoot && (
+                    <button
+                      type="button"
+                      disabled={refreshing}
+                      onClick={onRefreshRoot}
+                      aria-label={t("nav.refresh")}
+                      title={t("nav.refresh")}
+                      class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                    >
+                      {refreshing ? "…" : "↻"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <div class="ml-auto flex min-w-0 shrink-0 items-center gap-2">
+          <ContextChipRow reserve={context.supported}>
             <ActiveContextChip
               selections={activeContext.selections}
+              selection={activeContext.selection}
+              onRemoveGroup={activeContext.removeGroup}
               failed={activeContext.failed}
               pending={activeContext.pending}
               evictedLabel={activeContext.evictedLabel}
@@ -1167,65 +1240,7 @@ function KanbanBoardWithNav({
               onClear={activeContext.clear}
               compact={narrow}
             />
-            {!narrow && nav.isRoot && (
-              <div class="flex shrink-0 items-center gap-2">
-                {nav.current.stale && (
-                  <div
-                    role="status"
-                    title={t("nav.stale_title")}
-                    class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
-                  >
-                    <span
-                      aria-hidden="true"
-                      class="size-[5px] rounded-full bg-warn"
-                    />
-                    <span>
-                      {t("nav.stale_values", { at: nav.current.stale.at })}
-                    </span>
-                    {canRefreshRoot && (
-                      <button
-                        type="button"
-                        disabled={refreshing}
-                        onClick={onRefreshRoot}
-                        aria-label={t("nav.refresh")}
-                        title={t("nav.refresh")}
-                        class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
-                      >
-                        {refreshing ? "…" : "↻"}
-                      </button>
-                    )}
-                  </div>
-                )}
-                <span class="font-mono text-chip text-ink-faint">
-                  {actionCapabilities.canMove ? board.moveToolName : null}
-                </span>
-              </div>
-            )}
-            {narrow && nav.isRoot && nav.current.stale && (
-              <div
-                role="status"
-                title={t("nav.stale_title")}
-                class="ml-auto flex shrink-0 items-center gap-1 font-mono text-warn"
-              >
-                <span
-                  aria-hidden="true"
-                  class="size-[5px] rounded-full bg-warn"
-                />
-                {canRefreshRoot && (
-                  <button
-                    type="button"
-                    disabled={refreshing}
-                    onClick={onRefreshRoot}
-                    aria-label={t("nav.refresh")}
-                    title={t("nav.refresh")}
-                    class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
-                  >
-                    {refreshing ? "…" : "↻"}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          </ContextChipRow>
         </header>
 
         {/* Fil de navigation — invisible au niveau 1, visible dès le premier saut */}

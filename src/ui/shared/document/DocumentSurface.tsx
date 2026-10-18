@@ -39,6 +39,8 @@ export interface DocumentSurfaceProps {
   navigation?: ComponentChildren;
   /** Outils courts de l'en-tête, par exemple refresh et JSON. */
   headerActions?: ComponentChildren;
+  contextChip?: ComponentChildren;
+  contextSupported?: boolean;
   /** Surface pièces jointes déjà capability-gated par la coque. */
   attachments?: ComponentChildren;
   /** Actions métier déjà capability-gated par la coque. */
@@ -239,6 +241,8 @@ export function DocumentSurface({
   presentation = "full",
   navigation,
   headerActions,
+  contextChip,
+  contextSupported,
   attachments,
   actions,
   footer,
@@ -336,6 +340,8 @@ export function DocumentSurface({
       layout={layout}
       navigation={navigation}
       trailing={headerActions}
+      contextChip={contextChip}
+      contextSupported={contextSupported}
       live={live}
       contextTarget={contextTarget}
     />

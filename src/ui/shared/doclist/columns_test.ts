@@ -1,10 +1,27 @@
 import { assertEquals } from "@std/assert";
 import {
   pickAmountColumn,
+  pickDateColumn,
   pickNarrowColumns,
   shortenId,
   sumColumn,
 } from "./columns.ts";
+
+Deno.test("pickDateColumn préfère la date métier et accepte un champ de date personnalisé", () => {
+  assertEquals(
+    pickDateColumn([
+      { id: "due_date" },
+      { id: "transaction_date" },
+      { id: "posting_date" },
+    ]),
+    "posting_date",
+  );
+  assertEquals(
+    pickDateColumn([{ id: "custom_approval_date" }]),
+    "custom_approval_date",
+  );
+  assertEquals(pickDateColumn([{ id: "name" }]), undefined);
+});
 
 Deno.test("shortenId garde la queue, qui porte la distinction", () => {
   assertEquals(shortenId("ACC-SINV-2026-00046"), "…2026-00046");

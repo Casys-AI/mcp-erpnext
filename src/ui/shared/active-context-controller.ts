@@ -16,6 +16,7 @@ import type {
   ActiveContextFlowHost,
 } from "./active-context-flow.ts";
 import {
+  addSelectionGroupMembers,
   addSelectionSingle,
   emptySelectionState,
   normalizeSelectionAddition,
@@ -24,6 +25,7 @@ import {
   reconcileSelectionDocumentFields,
   reconcileSelectionGroup,
   removeSelectionGroup,
+  removeSelectionGroupMembers,
   removeSelectionItem,
   type SelectionGroupConfig,
   type SelectionGroupMemberInput,
@@ -233,23 +235,23 @@ export function createActiveContextController(
       config: GroupConfig,
       member: SelectionGroupMemberInput,
     ): SelectionChange {
-      const selected = isGroupMemberSelected(config.reconcileKey, member.name);
+      const selected = isSelected({
+        id: `record:${config.doctype}:${member.name}`,
+        label: member.label,
+        view: config.view,
+      });
       // L'intention ajout/retrait est fixée à l'exécution, jamais recalculée au replay.
-      return change((selection) => {
-        const base = scoped(selection);
-        const members = base.groups.find((group) =>
-          group.reconcileKey === config.reconcileKey
-        )?.members ?? [];
-        const next = selected
-          ? members.filter((row) =>
-            row.name !== member.name
-          )
-          : [...members.filter((row) => row.name !== member.name), member];
-        return setSelectionGroupMembers(base, {
-          ...config,
-          scopeKey: actionScope,
-        }, next);
-      }, !selected);
+      return selected
+        ? change((selection) =>
+          removeSelectionGroupMembers(selection, {
+            ...config,
+            scopeKey: actionScope,
+          }, [member.name]), false)
+        : change((selection) =>
+          addSelectionGroupMembers(scoped(selection), {
+            ...config,
+            scopeKey: actionScope,
+          }, [member]), true);
     }
     function perform(
       prepare: () => SelectionChange,
@@ -536,6 +538,28 @@ export function createActiveContextController(
         config: GroupConfig,
         member: SelectionGroupMemberInput,
       ) => performReversible(() => groupMutation(config, member)),
+      addGroupMembers: (
+        config: GroupConfig,
+        members: readonly SelectionGroupMemberInput[],
+      ) =>
+        perform(() =>
+          change((selection) =>
+            addSelectionGroupMembers(scoped(selection), {
+              ...config,
+              scopeKey: actionScope,
+            }, members), true)
+        ),
+      removeGroupMembers: (
+        config: GroupConfig,
+        names: readonly string[],
+      ) =>
+        perform(() =>
+          change((selection) =>
+            removeSelectionGroupMembers(selection, {
+              ...config,
+              scopeKey: actionScope,
+            }, names), false)
+        ),
       setGroupMembers: (
         config: GroupConfig,
         members: readonly SelectionGroupMemberInput[],
@@ -554,9 +578,9 @@ export function createActiveContextController(
               scopeKey: actionScope,
             }, members), adding);
         }),
-      removeGroup: (reconcileKey: string) =>
+      removeGroup: (reconcileKey: string, scopeKey = actionScope) =>
         reconcileCurrent((selection) =>
-          removeSelectionGroup(selection, actionScope, reconcileKey)
+          removeSelectionGroup(selection, scopeKey, reconcileKey)
         ),
       reconcileGroup: (
         reconcileKey: string,

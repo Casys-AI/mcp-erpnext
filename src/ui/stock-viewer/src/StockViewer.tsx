@@ -26,6 +26,7 @@ import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
 import {
   CasysCredit,
+  ContextChipRow,
   CountBadge,
   cx,
   StateMessage,
@@ -445,6 +446,14 @@ function StockContent(
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
+    pending: activeContext.pending,
+    selection: activeContext.selection,
+    toggleGroupMember: activeContext.toggleGroupMember,
+    setGroupMembers: activeContext.setGroupMembers,
+    addGroupMembers: activeContext.addGroupMembers,
+    removeGroupMembers: activeContext.removeGroupMembers,
+    reconcileGroup: activeContext.reconcileGroup,
+    isGroupMemberSelected: activeContext.isGroupMemberSelected,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
     canShareResource: (resource) =>
@@ -578,32 +587,88 @@ function StockContent(
       }
       <header
         class={cx(
-          "flex shrink-0 items-center justify-between border-b border-line",
-          isMobile ? "gap-2.5 px-3 py-[11px]" : "gap-3 px-4 py-[13px]",
+          "flex shrink-0 flex-col border-b border-line",
+          isMobile ? "px-3 py-[11px]" : "px-4 py-[13px]",
         )}
       >
-        <div
-          class={cx(
-            "flex min-w-0 items-center",
-            isMobile ? "gap-2" : "gap-3",
-          )}
-        >
-          {isMobile
-            ? (
-              <h3 class="m-0 truncate font-display font-semibold text-ink text-card-title">
-                {t("stock.title")}
-              </h3>
-            )
-            : (
-              <h2 class="m-0 truncate font-display font-semibold text-ink text-title tracking-title">
-                {t("stock.title")}
-              </h2>
+        <div class="flex min-w-0 items-center justify-between gap-3">
+          <div
+            class={cx(
+              "flex min-w-0 items-center",
+              isMobile ? "gap-2" : "gap-3",
             )}
-          <CountBadge narrow={isMobile}>{sorted.length}</CountBadge>
+          >
+            {isMobile
+              ? (
+                <h3 class="m-0 truncate font-display font-semibold text-ink text-card-title">
+                  {t("stock.title")}
+                </h3>
+              )
+              : (
+                <h2 class="m-0 truncate font-display font-semibold text-ink text-title tracking-title">
+                  {t("stock.title")}
+                </h2>
+              )}
+            <CountBadge narrow={isMobile}>{sorted.length}</CountBadge>
+          </div>
+          <div class="flex min-w-0 shrink-0 items-center gap-2">
+            {isRoot && (
+              <>
+                {current.stale && (
+                  <div
+                    role="status"
+                    title={t("nav.stale_title")}
+                    class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+                  >
+                    <span
+                      aria-hidden="true"
+                      class="size-[5px] rounded-full bg-warn"
+                    />
+                    {!isMobile && (
+                      <span>
+                        {t("nav.stale_values", { at: current.stale.at })}
+                      </span>
+                    )}
+                    {canRefreshRoot && (
+                      <button
+                        type="button"
+                        disabled={refreshing}
+                        onClick={onRefresh}
+                        aria-label={t("nav.refresh")}
+                        title={t("nav.refresh")}
+                        class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                      >
+                        {refreshing ? "…" : "↻"}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {warehouse && (
+                  <span
+                    class={cx(
+                      "max-w-40 truncate font-mono text-ink-faint",
+                      isMobile ? "text-micro" : "text-chip",
+                    )}
+                  >
+                    {warehouse}
+                  </span>
+                )}
+                <SearchControl
+                  value={filter}
+                  layout={layout}
+                  open={searchOpen}
+                  onOpenChange={setSearchOpen}
+                  onInput={setFilter}
+                />
+              </>
+            )}
+          </div>
         </div>
-        <div class="flex min-w-0 shrink-0 items-center gap-2">
+        <ContextChipRow reserve={context.supported}>
           <ActiveContextChip
             selections={activeContext.selections}
+            selection={activeContext.selection}
+            onRemoveGroup={activeContext.removeGroup}
             failed={activeContext.failed}
             pending={activeContext.pending}
             evictedLabel={activeContext.evictedLabel}
@@ -611,57 +676,7 @@ function StockContent(
             onClear={activeContext.clear}
             compact={isMobile}
           />
-          {isRoot && (
-            <>
-              {current.stale && (
-                <div
-                  role="status"
-                  title={t("nav.stale_title")}
-                  class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
-                >
-                  <span
-                    aria-hidden="true"
-                    class="size-[5px] rounded-full bg-warn"
-                  />
-                  {!isMobile && (
-                    <span>
-                      {t("nav.stale_values", { at: current.stale.at })}
-                    </span>
-                  )}
-                  {canRefreshRoot && (
-                    <button
-                      type="button"
-                      disabled={refreshing}
-                      onClick={onRefresh}
-                      aria-label={t("nav.refresh")}
-                      title={t("nav.refresh")}
-                      class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
-                    >
-                      {refreshing ? "…" : "↻"}
-                    </button>
-                  )}
-                </div>
-              )}
-              {warehouse && (
-                <span
-                  class={cx(
-                    "max-w-40 truncate font-mono text-ink-faint",
-                    isMobile ? "text-micro" : "text-chip",
-                  )}
-                >
-                  {warehouse}
-                </span>
-              )}
-              <SearchControl
-                value={filter}
-                layout={layout}
-                open={searchOpen}
-                onOpenChange={setSearchOpen}
-                onInput={setFilter}
-              />
-            </>
-          )}
-        </div>
+        </ContextChipRow>
       </header>
 
       {isRoot && layout === "mobile" && searchOpen && (

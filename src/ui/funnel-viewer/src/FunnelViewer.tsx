@@ -12,7 +12,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
-import { CasysCredit, cx, StateMessage, ViewerShell } from "~/shared/ui";
+import {
+  CasysCredit,
+  ContextChipRow,
+  cx,
+  StateMessage,
+  ViewerShell,
+} from "~/shared/ui";
 import { useViewerLayout } from "~/shared/useViewerLayout";
 import {
   beginUiRefresh,
@@ -755,6 +761,14 @@ function FunnelContent(
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
+    pending: activeContext.pending,
+    selection: activeContext.selection,
+    toggleGroupMember: activeContext.toggleGroupMember,
+    setGroupMembers: activeContext.setGroupMembers,
+    addGroupMembers: activeContext.addGroupMembers,
+    removeGroupMembers: activeContext.removeGroupMembers,
+    reconcileGroup: activeContext.reconcileGroup,
+    isGroupMemberSelected: activeContext.isGroupMemberSelected,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
     canShareResource: (resource) =>
@@ -865,133 +879,129 @@ function FunnelContent(
       <header
         style={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          flexDirection: "column",
           padding: headerPadding,
           borderBottom: "1px solid var(--color-line)",
           flexShrink: 0,
         }}
       >
-        {isRoot
-          ? (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <h2
-                  style={{
-                    margin: 0,
-                    fontFamily: "var(--font-display)",
-                    fontSize: titleSize,
-                    fontWeight: 600,
-                    color: "var(--color-ink)",
-                    lineHeight: 1.2,
-                  }}
-                >
-                  {data.title}
-                </h2>
-                {data.subtitle && (
+        <div class="flex min-w-0 items-center justify-between gap-3">
+          {isRoot
+            ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontFamily: "var(--font-display)",
+                      fontSize: titleSize,
+                      fontWeight: 600,
+                      color: "var(--color-ink)",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {data.title}
+                  </h2>
+                  {data.subtitle && (
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 10.5,
+                        letterSpacing: "var(--tracking-chip)",
+                        textTransform: "uppercase",
+                        color: "var(--color-ink-faint)",
+                      }}
+                    >
+                      {data.subtitle}
+                    </span>
+                  )}
+                </div>
+                <div class="flex min-w-0 shrink-0 items-center gap-2">
+                  {navCurrent.stale && (
+                    <div
+                      role="status"
+                      title={t("nav.stale_title")}
+                      class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+                    >
+                      <span
+                        aria-hidden="true"
+                        class="size-[5px] rounded-full bg-warn"
+                      />
+                      {isWide && (
+                        <span>
+                          {t("nav.stale_values", { at: navCurrent.stale.at })}
+                        </span>
+                      )}
+                      {canRefreshRoot && (
+                        <button
+                          type="button"
+                          disabled={refreshing}
+                          onClick={onRefresh}
+                          aria-label={t("nav.refresh")}
+                          title={t("nav.refresh")}
+                          class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                        >
+                          {refreshing ? "…" : "↻"}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <span
                     style={{
                       fontFamily: "var(--font-mono)",
-                      fontSize: 10.5,
-                      letterSpacing: "var(--tracking-chip)",
-                      textTransform: "uppercase",
-                      color: "var(--color-ink-faint)",
+                      fontSize: isWide ? 11.5 : 10.5,
+                      padding: isWide ? "3px 8px" : "2px 7px",
+                      borderRadius: 3,
+                      background: badgeBg,
+                      color: badgeColor,
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
                     }}
                   >
-                    {data.subtitle}
+                    {badgeText}
                   </span>
-                )}
-              </div>
-              <div class="flex min-w-0 shrink-0 items-center gap-2">
-                {navCurrent.stale && (
-                  <div
-                    role="status"
-                    title={t("nav.stale_title")}
-                    class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+                </div>
+              </>
+            )
+            : (
+              /* Niveau de navigation empilé : titre du niveau + compte si liste */
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontFamily: "var(--font-display)",
+                      fontSize: titleSize,
+                      fontWeight: 600,
+                      color: "var(--color-ink)",
+                      lineHeight: 1.2,
+                    }}
                   >
-                    <span
-                      aria-hidden="true"
-                      class="size-[5px] rounded-full bg-warn"
-                    />
-                    {isWide && (
-                      <span>
-                        {t("nav.stale_values", { at: navCurrent.stale.at })}
-                      </span>
-                    )}
-                    {canRefreshRoot && (
-                      <button
-                        type="button"
-                        disabled={refreshing}
-                        onClick={onRefresh}
-                        aria-label={t("nav.refresh")}
-                        title={t("nav.refresh")}
-                        class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
-                      >
-                        {refreshing ? "…" : "↻"}
-                      </button>
-                    )}
-                  </div>
-                )}
-                <ActiveContextChip
-                  compact={!isWide}
-                  selections={activeContext.selections}
-                  failed={activeContext.failed}
-                  pending={activeContext.pending}
-                  evictedLabel={activeContext.evictedLabel}
-                  onRemove={(selection) => activeContext.remove(selection)}
-                  onClear={() => activeContext.clear()}
-                />
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: isWide ? 11.5 : 10.5,
-                    padding: isWide ? "3px 8px" : "2px 7px",
-                    borderRadius: 3,
-                    background: badgeBg,
-                    color: badgeColor,
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {badgeText}
-                </span>
-              </div>
-            </>
-          )
-          : (
-            /* Niveau de navigation empilé : titre du niveau + compte si liste */
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <h2
-                  style={{
-                    margin: 0,
-                    fontFamily: "var(--font-display)",
-                    fontSize: titleSize,
-                    fontWeight: 600,
-                    color: "var(--color-ink)",
-                    lineHeight: 1.2,
-                  }}
-                >
-                  {navCurrent.title}
-                </h2>
-                {navCurrent.count !== undefined &&
-                  navCurrent.kind === "list" && (
-                  <span class="rounded-[3px] bg-count px-[7px] py-0.5 font-mono text-[11px] text-ink-muted">
-                    {navCurrent.count}
-                  </span>
-                )}
-              </div>
-              <ActiveContextChip
-                compact={!isWide}
-                selections={activeContext.selections}
-                failed={activeContext.failed}
-                pending={activeContext.pending}
-                evictedLabel={activeContext.evictedLabel}
-                onRemove={(selection) => activeContext.remove(selection)}
-                onClear={() => activeContext.clear()}
-              />
-            </>
-          )}
+                    {navCurrent.title}
+                  </h2>
+                  {navCurrent.count !== undefined &&
+                    navCurrent.kind === "list" && (
+                    <span class="rounded-[3px] bg-count px-[7px] py-0.5 font-mono text-[11px] text-ink-muted">
+                      {navCurrent.count}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+        </div>
+        <ContextChipRow reserve={activeContext.supported}>
+          <ActiveContextChip
+            compact={!isWide}
+            selections={activeContext.selections}
+            selection={activeContext.selection}
+            onRemoveGroup={activeContext.removeGroup}
+            failed={activeContext.failed}
+            pending={activeContext.pending}
+            evictedLabel={activeContext.evictedLabel}
+            onRemove={(selection) => activeContext.remove(selection)}
+            onClear={() => activeContext.clear()}
+          />
+        </ContextChipRow>
       </header>
 
       {/* PathBar — visible uniquement en profondeur (renvoie null au niveau 1) */}

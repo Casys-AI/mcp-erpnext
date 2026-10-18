@@ -22,6 +22,7 @@ import {
   toneForStatus,
 } from "~/shared/status";
 import { type ComponentChildren, Fragment } from "preact";
+import { useRef } from "preact/hooks";
 import type { ClickIntentArbiter } from "~/shared/click-intent";
 import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import {
@@ -34,6 +35,7 @@ import { useT } from "~/shared/i18n-hook";
 import { formatCell, isStatusField } from "./helpers";
 import { pickNarrowColumns, shortenId } from "./columns";
 import { StatusCell } from "./StatusCell";
+import { doclistCheckboxEvents } from "./selection.ts";
 import type { SortDir } from "./types";
 
 export interface DoclistColumn {
@@ -64,6 +66,20 @@ interface CommonProps {
   ) => ContextInteractionTarget | undefined;
   /** Détail accordéon inséré immédiatement sous la ligne sélectionnée. */
   detail?: ComponentChildren;
+  selection?: DoclistSelectionControls;
+}
+
+interface DoclistSelectionControls {
+  checked: boolean;
+  indeterminate: boolean;
+  totalCount: number;
+  isSelected: (row: Record<string, unknown>, index: number) => boolean;
+  onToggle: (
+    row: Record<string, unknown>,
+    index: number,
+    shiftKey: boolean,
+  ) => void;
+  onToggleAll: () => void;
 }
 
 type ModeProps = CommonProps & {
@@ -168,6 +184,75 @@ function RowDetailToggle({
   );
 }
 
+function SelectionCheckbox(
+  { checked, indeterminate = false, label, disabled, onClick }: {
+    checked: boolean;
+    indeterminate?: boolean;
+    label: string;
+    disabled: boolean;
+    onClick: (shiftKey: boolean) => void;
+  },
+) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <label
+      class="flex h-full min-h-10 min-w-10 w-full cursor-pointer items-center justify-center"
+      {...doclistCheckboxEvents(() => {})}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        aria-label={label}
+        aria-checked={indeterminate ? "mixed" : checked}
+        ref={(input) => {
+          inputRef.current = input;
+          if (input) input.indeterminate = indeterminate;
+        }}
+        {...doclistCheckboxEvents((event) => {
+          // Le navigateur coche avant le clic ; seul l'ACK confirme la sélection.
+          if (inputRef.current) {
+            inputRef.current.checked = checked;
+            inputRef.current.indeterminate = indeterminate;
+          }
+          onClick(event.shiftKey);
+        })}
+        class="size-4 cursor-pointer accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      />
+    </label>
+  );
+}
+
+function HeaderSelectionCheckbox(
+  { selection }: { selection: DoclistSelectionControls },
+) {
+  return (
+    <SelectionCheckbox
+      checked={selection.checked}
+      indeterminate={selection.indeterminate}
+      disabled={selection.totalCount === 0}
+      label={`Select all ${selection.totalCount} filtered rows`}
+      onClick={selection.onToggleAll}
+    />
+  );
+}
+
+function RowSelectionCheckbox({ selection, name, row, index }: {
+  selection: DoclistSelectionControls;
+  name: string;
+  row: Record<string, unknown>;
+  index: number;
+}) {
+  return (
+    <SelectionCheckbox
+      checked={selection.isSelected(row, index)}
+      disabled={false}
+      label={`Select ${name}`}
+      onClick={(shiftKey) => selection.onToggle(row, index, shiftKey)}
+    />
+  );
+}
+
 /**
  * Un solde nul est une absence, pas une valeur : la maquette y met un tiret.
  * Restreint à outstanding_amount — ailleurs, zéro veut dire quelque chose.
@@ -243,6 +328,7 @@ function WideTable(
     detail,
     clickIntent,
     hasDetailControls,
+    selection,
   }:
     & ModeProps
     & {
@@ -257,6 +343,14 @@ function WideTable(
     <table class="w-full table-fixed border-collapse">
       <thead>
         <tr class="bg-sunken">
+          {selection && (
+            <th
+              scope="col"
+              class="relative h-10 w-10 border-b border-line p-0 text-center [&>label]:absolute [&>label]:inset-0"
+            >
+              <HeaderSelectionCheckbox selection={selection} />
+            </th>
+          )}
           {columns.map((column, index) => (
             <th
               key={column.id}
@@ -342,6 +436,20 @@ function WideTable(
                 aria-pressed={undefined}
                 aria-selected={interactionTarget?.selected}
               >
+                {selection && (
+                  <td
+                    class={`relative h-10 w-10 border-l-2 ${
+                      TONE_RULE[tone]
+                    } p-0 text-center [&>label]:absolute [&>label]:inset-0`}
+                  >
+                    <RowSelectionCheckbox
+                      selection={selection}
+                      name={id}
+                      row={raw}
+                      index={index}
+                    />
+                  </td>
+                )}
                 {columns.map((column, columnIndex) => {
                   const value = row[column.id];
                   const isFirst = columnIndex === 0;
@@ -352,7 +460,7 @@ function WideTable(
                       class={[
                         "truncate py-2",
                         // Le liseré occupe 2 px du padding gauche de la 1re cellule.
-                        isFirst
+                        isFirst && !selection
                           ? `border-l-2 ${TONE_RULE[tone]} pl-[14px] pr-3.5`
                           : "px-3.5",
                         // Et le bord de sélection 2 px de la dernière : sur <tr>
@@ -406,7 +514,8 @@ function WideTable(
                 <tr>
                   <td
                     class="p-0"
-                    colSpan={columns.length + (hasDetailControls ? 1 : 0)}
+                    colSpan={columns.length + (hasDetailControls ? 1 : 0) +
+                      (selection ? 1 : 0)}
                   >
                     {detail}
                   </td>
@@ -450,6 +559,7 @@ function CompactTable(
     detail,
     clickIntent,
     hasDetailControls,
+    selection,
   }: ModeProps,
 ) {
   const t = useT();
@@ -465,6 +575,11 @@ function CompactTable(
   return (
     <div>
       <div class="flex border-y border-line bg-sunken">
+        {selection && (
+          <span class="flex w-10 shrink-0 items-stretch">
+            <HeaderSelectionCheckbox selection={selection} />
+          </span>
+        )}
         <div class={`grid ${mobileGrid} min-w-0 flex-1 px-3 py-1.5`}>
           <span class={MOBILE_HEAD}>
             {amountKey
@@ -515,6 +630,16 @@ function CompactTable(
                   active ? "bg-row-selected" : "hover:bg-row-hover",
                 ].join(" ")}
               >
+                {selection && (
+                  <span class="flex w-10 shrink-0 items-stretch">
+                    <RowSelectionCheckbox
+                      selection={selection}
+                      name={id}
+                      row={raw}
+                      index={index}
+                    />
+                  </span>
+                )}
                 <div
                   class={`grid ${mobileGrid} min-w-0 flex-1 items-center px-3 ${
                     rowClasses(active, interactive, struck)
@@ -581,6 +706,7 @@ function StackedList(
     detail,
     clickIntent,
     hasDetailControls,
+    selection,
   }: ModeProps,
 ) {
   const { idKey, labelKey, trailingKey } = pickNarrowColumns(
@@ -593,6 +719,16 @@ function StackedList(
 
   return (
     <ul class="flex flex-col">
+      {selection && (
+        <li class="flex min-h-10 items-center border-b border-line bg-sunken">
+          <span class="flex w-10 shrink-0 items-stretch">
+            <HeaderSelectionCheckbox selection={selection} />
+          </span>
+          <span class={MOBILE_HEAD}>
+            Select all {selection.totalCount} filtered rows
+          </span>
+        </li>
+      )}
       {rows.map((raw, index) => {
         const { id, row, selected, interactionTarget, tone, struck } = shape(
           raw,
@@ -619,6 +755,16 @@ function StackedList(
                 active ? "bg-row-selected" : "hover:bg-row-hover",
               ].join(" ")}
             >
+              {selection && (
+                <span class="flex w-10 shrink-0 items-stretch">
+                  <RowSelectionCheckbox
+                    selection={selection}
+                    name={id}
+                    row={raw}
+                    index={index}
+                  />
+                </span>
+              )}
               <div
                 class={`flex min-w-0 flex-1 items-center justify-between gap-2.5 px-3 py-[9px] ${
                   rowClasses(active, interactive, struck)

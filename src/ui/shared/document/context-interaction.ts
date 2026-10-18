@@ -3,6 +3,11 @@ import type {
   ContextSelectionItem,
 } from "../active-context.ts";
 import type {
+  SelectionGroupConfig,
+  SelectionGroupMemberInput,
+  SelectionState,
+} from "../selection-projection.ts";
+import type {
   ClickIntent,
   ClickIntentArbiter,
   ClickIntentCommit,
@@ -13,6 +18,30 @@ import type {
 
 export interface DocumentContextController {
   supported: boolean;
+  pending: boolean;
+  selection: SelectionState;
+  toggleGroupMember: (
+    config: Omit<SelectionGroupConfig, "scopeKey">,
+    member: SelectionGroupMemberInput,
+  ) => Promise<unknown>;
+  setGroupMembers: (
+    config: Omit<SelectionGroupConfig, "scopeKey">,
+    members: readonly SelectionGroupMemberInput[],
+  ) => Promise<unknown>;
+  addGroupMembers: (
+    config: Omit<SelectionGroupConfig, "scopeKey">,
+    members: readonly SelectionGroupMemberInput[],
+  ) => Promise<unknown>;
+  removeGroupMembers: (
+    config: Omit<SelectionGroupConfig, "scopeKey">,
+    names: readonly string[],
+  ) => Promise<unknown>;
+  reconcileGroup: (
+    reconcileKey: string,
+    candidates: readonly SelectionGroupMemberInput[],
+    options?: { complete?: boolean },
+  ) => Promise<unknown>;
+  isGroupMemberSelected: (reconcileKey: string, name: string) => boolean;
   activate: (item: ContextSelectionItem) => Promise<unknown>;
   activateReversible: (
     item: ContextSelectionItem,

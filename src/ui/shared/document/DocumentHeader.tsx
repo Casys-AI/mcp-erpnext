@@ -4,7 +4,7 @@ import type { ComponentChildren } from "preact";
 import { useT } from "../i18n-hook";
 import { TONE_BADGE, toneForStatus } from "../status";
 import type { ViewerLayout } from "../useViewerLayout";
-import { cx, Label, LiveDot } from "../ui";
+import { ContextChipRow, cx, Label, LiveDot } from "../ui";
 import {
   contextInteractionProps,
   type ContextInteractionTarget,
@@ -21,6 +21,8 @@ export interface DocumentHeaderProps {
   navigation?: ComponentChildren;
   /** Refresh, JSON ou toute autre action propre à la coque. */
   trailing?: ComponentChildren;
+  contextChip?: ComponentChildren;
+  contextSupported?: boolean;
   live?: boolean;
   /** La fiche elle-même rejoint le contexte au clic, comme un point de chart. */
   contextTarget?: ContextInteractionTarget;
@@ -70,6 +72,8 @@ export function DocumentHeader({
   layout,
   navigation,
   trailing,
+  contextChip,
+  contextSupported = false,
   live,
   contextTarget,
 }: DocumentHeaderProps) {
@@ -89,6 +93,14 @@ export function DocumentHeader({
             )}
           </div>
         </div>
+
+        {contextSupported && (
+          <div class="px-3">
+            <ContextChipRow reserve={contextSupported}>
+              {contextChip}
+            </ContextChipRow>
+          </div>
+        )}
 
         <div
           class={cx(
@@ -123,42 +135,48 @@ export function DocumentHeader({
   return (
     <header
       aria-label={t("document.header")}
-      class="flex shrink-0 items-start justify-between gap-4 border-b border-line px-4 py-[13px]"
+      class="flex shrink-0 flex-col border-b border-line px-4 py-[13px]"
     >
-      <div class="flex min-w-0 items-start gap-3">
-        {navigation && <div class="shrink-0 pt-0.5">{navigation}</div>}
-        <div
-          class={cx(
-            "relative min-w-0 rounded-[4px] transition-colors",
-            contextTarget && "px-1.5 py-1 -ml-1.5 -my-1",
-            contextTarget?.selected && "bg-row-selected",
-          )}
-        >
-          <DocumentContextButton target={contextTarget} class="rounded-[4px]" />
-          <div class="pointer-events-none relative z-[1] flex min-w-0 flex-col gap-1">
-            <span class="truncate font-mono text-micro uppercase tracking-label text-ink-faint">
-              {doctype} · {name}
-            </span>
-            <h2 class="truncate font-display text-title font-semibold tracking-title text-ink">
-              {title}
-            </h2>
-            {(status || docstatus !== undefined || live) && (
-              <div class="flex flex-wrap items-center gap-[7px]">
-                {status && <StatusBadge status={status} />}
-                {docstatus !== undefined && (
-                  <span class="font-mono text-chip text-ink-faint">
-                    {t("document.docstatus", { value: docstatus })}
-                  </span>
-                )}
-                {live && <LiveDot />}
-              </div>
+      <div class="flex min-w-0 items-start justify-between gap-4">
+        <div class="flex min-w-0 items-start gap-3">
+          {navigation && <div class="shrink-0 pt-0.5">{navigation}</div>}
+          <div
+            class={cx(
+              "relative min-w-0 rounded-[4px] transition-colors",
+              contextTarget && "px-1.5 py-1 -ml-1.5 -my-1",
+              contextTarget?.selected && "bg-row-selected",
             )}
+          >
+            <DocumentContextButton
+              target={contextTarget}
+              class="rounded-[4px]"
+            />
+            <div class="pointer-events-none relative z-[1] flex min-w-0 flex-col gap-1">
+              <span class="truncate font-mono text-micro uppercase tracking-label text-ink-faint">
+                {doctype} · {name}
+              </span>
+              <h2 class="truncate font-display text-title font-semibold tracking-title text-ink">
+                {title}
+              </h2>
+              {(status || docstatus !== undefined || live) && (
+                <div class="flex flex-wrap items-center gap-[7px]">
+                  {status && <StatusBadge status={status} />}
+                  {docstatus !== undefined && (
+                    <span class="font-mono text-chip text-ink-faint">
+                      {t("document.docstatus", { value: docstatus })}
+                    </span>
+                  )}
+                  {live && <LiveDot />}
+                </div>
+              )}
+            </div>
           </div>
         </div>
+        {trailing && (
+          <div class="flex shrink-0 items-center gap-1.5">{trailing}</div>
+        )}
       </div>
-      {trailing && (
-        <div class="flex shrink-0 items-center gap-1.5">{trailing}</div>
-      )}
+      <ContextChipRow reserve={contextSupported}>{contextChip}</ContextChipRow>
     </header>
   );
 }

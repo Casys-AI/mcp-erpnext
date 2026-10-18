@@ -47,6 +47,7 @@ import { useAttachments } from "~/shared/document/useAttachments";
 import {
   Button,
   CasysCredit,
+  ContextChipRow,
   cx,
   StateMessage,
   ViewerShell,
@@ -693,6 +694,14 @@ function InvoiceContent({
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
+    pending: activeContext.pending,
+    selection: activeContext.selection,
+    toggleGroupMember: activeContext.toggleGroupMember,
+    setGroupMembers: activeContext.setGroupMembers,
+    addGroupMembers: activeContext.addGroupMembers,
+    removeGroupMembers: activeContext.removeGroupMembers,
+    reconcileGroup: activeContext.reconcileGroup,
+    isGroupMemberSelected: activeContext.isGroupMemberSelected,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
     canShareResource: (resource) =>
@@ -909,6 +918,8 @@ function InvoiceContent({
   const activeContextChip = (
     <ActiveContextChip
       selections={activeContext.selections}
+      selection={activeContext.selection}
+      onRemoveGroup={activeContext.removeGroup}
       failed={activeContext.failed}
       pending={activeContext.pending}
       evictedLabel={activeContext.evictedLabel}
@@ -1182,72 +1193,77 @@ function InvoiceContent({
     return (
       <ViewerShell containerRef={ref}>
         {/* Header 2 colonnes — toujours visible */}
-        <div
-          class="grid gap-5 border-b border-line p-4"
-          style={{ gridTemplateColumns: "1fr auto" }}
-        >
-          <div class="flex min-w-0 flex-col gap-1.5">
-            <span class="font-mono text-micro uppercase tracking-eyebrow text-ink-faint">
-              {doctype}
-            </span>
-            <h2
-              class="m-0 font-display font-semibold text-doc text-ink"
-              style={{ letterSpacing: "-0.015em" }}
-            >
-              {nav.isRoot
-                ? (
-                  <button
-                    type="button"
-                    {...contextInteractionProps(rootContextTarget)}
-                    class={cx(
-                      "rounded-[4px] transition-colors hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-accent",
-                      rootContextTarget?.selected && "bg-row-selected",
-                    )}
-                  >
-                    {data.name}
-                  </button>
-                )
-                : nav.current.title}
-            </h2>
-            <div class="flex items-center gap-2">
-              {nav.isRoot && <StatusBadge status={data.status} />}
-              {refreshing && (
-                <span class="font-mono text-nano text-ink-faint">
-                  {t("common.refreshing")}
-                </span>
-              )}
-              {rootStaleIndicator}
-              {activeContextChip}
-              {nav.isRoot && (
-                <span class="text-data text-ink-muted">
-                  {partyName}
-                  {data.company ? ` · ${data.company}` : ""}
-                </span>
-              )}
+        <div class="flex min-w-0 flex-col border-b border-line p-4">
+          <div
+            class="grid gap-5"
+            style={{ gridTemplateColumns: "1fr auto" }}
+          >
+            <div class="flex min-w-0 flex-col gap-1.5">
+              <span class="font-mono text-micro uppercase tracking-eyebrow text-ink-faint">
+                {doctype}
+              </span>
+              <h2
+                class="m-0 font-display font-semibold text-doc text-ink"
+                style={{ letterSpacing: "-0.015em" }}
+              >
+                {nav.isRoot
+                  ? (
+                    <button
+                      type="button"
+                      {...contextInteractionProps(rootContextTarget)}
+                      class={cx(
+                        "rounded-[4px] transition-colors hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-accent",
+                        rootContextTarget?.selected && "bg-row-selected",
+                      )}
+                    >
+                      {data.name}
+                    </button>
+                  )
+                  : nav.current.title}
+              </h2>
+              <div class="flex items-center gap-2">
+                {nav.isRoot && <StatusBadge status={data.status} />}
+                {refreshing && (
+                  <span class="font-mono text-nano text-ink-faint">
+                    {t("common.refreshing")}
+                  </span>
+                )}
+                {rootStaleIndicator}
+                {nav.isRoot && (
+                  <span class="text-data text-ink-muted">
+                    {partyName}
+                    {data.company ? ` · ${data.company}` : ""}
+                  </span>
+                )}
+              </div>
             </div>
+
+            {nav.isRoot && (
+              <div class="flex flex-col items-end gap-1 border-l border-line pl-6">
+                <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+                  {t("invoice.header.outstanding")}
+                </span>
+                <span
+                  class={cx(
+                    "font-display font-semibold tabular-nums leading-[1.05]",
+                    isPaid ? "text-ok" : "text-bad",
+                  )}
+                  style={{ fontSize: "30px" }}
+                >
+                  {formatCurrency(outstanding, ccy)}
+                </span>
+                {data.due_date && (
+                  <span class="font-mono text-meta text-ink-muted">
+                    {t("invoice.header.due", { date: data.due_date })}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
-          {nav.isRoot && (
-            <div class="flex flex-col items-end gap-1 border-l border-line pl-6">
-              <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
-                {t("invoice.header.outstanding")}
-              </span>
-              <span
-                class={cx(
-                  "font-display font-semibold tabular-nums leading-[1.05]",
-                  isPaid ? "text-ok" : "text-bad",
-                )}
-                style={{ fontSize: "30px" }}
-              >
-                {formatCurrency(outstanding, ccy)}
-              </span>
-              {data.due_date && (
-                <span class="font-mono text-meta text-ink-muted">
-                  {t("invoice.header.due", { date: data.due_date })}
-                </span>
-              )}
-            </div>
-          )}
+          <ContextChipRow reserve={context.supported}>
+            {activeContextChip}
+          </ContextChipRow>
         </div>
 
         {/* PathBar — invisible au niveau 1 (crumbs.showBar = false) */}
@@ -1485,7 +1501,6 @@ function InvoiceContent({
             <div class="flex flex-col items-end gap-[5px]">
               <StatusBadge status={data.status} />
               {rootStaleIndicator}
-              {activeContextChip}
               {data.due_date && (
                 <span class="font-mono text-chip text-ink-muted">
                   {t("invoice.header.due", { date: data.due_date.slice(5) })}
@@ -1494,6 +1509,9 @@ function InvoiceContent({
             </div>
           </div>
         )}
+        <ContextChipRow reserve={context.supported}>
+          {activeContextChip}
+        </ContextChipRow>
       </div>
 
       {/* PathBar — invisible au niveau 1 */}

@@ -1127,7 +1127,7 @@ const VIEWER_TOOL_CANDIDATES: Record<string, readonly string[]> = {
     "erpnext_file_upload",
     "erpnext_file_download",
   ],
-  "ui://mcp-erpnext/doclist-viewer": [],
+  "ui://mcp-erpnext/doclist-viewer": ["erpnext_doc_list"],
   "ui://mcp-erpnext/doc-viewer": [
     "erpnext_file_list",
     "erpnext_file_upload",

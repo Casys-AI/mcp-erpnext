@@ -45,11 +45,31 @@ export interface ActiveContextLocalResource {
   uri: string;
   mimeType: string;
   bytes: Uint8Array;
+  /** Sans indication, la ressource est une pièce jointe explicite. */
+  kind?: "derived" | "attachment";
   /**
    * Repli JSON/texte optionnel pour un hôte acceptant `text` sans `resource`.
    * Jamais dérivé des octets : une pièce jointe binaire n'en a pas.
    */
   textFallback?: string;
+}
+
+export interface ContextSelectionField {
+  label: string;
+  value: string;
+}
+
+export interface ContextSelectionQuery {
+  tool: "erpnext_doc_list";
+  args: {
+    doctype: string;
+    filters: [["name", "in", string[]]];
+    fields: string[];
+    limit: number;
+  };
+  selectedCount: number;
+  includedCount: number;
+  truncated: boolean;
 }
 
 /** Point unique choisi par l'utilisateur dans un viewer. */
@@ -64,6 +84,11 @@ export interface ContextSelectionItem {
   label: string;
   /** Valeur visible associée, si elle existe. */
   value?: string;
+  fields?: ContextSelectionField[];
+  query?: ContextSelectionQuery;
+  /** Métadonnées locales de fraîcheur, jamais sérialisées. */
+  fieldsSource?: "record" | "row";
+  modified?: string;
   /**
    * Pièce jointe locale. Omettre conserve la pièce jointe déjà chargée ;
    * fournir explicitement undefined invalide une ressource dérivée obsolète.
@@ -95,7 +120,7 @@ export interface ActiveContextAddResult {
 }
 
 export const ACTIVE_CONTEXT_SCHEMA = "casys.erpnext/active-context" as const;
-export const ACTIVE_CONTEXT_VERSION = 2 as const;
+export const ACTIVE_CONTEXT_VERSION = 3 as const;
 export const ACTIVE_CONTEXT_MAX_ITEMS = 8;
 export const ACTIVE_CONTEXT_MAX_RESOURCE_BYTES = 5 * 1024 * 1024;
 export const ACTIVE_CONTEXT_MAX_TEXT_FALLBACK_BYTES = 32 * 1024;
@@ -105,7 +130,10 @@ export const ACTIVE_CONTEXT_MAX_TEXT_FALLBACK_BYTES = 32 * 1024;
  * Le snapshot reste ainsi compact et ne peut pas embarquer un payload métier.
  */
 export const ACTIVE_CONTEXT_LIMITS = {
-  id: 180,
+  id: 512,
+  fields: 8,
+  fieldLabel: 40,
+  fieldValue: 80,
   view: 120,
   label: 240,
   value: 240,
@@ -115,7 +143,7 @@ export const ACTIVE_CONTEXT_LIMITS = {
 
 export type ActiveContextSnapshotItem = Pick<
   ContextSelectionItem,
-  "id" | "view" | "label" | "value"
+  "id" | "view" | "label" | "value" | "fields" | "query"
 >;
 
 export interface ActiveContextSnapshot extends Record<string, unknown> {
@@ -213,6 +241,28 @@ export function reconcileActiveContextItem(
   return candidates.find((candidate) => candidate.id === current.id) ?? null;
 }
 
+/** Une fiche plus riche ne masque jamais une version métier plus récente. */
+export function fresherSelectionItem(
+  current: ContextSelectionItem,
+  candidate: ContextSelectionItem,
+): ContextSelectionItem {
+  if (current.modified && candidate.modified) {
+    if (candidate.modified < current.modified) return current;
+    if (candidate.modified > current.modified) return candidate;
+  }
+  if (
+    current.fieldsSource === "record" && candidate.fieldsSource !== "record"
+  ) {
+    return {
+      ...candidate,
+      fields: current.fields,
+      fieldsSource: current.fieldsSource,
+      ...(current.modified ? { modified: current.modified } : {}),
+    };
+  }
+  return candidate;
+}
+
 /** Vrai si la provenance et la valeur visibles n'ont pas changé. */
 export function sameActiveContextItem(
   left: ContextSelectionItem,
@@ -221,7 +271,38 @@ export function sameActiveContextItem(
   return left.id === right.id && left.view === right.view &&
     left.reconcileKey === right.reconcileKey &&
     left.label === right.label && left.value === right.value &&
+    left.fieldsSource === right.fieldsSource &&
+    left.modified === right.modified &&
+    sameFields(left.fields, right.fields) &&
+    sameQuery(left.query, right.query) &&
     sameLocalResource(left.resource, right.resource);
+}
+
+function sameFields(
+  left: ContextSelectionField[] | undefined,
+  right: ContextSelectionField[] | undefined,
+): boolean {
+  if (left === right) return true;
+  return !!left && !!right && left.length === right.length &&
+    left.every((field, index) =>
+      field.label === right[index].label && field.value === right[index].value
+    );
+}
+
+function sameQuery(
+  left: ContextSelectionQuery | undefined,
+  right: ContextSelectionQuery | undefined,
+): boolean {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  return left.tool === right.tool &&
+    left.selectedCount === right.selectedCount &&
+    left.includedCount === right.includedCount &&
+    left.truncated === right.truncated &&
+    left.args.doctype === right.args.doctype &&
+    left.args.limit === right.args.limit &&
+    JSON.stringify(left.args.fields) === JSON.stringify(right.args.fields) &&
+    JSON.stringify(left.args.filters) === JSON.stringify(right.args.filters);
 }
 
 function sameLocalResource(
@@ -231,7 +312,7 @@ function sameLocalResource(
   if (left === right) return true;
   if (
     !left || !right || left.uri !== right.uri ||
-    left.mimeType !== right.mimeType ||
+    left.mimeType !== right.mimeType || left.kind !== right.kind ||
     left.textFallback !== right.textFallback ||
     left.bytes.byteLength !== right.bytes.byteLength
   ) return false;
@@ -262,9 +343,13 @@ function normalizeSelectionResources(
 ): ActiveContextSelection[] {
   let newestValidResourceIndex = -1;
   for (let index = selections.length - 1; index >= 0; index -= 1) {
-    if (validLocalResource(selections[index].item.resource)) {
-      newestValidResourceIndex = index;
-      break;
+    const resource = selections[index].item.resource;
+    if (validLocalResource(resource)) {
+      if (newestValidResourceIndex === -1) newestValidResourceIndex = index;
+      if (resource.kind !== "derived") {
+        newestValidResourceIndex = index;
+        break;
+      }
     }
   }
   return selections.map((selection, index) =>
@@ -503,9 +588,10 @@ function reconcileActiveContextSelectionSubset(
       changed = true;
       continue;
     }
-    const refreshedItem = selection.item.resource && !("resource" in candidate)
-      ? { ...candidate, resource: selection.item.resource }
-      : candidate;
+    const fresh = fresherSelectionItem(selection.item, candidate);
+    const refreshedItem = selection.item.resource && !("resource" in fresh)
+      ? { ...fresh, resource: selection.item.resource }
+      : fresh;
     const refreshed = { scopeKey, item: refreshedItem };
     if (!sameSelection(selection, refreshed)) changed = true;
     next.push(refreshed);
@@ -546,15 +632,47 @@ function boundText(value: string, limit: number): string {
     : normalized;
 }
 
+export class ActiveContextValidationError extends TypeError {
+  constructor(
+    readonly code: "ID_EMPTY" | "ID_TOO_LONG" | "QUERY_INVALID" = "ID_TOO_LONG",
+    readonly context: {
+      field: string;
+      limit?: number;
+      length?: number;
+      reason?: string;
+    } = { field: "id", limit: ACTIVE_CONTEXT_LIMITS.id },
+  ) {
+    const message = code === "ID_EMPTY"
+      ? "id is empty"
+      : code === "ID_TOO_LONG"
+      ? `id exceeds ${context.limit} code points`
+      : "query is invalid";
+    super(`Active context ${code}: ${message}`);
+    this.name = "ActiveContextValidationError";
+  }
+}
+
+export function validateActiveContextId(id: string): string {
+  const length = Array.from(id).length;
+  if (length > ACTIVE_CONTEXT_LIMITS.id) {
+    throw new ActiveContextValidationError("ID_TOO_LONG", {
+      field: "id",
+      limit: ACTIVE_CONTEXT_LIMITS.id,
+      length,
+    });
+  }
+  if (!id) {
+    throw new ActiveContextValidationError("ID_EMPTY", { field: "id", length });
+  }
+  return id;
+}
+
 function boundRequired(
   value: string,
-  field: keyof typeof ACTIVE_CONTEXT_LIMITS,
+  field: "id" | "view" | "label",
 ): string {
-  // L'identifiant n'est jamais réécrit : le modèle le repasse aux outils
-  // `*_get` et la réconciliation le compare tel quel. Seuls les champs
-  // affichés (view, label) sont nettoyés et marqués à la troncature.
   const normalized = field === "id"
-    ? Array.from(value.trim()).slice(0, ACTIVE_CONTEXT_LIMITS.id).join("")
+    ? validateActiveContextId(value)
     : boundText(value, ACTIVE_CONTEXT_LIMITS[field]);
   if (!normalized) throw new TypeError(`Active context ${field} is empty`);
   return normalized;
@@ -566,13 +684,106 @@ function boundOptional(value: string | undefined): string | undefined {
 }
 
 /** Borne un point avant son entrée dans le snapshot canonique. */
-function boundItem(item: ContextSelectionItem): ActiveContextSnapshotItem {
+export function boundActiveContextItem(
+  item: ContextSelectionItem,
+): ActiveContextSnapshotItem {
   const value = boundOptional(item.value);
   return {
     id: boundRequired(item.id, "id"),
     view: boundRequired(item.view, "view"),
     label: boundRequired(item.label, "label"),
     ...(value === undefined ? {} : { value }),
+    ...(item.fields?.length
+      ? {
+        fields: item.fields.slice(0, ACTIVE_CONTEXT_LIMITS.fields).map((
+          field,
+        ) => ({
+          label: boundText(field.label, ACTIVE_CONTEXT_LIMITS.fieldLabel),
+          value: boundText(field.value, ACTIVE_CONTEXT_LIMITS.fieldValue),
+        })),
+      }
+      : {}),
+    ...(item.query !== undefined ? { query: boundQuery(item.query) } : {}),
+  };
+}
+
+function invalidQuery(field: string, reason: string): never {
+  throw new ActiveContextValidationError("QUERY_INVALID", { field, reason });
+}
+
+function nonBlankString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function boundQuery(query: ContextSelectionQuery): ContextSelectionQuery {
+  if (!query || typeof query !== "object" || Array.isArray(query)) {
+    invalidQuery("query", "must be an object");
+  }
+  if (query.tool !== "erpnext_doc_list") {
+    invalidQuery("query.tool", "must be erpnext_doc_list");
+  }
+  if (
+    !query.args || typeof query.args !== "object" || Array.isArray(query.args)
+  ) {
+    invalidQuery("query.args", "must be an object");
+  }
+  if (!nonBlankString(query.args.doctype)) {
+    invalidQuery("query.args.doctype", "must be a non-blank string");
+  }
+  if (!Array.isArray(query.args.fields)) {
+    invalidQuery("query.args.fields", "must be an array of non-empty strings");
+  }
+  for (const field of query.args.fields) {
+    if (!nonBlankString(field)) {
+      invalidQuery("query.args.fields", "must contain only non-empty strings");
+    }
+  }
+  const filters = query.args.filters;
+  if (
+    !Array.isArray(filters) || filters.length !== 1 ||
+    !Array.isArray(filters[0]) || filters[0].length !== 3 ||
+    filters[0][0] !== "name" || filters[0][1] !== "in" ||
+    !Array.isArray(filters[0][2])
+  ) {
+    invalidQuery(
+      "query.args.filters",
+      'must have exactly [["name", "in", names]]',
+    );
+  }
+  const selectedNames = filters[0][2];
+  if (selectedNames.length === 0) {
+    invalidQuery("query.args.filters[0][2]", "must contain at least one name");
+  }
+  for (const name of selectedNames) {
+    if (!nonBlankString(name)) {
+      invalidQuery(
+        "query.args.filters[0][2]",
+        "must contain only non-empty strings",
+      );
+    }
+    validateActiveContextId(name);
+  }
+  if (
+    !Number.isInteger(query.selectedCount) ||
+    query.selectedCount < selectedNames.length
+  ) {
+    invalidQuery(
+      "query.selectedCount",
+      "must be an integer at least as large as the included names",
+    );
+  }
+  const names = selectedNames.slice(0, 100);
+  return {
+    tool: "erpnext_doc_list",
+    args: {
+      doctype: query.args.doctype,
+      filters: [["name", "in", names]],
+      fields: query.args.fields.slice(),
+      limit: names.length,
+    },
+    selectedCount: query.selectedCount,
+    includedCount: names.length,
+    truncated: names.length < query.selectedCount,
   };
 }
 
@@ -582,7 +793,7 @@ export function activeContextSnapshot(
   return {
     schema: ACTIVE_CONTEXT_SCHEMA,
     version: ACTIVE_CONTEXT_VERSION,
-    items: items.slice(-ACTIVE_CONTEXT_MAX_ITEMS).map(boundItem),
+    items: items.slice(-ACTIVE_CONTEXT_MAX_ITEMS).map(boundActiveContextItem),
   };
 }
 
@@ -590,9 +801,10 @@ function activeLocalResource(
   items: readonly ContextSelectionItem[],
 ): ActiveContextLocalResource | undefined {
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    if (items[index].resource) return items[index].resource;
+    const resource = items[index].resource;
+    if (resource && resource.kind !== "derived") return resource;
   }
-  return undefined;
+  return items.length === 1 ? items[0].resource : undefined;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -658,6 +870,7 @@ export function activeContextJsonResource(
   return {
     uri,
     mimeType: "application/json",
+    kind: "derived",
     bytes,
     ...(bytes.byteLength <= ACTIVE_CONTEXT_MAX_TEXT_FALLBACK_BYTES
       ? { textFallback: text }

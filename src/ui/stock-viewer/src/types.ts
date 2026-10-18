@@ -5,6 +5,7 @@ export interface StockEntry {
   item_code: string;
   warehouse: string;
   actual_qty: number;
+  modified?: string;
   reserved_qty?: number;
   projected_qty?: number;
   valuation_rate?: number;

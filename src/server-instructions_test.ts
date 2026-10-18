@@ -13,8 +13,14 @@ Deno.test("server instructions describe active context in under 900 characters",
   );
   assertStringIncludes(
     ACTIVE_CONTEXT_INSTRUCTIONS,
-    "{id, view, label, value?}",
+    "{id, view, label, value?, fields?, query?}",
   );
+  assertStringIncludes(ACTIVE_CONTEXT_INSTRUCTIONS, "version 3");
+  assertStringIncludes(ACTIVE_CONTEXT_INSTRUCTIONS, "compact record");
+  assertStringIncludes(ACTIVE_CONTEXT_INSTRUCTIONS, "query.tool");
+  assertStringIncludes(ACTIVE_CONTEXT_INSTRUCTIONS, "query.args");
+  assertStringIncludes(ACTIVE_CONTEXT_INSTRUCTIONS, "truncated: true");
+  assertStringIncludes(ACTIVE_CONTEXT_INSTRUCTIONS, "includedCount");
   assertStringIncludes(ACTIVE_CONTEXT_INSTRUCTIONS, "record:<doctype>:<name>");
   assertStringIncludes(ACTIVE_CONTEXT_INSTRUCTIONS, "name argument");
   assertStringIncludes(ACTIVE_CONTEXT_INSTRUCTIONS, "*_get");

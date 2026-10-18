@@ -12,7 +12,6 @@ import type {
   ContextInteractionTarget,
   DocumentContextController,
 } from "../document/context-interaction.ts";
-import { documentContextItem } from "../document/context-items.ts";
 import type { LifecycleOutcome } from "../document/lifecycle-actions.ts";
 import { interpretHostPurchaseInvoiceSubmit } from "../document/purchase-invoice.ts";
 import { documentModelOf } from "../document/model.ts";
@@ -32,6 +31,7 @@ import type { DoclistState, Row } from "./useDoclist";
 import { canCallViewerTool } from "../viewer-tools";
 import { doclistDetailPanelId } from "./detail-panel.ts";
 import { nearestScrollDelta } from "./scroll-nearest.ts";
+import { doclistRowContextItem } from "./context-items.ts";
 
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 const CANONICAL_READBACK_DELAY_MS = 1_500;
@@ -149,8 +149,9 @@ export function DoclistBody(
     const rowId = resolveRowId(row, rowAction, String(rowIndex));
     const envelope = recordOf(row, { doctype: data.doctype, name: rowId });
     return envelope
-      ? documentContextItem(
+      ? doclistRowContextItem(
         documentModelOf(envelope),
+        list.tableColumns,
         listContextView,
         listContextKey,
       )
@@ -169,6 +170,7 @@ export function DoclistBody(
     data.doctype,
     listContextKey,
     listContextView,
+    list.tableColumns,
     reconcileView,
     rowAction,
     rows,

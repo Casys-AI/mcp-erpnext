@@ -1,13 +1,20 @@
-import type { ContextSelectionItem } from "../../shared/active-context.ts";
+import {
+  ACTIVE_CONTEXT_LIMITS,
+  type ContextSelectionItem,
+} from "../../shared/active-context.ts";
+import { fnv1a64 } from "../../shared/selection-projection.ts";
 import type { StockEntry } from "./types.ts";
 
 export const STOCK_CONTEXT_RECONCILE_KEY = "stock-rows";
 
 /** Identite stable d'une ligne, distincte de son etat d'ouverture. */
 export function stockRowContextId(row: StockEntry): string {
-  return `stock:${encodeURIComponent(row.item_code)}:${
-    encodeURIComponent(row.warehouse)
-  }`;
+  const escape = (part: string) =>
+    part.replaceAll("%", "%25").replaceAll(":", "%3A");
+  const id = `stock:${escape(row.item_code)}:${escape(row.warehouse)}`;
+  return Array.from(id).length <= ACTIVE_CONTEXT_LIMITS.id
+    ? id
+    : `stock:#${fnv1a64(JSON.stringify([row.item_code, row.warehouse]))}`;
 }
 
 /** Cible compacte partagee avec le modele lors d'un clic simple. */
@@ -27,6 +34,13 @@ export function stockRowContextItem(
     view,
     label: row.item_code,
     ...(value.length > 0 ? { value: value.join(" · ") } : {}),
+    fields: [
+      { label: "Item code", value: row.item_code },
+      { label: "Warehouse", value: row.warehouse },
+      { label: actualLabel, value: formattedActual },
+    ],
+    fieldsSource: "row",
+    ...(row.modified ? { modified: row.modified } : {}),
   };
 }
 

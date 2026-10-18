@@ -1,4 +1,5 @@
 import { assertEquals, assertExists } from "@std/assert";
+import { activeContextAttachmentNotice } from "./active-context-attachment.ts";
 import { createActiveContextController } from "./active-context-controller.ts";
 import type { ActiveContextFlowHost } from "./active-context-flow.ts";
 import type { ContextSelectionItem } from "./active-context.ts";
@@ -29,6 +30,7 @@ function harness(...args: [capabilities?: HostCapabilities]) {
   const capabilities = args.length === 0 ? CAPABLE_HOST : args[0];
   const requests: {
     ids: string[];
+    items: ContextSelectionItem[];
     response: ReturnType<typeof deferred<unknown>>;
   }[] = [];
   const host: ActiveContextFlowHost = {
@@ -38,7 +40,7 @@ function harness(...args: [capabilities?: HostCapabilities]) {
       const response = deferred<unknown>();
       const items =
         (params.structuredContent?.items ?? []) as ContextSelectionItem[];
-      requests.push({ ids: items.map((entry) => entry.id), response });
+      requests.push({ ids: items.map((entry) => entry.id), items, response });
       return response.promise;
     },
     sendMessage: () => Promise.resolve({}),
@@ -664,4 +666,449 @@ Deno.test("context controller - capable host rejecting the root clear still repo
   assertEquals(await clear, "error");
   assertEquals(h.controller.getSnapshot().failed, true);
   assertEquals(h.controller.getSnapshot().pending, false);
+});
+
+const listGroup = {
+  reconcileKey: "invoice-list",
+  doctype: "Sales Invoice",
+  view: "Invoices",
+  fields: ["name", "status"],
+  queryAvailable: true,
+};
+function rowMembers(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    name: `INV-${index + 1}`,
+    label: `Invoice ${index + 1}`,
+    fields: [{ label: "Status", value: "Draft" }],
+    fieldsSource: "row" as const,
+    modified: "2026-10-18 10:00:00",
+  }));
+}
+async function acknowledge<T>(
+  h: ReturnType<typeof harness>,
+  action: Promise<T>,
+) {
+  const index = h.requests.length;
+  await flush();
+  await h.ack(index);
+  return await action;
+}
+
+Deno.test("context groups - atomic select-all, 8 to 9 and undo restores eight rows", async () => {
+  const h = harness();
+  const rows = rowMembers(8);
+  const names = rows.map((row) => row.name);
+  const ids = names.map((name) => `record:Sales Invoice:${name}`);
+  await acknowledge(h, h.actions.setGroupMembers(listGroup, rows));
+  assertEquals(h.requests.length, 1);
+  assertEquals(h.ids(), ids);
+  assertEquals(h.requests[0].ids, ids);
+  const undo = await acknowledge(
+    h,
+    h.actions.toggleGroupMemberReversible(listGroup, rowMembers(9)[8]),
+  );
+  assertEquals(h.ids().length, 1);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.length,
+    9,
+  );
+  assertExists(undo);
+  await acknowledge(h, Promise.resolve(undo()));
+  assertEquals(h.ids(), ids);
+  assertEquals(h.requests[2].ids, ids);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.map((row) =>
+      row.name
+    ),
+    names,
+  );
+  undo.release?.();
+});
+
+Deno.test("context groups - checking a row already selected by click has one identity", async () => {
+  const h = harness();
+  const row = rowMembers(1)[0];
+  const id = `record:Sales Invoice:${row.name}`;
+  await acknowledge(
+    h,
+    h.actions.activate({
+      id,
+      label: row.label,
+      view: listGroup.view,
+      reconcileKey: listGroup.reconcileKey,
+      fields: row.fields,
+      fieldsSource: row.fieldsSource,
+      modified: row.modified,
+    }),
+  );
+  await acknowledge(h, h.actions.toggleGroupMember(listGroup, row));
+  assertEquals(h.ids(), [id]);
+  assertEquals(h.requests[1].ids, [id]);
+  assertEquals(h.controller.getSnapshot().selection.singles, []);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.map((member) =>
+      member.name
+    ),
+    [row.name],
+  );
+  assertEquals(
+    h.actions.isGroupMemberSelected(listGroup.reconcileKey, row.name),
+    true,
+  );
+});
+
+Deno.test("context groups - removing query survives a late undo of the ninth row", async () => {
+  const h = harness();
+  await acknowledge(h, h.actions.setGroupMembers(listGroup, rowMembers(8)));
+  const undo = await acknowledge(
+    h,
+    h.actions.toggleGroupMemberReversible(listGroup, rowMembers(9)[8]),
+  );
+  await acknowledge(
+    h,
+    h.actions.remove(h.controller.getSnapshot().selections[0]),
+  );
+  assertExists(undo);
+  assertEquals(await undo(), true);
+  assertEquals(h.ids(), []);
+  assertEquals(h.controller.getSnapshot().selection.groups, []);
+  assertEquals(h.requests.length, 3);
+});
+
+Deno.test("context groups - refresh during removed member undo retains freshest fields", async () => {
+  const h = harness();
+  await acknowledge(h, h.actions.setGroupMembers(listGroup, rowMembers(2)));
+  const undo = await acknowledge(
+    h,
+    h.actions.toggleGroupMemberReversible(listGroup, rowMembers(2)[0]),
+  );
+  const refreshed = rowMembers(2).map((row) => ({
+    ...row,
+    modified: "2026-10-18 11:00:00",
+    fields: [{ label: "Status", value: "Paid" }],
+  }));
+  await acknowledge(
+    h,
+    h.actions.reconcileGroup(listGroup.reconcileKey, refreshed, {
+      complete: true,
+    }),
+  );
+  assertExists(undo);
+  await acknowledge(h, Promise.resolve(undo()));
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.map((row) =>
+      row.fields
+    ),
+    refreshed.map((row) => row.fields),
+  );
+});
+
+Deno.test("context groups - refresh queued while undo awaits ACK retains fresh fields and order", async () => {
+  const h = harness();
+  const rows = rowMembers(2);
+  const ids = rows.map((row) => `record:Sales Invoice:${row.name}`);
+  await acknowledge(h, h.actions.setGroupMembers(listGroup, rows));
+  const undo = await acknowledge(
+    h,
+    h.actions.toggleGroupMemberReversible(listGroup, rows[0]),
+  );
+  assertExists(undo);
+  const undone = undo();
+  await flush();
+  assertEquals(h.requests[2].ids, ids);
+  assertEquals(h.ids(), [ids[1]]);
+  assertEquals(h.controller.getSnapshot().pending, true);
+
+  const refreshed = rows.map((row) => ({
+    ...row,
+    modified: "2026-10-18 11:00:00",
+    fields: [{ label: "Status", value: "Paid" }],
+  }));
+  const refresh = h.actions.reconcileGroup(listGroup.reconcileKey, refreshed, {
+    complete: true,
+  });
+  await flush();
+  assertEquals(h.requests.length, 3);
+  assertEquals(h.ids(), [ids[1]]);
+  assertEquals(h.controller.getSnapshot().failed, false);
+
+  await h.ack(2);
+  assertEquals(await undone, true);
+  assertEquals(h.requests[3].ids, ids);
+  assertEquals(
+    h.requests[3].items.map((entry) => entry.fields),
+    refreshed.map((row) => row.fields),
+  );
+  assertEquals(h.controller.getSnapshot().pending, true);
+  await h.ack(3);
+  assertEquals(await refresh, "shared");
+  undo.release?.();
+
+  const state = h.controller.getSnapshot();
+  assertEquals(h.ids(), ids);
+  assertEquals(
+    state.selection.groups[0].members.map((row) => row.name),
+    rows.map((row) => row.name),
+  );
+  assertEquals(
+    state.selection.groups[0].members.map((row) => row.modified),
+    refreshed.map((row) => row.modified),
+  );
+  assertEquals(
+    state.selection.groups[0].members.map((row) => row.fields),
+    refreshed.map((row) => row.fields),
+  );
+  assertEquals(
+    state.selections.map((selection) => selection.item.fields),
+    refreshed.map((row) => row.fields),
+  );
+  assertEquals(h.requests.length, 4);
+  assertEquals(h.requests.at(-1)?.ids, ids);
+  assertEquals(state.pending, false);
+  assertEquals(state.failed, false);
+});
+
+Deno.test("context groups - refused ACK retains members and refused undo retains collapse", async () => {
+  const h = harness();
+  await acknowledge(h, h.actions.setGroupMembers(listGroup, rowMembers(8)));
+  const refused = h.actions.toggleGroupMember(listGroup, rowMembers(9)[8]);
+  await flush();
+  h.requests[1].response.resolve({ isError: true });
+  await refused;
+  assertEquals(h.ids().length, 8);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.length,
+    8,
+  );
+  const undo = await acknowledge(
+    h,
+    h.actions.toggleGroupMemberReversible(listGroup, rowMembers(9)[8]),
+  );
+  assertExists(undo);
+  const undone = undo();
+  await flush();
+  await h.ack(3, false);
+  assertEquals(await undone, false);
+  assertEquals(h.ids().length, 1);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.length,
+    9,
+  );
+});
+
+Deno.test("context groups - removal from 9 plus 7 never evicts and query removal clears members", async () => {
+  const h = harness();
+  await acknowledge(h, h.actions.setGroupMembers(listGroup, rowMembers(9)));
+  await h.seed("A", "B", "C", "D", "E", "F", "G");
+  await acknowledge(
+    h,
+    h.actions.toggleGroupMember(listGroup, rowMembers(9)[8]),
+  );
+  assertEquals(h.ids().length, 8);
+  assertEquals(h.ids().slice(1), ["A", "B", "C", "D", "E", "F", "G"]);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.length,
+    8,
+  );
+  await acknowledge(h, h.actions.removeGroup(listGroup.reconcileKey));
+  assertEquals(h.ids(), ["A", "B", "C", "D", "E", "F", "G"]);
+});
+
+Deno.test("context groups - incomplete refresh preserves absent members and root fences old actions", async () => {
+  const h = harness();
+  await acknowledge(h, h.actions.setGroupMembers(listGroup, rowMembers(3)));
+  assertEquals(
+    await h.actions.reconcileGroup(listGroup.reconcileKey, rowMembers(1)),
+    "unchanged",
+  );
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.length,
+    3,
+  );
+  await acknowledge(
+    h,
+    h.actions.reconcileGroup(listGroup.reconcileKey, rowMembers(1), {
+      complete: true,
+    }),
+  );
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.length,
+    1,
+  );
+  h.controller.setScope("other");
+  await acknowledge(h, h.controller.clearPreviousScope()!);
+  assertEquals(h.controller.getSnapshot().selection.groups, []);
+  assertEquals(
+    await h.actions.toggleGroupMember(listGroup, rowMembers(1)[0]),
+    "superseded",
+  );
+});
+
+Deno.test("context groups - no query tool keeps members outside the projection", async () => {
+  const h = harness();
+  await acknowledge(
+    h,
+    h.actions.setGroupMembers(
+      { ...listGroup, queryAvailable: false },
+      rowMembers(12),
+    ),
+  );
+  assertEquals(h.ids().length, 8);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.length,
+    12,
+  );
+  assertEquals(
+    h.actions.isGroupMemberSelected(listGroup.reconcileKey, "INV-1"),
+    true,
+  );
+});
+
+Deno.test("context groups - document refresh enriches fields without downgrade by equal row refresh", async () => {
+  const h = harness();
+  await acknowledge(h, h.actions.setGroupMembers(listGroup, rowMembers(1)));
+  const record = {
+    id: "record:Sales Invoice:INV-1",
+    view: "Invoices",
+    label: "INV-1",
+    fields: [{ label: "Customer", value: "Alice" }],
+    fieldsSource: "record" as const,
+    modified: "2026-10-18 10:00:00",
+  };
+  await acknowledge(h, h.actions.reconcileDocument(record.id, [record]));
+  const rowRefresh = h.actions.reconcileGroup(
+    listGroup.reconcileKey,
+    rowMembers(1),
+  );
+  await acknowledge(h, rowRefresh);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members[0].fields,
+    record.fields,
+  );
+  const newer = { ...rowMembers(1)[0], modified: "2026-10-18 12:00:00" };
+  await acknowledge(
+    h,
+    h.actions.reconcileGroup(listGroup.reconcileKey, [newer]),
+  );
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members[0].fields,
+    newer.fields,
+  );
+});
+
+Deno.test("context resources - chart and record announce no attachment until chart is the sole entry", async () => {
+  const sent: unknown[][] = [];
+  const controller = createActiveContextController({
+    getHostCapabilities: () => ({
+      updateModelContext: { structuredContent: {}, resource: {} },
+    }),
+    updateModelContext: (params) => {
+      sent.push(params.content ?? []);
+      return Promise.resolve({});
+    },
+    sendMessage: () => Promise.resolve({}),
+  }, "root");
+  const actions = controller.actionsForScope("root");
+  const chart = {
+    ...item("chart"),
+    resource: {
+      uri: "ui://chart/data",
+      mimeType: "application/json",
+      bytes: new Uint8Array([123, 125]),
+      kind: "derived" as const,
+    },
+  };
+  const record = {
+    id: "record:Sales Invoice:INV-1",
+    view: "Invoice",
+    label: "INV-1",
+  };
+  const expectedResource = [{
+    type: "resource",
+    resource: {
+      uri: chart.resource.uri,
+      mimeType: chart.resource.mimeType,
+      blob: "e30=",
+    },
+  }];
+  await actions.activate(chart);
+  assertEquals(sent.at(-1), expectedResource);
+  await actions.activate(record);
+  assertEquals(sent.at(-1), []);
+  const selections = controller.getSnapshot().selections;
+  assertEquals(
+    selections.map((selection) => "resource" in selection.item),
+    [false, false],
+  );
+  assertEquals(
+    selections.map((selection) =>
+      activeContextAttachmentNotice(selection.item)
+    ),
+    [null, null],
+  );
+  assertEquals(
+    controller.getSnapshot().selection.singles[0].item.resource,
+    chart.resource,
+  );
+
+  await actions.remove({ scopeKey: "root", item: record });
+  assertEquals(sent.at(-1), expectedResource);
+  assertEquals(
+    controller.getSnapshot().selections[0].item.resource,
+    chart.resource,
+  );
+  assertExists(
+    activeContextAttachmentNotice(controller.getSnapshot().selections[0].item),
+  );
+});
+
+Deno.test("context resources - refresh preserves hidden derived resource until it becomes the sole entry", async () => {
+  const sent: unknown[][] = [];
+  const controller = createActiveContextController({
+    getHostCapabilities: () => ({
+      updateModelContext: { structuredContent: {}, resource: {} },
+    }),
+    updateModelContext: (params) => {
+      sent.push(params.content ?? []);
+      return Promise.resolve({});
+    },
+    sendMessage: () => Promise.resolve({}),
+  }, "root");
+  const actions = controller.actionsForScope("root");
+  const attachment = {
+    ...item("file"),
+    reconcileKey: "attachment",
+    resource: {
+      uri: "file:///invoice.pdf",
+      mimeType: "application/pdf",
+      bytes: new Uint8Array([1]),
+    },
+  };
+  const chart = {
+    ...item("chart"),
+    reconcileKey: "chart",
+    resource: {
+      uri: "ui://chart/data",
+      mimeType: "application/json",
+      bytes: new Uint8Array([123, 125]),
+      kind: "derived" as const,
+    },
+  };
+  await actions.activate(attachment);
+  await actions.activate(chart);
+  await actions.reconcileView("chart", [chart]);
+  assertExists(
+    controller.getSnapshot().selection.singles.find((single) =>
+      single.item.id === "chart"
+    )?.item.resource,
+  );
+  await actions.remove({ scopeKey: "root", item: attachment });
+  assertEquals(sent.at(-1), [{
+    type: "resource",
+    resource: {
+      uri: chart.resource.uri,
+      mimeType: chart.resource.mimeType,
+      blob: "e30=",
+    },
+  }]);
 });

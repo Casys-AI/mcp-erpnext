@@ -1,38 +1,61 @@
 import {
-  type ActiveContextMutation,
   type ActiveContextResult,
   type ActiveContextSelection,
-  activeContextSelectionsForScope,
-  addActiveContextSelectionWithEviction,
   canReplaceActiveContext,
   clearActiveContext,
-  compactActiveContextMutations,
   type ContextSelectionItem,
   createActiveContextQueue,
   reconcileActiveContextDocumentSelections,
   reconcileActiveContextSelections,
   reconcileActiveContextViewSelections,
-  removeActiveContextSelection,
   replaceActiveContext,
-  replayActiveContextMutations,
   sameActiveContextSelections,
 } from "./active-context.ts";
-import {
-  activateContext,
-  type ActiveContextActivation,
-  type ActiveContextFlowHost,
+import type {
+  ActiveContextActivation,
+  ActiveContextFlowHost,
 } from "./active-context-flow.ts";
+import {
+  addSelectionSingle,
+  emptySelectionState,
+  normalizeSelectionAddition,
+  projectedSelectionEntries,
+  projectSelection,
+  reconcileSelectionDocumentFields,
+  reconcileSelectionGroup,
+  removeSelectionGroup,
+  removeSelectionItem,
+  type SelectionGroupConfig,
+  type SelectionGroupMemberInput,
+  type SelectionState,
+  setSelectionGroupMembers,
+} from "./selection-projection.ts";
 import type { ClickIntentCommit, ClickIntentRevert } from "./click-intent.ts";
 
 export type ActiveContextReconcileResult = ActiveContextResult | "unchanged";
 export interface ActiveContextState {
   selections: ActiveContextSelection[];
+  selection: SelectionState;
   pending: boolean;
   failed: boolean;
   evictedLabel: string | null;
 }
 
-/** The viewer owns this queue; a clicked surface may unmount during its undo. */
+type SelectionMutation = {
+  id: number;
+  active: boolean;
+  reversible: boolean;
+  apply: (current: SelectionState) => SelectionState;
+};
+type GroupConfig = Omit<SelectionGroupConfig, "scopeKey">;
+type SelectionChange = {
+  apply: SelectionMutation["apply"];
+  selection: SelectionState;
+  evicted: ActiveContextSelection[];
+  removing: boolean;
+};
+
+/** La file appartient au viewer ; une surface peut disparaître pendant son annulation. */
 export function createActiveContextController(
   app: ActiveContextFlowHost,
   initialScope: string,
@@ -42,6 +65,7 @@ export function createActiveContextController(
   let generation = 0;
   let state: ActiveContextState = {
     selections: [],
+    selection: emptySelectionState(),
     pending: false,
     failed: false,
     evictedLabel: null,
@@ -51,8 +75,8 @@ export function createActiveContextController(
   const pending = new Set<number>();
   let nextOperation = 0;
   let lastPresentation = 0;
-  let mutationBase: ActiveContextSelection[] = [];
-  let mutationLog: ActiveContextMutation[] = [];
+  let mutationBase = emptySelectionState();
+  let mutationLog: SelectionMutation[] = [];
   let nextMutation = 0;
 
   function publish(patch: Partial<ActiveContextState>) {
@@ -88,34 +112,48 @@ export function createActiveContextController(
     return Object.assign(finish, { id });
   }
 
-  function compact() {
-    const next = compactActiveContextMutations(mutationBase, mutationLog);
-    mutationBase = next.base;
-    mutationLog = next.mutations;
+  function replay() {
+    return mutationLog.reduce(
+      (selection, mutation) =>
+        mutation.active ? mutation.apply(selection) : selection,
+      mutationBase,
+    );
   }
-  function record(apply: ActiveContextMutation["apply"], reversible = false) {
+  function compact() {
+    const first = mutationLog.findIndex((mutation) => mutation.reversible);
+    const count = first < 0 ? mutationLog.length : first;
+    for (const mutation of mutationLog.slice(0, count)) {
+      if (mutation.active) mutationBase = mutation.apply(mutationBase);
+    }
+    mutationLog = mutationLog.slice(count);
+  }
+  function record(apply: SelectionMutation["apply"], reversible = false) {
     const mutation = { id: ++nextMutation, active: true, reversible, apply };
     mutationLog.push(mutation);
     compact();
     return mutation;
   }
-  function release(mutation: ActiveContextMutation) {
+  function release(mutation: SelectionMutation) {
     if (!mutationLog.includes(mutation)) return;
     mutation.reversible = false;
     compact();
   }
-  function commit(next: ActiveContextSelection[]) {
-    // An acknowledged write remains host truth even after a root change.
-    publish({ selections: next });
+  function commit(selection: SelectionState) {
+    // Un ACK reste la vérité distante, même après un changement de racine.
+    const projected = projectedSelectionEntries(selection);
+    const selections = sameActiveContextSelections(state.selections, projected)
+      ? state.selections
+      : projected;
+    publish({ selection, selections });
   }
-  function replace(next: readonly ActiveContextSelection[]) {
-    return next.length === 0
+  function replace(next: SelectionState) {
+    const items = projectSelection(next);
+    return items.length === 0
       ? clearActiveContext(app)
-      : replaceActiveContext(app, next.map((selection) => selection.item));
+      : replaceActiveContext(app, items);
   }
   function clear(): Promise<ActiveContextResult> {
-    // Host without updateModelContext: nothing was ever shared, nothing to
-    // clear. Neutral outcome: no pending flash, no failure badge.
+    // Sans cette capacité, aucun contexte distant ne peut avoir été partagé.
     if (!canReplaceActiveContext(app.getHostCapabilities())) {
       return Promise.resolve("unsupported");
     }
@@ -125,11 +163,11 @@ export function createActiveContextController(
       try {
         const result = await clearActiveContext(app);
         if (result === "cleared") {
-          mutationBase = [];
+          mutationBase = emptySelectionState();
           mutationLog = [];
-          commit([]);
+          commit(emptySelectionState());
         }
-        // "unsupported" is neutral (defense in depth vs. the guard above).
+        // Une capacité disparue reste un résultat neutre.
         finish(result === "unsupported" ? undefined : result === "cleared");
         return result;
       } finally {
@@ -141,116 +179,151 @@ export function createActiveContextController(
   function actionsForScope(actionScope: string) {
     const actionGeneration = generation;
     const current = () => actionGeneration === generation;
-    function addMutation(next: ContextSelectionItem) {
-      return (items: readonly ActiveContextSelection[]) =>
-        addActiveContextSelectionWithEviction(
-          activeContextSelectionsForScope(items, actionScope),
-          actionScope,
-          next,
-        ).selections;
-    }
-    function selectionMutation(next: ContextSelectionItem, toggling: boolean) {
-      const selected = toggling &&
-        state.selections.find((selection) =>
-          selection.scopeKey === actionScope && selection.item.id === next.id
-        );
-      if (selected) {
-        const apply: ActiveContextMutation["apply"] = (items) =>
-          removeActiveContextSelection(items, selected);
-        return {
-          selections: apply(state.selections),
-          evicted: null,
-          removing: true,
-          apply,
-        };
-      }
+    function scoped(selection: SelectionState): SelectionState {
       return {
-        ...addActiveContextSelectionWithEviction(
-          activeContextSelectionsForScope(state.selections, actionScope),
-          actionScope,
-          next,
+        ...selection,
+        singles: selection.singles.filter((entry) =>
+          entry.scopeKey === actionScope
         ),
-        removing: false,
-        apply: addMutation(next),
+        groups: selection.groups.filter((entry) =>
+          entry.scopeKey === actionScope
+        ),
       };
     }
-    function activate(
+    function change(
+      applyMembers: SelectionMutation["apply"],
+      adding: boolean,
+    ): SelectionChange {
+      const apply: SelectionMutation["apply"] = (selection) => {
+        const next = applyMembers(selection);
+        return adding ? normalizeSelectionAddition(next).state : next;
+      };
+      const candidate = applyMembers(state.selection);
+      const normalized = adding
+        ? normalizeSelectionAddition(candidate)
+        : { state: candidate, evicted: [] };
+      return {
+        apply,
+        selection: normalized.state,
+        evicted: normalized.evicted,
+        removing: !adding,
+      };
+    }
+    function selectionMutation(
       next: ContextSelectionItem,
-      toggling = false,
+      toggling: boolean,
+    ): SelectionChange {
+      const selected = toggling && isSelected(next);
+      return selected
+        ? change(
+          (selection) =>
+            removeSelectionItem(selection, {
+              scopeKey: actionScope,
+              item: next,
+            }),
+          false,
+        )
+        : change(
+          (selection) =>
+            addSelectionSingle(scoped(selection), actionScope, next),
+          true,
+        );
+    }
+    function groupMutation(
+      config: GroupConfig,
+      member: SelectionGroupMemberInput,
+    ): SelectionChange {
+      const selected = isGroupMemberSelected(config.reconcileKey, member.name);
+      // L'intention ajout/retrait est fixée à l'exécution, jamais recalculée au replay.
+      return change((selection) => {
+        const base = scoped(selection);
+        const members = base.groups.find((group) =>
+          group.reconcileKey === config.reconcileKey
+        )?.members ?? [];
+        const next = selected
+          ? members.filter((row) =>
+            row.name !== member.name
+          )
+          : [...members.filter((row) => row.name !== member.name), member];
+        return setSelectionGroupMembers(base, {
+          ...config,
+          scopeKey: actionScope,
+        }, next);
+      }, !selected);
+    }
+    function perform(
+      prepare: () => SelectionChange,
     ): Promise<ActiveContextActivation> {
       const finish = beginOperation(actionGeneration);
       return queue.run(async () => {
         try {
           if (!current()) return "superseded";
-          // Decide from acknowledged state inside the queue. Replay keeps the
-          // chosen add/remove intent when an earlier gesture is compensated.
-          const mutation = selectionMutation(next, toggling);
-          const removal = mutation.removing
-            ? await replace(mutation.selections)
-            : undefined;
-          const result: ActiveContextActivation = mutation.removing
-            ? removal === "shared" || removal === "cleared" ? "context" : "none"
-            : await activateContext(
-              app,
-              mutation.selections.map((selection) => selection.item),
-              current,
-            );
-          if (result === "context") {
+          const mutation = prepare();
+          const result = await replace(mutation.selection);
+          const accepted = result === "shared" || result === "cleared";
+          if (accepted) {
             record(mutation.apply);
-            commit(mutation.selections);
-            if (current() && (mutation.removing || mutation.evicted)) {
-              publish({ evictedLabel: mutation.evicted?.item.label ?? null });
+            commit(mutation.selection);
+            if (current() && (mutation.removing || mutation.evicted.length)) {
+              publish({
+                evictedLabel: mutation.evicted.at(-1)?.item.label ?? null,
+              });
             }
           }
-          finish(result === "context");
-          return current() ? result : "superseded";
+          finish(accepted);
+          return current() ? accepted ? "context" : "none" : "superseded";
         } finally {
           finish();
         }
       });
     }
-    function activateReversible(
-      next: ContextSelectionItem,
-      toggling = false,
+    function activate(next: ContextSelectionItem, toggling = false) {
+      return perform(() => selectionMutation(next, toggling));
+    }
+    function performReversible(
+      prepare: () => SelectionChange,
     ): ClickIntentCommit {
       const finish = beginOperation(actionGeneration);
       let undoPresentation = finish.id;
       const committed = queue.run(async (): Promise<ClickIntentRevert> => {
         try {
           if (!current()) return () => false;
-          const change = selectionMutation(next, toggling);
-          const result = await replace(change.selections);
+          const change = prepare();
+          const result = await replace(change.selection);
           if (result !== "shared" && result !== "cleared") {
             finish(false);
             // A failed context must not unlock a conversation fallback.
             return () => false;
           }
           const mutation = record(change.apply, true);
-          commit(change.selections);
-          if (current() && (change.removing || change.evicted)) {
-            publish({ evictedLabel: change.evicted?.item.label ?? null });
+          commit(change.selection);
+          if (current() && (change.removing || change.evicted.length)) {
+            publish({
+              evictedLabel: change.evicted.at(-1)?.item.label ?? null,
+            });
           }
           finish(true);
           const revert: ClickIntentRevert = () => {
-            // Undo belongs to its original gesture, not to the later moment
-            // when the first ACK lets it run. It cannot hide a newer failure.
+            // L’annulation appartient au geste initial ; elle ne masque pas un échec plus récent.
             const finishRevert = beginOperation(
               actionGeneration,
               undoPresentation,
             );
             return queue.run(async () => {
               try {
-                // A confirmed clear removed the mutation. A rejected root clear
-                // did not: its pending undo still has to run.
+                // Seul un effacement acquitté abandonne les anciennes annulations.
                 if (!mutation.active || !mutationLog.includes(mutation)) {
                   return true;
                 }
                 mutation.active = false;
-                const rolledBack = replayActiveContextMutations(
-                  mutationLog,
-                  mutationBase,
-                );
-                if (sameActiveContextSelections(state.selections, rolledBack)) {
+                const rolledBack = replay();
+                if (
+                  sameActiveContextSelections(
+                    state.selections,
+                    projectedSelectionEntries(rolledBack),
+                  )
+                ) {
+                  commit(rolledBack);
                   return true;
                 }
                 const result = await replace(rolledBack);
@@ -272,7 +345,7 @@ export function createActiveContextController(
           finish();
         }
       });
-      // Claimed at click(detail=2) before the first ACK, bridging the wait for undo.
+      // Le second clic réserve l’attente avant même le premier ACK.
       return Object.assign(committed, {
         retainPending: () => {
           const hold = beginOperation(actionGeneration);
@@ -281,16 +354,25 @@ export function createActiveContextController(
         },
       });
     }
+    function activateReversible(next: ContextSelectionItem, toggling = false) {
+      return performReversible(() => selectionMutation(next, toggling));
+    }
     function remove(target: ActiveContextSelection) {
       const finish = beginOperation(actionGeneration);
       return queue.run(async () => {
         try {
           if (!current()) return "superseded" as const;
-          const apply: ActiveContextMutation["apply"] = (items) =>
-            removeActiveContextSelection(items, target);
-          const next = apply(state.selections);
-          if (sameActiveContextSelections(state.selections, next)) {
+          const apply: SelectionMutation["apply"] = (items) =>
+            removeSelectionItem(items, target);
+          const next = apply(state.selection);
+          if (
+            sameActiveContextSelections(
+              state.selections,
+              projectedSelectionEntries(next),
+            )
+          ) {
             record(apply);
+            commit(next);
             return "unchanged" as const;
           }
           const result = await replace(next);
@@ -307,15 +389,21 @@ export function createActiveContextController(
       });
     }
     function reconcileCurrent(
-      apply: ActiveContextMutation["apply"],
+      apply: SelectionMutation["apply"],
     ): Promise<ActiveContextReconcileResult> {
       return queue.run(async () => {
         if (!current()) return "unchanged";
-        const next = apply(state.selections);
-        if (sameActiveContextSelections(state.selections, next)) {
-          // Keep refresh intent for an older selection restored by undo. No
-          // pending publication for no-ops: it would cause a reconcile effect loop.
+        const next = apply(state.selection);
+        if (
+          sameActiveContextSelections(
+            state.selections,
+            projectedSelectionEntries(next),
+          )
+        ) {
+          // Le refresh doit aussi s’appliquer aux membres restaurés par une annulation.
+          // Un résultat inchangé ne doit pas relancer les effets de réconciliation.
           record(apply);
+          if (!sameSelectionState(state.selection, next)) commit(next);
           return "unchanged";
         }
         const finish = beginOperation(actionGeneration);
@@ -348,14 +436,13 @@ export function createActiveContextController(
       action: () => void,
       restored: Promise<boolean>,
     ): Promise<boolean> {
-      // Wait outside the write queue: the compensation itself needs that queue.
-      // Later deliberate selections belong to this conversation once confirmed.
+      // Attendre hors de la file : l’annulation doit pouvoir y entrer.
       if (!await restored || !current()) return false;
       while (current()) {
         await waitUntilIdle();
         const outcome = await queue.run(() => {
           if (!current() || state.failed) return Promise.resolve("cancel");
-          // A gesture may have queued a write between idle and this barrier.
+          // Un geste peut avoir ajouté une écriture entre l’attente et cette barrière.
           if (state.pending) return Promise.resolve("retry");
           action();
           return Promise.resolve("sent");
@@ -364,48 +451,194 @@ export function createActiveContextController(
       }
       return false;
     }
+    function reconcileSingles(
+      selection: SelectionState,
+      reconcile: (
+        singles: readonly ActiveContextSelection[],
+      ) => ActiveContextSelection[],
+    ): SelectionState {
+      // La limite de ressource concerne l’envoi, pas les ressources conservées localement.
+      const next = selection.singles.flatMap((single) => reconcile([single]));
+      return {
+        ...selection,
+        singles: next.map((entry) => ({
+          ...entry,
+          order:
+            selection.singles.find((single) =>
+              single.scopeKey === entry.scopeKey &&
+              single.item.id === entry.item.id
+            )!.order,
+        })),
+      };
+    }
+    function reconcileGroupsFromItems(
+      selection: SelectionState,
+      candidates: readonly ContextSelectionItem[],
+      complete: boolean,
+      reconcileKey?: string,
+    ): SelectionState {
+      let next = selection;
+      for (const group of selection.groups) {
+        if (
+          group.scopeKey !== actionScope ||
+          (reconcileKey !== undefined && group.reconcileKey !== reconcileKey)
+        ) continue;
+        const prefix = `record:${group.doctype}:`;
+        const rows = candidates.filter((item) =>
+          (item.reconcileKey ?? item.view) === group.reconcileKey &&
+          item.id.startsWith(prefix)
+        ).map((item) => ({
+          name: item.id.slice(prefix.length),
+          label: item.label,
+          value: item.value,
+          fields: item.fields,
+          fieldsSource: item.fieldsSource ?? "row" as const,
+          modified: item.modified,
+        }));
+        next = reconcileSelectionGroup(
+          next,
+          actionScope,
+          group.reconcileKey,
+          rows,
+          complete,
+        );
+      }
+      return next;
+    }
+    function isGroupMemberSelected(reconcileKey: string, name: string) {
+      return state.selection.groups.some((group) =>
+        group.scopeKey === actionScope && group.reconcileKey === reconcileKey &&
+        group.members.some((member) => member.name === name)
+      );
+    }
+    function isSelected(candidate: ContextSelectionItem) {
+      return state.selection.singles.some((selection) =>
+        selection.scopeKey === actionScope && selection.item.id === candidate.id
+      ) ||
+        state.selection.groups.some((group) =>
+          group.scopeKey === actionScope &&
+          group.members.some((member) =>
+            candidate.id === `record:${group.doctype}:${member.name}`
+          )
+        );
+    }
     return {
       activate,
       activateReversible,
       toggle: (next: ContextSelectionItem) => activate(next, true),
       toggleReversible: (next: ContextSelectionItem) =>
         activateReversible(next, true),
+      toggleGroupMember: (
+        config: GroupConfig,
+        member: SelectionGroupMemberInput,
+      ) => perform(() => groupMutation(config, member)),
+      toggleGroupMemberReversible: (
+        config: GroupConfig,
+        member: SelectionGroupMemberInput,
+      ) => performReversible(() => groupMutation(config, member)),
+      setGroupMembers: (
+        config: GroupConfig,
+        members: readonly SelectionGroupMemberInput[],
+      ) =>
+        perform(() => {
+          const previous = state.selection.groups.find((group) =>
+            group.scopeKey === actionScope &&
+            group.reconcileKey === config.reconcileKey
+          );
+          const adding = members.some((member) =>
+            !previous?.members.some((row) => row.name === member.name)
+          );
+          return change((selection) =>
+            setSelectionGroupMembers(scoped(selection), {
+              ...config,
+              scopeKey: actionScope,
+            }, members), adding);
+        }),
+      removeGroup: (reconcileKey: string) =>
+        reconcileCurrent((selection) =>
+          removeSelectionGroup(selection, actionScope, reconcileKey)
+        ),
+      reconcileGroup: (
+        reconcileKey: string,
+        candidates: readonly SelectionGroupMemberInput[],
+        options: { complete?: boolean } = {},
+      ) =>
+        reconcileCurrent((selection) =>
+          reconcileSelectionGroup(
+            selection,
+            actionScope,
+            reconcileKey,
+            candidates,
+            options.complete ?? false,
+          )
+        ),
+      isGroupMemberSelected,
       remove,
       clear,
       runConversation,
-      reconcile: (candidates: readonly ContextSelectionItem[]) =>
-        reconcileCurrent((items) =>
-          reconcileActiveContextSelections(items, actionScope, candidates)
+      reconcile: (
+        candidates: readonly ContextSelectionItem[],
+        options: { complete?: boolean } = {},
+      ) =>
+        reconcileCurrent((selection) =>
+          reconcileGroupsFromItems(
+            reconcileSingles(
+              selection,
+              (items) =>
+                reconcileActiveContextSelections(
+                  items,
+                  actionScope,
+                  candidates,
+                ),
+            ),
+            candidates,
+            options.complete ?? false,
+          )
         ),
       reconcileView: (
         reconcileKey: string,
         candidates: readonly ContextSelectionItem[],
+        options: { complete?: boolean } = {},
       ) =>
-        reconcileCurrent((items) =>
-          reconcileActiveContextViewSelections(
-            items,
-            actionScope,
-            reconcileKey,
+        reconcileCurrent((selection) =>
+          reconcileGroupsFromItems(
+            reconcileSingles(selection, (items) =>
+              reconcileActiveContextViewSelections(
+                items,
+                actionScope,
+                reconcileKey,
+                candidates,
+              )),
             candidates,
+            options.complete ?? false,
+            reconcileKey,
           )
         ),
       reconcileDocument: (
         documentId: string,
         candidates: readonly ContextSelectionItem[],
       ) =>
-        reconcileCurrent((items) =>
-          reconcileActiveContextDocumentSelections(
-            items,
-            actionScope,
-            documentId,
-            candidates,
-          )
-        ),
-      isSelected: (candidate: ContextSelectionItem) =>
-        state.selections.some((selection) =>
-          selection.scopeKey === actionScope &&
-          selection.item.id === candidate.id
-        ),
+        reconcileCurrent((selection) => {
+          const next = reconcileSingles(selection, (items) =>
+            reconcileActiveContextDocumentSelections(
+              items,
+              actionScope,
+              documentId,
+              candidates,
+            ));
+          const candidate = candidates.find((item) =>
+            item.id === documentId
+          );
+          return candidate
+            ? reconcileSelectionDocumentFields(
+              next,
+              actionScope,
+              documentId,
+              candidate,
+            )
+            : next;
+        }),
+      isSelected,
     };
   }
   return {
@@ -420,7 +653,7 @@ export function createActiveContextController(
       if (scope === next) return;
       scope = next;
       generation += 1;
-      // Keep acknowledged history until the queued root clear succeeds.
+      // Conserver l’historique acquitté jusqu’au succès de l’effacement distant.
     },
     clearPreviousScope() {
       if (clearedScope === scope) return;
@@ -430,4 +663,16 @@ export function createActiveContextController(
     dismissEviction: () => publish({ evictedLabel: null }),
     actionsForScope,
   };
+}
+
+function sameSelectionState(
+  left: SelectionState,
+  right: SelectionState,
+): boolean {
+  return left.nextOrder === right.nextOrder &&
+    sameActiveContextSelections(left.singles, right.singles) &&
+    left.singles.every((single, index) =>
+      single.order === right.singles[index].order
+    ) &&
+    JSON.stringify(left.groups) === JSON.stringify(right.groups);
 }

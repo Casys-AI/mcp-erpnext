@@ -24,6 +24,14 @@ export function hasAvailableTool(
   return tools === undefined || tools.includes(toolName);
 }
 
+/** Une requête destinée au modèle exige l'annonce explicite de l'outil. */
+export function hasExplicitAvailableTool(
+  tools: unknown,
+  toolName: string,
+): boolean {
+  return Array.isArray(tools) && tools.includes(toolName);
+}
+
 /** Un appel initié par le viewer exige les deux capacités : proxy hôte et outil. */
 export function canCallViewerTool(
   serverTools: unknown,

@@ -1,6 +1,7 @@
 import { assertEquals, assertNotEquals } from "@std/assert";
 import { boundActiveContextItem } from "./active-context.ts";
 import {
+  addSelectionGroupMembers,
   addSelectionSingle,
   emptySelectionState,
   normalizeSelectionAddition,
@@ -8,9 +9,11 @@ import {
   projectSelection,
   reconcileSelectionGroup,
   removeSelectionGroup,
+  removeSelectionGroupMembers,
   removeSelectionItem,
   type SelectionGroupConfig,
   type SelectionGroupMemberInput,
+  selectionGroupSummary,
   type SelectionState,
   setSelectionGroupMembers,
 } from "./selection-projection.ts";
@@ -47,6 +50,54 @@ function single(state: SelectionState, index: number) {
     fieldsSource: "record",
   });
 }
+Deno.test("group members : relative addition preserves members, order and input state", () => {
+  const state = group(2);
+  const before = structuredClone(state);
+  const next = addSelectionGroupMembers(state, CONFIG, members(3).slice(1));
+  assertEquals(state, before);
+  assertEquals(next.groups[0].members.map((member) => member.name), [
+    "INV-1",
+    "INV-2",
+    "INV-3",
+  ]);
+  assertEquals(next.groups[0].members.map((member) => member.order), [0, 1, 2]);
+});
+Deno.test("group members : relative removal removes both identity forms without evicting other selections", () => {
+  let state = group(9);
+  state = addSelectionSingle(state, "root", {
+    id: "record:Sales Invoice:INV-9",
+    label: "Invoice 9",
+    view: "Invoices",
+  });
+  for (let index = 0; index < 7; index++) state = single(state, index);
+  const before = structuredClone(state);
+  const next = removeSelectionGroupMembers(state, CONFIG, ["INV-1", "INV-9"]);
+  assertEquals(state, before);
+  assertEquals(
+    next.groups[0].members.map((member) => member.name),
+    members(8).slice(1).map((member) => member.name),
+  );
+  assertEquals(
+    next.singles.map((entry) => entry.item.id),
+    Array.from({ length: 7 }, (_, index) => `record:Customer:C-${index}`),
+  );
+});
+Deno.test("group summary : expanded groups share their date and amount summary", () => {
+  const state = setSelectionGroupMembers(
+    emptySelectionState(),
+    CONFIG,
+    members(2).map((member, index) => ({
+      ...member,
+      date: index ? "2026-03-31" : "2026-01-01",
+      amount: index ? 200 : 100,
+      currency: "EUR",
+    })),
+  );
+  assertEquals(
+    selectionGroupSummary(state.groups[0]),
+    "2 Sales Invoice · 2026-01-01–2026-03-31 · 100–200 EUR",
+  );
+});
 Deno.test("projectSelection : paliers 1, 2, 3, 4 et 8, groupe 8 puis 9", () => {
   for (const count of [1, 2, 3, 4, 8]) {
     const projected = projectSelection(group(count));

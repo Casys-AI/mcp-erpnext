@@ -136,3 +136,102 @@ Deno.test("non-financial narrow lists use real columns without a fake due field"
   );
   assertStringIncludes(table, "{trailingKey && (");
 });
+
+Deno.test("doclist checkbox selection uses the filtered sort before pagination and the group controller", async () => {
+  const body = await Deno.readTextFile(
+    new URL("./DoclistBody.tsx", import.meta.url),
+  );
+  assertStringIncludes(body, "list.sorted.flatMap(");
+  assertStringIncludes(body, "context?.supported && data.doctype");
+  assertStringIncludes(body, '"erpnext_doc_list"');
+  assertStringIncludes(body, "context.toggleGroupMember(groupConfig, member)");
+  assertStringIncludes(body, "context.addGroupMembers(");
+  assertStringIncludes(body, "context.removeGroupMembers(");
+  assertStringIncludes(body, "extendDoclistRange(");
+  assertStringIncludes(body, "doclistFilteredSelectionOperation(");
+  assertEquals(body.includes("if (context.pending) return"), false);
+  assertStringIncludes(body, "context.isSelected(item)");
+  assertEquals(body.includes("context.isGroupMemberSelected("), false);
+  assertStringIncludes(body, "hasExplicitAvailableTool(");
+  assertStringIncludes(body, "complete: isDoclistResultComplete(data)");
+  // Les gestes de ligne restent ceux de la sélection unitaire et du détail.
+  assertStringIncludes(body, "context?.toggleReversible(item)");
+  assertStringIncludes(body, "context?.toggle(item)");
+});
+
+Deno.test("doclist exposes isolated native checkboxes in every layout", async () => {
+  const table = await Deno.readTextFile(
+    new URL("./DoclistTable.tsx", import.meta.url),
+  );
+  assertStringIncludes(table, 'type="checkbox"');
+  assertStringIncludes(
+    table,
+    'aria-checked={indeterminate ? "mixed" : checked}',
+  );
+  assertStringIncludes(table, "input.indeterminate = indeterminate");
+  assertStringIncludes(table, "doclistCheckboxEvents(");
+  assertStringIncludes(table, "`Select ${name}`");
+  assertStringIncludes(
+    table,
+    "`Select all ${selection.totalCount} filtered rows`",
+  );
+  assertEquals([...table.matchAll(/<RowSelectionCheckbox\s/g)].length, 3);
+  assertEquals([...table.matchAll(/<HeaderSelectionCheckbox\s/g)].length, 3);
+  assertStringIncludes(
+    table.replace(/\s+/g, " "),
+    "columns.length + (hasDetailControls ? 1 : 0) + (selection ? 1 : 0)",
+  );
+});
+
+Deno.test("doclist checkbox hit areas cover the cell and remain active during ACK", async () => {
+  const table = await Deno.readTextFile(
+    new URL("./DoclistTable.tsx", import.meta.url),
+  );
+  assertStringIncludes(table, "<label");
+  assertStringIncludes(table, "min-h-10 min-w-10");
+  assertStringIncludes(table, "[&>label]:absolute [&>label]:inset-0");
+  assertEquals(table.includes("disabled={selection.pending"), false);
+  assertEquals(table.includes("selection.pending ||"), false);
+  assertStringIncludes(table, "doclistCheckboxEvents(() => {})");
+  assertStringIncludes(table, "checked={selection.isSelected(row, index)}");
+});
+
+Deno.test("all viewer context adapters expose relative group actions", async () => {
+  for (
+    const viewer of [
+      "chart",
+      "doc",
+      "doclist",
+      "funnel",
+      "invoice",
+      "kanban",
+      "kpi",
+      "stock",
+    ]
+  ) {
+    const className = viewer === "kpi"
+      ? "Kpi"
+      : viewer[0].toUpperCase() + viewer.slice(1);
+    const source = await Deno.readTextFile(
+      new URL(
+        `../../${viewer}-viewer/src/${className}Viewer.tsx`,
+        import.meta.url,
+      ),
+    );
+    assertEquals(
+      source.includes("addGroupMembers: activeContext.addGroupMembers"),
+      true,
+      `${viewer} forwards addGroupMembers`,
+    );
+    assertEquals(
+      source.includes("removeGroupMembers: activeContext.removeGroupMembers"),
+      true,
+      `${viewer} forwards removeGroupMembers`,
+    );
+    assertEquals(
+      source.includes("onRemoveGroup={activeContext.removeGroup}"),
+      true,
+      `${viewer} forwards group removal`,
+    );
+  }
+});

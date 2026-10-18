@@ -1028,6 +1028,14 @@ function KanbanBoardWithNav({
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
+    pending: activeContext.pending,
+    selection: activeContext.selection,
+    toggleGroupMember: activeContext.toggleGroupMember,
+    setGroupMembers: activeContext.setGroupMembers,
+    addGroupMembers: activeContext.addGroupMembers,
+    removeGroupMembers: activeContext.removeGroupMembers,
+    reconcileGroup: activeContext.reconcileGroup,
+    isGroupMemberSelected: activeContext.isGroupMemberSelected,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
     canShareResource: (resource) =>
@@ -1160,6 +1168,8 @@ function KanbanBoardWithNav({
           <div class="ml-auto flex min-w-0 shrink-0 items-center gap-2">
             <ActiveContextChip
               selections={activeContext.selections}
+              selection={activeContext.selection}
+              onRemoveGroup={activeContext.removeGroup}
               failed={activeContext.failed}
               pending={activeContext.pending}
               evictedLabel={activeContext.evictedLabel}

@@ -176,6 +176,35 @@ export function toggleSelectionGroupMember(
   );
 }
 
+export function addSelectionGroupMembers(
+  state: SelectionState,
+  config: SelectionGroupConfig,
+  members: readonly SelectionGroupMemberInput[],
+): SelectionState {
+  const current =
+    state.groups.find((group) =>
+      group.scopeKey === config.scopeKey &&
+      group.reconcileKey === config.reconcileKey
+    )?.members ?? [];
+  const names = new Set(members.map((member) => member.name));
+  return setSelectionGroupMembers(state, config, [
+    ...current.filter((member) => !names.has(member.name)),
+    ...members,
+  ]);
+}
+
+export function removeSelectionGroupMembers(
+  state: SelectionState,
+  config: SelectionGroupConfig,
+  names: readonly string[],
+): SelectionState {
+  return names.reduce((current, name) =>
+    removeSelectionItem(current, {
+      scopeKey: config.scopeKey,
+      item: { id: `record:${config.doctype}:${name}` },
+    }), state);
+}
+
 export function removeSelectionGroup(
   state: SelectionState,
   scopeKey: string,
@@ -332,15 +361,16 @@ export function selectionNamesHash(names: readonly string[]): string {
   return fnv1a64(JSON.stringify([...names].sort()));
 }
 
-function queryItem(group: SelectionGroup): ContextSelectionItem {
-  const names = group.members.map((member) => member.name);
-  const included = names.slice(0, 100);
-  const truncated = names.length > included.length;
+export function selectionGroupSummary(
+  group: SelectionGroup,
+  includedCount = group.members.length,
+): string {
+  const count = group.members.length;
   const label = group.doctypeLabel ?? group.doctype;
   const summary = [
-    truncated
-      ? `first ${included.length} of ${names.length} selected ${label}`
-      : `${names.length} ${label}`,
+    count > includedCount
+      ? `first ${includedCount} of ${count} selected ${label}`
+      : `${count} ${label}`,
   ];
   const dates = group.members.flatMap((member) =>
     member.date ? [member.date] : []
@@ -369,11 +399,18 @@ function queryItem(group: SelectionGroup): ContextSelectionItem {
       }`,
     );
   }
+  return summary.join(" · ");
+}
+
+function queryItem(group: SelectionGroup): ContextSelectionItem {
+  const names = group.members.map((member) => member.name);
+  const included = names.slice(0, 100);
+  const truncated = names.length > included.length;
   return {
     id: `query:${group.doctype}:${selectionNamesHash(names)}`,
     view: group.view,
     reconcileKey: group.reconcileKey,
-    label: summary.join(" · "),
+    label: selectionGroupSummary(group, included.length),
     query: {
       tool: "erpnext_doc_list",
       args: {

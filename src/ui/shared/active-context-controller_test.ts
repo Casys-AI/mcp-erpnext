@@ -725,7 +725,7 @@ Deno.test("context groups - atomic select-all, 8 to 9 and undo restores eight ro
   undo.release?.();
 });
 
-Deno.test("context groups - checking a row already selected by click has one identity", async () => {
+Deno.test("context groups - unchecking a row already selected by click removes its identity", async () => {
   const h = harness();
   const row = rowMembers(1)[0];
   const id = `record:Sales Invoice:${row.name}`;
@@ -741,20 +741,195 @@ Deno.test("context groups - checking a row already selected by click has one ide
       modified: row.modified,
     }),
   );
-  await acknowledge(h, h.actions.toggleGroupMember(listGroup, row));
-  assertEquals(h.ids(), [id]);
-  assertEquals(h.requests[1].ids, [id]);
-  assertEquals(h.controller.getSnapshot().selection.singles, []);
   assertEquals(
-    h.controller.getSnapshot().selection.groups[0].members.map((member) =>
-      member.name
-    ),
-    [row.name],
-  );
-  assertEquals(
-    h.actions.isGroupMemberSelected(listGroup.reconcileKey, row.name),
+    h.actions.isSelected({ id, label: row.label, view: listGroup.view }),
     true,
   );
+  await acknowledge(h, h.actions.toggleGroupMember(listGroup, row));
+  assertEquals(h.ids(), []);
+  assertEquals(h.requests[1].ids, []);
+  assertEquals(h.controller.getSnapshot().selection.singles, []);
+  assertEquals(h.controller.getSnapshot().selection.groups, []);
+  assertEquals(
+    h.actions.isGroupMemberSelected(listGroup.reconcileKey, row.name),
+    false,
+  );
+});
+
+Deno.test("context groups - three quick checkbox toggles while ACK is pending keep three members", async () => {
+  const h = harness();
+  const rows = rowMembers(3);
+  const operations = rows.map((row) =>
+    h.actions.toggleGroupMember(listGroup, row)
+  );
+  await flush();
+  assertEquals(h.requests.length, 1);
+  assertEquals(h.controller.getSnapshot().selection.groups, []);
+  for (let index = 0; index < rows.length; index++) await h.ack(index);
+  await Promise.all(operations);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.map((row) =>
+      row.name
+    ),
+    rows.map((row) => row.name),
+  );
+  assertEquals(h.requests.map((request) => request.ids.length), [1, 2, 3]);
+});
+
+Deno.test("context groups - relative select-all and range additions queued during ACK retain current members", async () => {
+  const h = harness();
+  const rows = rowMembers(3);
+  const first = h.actions.toggleGroupMember(listGroup, rows[0]);
+  await flush();
+  const range = h.actions.addGroupMembers(listGroup, rows.slice(1));
+  await h.ack(0);
+  assertEquals(
+    h.requests[1].ids,
+    rows.map((row) => `record:Sales Invoice:${row.name}`),
+  );
+  await h.ack(1);
+  await Promise.all([first, range]);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.map((row) =>
+      row.name
+    ),
+    rows.map((row) => row.name),
+  );
+  assertEquals(h.requests.length, 2);
+});
+
+Deno.test("context groups - select-all then toggle before ACK removes the toggled member", async () => {
+  const h = harness();
+  const rows = rowMembers(3);
+  const selectAll = h.actions.addGroupMembers(listGroup, rows);
+  const toggle = h.actions.toggleGroupMember(listGroup, rows[1]);
+  await flush();
+  assertEquals(h.requests.length, 1);
+  await h.ack(0);
+  assertEquals(h.requests[1].ids, [
+    "record:Sales Invoice:INV-1",
+    "record:Sales Invoice:INV-3",
+  ]);
+  await h.ack(1);
+  await Promise.all([selectAll, toggle]);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.map((row) =>
+      row.name
+    ),
+    ["INV-1", "INV-3"],
+  );
+});
+
+Deno.test("context groups - relative removal queued during ACK removes matching singles and preserves other rows", async () => {
+  const h = harness();
+  const rows = rowMembers(3);
+  await acknowledge(
+    h,
+    h.actions.activate({
+      id: "record:Sales Invoice:INV-3",
+      label: rows[2].label,
+      view: listGroup.view,
+    }),
+  );
+  const addition = h.actions.addGroupMembers(listGroup, rows.slice(0, 2));
+  const removal = h.actions.removeGroupMembers(listGroup, ["INV-1", "INV-3"]);
+  await flush();
+  await h.ack(1);
+  assertEquals(h.requests[2].ids, ["record:Sales Invoice:INV-2"]);
+  await h.ack(2);
+  await Promise.all([addition, removal]);
+  assertEquals(h.controller.getSnapshot().selection.singles, []);
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.map((row) =>
+      row.name
+    ),
+    ["INV-2"],
+  );
+});
+
+Deno.test("context groups - relative removal from 9 plus 7 never evicts", async () => {
+  const h = harness();
+  await acknowledge(h, h.actions.setGroupMembers(listGroup, rowMembers(9)));
+  await h.seed("A", "B", "C", "D", "E", "F", "G");
+  await acknowledge(h, h.actions.removeGroupMembers(listGroup, ["INV-9"]));
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.length,
+    8,
+  );
+  assertEquals(
+    h.controller.getSnapshot().selection.singles.map((single) =>
+      single.item.id
+    ),
+    ["A", "B", "C", "D", "E", "F", "G"],
+  );
+  assertEquals(h.controller.getSnapshot().evictedLabel, null);
+});
+
+Deno.test("context groups - relative bulk mutations replay atomically across an earlier undo", async () => {
+  const h = harness();
+  const rows = rowMembers(5);
+  await acknowledge(h, h.actions.setGroupMembers(listGroup, rows.slice(0, 3)));
+  const undo = await acknowledge(
+    h,
+    h.actions.toggleGroupMemberReversible(listGroup, rows[0]),
+  );
+  await acknowledge(h, h.actions.addGroupMembers(listGroup, rows.slice(3)));
+  await acknowledge(
+    h,
+    h.actions.removeGroupMembers(listGroup, ["INV-2", "INV-5"]),
+  );
+  assertEquals(h.requests.length, 4);
+  assertExists(undo);
+  await acknowledge(h, Promise.resolve(undo()));
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members.map((row) =>
+      row.name
+    ),
+    ["INV-1", "INV-3", "INV-4"],
+  );
+  assertEquals(h.requests.length, 5);
+  undo.release?.();
+});
+
+Deno.test("context groups - relative addition may evict the oldest context entry", async () => {
+  const h = harness();
+  await h.seed("A", "B", "C", "D", "E", "F", "G", "H");
+  await acknowledge(h, h.actions.addGroupMembers(listGroup, rowMembers(1)));
+  assertEquals(h.ids(), [
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "record:Sales Invoice:INV-1",
+  ]);
+  assertEquals(h.controller.getSnapshot().evictedLabel, "A");
+});
+
+Deno.test("context groups - current chip can remove its old scope after root clear fails while old handlers remain fenced", async () => {
+  const h = harness();
+  await acknowledge(h, h.actions.addGroupMembers(listGroup, rowMembers(2)));
+  h.controller.setScope("root-2");
+  const clearing = h.controller.clearPreviousScope();
+  await flush();
+  await h.ack(1, false);
+  await clearing;
+  assertEquals(h.controller.getSnapshot().selection.groups[0].scopeKey, "root");
+  assertEquals(
+    await h.actions.removeGroup(listGroup.reconcileKey, "root"),
+    "unchanged",
+  );
+  assertEquals(h.requests.length, 2);
+
+  const currentActions = h.controller.actionsForScope("root-2");
+  await acknowledge(
+    h,
+    currentActions.removeGroup(listGroup.reconcileKey, "root"),
+  );
+  assertEquals(h.requests[2].ids, []);
+  assertEquals(h.controller.getSnapshot().selection.groups, []);
 });
 
 Deno.test("context groups - removing query survives a late undo of the ninth row", async () => {

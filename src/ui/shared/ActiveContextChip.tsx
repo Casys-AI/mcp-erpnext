@@ -4,6 +4,13 @@ import type { JSX } from "preact";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
 import type { ActiveContextSelection } from "./active-context.ts";
 import { activeContextAttachmentNotice } from "./active-context-attachment.ts";
+import {
+  activeContextChipEntries,
+  type ActiveContextChipEntry,
+  activeContextChipNotices,
+  activeContextRemovalFocus,
+} from "./active-context-chip.ts";
+import type { SelectionState } from "./selection-projection.ts";
 import { useT } from "./i18n-hook.ts";
 import { cx } from "./ui.tsx";
 
@@ -61,21 +68,28 @@ function selectionKey(selection: ActiveContextSelection): string {
 export function ActiveContextChip(
   {
     selections,
+    selection,
     failed = false,
     pending = false,
     evictedLabel,
     onRemove,
+    onRemoveGroup,
     onClear,
     compact = false,
     popoverAlign = "end",
     class: klass,
   }: {
     selections: readonly ActiveContextSelection[];
+    selection?: SelectionState;
     failed?: boolean;
     pending?: boolean;
     evictedLabel?: string | null;
     onRemove?: (
       selection: ActiveContextSelection,
+    ) => unknown | Promise<unknown>;
+    onRemoveGroup?: (
+      reconcileKey: string,
+      scopeKey: string,
     ) => unknown | Promise<unknown>;
     onClear: ContextMutation;
     compact?: boolean;
@@ -91,7 +105,12 @@ export function ActiveContextChip(
   const removeRefs = useRef(new Map<string, HTMLButtonElement>());
   const popoverId = useId();
   const activeSelections = selections;
-  const count = activeSelections.length;
+  const chipEntries = activeContextChipEntries(activeSelections, selection);
+  const renderedSelectionsRef = useRef(chipEntries);
+  renderedSelectionsRef.current = chipEntries;
+  const count = chipEntries.length;
+  const notices = activeContextChipNotices(activeSelections, selection);
+  const singleItem = count === 1 ? chipEntries[0] : undefined;
   const attachmentNotices = activeSelections.flatMap((selection) => {
     const notice = activeContextAttachmentNotice(selection.item);
     return notice ? [{ key: selectionKey(selection), notice }] : [];
@@ -119,38 +138,45 @@ export function ActiveContextChip(
     };
   }, [open]);
 
-  if (count === 0 && !failed && !pending) return null;
+  if (count === 0 && notices.length === 0 && !failed && !pending) return null;
 
   const remove = async (
-    selection: ActiveContextSelection,
+    entry: ActiveContextChipEntry,
     index: number,
   ) => {
     const external = adjacentFocusableOutside(
       wrapperRef.current,
       document.activeElement,
     );
-    const remaining = activeSelections.filter((candidate) =>
-      selectionKey(candidate) !== selectionKey(selection)
-    );
     let result: unknown;
     try {
-      result = await (onRemove ? onRemove(selection) : onClear());
+      result = await (entry.kind === "group"
+        ? onRemoveGroup?.(entry.group.reconcileKey, entry.group.scopeKey)
+        : onRemove
+        ? onRemove(entry.selection)
+        : onClear());
     } catch {
       return;
     }
     if (!mutationAccepted(result)) return;
 
     afterDomUpdate(() => {
-      if (remaining.length === 0) {
+      // La projection peut changer après l'ACK ; le focus suit les puces visibles.
+      const focus = activeContextRemovalFocus(
+        renderedSelectionsRef.current,
+        index,
+      );
+      if (focus.kind === "outside") {
         if (external?.isConnected) external.focus({ preventScroll: true });
         return;
       }
-      if (remaining.length === 1) {
+      if (focus.kind === "single") {
         singleRemoveRef.current?.focus({ preventScroll: true });
         return;
       }
-      const neighbour = remaining[Math.min(index, remaining.length - 1)];
-      removeRefs.current.get(selectionKey(neighbour))?.focus({
+      const target = removeRefs.current.get(focus.selection.key) ??
+        triggerRef.current;
+      target?.focus({
         preventScroll: true,
       });
     });
@@ -180,7 +206,7 @@ export function ActiveContextChip(
       aria-busy={pending || undefined}
       class={cx(
         "relative inline-flex min-w-0 max-w-full items-center gap-1.5",
-        attachmentNotices.length > 0 && "flex-wrap",
+        (attachmentNotices.length > 0 || notices.length > 0) && "flex-wrap",
         "font-mono text-chip text-ink-muted",
         klass,
       )}
@@ -194,16 +220,23 @@ export function ActiveContextChip(
           <span class={cx("shrink-0 text-accent-text", compact && "sr-only")}>
             {t("context.active.label")}
           </span>
-          <span
-            class={cx("truncate text-ink", compact && "max-w-24")}
-            title={activeSelections[0].item.label}
-          >
-            {activeSelections[0].item.label}
+          <span class="min-w-0">
+            <span
+              class={cx("block truncate text-ink", compact && "max-w-24")}
+              title={singleItem?.label}
+            >
+              {singleItem?.label}
+            </span>
+            {singleItem?.summary && (
+              <span class="block text-micro text-ink-faint whitespace-normal break-words">
+                {singleItem.summary}
+              </span>
+            )}
           </span>
           <button
             ref={singleRemoveRef}
             type="button"
-            onClick={() => void remove(activeSelections[0], 0)}
+            onClick={() => void remove(chipEntries[0], 0)}
             class={cx(
               "-my-0.5 grid size-6 shrink-0 place-items-center rounded-badge",
               "text-[14px] leading-none text-ink-faint transition-colors",
@@ -211,10 +244,10 @@ export function ActiveContextChip(
               "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
             )}
             aria-label={t("context.active.clear", {
-              label: activeSelections[0].item.label,
+              label: singleItem?.label ?? chipEntries[0].label,
             })}
             title={t("context.active.clear", {
-              label: activeSelections[0].item.label,
+              label: singleItem?.label ?? chipEntries[0].label,
             })}
           >
             <span aria-hidden="true">×</span>
@@ -255,46 +288,54 @@ export function ActiveContextChip(
               )}
             >
               <span class="flex max-h-64 flex-col overflow-y-auto">
-                {activeSelections.map((selection, index) => (
-                  <span
-                    key={`${selection.scopeKey}:${selection.item.id}`}
-                    class="flex min-w-0 items-center gap-2 rounded-badge px-1.5 py-1 hover:bg-sunken"
-                  >
-                    <span class="min-w-0 flex-1">
-                      <span class="block truncate text-chip text-ink">
-                        {selection.item.label}
-                      </span>
-                      <span class="block truncate text-micro text-ink-faint">
-                        {selection.item.view}
-                        {selection.item.value
-                          ? ` · ${selection.item.value}`
-                          : ""}
-                      </span>
-                    </span>
-                    <button
-                      ref={(element) => {
-                        const key = selectionKey(selection);
-                        if (element) removeRefs.current.set(key, element);
-                        else removeRefs.current.delete(key);
-                      }}
-                      type="button"
-                      class={cx(
-                        "grid size-6 shrink-0 place-items-center rounded-badge",
-                        "text-[14px] leading-none text-ink-faint transition-colors",
-                        "hover:bg-accent/12 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent",
-                      )}
-                      aria-label={t("context.active.clear", {
-                        label: selection.item.label,
-                      })}
-                      title={t("context.active.clear", {
-                        label: selection.item.label,
-                      })}
-                      onClick={() => void remove(selection, index)}
+                {chipEntries.map((entry, index) => {
+                  const display = entry;
+                  return (
+                    <span
+                      key={entry.key}
+                      class="flex min-w-0 items-center gap-2 rounded-badge px-1.5 py-1 hover:bg-sunken"
                     >
-                      <span aria-hidden="true">×</span>
-                    </button>
-                  </span>
-                ))}
+                      <span class="min-w-0 flex-1">
+                        <span class="block truncate text-chip text-ink">
+                          {display.label}
+                        </span>
+                        {display.summary && (
+                          <span class="block whitespace-normal break-words text-micro text-ink-faint">
+                            {display.summary}
+                          </span>
+                        )}
+                        {!display.summary && (
+                          <span class="block truncate text-micro text-ink-faint">
+                            {entry.view}
+                            {entry.value ? ` · ${entry.value}` : ""}
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        ref={(element) => {
+                          const key = entry.key;
+                          if (element) removeRefs.current.set(key, element);
+                          else removeRefs.current.delete(key);
+                        }}
+                        type="button"
+                        class={cx(
+                          "grid size-6 shrink-0 place-items-center rounded-badge",
+                          "text-[14px] leading-none text-ink-faint transition-colors",
+                          "hover:bg-accent/12 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent",
+                        )}
+                        aria-label={t("context.active.clear", {
+                          label: display.label,
+                        })}
+                        title={t("context.active.clear", {
+                          label: display.label,
+                        })}
+                        onClick={() => void remove(entry, index)}
+                      >
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    </span>
+                  );
+                })}
               </span>
               <button
                 type="button"
@@ -321,6 +362,16 @@ export function ActiveContextChip(
           {attachmentNotices.map(({ key, notice }) => (
             <span key={key}>{notice}</span>
           ))}
+        </span>
+      )}
+      {notices.length > 0 && (
+        <span
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          class="flex min-w-0 basis-full flex-col gap-0.5 whitespace-normal break-words text-micro text-ink-muted"
+        >
+          {notices.map((notice, index) => <span key={index}>{notice}</span>)}
         </span>
       )}
       {pending && (

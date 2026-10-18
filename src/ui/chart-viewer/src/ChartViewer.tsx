@@ -2470,6 +2470,14 @@ function ChartContent(
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
     reconcileView: activeContext.reconcileView,
+    pending: activeContext.pending,
+    selection: activeContext.selection,
+    toggleGroupMember: activeContext.toggleGroupMember,
+    setGroupMembers: activeContext.setGroupMembers,
+    addGroupMembers: activeContext.addGroupMembers,
+    removeGroupMembers: activeContext.removeGroupMembers,
+    reconcileGroup: activeContext.reconcileGroup,
+    isGroupMemberSelected: activeContext.isGroupMemberSelected,
     reconcileDocument: activeContext.reconcileDocument,
     isSelected: activeContext.isSelected,
     canShareResource: (resource) =>
@@ -2791,6 +2799,8 @@ function ChartContent(
           <ActiveContextChip
             compact={narrow}
             selections={activeContext.selections}
+            selection={activeContext.selection}
+            onRemoveGroup={activeContext.removeGroup}
             failed={activeContext.failed}
             pending={activeContext.pending}
             evictedLabel={activeContext.evictedLabel}

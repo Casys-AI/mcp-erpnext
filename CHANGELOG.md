@@ -6,6 +6,12 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Added
 
+- Doclist checkboxes support selecting all locally filtered rows across loaded
+  pages and Shift-click ranges in the current sort order. Active-context chips
+  show one removable chip per group, with counts and summaries whether shared as
+  references or a query, plus shared details and partial-sharing notices.
+  Checkboxes include rows selected by click or Space and remain usable while
+  context updates await acknowledgement.
 - Active context can share compact record fields for small selections and exact
   `erpnext_doc_list` queries for groups, with explicit counts when the query's
   100-name limit is reached. Doclist viewers advertise this tool only when it is
@@ -18,8 +24,10 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   Chart and KPI series resources accompany single-entry selections; explicit
   attachments take priority.
 - Selected record fields refresh by modification time and source quality; list
-  refreshes retain group selections outside an incomplete result window (list
-  checkboxes, coming in the next phase).
+  refreshes retain group selections outside an incomplete result window. Only a
+  complete, unpaginated `erpnext_doc_list` result can confirm their absence;
+  dedicated list tools conservatively refresh known members without removing
+  missing ones.
 - Stock row identities use `stock:<item>:<warehouse>`, escaping only `%` and
   `:`; identities longer than 512 code points use a stable `stock:#<hash>`
   fallback.

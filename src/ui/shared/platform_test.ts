@@ -1,5 +1,9 @@
 import { assertEquals } from "@std/assert";
-import { isMacControlClick, isMacPlatform } from "./platform.ts";
+import {
+  isMacControlClick,
+  isMacControlClickEcho,
+  isMacPlatform,
+} from "./platform.ts";
 
 Deno.test("platform - reconnaît macOS sans assimiler iOS, Windows ou Linux", () => {
   for (const platform of ["MacIntel", "MacPPC", "Mac68K", "macOS", "macos"]) {
@@ -34,4 +38,16 @@ Deno.test("platform - Ctrl contextmenu exige Mac, Ctrl et le bouton principal", 
     isMacControlClick({ ctrlKey: true, button: 0 }, "Linux x86_64"),
     false,
   );
+});
+
+Deno.test("platform - reconnaît le click Ctrl Mac quel que soit le bouton de l'écho", () => {
+  for (const button of [0, 1, 2, undefined]) {
+    const event = { ctrlKey: true, button };
+    assertEquals(isMacControlClickEcho(event, "MacIntel"), true);
+    for (const platform of ["Win32", "Linux x86_64", "iPhone", "iPad", ""]) {
+      assertEquals(isMacControlClickEcho(event, platform), false);
+    }
+  }
+  assertEquals(isMacControlClickEcho({ ctrlKey: false }, "MacIntel"), false);
+  assertEquals(isMacControlClickEcho({}, "MacIntel"), false);
 });

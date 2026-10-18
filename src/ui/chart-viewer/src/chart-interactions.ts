@@ -30,6 +30,7 @@ export type ChartCursorMove =
 
 export interface ChartSelection {
   label: string;
+  index?: number;
   series?: string;
   value?: number;
   x?: number;
@@ -150,6 +151,12 @@ function treeSelections(
   return result;
 }
 
+function hasIndexedChartColumns(type: ChartData["type"]): boolean {
+  return type === undefined || type === "bar" || type === "stacked-bar" ||
+    type === "line" || type === "area" || type === "stacked-area" ||
+    type === "composed";
+}
+
 /**
  * Grille reelle du controle clavier. Scatter utilise uniquement ses points
  * nommes ; treemap ses feuilles. Aucun label artificiel n'est donc cree pour
@@ -197,6 +204,7 @@ export function chartNavigationGroups(data: ChartData): ChartSelection[][] {
       const rawValue = dataset.values[index];
       return {
         label,
+        ...(hasIndexedChartColumns(data.type) ? { index } : {}),
         series: dataset.label || undefined,
         value: typeof rawValue === "number" && Number.isFinite(rawValue)
           ? rawValue
@@ -446,11 +454,12 @@ function chartPointItem(
   namespace: string,
   label: string,
   series?: string,
+  index?: number,
 ): ContextSelectionItem {
   return {
     id: `${namespace}:point:${encodeURIComponent(label)}:${
       series === "all" ? "s:all" : encodeURIComponent(series ?? "all")
-    }`,
+    }${index === undefined ? "" : `:index:${index}`}`,
     view: data.title,
     reconcileKey: identity,
     label: series ? `${label} · ${series}` : label,
@@ -462,10 +471,15 @@ export function createChartPointContextIndex(
   data: ChartData,
   identity: string,
 ): {
-  get(label: string, series?: string): ContextSelectionItem;
+  get(label: string, series?: string, index?: number): ContextSelectionItem;
   values(): IterableIterator<ContextSelectionItem>;
 } {
   const namespace = chartContextNamespace(identity);
+  const indexedColumns = hasIndexedChartColumns(data.type);
+  const labelCounts = new Map<string, number>();
+  for (const label of data.labels) {
+    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+  }
   const datasets = new Map<string, Dataset>();
   for (const dataset of data.datasets) {
     if (!datasets.has(dataset.label)) datasets.set(dataset.label, dataset);
@@ -478,9 +492,17 @@ export function createChartPointContextIndex(
     label: string,
     series: string | undefined,
     value: string | null,
+    index?: number,
   ) {
-    const item = chartPointItem(data, identity, namespace, label, series);
-    const key = JSON.stringify([label, series ?? null]);
+    const item = chartPointItem(
+      data,
+      identity,
+      namespace,
+      label,
+      series,
+      index,
+    );
+    const key = JSON.stringify([label, series ?? null, index ?? null]);
     let candidate = candidates.get(key);
     if (!candidate) {
       candidate = { item, values: [] };
@@ -501,6 +523,22 @@ export function createChartPointContextIndex(
       if (selection.series) {
         append(selection.label, selection.series, formatted);
       }
+      if (
+        selection.index !== undefined &&
+        (labelCounts.get(selection.label) ?? 0) > 1
+      ) {
+        append(
+          selection.label,
+          undefined,
+          formatted && selection.series
+            ? `${selection.series}: ${formatted}`
+            : formatted,
+          selection.index,
+        );
+        if (selection.series) {
+          append(selection.label, selection.series, formatted, selection.index);
+        }
+      }
     }
   }
   const items = new Map([...candidates].map(([id, { item, values }]) => [
@@ -508,9 +546,20 @@ export function createChartPointContextIndex(
     { ...item, value: values.length > 0 ? values.join(" · ") : undefined },
   ]));
   return {
-    get(label, series) {
-      return items.get(JSON.stringify([label, series ?? null])) ??
-        chartPointItem(data, identity, namespace, label, series);
+    get(label, series, rawIndex) {
+      const index = indexedColumns ? rawIndex : undefined;
+      if (
+        index !== undefined &&
+        (!Number.isInteger(index) || data.labels[index] !== label)
+      ) return chartPointItem(data, identity, namespace, label, series, index);
+      const exactIndex =
+        index !== undefined && (labelCounts.get(label) ?? 0) > 1
+          ? index
+          : undefined;
+      return items.get(
+        JSON.stringify([label, series ?? null, exactIndex ?? null]),
+      ) ??
+        chartPointItem(data, identity, namespace, label, series, exactIndex);
     },
     values: () => items.values(),
   };
@@ -522,8 +571,9 @@ export function chartPointContextItem(
   identity: string,
   label: string,
   series?: string,
+  index?: number,
 ): ContextSelectionItem {
-  return createChartPointContextIndex(data, identity).get(label, series);
+  return createChartPointContextIndex(data, identity).get(label, series, index);
 }
 
 /**
@@ -622,6 +672,7 @@ export type ChartDetailMode = "inline" | "message";
 export interface ChartFocus {
   label: string;
   series?: string;
+  index?: number;
 }
 
 export interface ChartDetailAction extends ChartFocus {
@@ -657,6 +708,7 @@ function chartFocusExists(data: ChartData, focus: ChartFocus): boolean {
   return chartNavigationGroups(data).some((group) =>
     group.some((selection) =>
       selection.label === focus.label &&
+      (focus.index === undefined || selection.index === focus.index) &&
       (!focus.series || selection.series === focus.series)
     )
   );
@@ -679,7 +731,14 @@ export function chartFocusedDetailAction(
     focus.label,
     focus.series,
   );
-  return mode ? { label: focus.label, series: focus.series, mode } : null;
+  return mode
+    ? {
+      label: focus.label,
+      series: focus.series,
+      ...(focus.index === undefined ? {} : { index: focus.index }),
+      mode,
+    }
+    : null;
 }
 
 /**
@@ -838,15 +897,39 @@ export function chartColumnSelection(
   pointer: ChartPointerPosition,
   marks: readonly ChartColumnMark[],
   columnXs?: readonly number[],
+  target?: unknown,
 ): ChartSelection | undefined {
-  if (!Number.isFinite(pointer.x) || !Number.isFinite(pointer.y)) {
-    return undefined;
+  function selectionAt(index: number, series: string | undefined) {
+    if (index < 0 || index >= data.labels.length) return undefined;
+    const dataset = data.datasets.find((candidate) =>
+      (candidate.label || undefined) === series
+    );
+    const value = dataset?.values[index];
+    return typeof value === "number" && Number.isFinite(value)
+      ? { label: data.labels[index], index, series, value }
+      : undefined;
   }
-  const columns = columnXs ?? data.labels.map((_, index) => {
-    const column = marks.filter((mark) => mark.index === index);
+
+  const touched = chartMarkFromTarget(target, marks);
+  const touchedSelection = touched &&
+    selectionAt(touched.index, touched.series);
+  if (touchedSelection) return touchedSelection;
+
+  const columns = data.labels.map((_, index) => {
+    const supplied = columnXs?.[index];
+    if (typeof supplied === "number" && Number.isFinite(supplied)) {
+      return supplied;
+    }
+    const column = marks.filter((mark) =>
+      mark.index === index && Number.isFinite(mark.x)
+    );
     if (!column.length) return NaN;
     return (Math.min(...column.map((mark) => mark.x)) +
-      Math.max(...column.map((mark) => mark.x + (mark.width ?? 0)))) / 2;
+      Math.max(
+        ...column.map((mark) =>
+          mark.x + (Number.isFinite(mark.width) ? mark.width! : 0)
+        ),
+      )) / 2;
   });
   let nearest = -1;
   let distance = Infinity;
@@ -857,27 +940,30 @@ export function chartColumnSelection(
       distance = delta;
     }
   });
-  const label = chartPointLabel(data.labels, state);
-  const active = label === undefined ? -1 : data.labels.indexOf(label);
   // Recharts peut encore exposer le survol précédent au premier tap/contextmenu.
-  const index = active >= 0 && (nearest < 0 || active === nearest)
-    ? active
-    : nearest;
+  const rawActive = state?.activeTooltipIndex;
+  const active = typeof rawActive === "number"
+    ? rawActive
+    : typeof rawActive === "string" && /^\d+$/.test(rawActive)
+    ? Number(rawActive)
+    : NaN;
+  const index = nearest >= 0 ? nearest : active;
+  if (!Number.isInteger(index)) return undefined;
   if (index < 0 || index >= data.labels.length) return undefined;
   let best: ChartSelection | undefined;
   let bestDistance = Infinity;
+  let bestKind: ChartColumnMark["kind"] | undefined;
   for (const mark of marks) {
+    if (mark.index !== index) continue;
+    const selection = selectionAt(index, mark.series);
+    if (!selection) continue;
+    let delta = Number.isFinite(pointer.y) && Number.isFinite(mark.y)
+      ? Math.abs(pointer.y - mark.y)
+      : Infinity;
     if (
-      mark.index !== index || !Number.isFinite(mark.x) ||
-      !Number.isFinite(mark.y)
-    ) continue;
-    const dataset = data.datasets.find((candidate) =>
-      (candidate.label || undefined) === mark.series
-    );
-    const value = dataset?.values[index];
-    if (typeof value !== "number" || !Number.isFinite(value)) continue;
-    let delta = Math.abs(pointer.y - mark.y);
-    if (mark.kind === "bar") {
+      mark.kind === "bar" && Number.isFinite(pointer.x) &&
+      Number.isFinite(mark.x)
+    ) {
       const right = mark.x + (mark.width ?? 0);
       const bottom = mark.y + (mark.height ?? 0);
       const dx = Math.max(
@@ -890,14 +976,27 @@ export function chartColumnSelection(
         0,
         pointer.y - Math.max(mark.y, bottom),
       );
-      delta = Math.hypot(dx, dy);
+      delta = Number.isFinite(dx) && Number.isFinite(dy)
+        ? Math.hypot(dx, dy)
+        : Infinity;
     }
-    if (delta < bestDistance) {
+    if (
+      !best || delta < bestDistance ||
+      (delta === bestDistance && mark.kind === "point" && bestKind === "bar")
+    ) {
       bestDistance = delta;
-      best = { label: data.labels[index], series: mark.series, value };
+      bestKind = mark.kind;
+      best = selection;
     }
   }
-  return best;
+  if (best) return best;
+  // Sans géométrie exploitable, seul l'index courant peut encore cibler une valeur.
+  return nearest < 0
+    ? data.datasets.map((dataset) =>
+      selectionAt(index, dataset.label || undefined)
+    )
+      .find((selection) => selection !== undefined)
+    : undefined;
 }
 
 interface SeriesMarker {
@@ -906,6 +1005,33 @@ interface SeriesMarker {
 
 interface ClosestSeriesTarget {
   closest(selector: string): SeriesMarker | null;
+}
+
+/** Une marque DOM n'est fiable que si son index, sa série et son type sont connus. */
+export function chartMarkFromTarget(
+  target: unknown,
+  marks: readonly ChartColumnMark[],
+): ChartColumnMark | undefined {
+  if (
+    !target || typeof target !== "object" ||
+    typeof (target as Partial<ClosestSeriesTarget>).closest !== "function"
+  ) return undefined;
+  const marker = (target as ClosestSeriesTarget).closest(
+    "[data-chart-point-index][data-chart-series][data-chart-mark]",
+  );
+  const rawIndex = marker?.getAttribute("data-chart-point-index");
+  const series = marker?.getAttribute("data-chart-series");
+  const kind = marker?.getAttribute("data-chart-mark");
+  if (
+    !rawIndex || !/^\d+$/.test(rawIndex) || series === null ||
+    series === undefined
+  ) {
+    return undefined;
+  }
+  const index = Number(rawIndex);
+  return marks.find((mark) =>
+    mark.index === index && (mark.series ?? "") === series && mark.kind === kind
+  );
 }
 
 /** Série portée par la géométrie SVG cliquée, jamais une valeur arbitraire. */

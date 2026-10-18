@@ -131,6 +131,34 @@ Deno.test("doclist row - Ctrl contextmenu Mac bascule, le menu normal reste nati
   }
 });
 
+Deno.test("doclist row - Ctrl clic Mac bascule une seule fois dans Chrome et WebKit", () => {
+  for (const browser of ["Chrome", "WebKit"]) {
+    for (const button of [0, 2, undefined]) {
+      const { props, effects } = setup("MacIntel");
+      props.onContextMenu(event({ ctrlKey: true }));
+      if (browser === "WebKit") {
+        props.onClick(event({ ctrlKey: true, button }));
+      }
+      assertEquals(effects, ["toggle"], `${browser}, button=${button}`);
+    }
+  }
+});
+
+Deno.test("doclist row - ignore le click Ctrl Mac même sans sélection de groupe", () => {
+  const { props, effects } = setup("MacIntel", false);
+  props.onClick(event({ ctrlKey: true }));
+  assertEquals(effects, []);
+});
+
+Deno.test("doclist row - hors Mac contextmenu puis Ctrl click conserve une bascule", () => {
+  for (const platform of ["Win32", "Linux x86_64"]) {
+    const { props, effects } = setup(platform);
+    props.onContextMenu(event({ ctrlKey: true }));
+    props.onClick(event({ ctrlKey: true }));
+    assertEquals(effects, ["toggle"]);
+  }
+});
+
 Deno.test("doclist row - geste explicite libère l'arbitrage précédent sans annuler la sélection", async () => {
   const effects: string[] = [];
   const arbiter = createClickIntentArbiter(() => () => {});

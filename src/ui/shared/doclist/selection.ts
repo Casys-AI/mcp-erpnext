@@ -1,6 +1,6 @@
 import { DOC_LIST_DEFAULT_LIMIT } from "../../doc-list-defaults.ts";
 import type { ClickIntentArbiter } from "../click-intent.ts";
-import { isMacControlClick } from "../platform.ts";
+import { isMacControlClick, isMacControlClickEcho } from "../platform.ts";
 import type { DocumentModel } from "../document/types.ts";
 import type { SelectionGroupMemberInput } from "../selection-projection.ts";
 import { pickAmountColumn, pickDateColumn } from "./columns.ts";
@@ -223,7 +223,9 @@ export function doclistRowEvents(
       ) event.preventDefault();
     },
     onClick: (event: RowPointerEvent) => {
-      if (rowControlTarget(event)) return;
+      if (
+        rowControlTarget(event) || isMacControlClickEcho(event, platform)
+      ) return;
       if (onToggle && modified(event)) {
         consume(event);
         onToggle(Boolean(event.shiftKey));

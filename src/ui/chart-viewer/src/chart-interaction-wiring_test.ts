@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertMatch, assertStringIncludes } from "@std/assert";
 
 const source = await Deno.readTextFile(
   new URL("./ChartViewer.tsx", import.meta.url),
@@ -10,6 +10,90 @@ function between(start: string, end: string): string {
   if (from < 0 || to < 0) return "";
   return source.slice(from, to);
 }
+
+Deno.test("chart wiring - keyboard navigator isolates every pointer gesture from whole-chart selection", () => {
+  const keyboard = between(
+    "function ChartKeyboardNavigator",
+    "function ChartDetailBar",
+  );
+  for (const handler of ["onClick", "onDblClick", "onContextMenu"]) {
+    assertMatch(
+      keyboard,
+      new RegExp(
+        `${handler}=\\{\\(event\\) => \\{\\s*event.stopPropagation\\(\\);`,
+      ),
+    );
+  }
+  for (
+    const handler of [
+      "onPointerDown",
+      "onPointerUp",
+      "onPointerMove",
+      "onPointerCancel",
+    ]
+  ) {
+    assertStringIncludes(
+      keyboard,
+      `${handler}={(event) => event.stopPropagation()}`,
+    );
+  }
+});
+
+Deno.test("chart wiring - column gestures retain indices and never resolve duplicate labels through a scale", () => {
+  const bounds = between(
+    "function ChartPlotBounds",
+    "function activateColumnPoint",
+  );
+  assertEquals(bounds.includes("xScale"), false);
+  const activate = between(
+    "function activateColumnPoint",
+    "function columnPointerHandlers",
+  );
+  assertStringIncludes(activate, "event.target");
+  assertStringIncludes(activate, "selection.index");
+  assertEquals(
+    activate.includes("if (!svg || !bounds || !matrix) return;"),
+    false,
+  );
+  assertStringIncludes(source, "pointIndex.get(label, series, index)");
+});
+
+Deno.test("chart wiring - visible Cartesian active dots expose exact point identity", () => {
+  const cartesian = between(
+    "function LineChartView",
+    "interface SelectedPieShapeProps",
+  );
+  assertEquals((cartesian.match(/<ActiveColumnPoint/g) ?? []).length, 4);
+  const activePoint = between(
+    "function ActiveColumnPoint",
+    "function LineChartView",
+  );
+  for (
+    const attribute of [
+      "data-chart-point-index={index}",
+      'data-chart-mark="point"',
+      "data-chart-series={series}",
+    ]
+  ) {
+    assertStringIncludes(activePoint, attribute);
+  }
+});
+
+Deno.test("chart wiring - Mac control-click echoes stop before point and whole-chart activation", () => {
+  const handlers = between(
+    "function columnPointerHandlers",
+    "function activateCategoricalPoint",
+  );
+  assertMatch(
+    handlers,
+    /onClick:[\s\S]*?isMacControlClickEcho\(event, getBrowserPlatform\(\)\)[\s\S]*?event.stopPropagation\(\);[\s\S]*?return;/,
+  );
+  const whole = between("const onWholeChartClick", "const chartSelected");
+  assertStringIncludes(
+    whole,
+    "isMacControlClickEcho(event, getBrowserPlatform())",
+  );
+});
 
 Deno.test("chart wiring - radar, named scatter points and treemap leaves expose both pointer intents", () => {
   const pie = between("function PieLegend", "function RadarChartView");
@@ -76,7 +160,7 @@ Deno.test("chart wiring - full chart and legend expose the visible subset", () =
   assertStringIncludes(content, "const pointIndex = useMemo(");
   assertStringIncludes(content, "createChartPointContextIndex(data, rootKey)");
   assertStringIncludes(content, "[data, rootKey, contextLocale]");
-  assertStringIncludes(content, "pointIndex.get(label, series)");
+  assertStringIncludes(content, "pointIndex.get(label, series, index)");
   assertStringIncludes(content, "[chartContext, ...pointIndex.values()]");
   assertStringIncludes(content, "activeContext.toggle(chartContext)");
   assertStringIncludes(
@@ -169,7 +253,7 @@ Deno.test("chart wiring - le dernier point activé alimente une barre d'action s
   // La décision est pure et partagée avec le double-clic / Entrée.
   assertStringIncludes(content, "chartFocusedDetailAction(");
   assertStringIncludes(content, "chartPointDetailMode(");
-  assertStringIncludes(content, "focusDetailPoint(label, series)");
+  assertStringIncludes(content, "focusDetailPoint(label, series, index)");
   assertStringIncludes(content, "setDetailFocus((current)");
   assertStringIncludes(content, "<ChartDetailBar");
   // Le bouton passe par l'arbitre : même chemin qu'Entrée, jamais le contexte.
@@ -197,7 +281,7 @@ Deno.test("chart wiring - Cartesian column clicks share snapping and keep exact 
     4,
   );
   assertEquals(
-    (cartesian.match(/<ChartPlotBounds data=\{data\} \/>/g) ?? []).length,
+    (cartesian.match(/<ChartPlotBounds \/>/g) ?? []).length,
     4,
   );
   const horizontal = between(

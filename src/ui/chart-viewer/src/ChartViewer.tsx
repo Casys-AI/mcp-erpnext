@@ -43,7 +43,6 @@ import {
   Tooltip,
   Treemap,
   usePlotArea,
-  useXAxisScale,
   XAxis,
   YAxis,
   ZAxis,
@@ -68,7 +67,11 @@ import {
 } from "~/shared/ui";
 import { useViewerLayout, type ViewerLayout } from "~/shared/useViewerLayout";
 import { useViewerNav } from "~/shared/useViewerNav";
-import { getBrowserPlatform, isMacControlClick } from "~/shared/platform.ts";
+import {
+  getBrowserPlatform,
+  isMacControlClick,
+  isMacControlClickEcho,
+} from "~/shared/platform.ts";
 import { useClickIntent } from "~/shared/useClickIntent.ts";
 import {
   type ClickIntent,
@@ -159,13 +162,19 @@ type ChartDataClick = (
   series: string | undefined,
   activation: ChartPointActivation,
   clickCount?: number,
+  index?: number,
 ) => void;
 type ChartDataKeyDown = (
   label: string,
   series: string | undefined,
   event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
+  index?: number,
 ) => void;
-type ChartSelectionPredicate = (label: string, series?: string) => boolean;
+type ChartSelectionPredicate = (
+  label: string,
+  series?: string,
+  index?: number,
+) => boolean;
 const ChartSelectionContext = createContext<
   ChartSelectionPredicate | undefined
 >(undefined);
@@ -186,20 +195,12 @@ interface ColumnPointerEvent extends ChartPointerEvent {
   preventDefault(): void;
 }
 
-/** Bornes/colonnes exactes : aucune approximation des marges ou des axes. */
-function ChartPlotBounds({ data }: { data: ChartData }) {
+/** Bornes exactes du tracé fournies par Recharts. */
+function ChartPlotBounds() {
   const plot = usePlotArea();
-  const xScale = useXAxisScale();
   return plot && (
     <g pointerEvents="none" aria-hidden="true">
       <rect data-chart-plot-bounds {...plot} fill="none" />
-      {data.labels.map((label, index) => (
-        <g
-          key={index}
-          data-chart-column-index={index}
-          data-chart-column-x={xScale?.(label, { position: "middle" })}
-        />
-      ))}
     </g>
   );
 }
@@ -212,57 +213,70 @@ function activateColumnPoint(
   activation: ChartPointActivation,
   contextMenu = false,
 ) {
+  if (event.shiftKey) return;
   const wrapper = event.currentTarget instanceof Element
     ? event.currentTarget
     : null;
   const svg = wrapper?.querySelector<SVGSVGElement>("svg.recharts-surface");
   const bounds = svg?.querySelector<SVGRectElement>("[data-chart-plot-bounds]");
   const matrix = svg?.getScreenCTM();
-  if (!svg || !bounds || !matrix) return;
-  const pointer = new DOMPoint(event.clientX, event.clientY).matrixTransform(
-    matrix.inverse(),
-  );
-  const plot = {
-    x: bounds.x.baseVal.value,
-    y: bounds.y.baseVal.value,
-    width: bounds.width.baseVal.value,
-    height: bounds.height.baseVal.value,
-  };
-  if (chartPlotIntent(plot, pointer, event.shiftKey) === "whole") return;
+  const pointer = matrix
+    ? new DOMPoint(event.clientX, event.clientY).matrixTransform(
+      matrix.inverse(),
+    )
+    : { x: NaN, y: NaN };
+  if (bounds && Number.isFinite(pointer.x) && Number.isFinite(pointer.y)) {
+    const plot = {
+      x: bounds.x.baseVal.value,
+      y: bounds.y.baseVal.value,
+      width: bounds.width.baseVal.value,
+      height: bounds.height.baseVal.value,
+    };
+    if (chartPlotIntent(plot, pointer, event.shiftKey) === "whole") return;
+  }
   // Même une colonne vide ne doit jamais remonter vers le contexte du graphe.
   event.stopPropagation();
   if (contextMenu) event.preventDefault();
   const marks = Array.from(
-    svg.querySelectorAll<SVGGElement>("[data-chart-point-index]"),
+    svg?.querySelectorAll<SVGGElement>("[data-chart-point-index]") ?? [],
     (mark): ChartColumnMark => ({
       index: Number(mark.dataset.chartPointIndex),
       series: mark.dataset.chartSeries || undefined,
       kind: mark.dataset.chartMark === "bar" ? "bar" : "point",
-      x: Number(mark.dataset.chartX),
-      y: Number(mark.dataset.chartY),
+      x: Number(mark.dataset.chartX ?? NaN),
+      y: Number(mark.dataset.chartY ?? NaN),
       width: Number(mark.dataset.chartWidth ?? 0),
       height: Number(mark.dataset.chartHeight ?? 0),
     }),
   );
-  const columns = Array.from(
-    svg.querySelectorAll<SVGGElement>("[data-chart-column-index]"),
-    (column) => Number(column.dataset.chartColumnX ?? NaN),
+  const selection = chartColumnSelection(
+    data,
+    state,
+    pointer,
+    marks,
+    undefined,
+    event.target,
   );
-  const selection = chartColumnSelection(data, state, pointer, marks, columns);
   if (selection) {
     onDataClick?.(
       selection.label,
       selection.series,
       activation,
       contextMenu ? 1 : event.detail,
+      selection.index,
     );
   }
 }
 
 function columnPointerHandlers(data: ChartData, onDataClick?: ChartDataClick) {
   return {
-    onClick: (state: Record<string, unknown>, event: ColumnPointerEvent) =>
-      activateColumnPoint(data, onDataClick, state, event, "context"),
+    onClick: (state: Record<string, unknown>, event: ColumnPointerEvent) => {
+      if (isMacControlClickEcho(event, getBrowserPlatform())) {
+        event.stopPropagation();
+        return;
+      }
+      activateColumnPoint(data, onDataClick, state, event, "context");
+    },
     onDoubleClick: (
       state: Record<string, unknown>,
       event: ColumnPointerEvent,
@@ -396,7 +410,7 @@ function SelectedBarShape(
   const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
   const index = typeof props.index === "number" ? props.index : -1;
   const label = String(rows[index]?.name ?? "");
-  const selected = label !== "" && selectedAt?.(label, series) === true;
+  const selected = label !== "" && selectedAt?.(label, series, index) === true;
   return (
     <g
       data-chart-series={series}
@@ -450,7 +464,7 @@ function SelectedPointShape(
   const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
   const index = typeof props.index === "number" ? props.index : -1;
   const label = String(props.payload?.name ?? rows[index]?.name ?? "");
-  const selected = label !== "" && selectedAt?.(label, series) === true;
+  const selected = label !== "" && selectedAt?.(label, series, index) === true;
   const cx = props.cx ?? 0;
   const cy = props.cy ?? 0;
   return (
@@ -879,7 +893,7 @@ function VerticalBarChart(
         barCategoryGap="19%"
         {...columnPointerHandlers(data, onDataClick)}
       >
-        <ChartPlotBounds data={data} />
+        <ChartPlotBounds />
         <CartesianGrid {...GRID} vertical={false} />
         <SharedXAxis data={data} />
         <SharedYAxis />
@@ -1011,6 +1025,29 @@ function HorizontalBarChart(
   );
 }
 
+function ActiveColumnPoint(
+  { cx, cy, index, fill, series, interactive }: ChartDotShapeProps & {
+    fill?: string;
+    series?: string;
+    interactive: boolean;
+  },
+) {
+  return (
+    <circle
+      {...ACTIVE_DOT_BASE}
+      cx={cx}
+      cy={cy}
+      fill={fill}
+      cursor={interactive ? "pointer" : undefined}
+      data-chart-point-index={index}
+      data-chart-series={series}
+      data-chart-mark="point"
+      data-chart-x={cx}
+      data-chart-y={cy}
+    />
+  );
+}
+
 function LineChartView(
   { data, onDataClick, isSelected, canDrillDown }: {
     data: ChartData;
@@ -1028,7 +1065,7 @@ function LineChartView(
         margin={MARGIN}
         {...columnPointerHandlers(data, onDataClick)}
       >
-        <ChartPlotBounds data={data} />
+        <ChartPlotBounds />
         <CartesianGrid {...GRID} vertical={false} />
         <SharedXAxis data={data} />
         <SharedYAxis />
@@ -1070,9 +1107,12 @@ function LineChartView(
                   isSelected={isSelected}
                 />
               }
-              activeDot={onDataClick
-                ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
-                : ACTIVE_DOT_BASE}
+              activeDot={
+                <ActiveColumnPoint
+                  series={ds.label || undefined}
+                  interactive={Boolean(onDataClick)}
+                />
+              }
               yAxisId={ds.yAxisId}
               isAnimationActive={false}
               {...marker}
@@ -1102,7 +1142,7 @@ function AreaChartView(
         margin={MARGIN}
         {...columnPointerHandlers(data, onDataClick)}
       >
-        <ChartPlotBounds data={data} />
+        <ChartPlotBounds />
         <defs>
           {data.datasets.map((ds, i) => (
             <linearGradient
@@ -1170,9 +1210,12 @@ function AreaChartView(
                   isSelected={isSelected}
                 />
               }
-              activeDot={onDataClick
-                ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
-                : ACTIVE_DOT_BASE}
+              activeDot={
+                <ActiveColumnPoint
+                  series={ds.label || undefined}
+                  interactive={Boolean(onDataClick)}
+                />
+              }
               stackId={stacked ? (ds.stack ?? "default") : undefined}
               isAnimationActive={false}
               {...marker}
@@ -1201,7 +1244,7 @@ function ComposedChartView(
         margin={MARGIN}
         {...columnPointerHandlers(data, onDataClick)}
       >
-        <ChartPlotBounds data={data} />
+        <ChartPlotBounds />
         <CartesianGrid {...GRID} vertical={false} />
         <SharedXAxis data={data} />
         <SharedYAxis />
@@ -1248,9 +1291,12 @@ function ComposedChartView(
                     isSelected={isSelected}
                   />
                 }
-                activeDot={onDataClick
-                  ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
-                  : ACTIVE_DOT_BASE}
+                activeDot={
+                  <ActiveColumnPoint
+                    series={ds.label || undefined}
+                    interactive={Boolean(onDataClick)}
+                  />
+                }
                 yAxisId={ds.yAxisId}
                 isAnimationActive={false}
                 {...marker}
@@ -1279,9 +1325,12 @@ function ComposedChartView(
                 }
                 yAxisId={ds.yAxisId}
                 isAnimationActive={false}
-                activeDot={onDataClick
-                  ? { ...ACTIVE_DOT_BASE, cursor: "pointer", ...marker }
-                  : ACTIVE_DOT_BASE}
+                activeDot={
+                  <ActiveColumnPoint
+                    series={ds.label || undefined}
+                    interactive={Boolean(onDataClick)}
+                  />
+                }
                 {...marker}
               />
             );
@@ -2052,16 +2101,16 @@ function ChartKeyboardNavigator(
   }: {
     data: ChartData;
     onActivate?: ChartDataClick;
-    onKeyActivate?: (
-      label: string,
-      series: string | undefined,
-      event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
-    ) => void;
+    onKeyActivate?: ChartDataKeyDown;
     contextEnabled: boolean;
     canDrillDown?: ChartSelectionPredicate;
     clickOpensDetail?: ChartSelectionPredicate;
-    isSelected?: (label: string, series?: string) => boolean;
-    isExpanded?: (label: string, series?: string) => boolean | undefined;
+    isSelected?: ChartSelectionPredicate;
+    isExpanded?: (
+      label: string,
+      series?: string,
+      index?: number,
+    ) => boolean | undefined;
   },
 ) {
   const t = useT();
@@ -2116,7 +2165,7 @@ function ChartKeyboardNavigator(
     selection.series,
   ) === true;
   const expandedState = drilldownEnabled
-    ? isExpanded?.(selection.label, selection.series)
+    ? isExpanded?.(selection.label, selection.series, selection.index)
     : undefined;
   const help = t(
     contextEnabled && drilldownEnabled
@@ -2140,7 +2189,8 @@ function ChartKeyboardNavigator(
     <button
       type="button"
       aria-pressed={contextEnabled
-        ? isSelected?.(selection.label, selection.series) ?? false
+        ? isSelected?.(selection.label, selection.series, selection.index) ??
+          false
         : undefined}
       aria-expanded={expandedState}
       aria-controls={expandedState === undefined
@@ -2154,13 +2204,23 @@ function ChartKeyboardNavigator(
       onKeyDown={(event) => {
         if (event.key === " ") {
           if (contextEnabled || spaceOpensDetail) {
-            onKeyActivate(selection.label, selection.series, event);
+            onKeyActivate(
+              selection.label,
+              selection.series,
+              event,
+              selection.index,
+            );
           } else event.preventDefault();
           return;
         }
         if (event.key === "Enter") {
           if (drilldownEnabled) {
-            onKeyActivate(selection.label, selection.series, event);
+            onKeyActivate(
+              selection.label,
+              selection.series,
+              event,
+              selection.index,
+            );
           } else event.preventDefault();
           return;
         }
@@ -2176,28 +2236,51 @@ function ChartKeyboardNavigator(
         );
         setCursor(next);
       }}
-      onClick={contextEnabled
-        ? (event) => {
-          // Enter et Espace emettent aussi un click natif detail=0 sur un
-          // bouton : leur commande a deja ete traitee dans onKeyDown.
-          if (event.detail === 0) return;
-          onActivate(
-            selection.label,
-            selection.series,
-            "context",
-            event.detail,
-          );
-        }
-        : undefined}
-      onDblClick={drilldownEnabled
-        ? (event) =>
-          onActivate(
-            selection.label,
-            selection.series,
-            "drilldown",
-            event.detail,
-          )
-        : undefined}
+      onClick={(event) => {
+        event.stopPropagation();
+        // Enter et Espace emettent aussi un click natif detail=0 sur un
+        // bouton : leur commande a deja ete traitee dans onKeyDown.
+        if (event.detail === 0) return;
+        if (
+          !contextEnabled || isMacControlClickEcho(event, getBrowserPlatform())
+        ) return;
+        onActivate(
+          selection.label,
+          selection.series,
+          "context",
+          event.detail,
+          selection.index,
+        );
+      }}
+      onDblClick={(event) => {
+        event.stopPropagation();
+        if (!drilldownEnabled) return;
+        onActivate(
+          selection.label,
+          selection.series,
+          "drilldown",
+          event.detail,
+          selection.index,
+        );
+      }}
+      onContextMenu={(event) => {
+        event.stopPropagation();
+        if (
+          !contextEnabled || !isMacControlClick(event, getBrowserPlatform())
+        ) return;
+        event.preventDefault();
+        onActivate(
+          selection.label,
+          selection.series,
+          "context",
+          1,
+          selection.index,
+        );
+      }}
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerUp={(event) => event.stopPropagation()}
+      onPointerMove={(event) => event.stopPropagation()}
+      onPointerCancel={(event) => event.stopPropagation()}
       class={cx(
         "pointer-events-none absolute bottom-1.5 left-1.5 z-20 h-px w-px overflow-hidden whitespace-nowrap border-0 p-0 opacity-0",
         "focus:pointer-events-auto focus:flex focus:h-auto focus:w-auto focus:max-w-[calc(100%-0.75rem)] focus:items-center focus:gap-2 focus:overflow-visible focus:rounded-[4px] focus:border focus:border-accent/50 focus:bg-control focus:px-2.5 focus:py-1.5 focus:opacity-100 focus:shadow-modal",
@@ -2564,8 +2647,9 @@ function ChartContent(
   function pointContext(
     label: string,
     series?: string,
+    index?: number,
   ): ContextSelectionItem {
-    return pointIndex.get(label, series);
+    return pointIndex.get(label, series, index);
   }
 
   useEffect(() => {
@@ -2586,18 +2670,24 @@ function ChartContent(
     return chartDrillDownMessage(data._drillDown, label, series);
   }
 
-  function isPointSelected(label: string, series?: string): boolean {
-    return activeContext.isSelected(pointContext(label, series));
+  function isPointSelected(
+    label: string,
+    series?: string,
+    index?: number,
+  ): boolean {
+    return activeContext.isSelected(pointContext(label, series, index));
   }
 
   function pointExpansionState(
     label: string,
     series?: string,
+    index?: number,
   ): boolean | undefined {
     const jump = pointJump?.(label, series) ?? null;
     return chartPointExpansionState(
       jump !== null,
-      nav.stack.levels[1]?.rootTriggerKey === pointContext(label, series).id,
+      nav.stack.levels[1]?.rootTriggerKey ===
+        pointContext(label, series, index).id,
     );
   }
 
@@ -2630,9 +2720,10 @@ function ChartContent(
     label: string,
     series: string | undefined,
     activation: ChartPointActivation,
+    index?: number,
   ) {
     const jump = pointJump?.(label, series) ?? null;
-    const context = pointContext(label, series);
+    const context = pointContext(label, series, index);
     const fallback = pointFallback(label, series);
     const plan = chartPointActionPlan(
       activation,
@@ -2654,12 +2745,16 @@ function ChartContent(
     }
   }
 
-  function pointIntent(label: string, series?: string): ClickIntent {
-    const context = pointContext(label, series);
+  function pointIntent(
+    label: string,
+    series?: string,
+    index?: number,
+  ): ClickIntent {
+    const context = pointContext(label, series, index);
     if (clickOpensDetailPoint(label, series)) {
       return detailOnClickIntent(
         context.id,
-        () => activatePoint(label, series, "drilldown"),
+        () => activatePoint(label, series, "drilldown", index),
       );
     }
     return {
@@ -2668,7 +2763,7 @@ function ChartContent(
         activeContext.supported
           ? activeContext.toggleReversible(context)
           : undefined,
-      onDouble: () => activatePoint(label, series, "drilldown"),
+      onDouble: () => activatePoint(label, series, "drilldown", index),
       runConversation: activeContext.runConversation,
       doublePolicy: pointDetailMode(label, series) === "inline"
         ? "local" as const
@@ -2676,11 +2771,16 @@ function ChartContent(
     };
   }
 
-  function focusDetailPoint(label: string, series: string | undefined) {
+  function focusDetailPoint(
+    label: string,
+    series: string | undefined,
+    index?: number,
+  ) {
     setDetailFocus((current) =>
-      current?.label === label && current.series === series
+      current?.label === label && current.series === series &&
+        current.index === index
         ? current
-        : { label, series }
+        : { label, series, index }
     );
   }
 
@@ -2690,9 +2790,10 @@ function ChartContent(
       series: string | undefined,
       activation: ChartPointActivation,
       clickCount = activation === "context" ? 1 : 2,
+      index?: number,
     ) => {
       if (!label) return;
-      focusDetailPoint(label, series);
+      focusDetailPoint(label, series, index);
       if (
         !shouldHandleChartPointActivation(
           activation,
@@ -2700,7 +2801,7 @@ function ChartContent(
           canDrillDownPoint(label, series),
         )
       ) return;
-      const intent = pointIntent(label, series);
+      const intent = pointIntent(label, series, index);
       if (activation === "context") clickIntent.click(intent, clickCount);
       else clickIntent.doubleClick(intent);
     }
@@ -2711,9 +2812,10 @@ function ChartContent(
       label: string,
       series: string | undefined,
       event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
+      index?: number,
     ) => {
-      focusDetailPoint(label, series);
-      clickIntent.keyDown(pointIntent(label, series), event);
+      focusDetailPoint(label, series, index);
+      clickIntent.keyDown(pointIntent(label, series, index), event);
     }
     : undefined;
   const chartHandlers = useRef({
@@ -2743,11 +2845,12 @@ function ChartContent(
     [],
   );
   const stableCanDrillDown = useCallback<ChartSelectionPredicate>(
-    (...args) => chartHandlers.current.canDrillDownPoint(...args),
+    (label, series) => chartHandlers.current.canDrillDownPoint(label, series),
     [],
   );
   const stableClickOpensDetail = useCallback<ChartSelectionPredicate>(
-    (...args) => chartHandlers.current.clickOpensDetailPoint(...args),
+    (label, series) =>
+      chartHandlers.current.clickOpensDetailPoint(label, series),
     [],
   );
   const detailAction = chartFocusedDetailAction(
@@ -2758,7 +2861,9 @@ function ChartContent(
   const onWholeChartClick = activeContext.supported
     ? (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
       event.stopPropagation();
-      if (event.detail > 1) return;
+      if (
+        event.detail > 1 || isMacControlClickEcho(event, getBrowserPlatform())
+      ) return;
       void activeContext.toggle(chartContext);
     }
     : undefined;
@@ -2891,7 +2996,10 @@ function ChartContent(
                 title={chartContextActionLabel}
                 onClick={(event) => {
                   event.stopPropagation();
-                  if (event.detail > 1) return;
+                  if (
+                    event.detail > 1 ||
+                    isMacControlClickEcho(event, getBrowserPlatform())
+                  ) return;
                   void activeContext.toggle(chartContext);
                 }}
                 class="pointer-events-none absolute right-1 top-1 z-10 max-w-[calc(100%_-_0.5rem)] truncate rounded-[3px] border border-line bg-surface px-2 py-1 font-mono text-[10px] text-ink opacity-0 shadow-sm transition-opacity focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
@@ -2963,11 +3071,16 @@ function ChartContent(
             expanded={pointExpansionState(
               detailAction.label,
               detailAction.series,
+              detailAction.index,
             )}
             narrow={narrow}
             onToggle={() =>
               clickIntent.activateDetail(
-                pointIntent(detailAction.label, detailAction.series),
+                pointIntent(
+                  detailAction.label,
+                  detailAction.series,
+                  detailAction.index,
+                ),
               )}
           />
         )}

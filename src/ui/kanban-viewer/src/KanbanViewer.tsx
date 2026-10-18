@@ -1228,7 +1228,7 @@ function KanbanBoardWithNav({
               )}
             </div>
           </div>
-          <ContextChipRow>
+          <ContextChipRow reserve={context.supported}>
             <ActiveContextChip
               selections={activeContext.selections}
               selection={activeContext.selection}

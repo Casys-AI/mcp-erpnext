@@ -989,7 +989,7 @@ function FunnelContent(
               </>
             )}
         </div>
-        <ContextChipRow>
+        <ContextChipRow reserve={activeContext.supported}>
           <ActiveContextChip
             compact={!isWide}
             selections={activeContext.selections}

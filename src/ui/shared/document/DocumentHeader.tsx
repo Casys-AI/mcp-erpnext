@@ -22,6 +22,7 @@ export interface DocumentHeaderProps {
   /** Refresh, JSON ou toute autre action propre à la coque. */
   trailing?: ComponentChildren;
   contextChip?: ComponentChildren;
+  contextSupported?: boolean;
   live?: boolean;
   /** La fiche elle-même rejoint le contexte au clic, comme un point de chart. */
   contextTarget?: ContextInteractionTarget;
@@ -72,6 +73,7 @@ export function DocumentHeader({
   navigation,
   trailing,
   contextChip,
+  contextSupported = false,
   live,
   contextTarget,
 }: DocumentHeaderProps) {
@@ -92,9 +94,11 @@ export function DocumentHeader({
           </div>
         </div>
 
-        {contextChip && (
+        {contextSupported && (
           <div class="px-3">
-            <ContextChipRow>{contextChip}</ContextChipRow>
+            <ContextChipRow reserve={contextSupported}>
+              {contextChip}
+            </ContextChipRow>
           </div>
         )}
 
@@ -172,7 +176,7 @@ export function DocumentHeader({
           <div class="flex shrink-0 items-center gap-1.5">{trailing}</div>
         )}
       </div>
-      {contextChip && <ContextChipRow>{contextChip}</ContextChipRow>}
+      <ContextChipRow reserve={contextSupported}>{contextChip}</ContextChipRow>
     </header>
   );
 }

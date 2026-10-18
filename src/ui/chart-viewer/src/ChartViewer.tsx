@@ -2804,7 +2804,7 @@ function ChartContent(
               : <span class="size-[5px] shrink-0 rounded-full bg-ok" />}
           </div>
         </div>
-        <ContextChipRow>
+        <ContextChipRow reserve={activeContext.supported}>
           <ActiveContextChip
             compact={narrow}
             selections={activeContext.selections}

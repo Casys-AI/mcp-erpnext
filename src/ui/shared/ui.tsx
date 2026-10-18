@@ -58,7 +58,10 @@ export function ViewerShell(
   );
 }
 
-export function ContextChipRow({ children }: { children: ComponentChildren }) {
+export function ContextChipRow(
+  { reserve, children }: { reserve: boolean; children: ComponentChildren },
+) {
+  if (!reserve) return null;
   return (
     <div
       data-context-chip-row
@@ -77,13 +80,22 @@ export function ContextChipRow({ children }: { children: ComponentChildren }) {
  * CSV ne sont pas ce qu'on vient chercher dans un panneau latéral.
  */
 export function ViewerHeader(
-  { title, count, live, actions, contextChip, layout = "wide" }: {
+  {
+    title,
+    count,
+    live,
+    actions,
+    contextChip,
+    contextSupported = false,
+    layout = "wide",
+  }: {
     title: string;
     count?: number;
     live?: boolean;
     /** Actions de droite : la barre complète en large, l'icône seule en mobile. */
     actions?: ComponentChildren;
     contextChip?: ComponentChildren;
+    contextSupported?: boolean;
     layout?: ViewerLayout;
   },
 ) {
@@ -127,7 +139,7 @@ export function ViewerHeader(
           )}
         </div>
       </div>
-      {contextChip && <ContextChipRow>{contextChip}</ContextChipRow>}
+      <ContextChipRow reserve={contextSupported}>{contextChip}</ContextChipRow>
     </header>
   );
 }

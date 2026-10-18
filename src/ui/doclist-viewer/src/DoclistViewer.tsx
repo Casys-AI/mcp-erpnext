@@ -373,6 +373,7 @@ function DoclistContent({
         live={isRoot && refreshAvailable && !error}
         layout={layout}
         contextChip={activeContextChip}
+        contextSupported={context.supported}
         actions={
           <>
             {isList && !current.loading && (

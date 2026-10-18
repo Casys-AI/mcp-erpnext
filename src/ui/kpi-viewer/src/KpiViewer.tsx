@@ -816,7 +816,7 @@ function KpiCard({
               <StatusDot trend={data.trend} trendIsGood={data.trendIsGood} />
             )}
           </div>
-          <ContextChipRow>
+          <ContextChipRow reserve={activeContext.supported}>
             <ActiveContextChip
               compact
               selections={activeContext.selections}
@@ -1017,7 +1017,7 @@ function KpiCard({
               <StatusDot trend={data.trend} trendIsGood={data.trendIsGood} />
             )}
           </div>
-          <ContextChipRow>
+          <ContextChipRow reserve={activeContext.supported}>
             <ActiveContextChip
               selections={activeContext.selections}
               selection={activeContext.selection}
@@ -1313,6 +1313,7 @@ function KpiViewerContent({
               onClear={() => activeContext.clear()}
             />
           }
+          contextSupported={documentContext.supported}
         />
       )}
       {/* PathBar : null au niveau 1, visible dès le 2e niveau */}

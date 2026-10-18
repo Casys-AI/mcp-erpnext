@@ -1261,7 +1261,9 @@ function InvoiceContent({
             )}
           </div>
 
-          <ContextChipRow>{activeContextChip}</ContextChipRow>
+          <ContextChipRow reserve={context.supported}>
+            {activeContextChip}
+          </ContextChipRow>
         </div>
 
         {/* PathBar — invisible au niveau 1 (crumbs.showBar = false) */}
@@ -1507,7 +1509,9 @@ function InvoiceContent({
             </div>
           </div>
         )}
-        <ContextChipRow>{activeContextChip}</ContextChipRow>
+        <ContextChipRow reserve={context.supported}>
+          {activeContextChip}
+        </ContextChipRow>
       </div>
 
       {/* PathBar — invisible au niveau 1 */}

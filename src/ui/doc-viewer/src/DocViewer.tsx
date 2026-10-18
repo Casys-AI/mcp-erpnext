@@ -863,6 +863,7 @@ function DocumentContent({
               live={capabilities.canRefresh && !error}
               headerActions={headerActions}
               contextChip={activeContextChip}
+              contextSupported={context.supported}
               attachments={attachmentSurface}
               actions={mutationActions}
               footer={footer}

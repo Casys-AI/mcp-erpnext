@@ -4,6 +4,8 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.2.2] - 2026-10-18
+
 ### Fixed
 
 - The document layout read (`getdoctype`) is now bounded to 1.5 s and never

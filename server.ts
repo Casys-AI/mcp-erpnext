@@ -64,6 +64,7 @@ import { buildAuthProvider, loadAuthConfig } from "./src/auth/config.ts";
 import { warmCache } from "./src/cache/warm.ts";
 import { resourceMetadataRoute } from "./src/auth/resource-metadata-route.ts";
 import { loadMrtrConfig } from "./src/mrtr/config.ts";
+import { ACTIVE_CONTEXT_INSTRUCTIONS } from "./src/server-instructions.ts";
 
 const DEFAULT_HTTP_PORT = 3012;
 
@@ -159,6 +160,7 @@ async function main() {
   const server = new McpApp({
     name: "mcp-erpnext",
     version: "3.2.2",
+    instructions: ACTIVE_CONTEXT_INSTRUCTIONS,
     transport: "stateless",
     cache: {
       ttlMs: 3_600_000,

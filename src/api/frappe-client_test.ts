@@ -65,6 +65,72 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), { ...init, headers });
 }
 
+function mockStalledFetch(
+  phase: "headers" | "body",
+  stalledAttempts = Infinity,
+) {
+  const original = globalThis.fetch;
+  const cleanups: Array<() => void> = [];
+  let calls = 0;
+  globalThis.fetch = (_url, init): Promise<Response> => {
+    if (++calls > stalledAttempts) {
+      return Promise.resolve(jsonResponse({ docs: [] }));
+    }
+    let fail!: (reason: unknown) => void;
+    const response = phase === "headers"
+      ? new Promise<Response>((_resolve, reject) => {
+        fail = reject;
+      })
+      : Promise.resolve(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('{"docs":['));
+              fail = (reason) => controller.error(reason);
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      );
+    // Comme fetch, le faux transport interrompt aussi le flux à l'abandon.
+    const onAbort = () => fail(new DOMException("aborted", "AbortError"));
+    init?.signal?.addEventListener("abort", onAbort, { once: true });
+    if (init?.signal?.aborted) onAbort();
+    cleanups.push(() => {
+      init?.signal?.removeEventListener("abort", onAbort);
+      fail(new Error("Test cleanup"));
+    });
+    return response;
+  };
+  return {
+    get calls() {
+      return calls;
+    },
+    restore() {
+      globalThis.fetch = original;
+      for (const cleanup of cleanups) cleanup();
+    },
+  };
+}
+
+async function withinDeadline<T>(pending: Promise<T>, ms = 1000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      pending,
+      new Promise<never>((_resolve, reject) => {
+        // Cette garde fait échouer le test rouge sans le laisser suspendu.
+        timer = setTimeout(
+          () => reject(new Error("Test deadline exceeded")),
+          ms,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function makeClient(overrides: Record<string, unknown> = {}) {
   return new FrappeClient({
     baseUrl: "http://localhost:8000",
@@ -1015,6 +1081,235 @@ Deno.test("FrappeClient - throws FrappeAPIError on HTTP 500 (POST not retried)",
 });
 
 // ── Retry / backoff ───────────────────────────────────────────────────────────
+
+Deno.test({
+  name:
+    "FrappeClient timeout - a stalled response body times out without a caller signal",
+  sanitizeOps: true,
+  sanitizeResources: true,
+  async fn() {
+    const mock = mockStalledFetch("body");
+    try {
+      const error = await assertRejects(
+        () =>
+          withinDeadline(
+            makeClient({ timeoutMs: 20, retries: 0 }).callMethodRaw(
+              "my_app.api.ping",
+              {},
+              "GET",
+            ),
+          ),
+        FrappeAPIError,
+        "Request timed out after 20ms",
+      );
+      assertEquals(error.status, 408);
+      assertEquals(mock.calls, 1);
+    } finally {
+      mock.restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "FrappeClient timeout - headers and body share one deadline",
+  sanitizeOps: true,
+  sanitizeResources: true,
+  async fn() {
+    const mock = mockStalledFetch("body");
+    const stalledFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      return stalledFetch(url, init);
+    };
+    try {
+      const error = await assertRejects(
+        () =>
+          withinDeadline(
+            makeClient({ timeoutMs: 300, retries: 0 }).callMethodRaw(
+              "my_app.api.ping",
+              {},
+              "GET",
+            ),
+            // Un nouveau délai de 300 ms après les en-têtes dépasserait la garde.
+            450,
+          ),
+        FrappeAPIError,
+        "Request timed out after 300ms",
+      );
+      assertEquals(error.status, 408);
+      assertEquals(mock.calls, 1);
+    } finally {
+      mock.restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "FrappeClient timeout - headers and body follow the same retry policy",
+  sanitizeOps: true,
+  sanitizeResources: true,
+  async fn(t) {
+    const cases: Array<{
+      name: string;
+      config?: Record<string, unknown>;
+      method?: "GET" | "POST";
+      retry?: false;
+      stalledAttempts?: number;
+      calls: number;
+      success?: boolean;
+    }> = [
+      { name: "GET recovers", stalledAttempts: 1, calls: 2, success: true },
+      { name: "GET exhausts retries", calls: 4 },
+      { name: "retry false", retry: false, calls: 1 },
+      { name: "retries zero", config: { retries: 0 }, calls: 1 },
+      { name: "408 excluded", config: { retryStatuses: [] }, calls: 1 },
+      { name: "POST is not retried", method: "POST", calls: 1 },
+      {
+        name: "POST retries when configured",
+        method: "POST",
+        config: { retryMethods: ["POST"] },
+        stalledAttempts: 1,
+        calls: 2,
+        success: true,
+      },
+    ];
+    for (const phase of ["headers", "body"] as const) {
+      for (const scenario of cases) {
+        await t.step(`${phase}: ${scenario.name}`, async () => {
+          const mock = mockStalledFetch(phase, scenario.stalledAttempts);
+          try {
+            const pending = withinDeadline(
+              makeClient({ timeoutMs: 20, ...scenario.config }).callMethodRaw(
+                "my_app.api.ping",
+                {},
+                scenario.method ?? "GET",
+                { retry: scenario.retry },
+              ),
+            );
+            if (scenario.success) {
+              assertEquals(await pending, { docs: [] });
+            } else {
+              const error = await assertRejects(
+                () => pending,
+                FrappeAPIError,
+                "Request timed out after 20ms",
+              );
+              assertEquals(error.status, 408);
+            }
+            assertEquals(mock.calls, scenario.calls);
+          } finally {
+            mock.restore();
+          }
+        });
+      }
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "FrappeClient timeout - a normal streamed body is parsed and leaves no timer",
+  sanitizeOps: true,
+  sanitizeResources: true,
+  async fn() {
+    const original = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            for (const chunk of ['{"docs":[', '{"name":"Task"}]}']) {
+              controller.enqueue(new TextEncoder().encode(chunk));
+            }
+            controller.close();
+          },
+        }),
+        { headers: { "content-type": "application/json" } },
+      );
+    try {
+      assertEquals(
+        await makeClient().callMethodRaw("my_app.api.ping", {}, "GET"),
+        { docs: [{ name: "Task" }] },
+      );
+    } finally {
+      globalThis.fetch = original;
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "FrappeClient timeout - a body read failure is unchanged and leaves no timer",
+  sanitizeOps: true,
+  sanitizeResources: true,
+  async fn() {
+    const original = globalThis.fetch;
+    const bodyError = new TypeError("body stream failed");
+    let calls = 0;
+    globalThis.fetch = async () => {
+      calls++;
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(bodyError);
+          },
+        }),
+      );
+    };
+    try {
+      const error = await assertRejects(
+        () => makeClient().callMethodRaw("my_app.api.ping", {}, "GET"),
+        TypeError,
+      );
+      assertEquals(error, bodyError);
+      assertEquals(calls, 1);
+    } finally {
+      globalThis.fetch = original;
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "FrappeClient timeout - caller abort during body read remains 499 without retry",
+  sanitizeOps: true,
+  sanitizeResources: true,
+  async fn() {
+    const original = globalThis.fetch;
+    const caller = new AbortController();
+    let calls = 0;
+    globalThis.fetch = async (_url, init) => {
+      calls++;
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            init?.signal?.addEventListener("abort", () => {
+              controller.error(new DOMException("aborted", "AbortError"));
+            }, { once: true });
+          },
+          pull() {
+            caller.abort();
+          },
+        }, { highWaterMark: 0 }),
+      );
+    };
+    try {
+      const error = await assertRejects(
+        () =>
+          withinDeadline(
+            makeClient().callMethodRaw("my_app.api.ping", {}, "GET", {
+              signal: caller.signal,
+            }),
+          ),
+        FrappeAPIError,
+        "aborted",
+      );
+      assertEquals(error.status, 499);
+      assertEquals(calls, 1);
+    } finally {
+      globalThis.fetch = original;
+    }
+  },
+});
 
 Deno.test("FrappeClient retry - GET 503 succeeds on second attempt", async () => {
   const restore = mockFetch([

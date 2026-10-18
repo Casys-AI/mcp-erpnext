@@ -959,6 +959,60 @@ Deno.test("buildHandlersMap - a failing getdoctype never fails the tool", async 
   assertEquals(String(errors[0][0]).includes("Lead"), true);
 });
 
+Deno.test("buildHandlersMap - a getdoctype that never answers cannot delay or fail the document", async () => {
+  const errors: unknown[][] = [];
+  const consoleError = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  let layoutCalls = 0;
+  let layoutOptions: { retry?: boolean; signal?: AbortSignal } | undefined;
+  try {
+    await withFrappe({
+      get: () => Promise.resolve({ name: "LEAD-001", lead_name: "Ada" }),
+      // Pire cas : mémo vide et ERPNext muet sur getdoctype.
+      callMethodRaw: (
+        _method: string,
+        _args: unknown,
+        _http: unknown,
+        options?: { retry?: boolean; signal?: AbortSignal },
+      ) => {
+        layoutCalls++;
+        layoutOptions = options;
+        return new Promise(() => {});
+      },
+    }, async () => {
+      const handler = new ErpNextToolsClient().buildHandlersMap().get(
+        "erpnext_lead_get",
+      )!;
+
+      const startedAt = performance.now();
+      const result = await handler({ name: "LEAD-001" }) as ViewerResult;
+      const elapsed = performance.now() - startedAt;
+
+      // Budget de 1,5 s : très en deçà des 10 s du viewer.
+      assert(elapsed < 5000, `la fiche a attendu ${elapsed} ms`);
+      assertEquals(result.structuredContent.data, {
+        name: "LEAD-001",
+        lead_name: "Ada",
+        doctype: "Lead",
+      });
+      assertEquals(viewerBlock(result)._fieldLayout, undefined);
+      assert(Array.isArray(viewerBlock(result)._availableTools));
+
+      // Un seul essai, sans reprise ; l'échec est mémorisé : la fiche suivante
+      // n'attend plus du tout.
+      assertEquals(layoutOptions?.retry, false);
+      const again = performance.now();
+      await handler({ name: "LEAD-001" });
+      assert(performance.now() - again < 500);
+      assertEquals(layoutCalls, 1);
+    });
+  } finally {
+    console.error = consoleError;
+  }
+  assertEquals(errors.length, 1);
+  assertEquals(String(errors[0][0]).includes("Lead"), true);
+});
+
 Deno.test("buildHandlersMap - field layout is fetched once per DocType per hour", async () => {
   let calls = 0;
   await withFrappe({

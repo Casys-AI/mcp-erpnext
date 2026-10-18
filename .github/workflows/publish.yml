@@ -152,19 +152,23 @@ jobs:
         # A stable release supersedes the prereleases of its own line: `next`
         # must not keep pointing at an older beta. A prerelease of a later
         # line (for example 3.3.0-beta.1 while 3.2.1 ships) is left alone.
+        # scripts/align-next-dist-tag.mjs owns the decision (unit-tested with
+        # `deno task test:scripts`). When the registry cannot be read, `next`
+        # is NOT touched: a failed read must never pass for "no next tag" and
+        # downgrade a newer beta.
         if: needs.release_guard.outputs.npm_dist_tag == 'latest'
         run: |
-          NEXT=$(npm view @casys/mcp-erpnext dist-tags.next 2>/dev/null || true)
-          if [ -z "$NEXT" ] || node -e '
-            const base = (v) => v.split("-")[0].split(".").map(Number);
-            const [n, r] = [base(process.argv[1]), base(process.argv[2])];
-            const cmp = n[0] - r[0] || n[1] - r[1] || n[2] - r[2];
-            process.exit(cmp <= 0 ? 0 : 1);
-          ' "$NEXT" "$RELEASE_VERSION"; then
-            echo "Aligning next (${NEXT:-none}) with $RELEASE_VERSION"
+          DECISION=$(node scripts/align-next-dist-tag.mjs --version "$RELEASE_VERSION")
+          echo "$DECISION"
+          ACTION=$(node -p 'JSON.parse(process.argv[1]).action' "$DECISION")
+          REASON=$(node -p 'JSON.parse(process.argv[1]).reason' "$DECISION")
+          if [ "$ACTION" = "align" ]; then
+            echo "Aligning next with $RELEASE_VERSION ($REASON)"
             npm dist-tag add "@casys/mcp-erpnext@$RELEASE_VERSION" next
+          elif [ "$REASON" = "READ_FAILED" ]; then
+            echo "::warning title=next dist-tag left untouched::Could not read the npm dist-tags, so next was not modified. If next should follow $RELEASE_VERSION, run: npm dist-tag add @casys/mcp-erpnext@$RELEASE_VERSION next"
           else
-            echo "Keeping next at $NEXT (newer line than $RELEASE_VERSION)"
+            echo "Keeping next ($REASON)"
           fi
         env:
           RELEASE_VERSION: ${{ needs.release_guard.outputs.version }}

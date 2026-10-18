@@ -5,6 +5,7 @@ import {
   DOCTYPE_LAYOUT_FAILURE_TTL_MS,
   DOCTYPE_LAYOUT_MAX_ENTRIES,
   DOCTYPE_LAYOUT_SKIPPED,
+  DOCTYPE_LAYOUT_TIMEOUT_MS,
   DOCTYPE_LAYOUT_TTL_MS,
   docTypeLayoutOf,
   fetchDocTypeLayout,
@@ -654,4 +655,145 @@ Deno.test("fetchDocTypeLayout - un client sans callMethodRaw ne fait pas échoue
     log: () => {},
   });
   assertEquals(layout, null);
+});
+
+// ── Budget de temps : la mise en page ne retarde jamais la fiche ──────────────
+
+interface BudgetCall {
+  options: { signal?: AbortSignal; retry?: boolean } | undefined;
+}
+
+/** Faux client dont la réponse arrive après `delayMs` (jamais si `null`). */
+function slowClient(
+  delayMs: number | null,
+  seen: BudgetCall[] = [],
+  { honorSignal = false }: { honorSignal?: boolean } = {},
+): FrappeClient {
+  return {
+    callMethodRaw: (
+      _method: string,
+      _args: unknown,
+      _http: unknown,
+      options?: BudgetCall["options"],
+    ) => {
+      seen.push({ options });
+      return new Promise((resolve, reject) => {
+        if (honorSignal) {
+          options?.signal?.addEventListener(
+            "abort",
+            () => reject(new Error("aborted by signal")),
+          );
+        }
+        if (delayMs !== null) {
+          setTimeout(() => resolve(SALES_INVOICE_GETDOCTYPE), delayMs);
+        }
+      });
+    },
+  } as unknown as FrappeClient;
+}
+
+Deno.test("fetchDocTypeLayout - le budget par défaut est de 1,5 s", () => {
+  assertEquals(DOCTYPE_LAYOUT_TIMEOUT_MS, 1500);
+});
+
+Deno.test("fetchDocTypeLayout - un client qui ne répond jamais rend null dans le budget", async () => {
+  const seen: BudgetCall[] = [];
+  const logs: string[] = [];
+  const { memo } = freshMemo();
+
+  const startedAt = performance.now();
+  const layout = await fetchDocTypeLayout(
+    slowClient(null, seen),
+    "Sales Invoice",
+    { memo, timeoutMs: 30, log: (message) => logs.push(message) },
+  );
+  const elapsed = performance.now() - startedAt;
+
+  assertEquals(layout, null);
+  // Largement sous le délai du viewer (10 s) comme sous les reprises du client.
+  assertEquals(elapsed < 1000, true, `a pris ${elapsed} ms`);
+  assertEquals(logs.length, 1);
+  assertEquals(logs[0].includes("Sales Invoice"), true);
+  assertEquals(logs[0].includes("30"), true);
+  // Un seul appel, sans reprise, annulable.
+  assertEquals(seen.length, 1);
+  assertEquals(seen[0].options?.retry, false);
+  assertEquals(seen[0].options?.signal instanceof AbortSignal, true);
+});
+
+Deno.test("fetchDocTypeLayout - au dépassement, le signal d'annulation est déclenché", async () => {
+  const seen: BudgetCall[] = [];
+  const layout = await fetchDocTypeLayout(
+    slowClient(null, seen, { honorSignal: true }),
+    "Sales Invoice",
+    { memo: freshMemo().memo, timeoutMs: 20, log: () => {} },
+  );
+
+  assertEquals(layout, null);
+  assertEquals(seen[0].options?.signal?.aborted, true);
+});
+
+Deno.test("fetchDocTypeLayout - un dépassement est mémorisé 60 s comme les autres échecs", async () => {
+  const seen: BudgetCall[] = [];
+  const { memo, time } = freshMemo();
+  const options = { memo, timeoutMs: 20, log: () => {} };
+
+  assertEquals(
+    await fetchDocTypeLayout(slowClient(null, seen), "Sales Invoice", options),
+    null,
+  );
+  assertEquals(memo.get("Sales Invoice"), null);
+
+  // Dans les 60 s : ni attente ni nouvel appel.
+  time.advance(DOCTYPE_LAYOUT_FAILURE_TTL_MS - 1);
+  assertEquals(
+    await fetchDocTypeLayout(slowClient(null, seen), "Sales Invoice", options),
+    null,
+  );
+  assertEquals(seen.length, 1);
+
+  // Passé les 60 s : nouvel essai, qui peut aboutir.
+  time.advance(1);
+  const layout = await fetchDocTypeLayout(
+    slowClient(0, seen),
+    "Sales Invoice",
+    options,
+  );
+  assertEquals(seen.length, 2);
+  assertEquals(layout?.preview[0], "customer_name");
+});
+
+Deno.test("fetchDocTypeLayout - un client lent mais sous le budget donne la mise en page", async () => {
+  const { memo } = freshMemo();
+  const layout = await fetchDocTypeLayout(
+    slowClient(20),
+    "Sales Invoice",
+    { memo, timeoutMs: 1000, log: () => {} },
+  );
+
+  assertEquals(layout?.preview[0], "customer_name");
+  assertEquals(memo.get("Sales Invoice")?.preview[0], "customer_name");
+});
+
+Deno.test("fetchDocTypeLayout - une réponse tardive après le budget ne remplace pas l'échec mémorisé", async () => {
+  const { memo } = freshMemo();
+  await fetchDocTypeLayout(slowClient(60), "Sales Invoice", {
+    memo,
+    timeoutMs: 10,
+    log: () => {},
+  });
+  // La réponse du faux client arrive ici, bien après le budget.
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  assertEquals(memo.get("Sales Invoice"), null);
+});
+
+Deno.test("fetchDocTypeLayout - un appel réussi dans le budget ne laisse aucun minuteur", async () => {
+  // Le détecteur de fuites de `Deno.test` échoue si le minuteur du budget survit.
+  const layout = await fetchDocTypeLayout(
+    slowClient(0),
+    "Sales Invoice",
+    { memo: freshMemo().memo, timeoutMs: 60_000, log: () => {} },
+  );
+  assertEquals(layout?.preview[0], "customer_name");
 });

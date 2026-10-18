@@ -1515,6 +1515,127 @@ Deno.test("FrappeClient.callMethodRaw() - propagates HTTP errors as FrappeAPIErr
   }
 });
 
+Deno.test("FrappeClient.callMethodRaw() - { retry: false } makes a single attempt on a transient failure", async () => {
+  const transient = {
+    status: 503,
+    body: { exc_type: "ServiceUnavailable", message: "Busy" },
+  };
+  // Par défaut, le client reprend un 503 sur GET : le 2e appel réussit.
+  let restore = mockFetch([transient, { status: 200, body: { docs: [] } }]);
+  try {
+    assertEquals(
+      await makeClient().callMethodRaw("my_app.api.ping", {}, "GET"),
+      { docs: [] },
+    );
+    assertEquals(callCountRef.current, 2);
+  } finally {
+    restore();
+  }
+
+  // Avec `retry: false`, le même 503 remonte tel quel après une seule tentative.
+  restore = mockFetch([transient, { status: 200, body: { docs: [] } }]);
+  try {
+    const error = await assertRejects(
+      () =>
+        makeClient().callMethodRaw("my_app.api.ping", {}, "GET", {
+          retry: false,
+        }),
+      FrappeAPIError,
+    );
+    assertEquals(error.status, 503);
+    assertEquals(callCountRef.current, 1);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("FrappeClient.callMethodRaw() - an abort signal cancels the request without any retry", async () => {
+  const original = globalThis.fetch;
+  let fetchCalls = 0;
+  let fetchSignal: AbortSignal | null | undefined;
+  // Un serveur qui ne répond jamais : seul le signal met fin à l'attente.
+  globalThis.fetch = (
+    _url: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    fetchCalls++;
+    fetchSignal = init?.signal;
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener(
+        "abort",
+        () => reject(new DOMException("aborted", "AbortError")),
+      );
+    });
+  };
+
+  try {
+    const controller = new AbortController();
+    const pending = makeClient({ retries: 3 }).callMethodRaw(
+      "my_app.api.ping",
+      {},
+      "GET",
+      { signal: controller.signal },
+    );
+    controller.abort();
+    const error = await assertRejects(() => pending, FrappeAPIError);
+    // L'abandon vient de l'appelant : ni 408 (délai) ni 0 (réseau), jamais repris.
+    assertEquals(error.status, 499);
+    assertEquals(error.message.includes("aborted"), true);
+    assertEquals(fetchCalls, 1);
+    assertEquals(fetchSignal?.aborted, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.callMethodRaw() - an already aborted signal fails fast without touching the network", async () => {
+  const original = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = (): Promise<Response> => {
+    fetchCalls++;
+    return Promise.resolve(jsonResponse({ docs: [] }));
+  };
+
+  try {
+    const error = await assertRejects(
+      () =>
+        makeClient().callMethodRaw("my_app.api.ping", {}, "GET", {
+          signal: AbortSignal.abort(),
+        }),
+      FrappeAPIError,
+    );
+    assertEquals(error.status, 499);
+    assertEquals(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.callMethodRaw() - an abort signal also interrupts the retry backoff", async () => {
+  // 1er essai : 503, puis une attente de 10 s avant la reprise.
+  const restore = mockFetch([
+    { status: 503, body: { message: "Busy" } },
+    { status: 200, body: { docs: [] } },
+  ]);
+  try {
+    const controller = new AbortController();
+    const startedAt = performance.now();
+    const pending = makeClient({ retryBackoffMs: 10_000 }).callMethodRaw(
+      "my_app.api.ping",
+      {},
+      "GET",
+      { signal: controller.signal },
+    );
+    setTimeout(() => controller.abort(), 20);
+    const error = await assertRejects(() => pending, FrappeAPIError);
+    assertEquals(error.status, 499);
+    assertEquals(callCountRef.current, 1);
+    assertEquals(performance.now() - startedAt < 2000, true);
+  } finally {
+    restore();
+  }
+});
+
 Deno.test("normalizeFrappeSiteUrl strips credentials, query, fragment, and trailing slash", () => {
   assertEquals(
     normalizeFrappeSiteUrl(

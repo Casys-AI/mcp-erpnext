@@ -30,6 +30,12 @@ export const DOCTYPE_LAYOUT_TTL_MS = 60 * 60 * 1000;
 /** Un échec est mémorisé brièvement : pas d'aller-retour raté à chaque fiche. */
 export const DOCTYPE_LAYOUT_FAILURE_TTL_MS = 60 * 1000;
 export const DOCTYPE_LAYOUT_MAX_ENTRIES = 200;
+/**
+ * Temps maximal accordé à la lecture d'une mise en page. La fiche est déjà
+ * obtenue quand on la demande, et le viewer abandonne son appel après 10 s :
+ * la mise en page ne doit jamais retarder la réponse au-delà de ce budget.
+ */
+export const DOCTYPE_LAYOUT_TIMEOUT_MS = 1500;
 
 /**
  * DocTypes dont la vue n'utilise pas la mise en page : Company a sa sélection
@@ -240,6 +246,8 @@ export const docTypeLayoutMemo: DocTypeLayoutMemo = createDocTypeLayoutMemo();
 
 export interface FetchDocTypeLayoutOptions {
   memo?: DocTypeLayoutMemo;
+  /** Budget de la lecture, sans reprise (`DOCTYPE_LAYOUT_TIMEOUT_MS` par défaut). */
+  timeoutMs?: number;
   /** Trace d'un échec non fatal (stderr par défaut : stdout est le canal MCP). */
   log?: (message: string) => void;
 }
@@ -254,6 +262,11 @@ function logToStderr(message: string): void {
  * Fail-soft par contrat : la mise en page est un confort de lecture. Une
  * erreur (permission, 404, réseau) renvoie `null` et ne fait jamais échouer
  * l'outil qui l'attache. Aucune lecture pour `DOCTYPE_LAYOUT_SKIPPED`.
+ *
+ * La lecture est bornée par `timeoutMs` et sans reprise : au dépassement, la
+ * requête est annulée (`signal`) et `null` est rendu, mémorisé comme tout
+ * autre échec. `Promise.race` garantit le budget même si le client ignore le
+ * signal.
  */
 export async function fetchDocTypeLayout(
   client: FrappeClient,
@@ -265,12 +278,27 @@ export async function fetchDocTypeLayout(
   const remembered = memo.get(doctype);
   if (remembered !== undefined) return remembered;
 
+  const timeoutMs = options.timeoutMs ?? DOCTYPE_LAYOUT_TIMEOUT_MS;
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const budget = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      // Rejeter avant d'annuler : le dépassement prime sur l'erreur d'annulation.
+      reject(new Error(`getdoctype exceeded the ${timeoutMs}ms budget`));
+      controller.abort();
+    }, timeoutMs);
+  });
+
   try {
-    const response = await client.callMethodRaw(
-      GETDOCTYPE_METHOD,
-      { doctype },
-      "GET",
-    );
+    const response = await Promise.race([
+      client.callMethodRaw(
+        GETDOCTYPE_METHOD,
+        { doctype },
+        "GET",
+        { signal: controller.signal, retry: false },
+      ),
+      budget,
+    ]);
     const layout = docTypeLayoutOf(response);
     if (!layout) throw new Error("unreadable getdoctype response");
     memo.set(doctype, layout);
@@ -283,5 +311,7 @@ export async function fetchDocTypeLayout(
     );
     memo.set(doctype, null);
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }

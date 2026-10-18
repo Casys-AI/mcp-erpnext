@@ -1,10 +1,25 @@
 # Concepts
 
-This document explains the reasoning behind five design decisions you encounter
-when the server does something unexpected: a write failing where a read
-succeeds, a warning at startup, a question about which transport to use,
-uncertainty about what to do when no typed tool exists for a DocType, and
-confusion about which cache controls which data.
+This document explains the reasoning behind design decisions you encounter when
+the server does something unexpected: a write failing where a read succeeds, a
+warning at startup, a question about which transport to use, uncertainty about
+what to do when no typed tool exists for a DocType, confusion about which cache
+controls which data, and viewer selections shared with the model.
+
+## Active viewer context
+
+On compatible hosts, user selections in ERPNext viewers are shared as model
+context with the shape
+`{ schema: "casys.erpnext/active-context", version: 2, items: [{ id, view, label, value? }] }`.
+The snapshot contains up to eight compact references, with an optional visible
+`value`; it helps identify the documents and values the user is referring to.
+The server instructions describe this format to the model.
+
+Document IDs have the form `record:<doctype>:<name>`. The `<name>` component is
+accepted as the `name` argument by the matching `*_get` tool; `erpnext_doc_get`
+accepts `<doctype>` and `<name>` as separate arguments. The full context ID is
+not a tool's document name. Child-row selections append `:row:<table>:<row>` to
+the parent document ID.
 
 ## How link resolution works — and why writes are stricter
 

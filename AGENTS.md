@@ -37,9 +37,11 @@ workflows, and interactive UI viewers. Published as `@casys/mcp-erpnext` on npm
   (Node.js) — the build script swaps them.
 - **Scripts**: `scripts/build-node.sh` produces the npm bundle;
   `scripts/release-guard.mjs` is the publish guard (versions, tag ref, npm
-  dist-tag, `latest` never moves backwards); `scripts/third-party-notices.mjs`
-  generates/checks `THIRD_PARTY_NOTICES.txt`. Their tests (`scripts/*_test.ts`)
-  run with `deno task test:scripts`.
+  dist-tag, `latest` never moves backwards); `scripts/align-next-dist-tag.mjs`
+  decides whether a stable release realigns `next` (an unreadable npm registry
+  leaves `next` untouched); `scripts/third-party-notices.mjs` generates/checks
+  `THIRD_PARTY_NOTICES.txt`. Their tests (`scripts/*_test.ts`) run with
+  `deno task test:scripts`.
 - **Docs**: `docs/` contains roadmap, known issues, and coverage notes.
 - Keep UI-only deps in `src/ui/package.json`; do not add them to `deno.json`.
   Conversely, server-side deps go in the `deno.json` import map.
@@ -149,7 +151,8 @@ singleton. The client is lazily initialized from env vars on first use.
 `src/api/frappe-client.ts` is a zero-dependency HTTP client wrapping the Frappe
 REST API. Key methods: `list()`, `get()`, `create()`, `update()`, `delete()`,
 `callMethod()` (returns `message`), `callMethodRaw()` (whole body, for methods
-that fill `frappe.response` such as `getdoctype`), `invalidate()`. All errors
+that fill `frappe.response` such as `getdoctype`; optional `signal` and `retry`
+(`false` = no retry) to cancel or skip retries), `invalidate()`. All errors
 throw `FrappeAPIError` with HTTP status and parsed body — no silent fallbacks.
 
 **Submit handlers must GET the doc first** to pass `modified` for Frappe's
@@ -182,7 +185,9 @@ in-process implementation — a hand-rolled TTL `Map`, zero dependencies;
   enabled) and `MCP_CACHE_TTL_MS` (default `15000`).
 - **DocType layouts**: `src/tools/doctype-layout.ts` keeps its own in-process
   memo (bounded to 200 DocTypes, 1 h on success, 60 s on failure), independent
-  of `MCP_CACHE_ENABLED`. Company and DocType are never read.
+  of `MCP_CACHE_ENABLED`. Company and DocType are never read. The read is
+  bounded to 1.5 s (`DOCTYPE_LAYOUT_TIMEOUT_MS`) with no retry: past that, the
+  record is returned without a layout.
 - **Warming**: `src/cache/warm.ts`'s `warmCache()` optionally pre-populates the
   cache on startup by calling a configured set of read-only `_list` tool
   handlers with no filters — matching the exact cache key a real unfiltered call

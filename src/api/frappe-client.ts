@@ -101,6 +101,52 @@ export interface FrappeClientConfig {
   cache?: Cache;
 }
 
+/** Options d'un appel de méthode (`callMethod` / `callMethodRaw`). */
+export interface FrappeCallOptions {
+  /**
+   * Annule l'appel dès que le signal se déclenche : la requête HTTP en cours
+   * est interrompue et aucune reprise n'est tentée (`FrappeAPIError` 499).
+   */
+  signal?: AbortSignal;
+  /**
+   * `false` : une seule tentative, sans reprise, quelle que soit la politique
+   * du client. Par défaut (`true`), la politique du client s'applique.
+   */
+  retry?: boolean;
+}
+
+/** Statut de `FrappeAPIError` quand l'appelant abandonne via son `signal`. */
+const CALLER_ABORT_STATUS = 499;
+
+/** Propage l'annulation de `from` vers `to` ; renvoie la fonction de détachement. */
+function relayAbort(
+  from: AbortSignal | undefined,
+  to: AbortController,
+): () => void {
+  if (!from) return () => {};
+  if (from.aborted) {
+    to.abort();
+    return () => {};
+  }
+  const onAbort = () => to.abort();
+  from.addEventListener("abort", onAbort, { once: true });
+  return () => from.removeEventListener("abort", onAbort);
+}
+
+/** Attente interrompue par le signal : la boucle de reprise teste ensuite `aborted`. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done, { once: true });
+  });
+}
+
 const DEFAULT_RETRY_STATUSES = [408, 429, 502, 503, 504];
 const DEFAULT_RETRY_METHODS = ["GET"];
 const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -335,7 +381,8 @@ export function normalizeFrappeSiteUrl(baseUrl: string): string {
 export class FrappeAPIError extends Error {
   /**
    * @param message - Human-readable error description
-   * @param status - HTTP status code (0 for network errors, 408 for timeouts)
+   * @param status - HTTP status code (0 for network errors, 408 for timeouts,
+   *                 499 when the caller aborted through its `signal`)
    * @param body - Raw response body (parsed JSON object or plain text string)
    * @param retryAfterMs - When the server sent a `Retry-After` header on a
    *                      retryable status (typically 429), the parsed delay
@@ -350,6 +397,14 @@ export class FrappeAPIError extends Error {
     super(`[FrappeClient] ${message} (HTTP ${status})`);
     this.name = "FrappeAPIError";
   }
+}
+
+function callerAbortError(method: string, path: string): FrappeAPIError {
+  return new FrappeAPIError(
+    `Request aborted by caller: ${method} ${path}`,
+    CALLER_ABORT_STATUS,
+    null,
+  );
 }
 
 /**
@@ -494,22 +549,31 @@ export class FrappeClient {
     path: string,
     body?: unknown,
     multipart = false,
+    options: FrappeCallOptions = {},
   ): Promise<T> {
+    const { signal } = options;
+    const retries = options.retry === false ? 0 : this.retries;
     let lastError: unknown;
-    for (let attempt = 0; attempt <= this.retries; attempt++) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      if (signal?.aborted) throw callerAbortError(method, path);
       try {
-        return await this.requestOnce<T>(method, path, body, multipart);
+        return await this.requestOnce<T>(
+          method,
+          path,
+          body,
+          multipart,
+          signal,
+        );
       } catch (err) {
         lastError = err;
         if (
-          attempt === this.retries || !this.isRetryable(err, method)
+          attempt === retries || signal?.aborted ||
+          !this.isRetryable(err, method)
         ) {
           throw err;
         }
         const delay = this.computeBackoff(attempt, err);
-        if (delay > 0) {
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
+        if (delay > 0) await sleep(delay, signal);
       }
     }
     // Defensive: the loop above either returns or throws.
@@ -521,9 +585,35 @@ export class FrappeClient {
     path: string,
     body?: unknown,
     multipart = false,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    // Le signal de l'appelant coupe aussi la lecture du corps, d'où le
+    // détachement tardif, une fois la réponse entièrement traitée.
+    const controller = new AbortController();
+    const detach = relayAbort(signal, controller);
+    try {
+      return await this.sendOnce<T>(
+        method,
+        path,
+        body,
+        multipart,
+        controller,
+        signal,
+      );
+    } finally {
+      detach();
+    }
+  }
+
+  private async sendOnce<T>(
+    method: string,
+    path: string,
+    body: unknown,
+    multipart: boolean,
+    controller: AbortController,
+    callerSignal?: AbortSignal,
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
-    const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
     let response: Response;
@@ -541,6 +631,7 @@ export class FrappeClient {
     } catch (err) {
       clearTimeout(timer);
       if (err instanceof Error && err.name === "AbortError") {
+        if (callerSignal?.aborted) throw callerAbortError(method, path);
         throw new FrappeAPIError(
           `Request timed out after ${this.timeoutMs}ms: ${method} ${path}`,
           408,
@@ -558,7 +649,13 @@ export class FrappeClient {
     // Read the body once as text, then attempt JSON parsing only if appropriate.
     // Reading via response.text() first lets us recover gracefully when the
     // server lies about content-type (e.g. HTML error pages with JSON CT).
-    const rawText = await response.text();
+    let rawText: string;
+    try {
+      rawText = await response.text();
+    } catch (err) {
+      if (callerSignal?.aborted) throw callerAbortError(method, path);
+      throw err;
+    }
     const contentType = response.headers.get("content-type") ?? "";
     let responseBody: unknown = rawText;
     if (contentType.includes("application/json") && rawText.length > 0) {
@@ -1093,11 +1190,15 @@ export class FrappeClient {
    * its `message`. Needed for methods that fill `frappe.response` rather than
    * returning a value, such as `frappe.desk.form.load.getdoctype` (`docs` at
    * the top level, no `message`).
+   *
+   * `options` borne un appel facultatif : `{ retry: false }` coupe les reprises
+   * et `signal` annule la requête en cours.
    */
   async callMethodRaw<T = unknown>(
     method: string,
     args: Record<string, unknown> = {},
     httpMethod: "GET" | "POST" = "POST",
+    options: FrappeCallOptions = {},
   ): Promise<T> {
     if (httpMethod === "GET") {
       const params = new URLSearchParams();
@@ -1109,10 +1210,22 @@ export class FrappeClient {
         );
       }
       const query = params.toString() ? `?${params.toString()}` : "";
-      return await this.request<T>("GET", `/api/method/${method}${query}`);
+      return await this.request<T>(
+        "GET",
+        `/api/method/${method}${query}`,
+        undefined,
+        false,
+        options,
+      );
     }
 
-    return await this.request<T>("POST", `/api/method/${method}`, args);
+    return await this.request<T>(
+      "POST",
+      `/api/method/${method}`,
+      args,
+      false,
+      options,
+    );
   }
 }
 

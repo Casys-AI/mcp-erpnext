@@ -4,6 +4,16 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- The document layout read (`getdoctype`) is now bounded to 1.5 s and never
+  retried, so a slow or silent ERPNext can no longer turn an already fetched
+  record into an error in the viewer. On timeout the record is returned without
+  a layout, and the failure is remembered for 60 s.
+- The publish workflow no longer touches the `next` dist-tag when the npm
+  dist-tags cannot be read: a failed read used to pass for "no `next` tag" and
+  could move a newer beta (such as `3.3.0-beta.1`) back to a stable release.
+
 ## [3.2.1] - 2026-10-18
 
 ### Changed

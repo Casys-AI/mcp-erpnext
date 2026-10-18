@@ -587,10 +587,11 @@ export class FrappeClient {
     multipart = false,
     signal?: AbortSignal,
   ): Promise<T> {
-    // Le signal de l'appelant coupe aussi la lecture du corps, d'où le
-    // détachement tardif, une fois la réponse entièrement traitée.
+    // Une seule échéance couvre les en-têtes et le corps ; le signal de
+    // l'appelant reste lui aussi relié jusqu'à la fin du traitement.
     const controller = new AbortController();
     const detach = relayAbort(signal, controller);
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       return await this.sendOnce<T>(
         method,
@@ -601,6 +602,7 @@ export class FrappeClient {
         signal,
       );
     } finally {
+      clearTimeout(timer);
       detach();
     }
   }
@@ -614,7 +616,6 @@ export class FrappeClient {
     callerSignal?: AbortSignal,
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
     let response: Response;
     try {
@@ -629,7 +630,6 @@ export class FrappeClient {
         signal: controller.signal,
       });
     } catch (err) {
-      clearTimeout(timer);
       if (err instanceof Error && err.name === "AbortError") {
         if (callerSignal?.aborted) throw callerAbortError(method, path);
         throw new FrappeAPIError(
@@ -644,8 +644,6 @@ export class FrappeClient {
         null,
       );
     }
-    clearTimeout(timer);
-
     // Read the body once as text, then attempt JSON parsing only if appropriate.
     // Reading via response.text() first lets us recover gracefully when the
     // server lies about content-type (e.g. HTML error pages with JSON CT).
@@ -654,6 +652,13 @@ export class FrappeClient {
       rawText = await response.text();
     } catch (err) {
       if (callerSignal?.aborted) throw callerAbortError(method, path);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new FrappeAPIError(
+          `Request timed out after ${this.timeoutMs}ms: ${method} ${path}`,
+          408,
+          null,
+        );
+      }
       throw err;
     }
     const contentType = response.headers.get("content-type") ?? "";

@@ -10,6 +10,12 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
   references, helping models understand user selections and retrieve the
   corresponding ERPNext documents.
 
+### Fixed
+
+- Frappe request timeouts now cover both response headers and body with a single
+  deadline per attempt, so a stalled response body cannot hang indefinitely.
+  Existing retry rules and caller cancellation behavior are preserved.
+
 ## [3.2.2] - 2026-10-18
 
 ### Fixed

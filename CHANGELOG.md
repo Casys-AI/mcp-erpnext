@@ -4,6 +4,8 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.2.3] - 2026-10-18
+
 ### Added
 
 - Server instructions describe the active viewer context schema and document

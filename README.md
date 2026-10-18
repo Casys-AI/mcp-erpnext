@@ -10,13 +10,16 @@ English | [繁體中文](README.zh-TW.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > [!IMPORTANT]
-> **Installing 3.2:** for npm/Node use `npx -y @casys/mcp-erpnext@latest`; for
-> Deno use `deno run -A jsr:@casys/mcp-erpnext@3.2.3/server`. 3.2.3 is the
+> **Installing 3.3:** for npm/Node use `npx -y @casys/mcp-erpnext@latest`; for
+> Deno use `deno run -A jsr:@casys/mcp-erpnext@3.3.0/server`. 3.3.0 is the
 > stable release and carries npm's `latest` tag; prereleases, when published,
-> use the `next` tag. 3.2 adds the generic document viewer and attachment
-> workflows, so test it with the MCP host your users actually run before
-> replacing an existing deployment. See the [CHANGELOG](CHANGELOG.md) for
-> release history.
+> use the `next` tag. 3.3 adds graduated selection to the active context: list
+> checkboxes, select-all over the filtered rows, Shift-click ranges and
+> Ctrl/Cmd-click toggles, compact records for one to three selections,
+> references up to eight and a single `erpnext_doc_list` query item beyond.
+> Chart clicks snap to the nearest point in their column. Test it with the MCP
+> host your users actually run before replacing an existing deployment. See the
+> [CHANGELOG](CHANGELOG.md) for release history.
 
 Let any MCP-compatible AI agent operate your [ERPNext](https://erpnext.com) /
 Frappe instance — documents, workflows, and interactive viewers inside the host
@@ -96,7 +99,7 @@ stable 3.0.5 and 3.1.0 releases. Features remain capability-gated by the MCP
 host; Buy evidence does not purchase or qualify a live ERP.
 
 For stable npm installations use `@casys/mcp-erpnext@latest`; for Deno use
-`jsr:@casys/mcp-erpnext@3.2.3/server`.
+`jsr:@casys/mcp-erpnext@3.3.0/server`.
 
 See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
 [latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for

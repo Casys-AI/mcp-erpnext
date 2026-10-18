@@ -4,6 +4,8 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-10-18
+
 ### Added
 
 - Doclist rows support Shift-click ranges and Ctrl/Cmd-click toggles, including
@@ -37,6 +39,9 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ### Fixed
 
+- Selecting a row no longer shifts viewer tables: viewer headers reserve the
+  context chip slot when the host supports the active context, and sharing
+  notices render as badges inside the chip.
 - Category/time charts snap plot clicks and taps to the nearest column and
   visible series instead of selecting the whole chart; Shift-click selects it.
 

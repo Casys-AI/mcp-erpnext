@@ -49,6 +49,43 @@ Deno.test("puce : une référence conserve son libellé", () => {
   );
 });
 
+Deno.test("puce : un seul membre affiche row et conserve le résumé du groupe", () => {
+  const selection = setSelectionGroupMembers(
+    emptySelectionState(),
+    invoiceSelection(1).groups[0],
+    [{ name: "INV-1", label: "INV-1", fieldsSource: "row" }],
+  );
+  const [entry] = activeContextChipEntries(
+    projectedSelectionEntries(selection),
+    selection,
+  );
+  assertEquals(entry.label, "1 row · Sales Invoice");
+  assertEquals(entry.summary, "1 Sales Invoice");
+});
+
+Deno.test("puce : une requête d'une ligne affiche row sans modifier son résumé", () => {
+  assertEquals(
+    activeContextChipItem({
+      id: "query:Sales Invoice:one",
+      view: "Sales invoices",
+      label: "1 Sales Invoice",
+      query: {
+        tool: "erpnext_doc_list",
+        args: {
+          doctype: "Sales Invoice",
+          filters: [["name", "in", ["INV-1"]]],
+          fields: ["name"],
+          limit: 1,
+        },
+        selectedCount: 1,
+        includedCount: 1,
+        truncated: false,
+      },
+    }),
+    { label: "1 row · Sales Invoice", summary: "1 Sales Invoice" },
+  );
+});
+
 Deno.test("puce : deux membres dépliés et un single donnent une puce par sélection", () => {
   const selection = addSelectionSingle(invoiceSelection(2), "root", {
     id: "record:Customer:CUST-1",

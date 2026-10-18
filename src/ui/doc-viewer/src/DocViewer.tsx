@@ -791,19 +791,21 @@ function DocumentContent({
       />
     )
     : undefined;
+  const activeContextChip = (
+    <ActiveContextChip
+      selections={activeContext.selections}
+      selection={activeContext.selection}
+      onRemoveGroup={activeContext.removeGroup}
+      failed={activeContext.failed}
+      pending={activeContext.pending}
+      evictedLabel={activeContext.evictedLabel}
+      onRemove={activeContext.remove}
+      onClear={activeContext.clear}
+      compact={layout !== "wide"}
+    />
+  );
   const headerActions = (
     <>
-      <ActiveContextChip
-        selections={activeContext.selections}
-        selection={activeContext.selection}
-        onRemoveGroup={activeContext.removeGroup}
-        failed={activeContext.failed}
-        pending={activeContext.pending}
-        evictedLabel={activeContext.evictedLabel}
-        onRemove={activeContext.remove}
-        onClear={activeContext.clear}
-        compact={layout !== "wide"}
-      />
       {rootStale && (
         <span
           role="status"
@@ -860,6 +862,7 @@ function DocumentContent({
               layout={layout}
               live={capabilities.canRefresh && !error}
               headerActions={headerActions}
+              contextChip={activeContextChip}
               attachments={attachmentSurface}
               actions={mutationActions}
               footer={footer}

@@ -372,9 +372,9 @@ function DoclistContent({
           : undefined}
         live={isRoot && refreshAvailable && !error}
         layout={layout}
+        contextChip={activeContextChip}
         actions={
           <>
-            {activeContextChip}
             {isList && !current.loading && (
               <>
                 <SearchControl
@@ -419,12 +419,6 @@ function DoclistContent({
         onJump={nav.popTo}
         loading={current.loading}
       />
-      {layout === "panel" &&
-        (activeContext.selections.length > 0 || activeContext.failed) && (
-        <div class="flex shrink-0 justify-end border-b border-line-soft bg-sunken px-3 py-2">
-          {activeContextChip}
-        </div>
-      )}
       <LevelBody
         level={current}
         app={app}

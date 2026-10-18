@@ -21,6 +21,10 @@ export type ActiveContextChipEntry =
     | { kind: "group"; group: SelectionGroup }
   );
 
+function rowSelectionLabel(count: number, doctype: string): string {
+  return `${count} ${count === 1 ? "row" : "rows"} · ${doctype}`;
+}
+
 export function activeContextChipEntries(
   selections: readonly ActiveContextSelection[],
   selection?: SelectionState,
@@ -47,7 +51,7 @@ export function activeContextChipEntries(
       entry: {
         kind: "group",
         key: JSON.stringify(["group", group.scopeKey, group.reconcileKey]),
-        label: `${group.members.length} rows · ${group.doctype}`,
+        label: rowSelectionLabel(group.members.length, group.doctype),
         summary: selectionGroupSummary(group),
         view: group.view,
         group,
@@ -63,7 +67,7 @@ export function activeContextChipItem(
 ): { label: string; summary?: string } {
   if (!item.query) return { label: item.label };
   return {
-    label: `${item.query.selectedCount} rows · ${item.query.args.doctype}`,
+    label: rowSelectionLabel(item.query.selectedCount, item.query.args.doctype),
     summary: item.label,
   };
 }

@@ -10,6 +10,7 @@ import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
 import {
   CasysCredit,
+  ContextChipRow,
   cx,
   Skeleton,
   ViewerHeader,
@@ -807,13 +808,15 @@ function KpiCard({
       <>
         <div class="flex flex-col gap-[10px] p-[14px_12px]">
           {/* Label + dot */}
-          <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <div class="flex min-w-0 items-center gap-2">
             <span class="font-mono text-nano uppercase tracking-eyebrow text-ink-faint">
               {data.label}
             </span>
             {data.trend !== undefined && (
               <StatusDot trend={data.trend} trendIsGood={data.trendIsGood} />
             )}
+          </div>
+          <ContextChipRow>
             <ActiveContextChip
               compact
               selections={activeContext.selections}
@@ -826,7 +829,7 @@ function KpiCard({
               onRemove={(selection) => activeContext.remove(selection)}
               onClear={() => activeContext.clear()}
             />
-          </div>
+          </ContextChipRow>
 
           {/* Valeur principale — geste et title dictés par kpiClickAction. */}
           <div class="flex min-w-0 items-center justify-between gap-2">
@@ -1004,15 +1007,17 @@ function KpiCard({
         style={{ gridTemplateColumns: "1fr 300px" }}
       >
         {/* Colonne gauche */}
-        <div class="flex flex-col gap-[10px] p-[18px_16px]">
+        <div class="flex min-w-0 flex-col gap-[10px] p-[18px_16px]">
           {/* Label + dot */}
-          <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <div class="flex min-w-0 items-center gap-2">
             <span class="font-mono text-micro uppercase tracking-eyebrow text-ink-faint">
               {data.label}
             </span>
             {data.trend !== undefined && (
               <StatusDot trend={data.trend} trendIsGood={data.trendIsGood} />
             )}
+          </div>
+          <ContextChipRow>
             <ActiveContextChip
               selections={activeContext.selections}
               selection={activeContext.selection}
@@ -1024,7 +1029,7 @@ function KpiCard({
               onRemove={(selection) => activeContext.remove(selection)}
               onClear={() => activeContext.clear()}
             />
-          </div>
+          </ContextChipRow>
 
           {/* Valeur principale — geste et title dictés par kpiClickAction. */}
           <div class="flex min-w-0 items-center gap-2">
@@ -1295,7 +1300,7 @@ function KpiViewerContent({
           title={nav.current.title}
           count={nav.current.count}
           layout={layout}
-          actions={
+          contextChip={
             <ActiveContextChip
               compact={layout !== "wide"}
               selections={activeContext.selections}

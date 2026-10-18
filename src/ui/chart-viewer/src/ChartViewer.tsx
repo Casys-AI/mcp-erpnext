@@ -57,6 +57,7 @@ import {
 import { useT } from "~/shared/i18n-hook";
 import { type DrillDownChannel, sharedLabel } from "~/shared/drill-down";
 import {
+  ContextChipRow,
   cx,
   LiveDot,
   StateMessage,
@@ -2736,66 +2737,74 @@ function ChartContent(
       {/* En-tête */}
       <header
         class={cx(
-          "flex shrink-0 items-center justify-between gap-4 border-b border-line",
+          "flex shrink-0 flex-col border-b border-line",
           narrow ? "px-3 py-[11px]" : "px-4 py-[13px]",
         )}
       >
-        <div
-          class={cx(
-            "flex min-w-0 items-center",
-            narrow ? "gap-2.5" : "gap-3",
-          )}
-        >
-          {narrow
-            ? (
-              <h3 class="truncate font-display font-semibold text-ink text-[--text-card-title]">
-                {data.title}
-              </h3>
-            )
-            : (
-              <h2 class="truncate font-display font-semibold text-ink text-[--text-title] tracking-title">
-                {data.title}
-              </h2>
+        <div class="flex min-w-0 items-center justify-between gap-3">
+          <div
+            class={cx(
+              "flex min-w-0 items-center",
+              narrow ? "gap-2.5" : "gap-3",
             )}
-          {visibleData.subtitle && (
-            <span
-              class={cx(
-                "font-mono text-ink-faint tracking-mono",
-                narrow ? "text-micro" : "text-chip",
+          >
+            {narrow
+              ? (
+                <h3 class="truncate font-display font-semibold text-ink text-[--text-card-title]">
+                  {data.title}
+                </h3>
+              )
+              : (
+                <h2 class="truncate font-display font-semibold text-ink text-[--text-title] tracking-title">
+                  {data.title}
+                </h2>
               )}
-            >
-              {visibleData.subtitle}
-            </span>
-          )}
-        </div>
-        <div class="flex min-w-0 shrink-0 items-center gap-2">
-          {root?.stale && (
-            <div
-              role="status"
-              title={t("nav.stale_title")}
-              class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
-            >
+            {visibleData.subtitle && (
               <span
-                aria-hidden="true"
-                class="size-[5px] rounded-full bg-warn"
-              />
-              {!narrow && (
-                <span>{t("nav.stale_values", { at: root.stale.at })}</span>
-              )}
-              {canRefreshRoot && (
-                <button
-                  type="button"
-                  disabled={refreshing}
-                  onClick={onRefreshRoot}
-                  aria-label={t("nav.refresh")}
-                  title={t("nav.refresh")}
-                  class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
-                >
-                  {refreshing ? "…" : "↻"}
-                </button>
-              )}
-            </div>
-          )}
+                class={cx(
+                  "font-mono text-ink-faint tracking-mono",
+                  narrow ? "text-micro" : "text-chip",
+                )}
+              >
+                {visibleData.subtitle}
+              </span>
+            )}
+          </div>
+          <div class="flex min-w-0 shrink-0 items-center gap-2">
+            {root?.stale && (
+              <div
+                role="status"
+                title={t("nav.stale_title")}
+                class="flex items-center gap-1.5 font-mono text-[9.5px] text-warn"
+              >
+                <span
+                  aria-hidden="true"
+                  class="size-[5px] rounded-full bg-warn"
+                />
+                {!narrow && (
+                  <span>{t("nav.stale_values", { at: root.stale.at })}</span>
+                )}
+                {canRefreshRoot && (
+                  <button
+                    type="button"
+                    disabled={refreshing}
+                    onClick={onRefreshRoot}
+                    aria-label={t("nav.refresh")}
+                    title={t("nav.refresh")}
+                    class="rounded-[3px] px-1 text-[12px] leading-none text-warn hover:bg-warn/10 disabled:opacity-50"
+                  >
+                    {refreshing ? "…" : "↻"}
+                  </button>
+                )}
+              </div>
+            )}
+            {/* LiveDot large = texte + point ; narrow = point seul */}
+            {!narrow
+              ? <LiveDot />
+              : <span class="size-[5px] shrink-0 rounded-full bg-ok" />}
+          </div>
+        </div>
+        <ContextChipRow>
           <ActiveContextChip
             compact={narrow}
             selections={activeContext.selections}
@@ -2807,11 +2816,7 @@ function ChartContent(
             onRemove={(selection) => activeContext.remove(selection)}
             onClear={() => activeContext.clear()}
           />
-          {/* LiveDot large = texte + point ; narrow = point seul */}
-          {!narrow
-            ? <LiveDot />
-            : <span class="size-[5px] shrink-0 rounded-full bg-ok" />}
-        </div>
+        </ContextChipRow>
       </header>
 
       {/* Erreur éventuelle */}

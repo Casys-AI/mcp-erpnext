@@ -96,7 +96,7 @@ export function ActiveContextChip(
     popoverAlign?: "start" | "end";
     class?: string;
   },
-): JSX.Element | null {
+): JSX.Element {
   const t = useT();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLSpanElement>(null);
@@ -138,7 +138,8 @@ export function ActiveContextChip(
     };
   }, [open]);
 
-  if (count === 0 && notices.length === 0 && !failed && !pending) return null;
+  const hasContent = count > 0 || attachmentNotices.length > 0 ||
+    notices.length > 0 || failed || pending || !!evictedLabel;
 
   const remove = async (
     entry: ActiveContextChipEntry,
@@ -202,212 +203,222 @@ export function ActiveContextChip(
 
   return (
     <span
+      data-context-slot
       ref={wrapperRef}
       aria-busy={pending || undefined}
       class={cx(
-        "relative inline-flex min-w-0 max-w-full items-center gap-1.5",
-        (attachmentNotices.length > 0 || notices.length > 0) && "flex-wrap",
+        "relative flex h-8 w-full shrink-0 min-w-0 items-center",
+        popoverAlign === "start" ? "justify-start" : "justify-end",
         "font-mono text-chip text-ink-muted",
         klass,
       )}
     >
-      {count === 1 && (
+      {hasContent && (
         <span
-          class="inline-flex min-w-0 items-center gap-1 rounded-chip border border-accent-edge bg-accent/8 py-0.5 pl-2 pr-0.5"
-          aria-live="polite"
-          aria-atomic="true"
+          data-context-chip
+          class="inline-flex h-7 min-w-0 max-w-full items-center gap-1 rounded-chip border border-accent-edge bg-accent/8 pl-2 pr-0.5"
         >
-          <span class={cx("shrink-0 text-accent-text", compact && "sr-only")}>
-            {t("context.active.label")}
-          </span>
-          <span class="min-w-0">
-            <span
-              class={cx("block truncate text-ink", compact && "max-w-24")}
-              title={singleItem?.label}
-            >
-              {singleItem?.label}
-            </span>
-            {singleItem?.summary && (
-              <span class="block text-micro text-ink-faint whitespace-normal break-words">
-                {singleItem.summary}
-              </span>
-            )}
-          </span>
-          <button
-            ref={singleRemoveRef}
-            type="button"
-            onClick={() => void remove(chipEntries[0], 0)}
-            class={cx(
-              "-my-0.5 grid size-6 shrink-0 place-items-center rounded-badge",
-              "text-[14px] leading-none text-ink-faint transition-colors",
-              "hover:bg-accent/12 hover:text-ink",
-              "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
-            )}
-            aria-label={t("context.active.clear", {
-              label: singleItem?.label ?? chipEntries[0].label,
-            })}
-            title={t("context.active.clear", {
-              label: singleItem?.label ?? chipEntries[0].label,
-            })}
-          >
-            <span aria-hidden="true">×</span>
-          </button>
-        </span>
-      )}
-      {count > 1 && (
-        <>
-          <button
-            ref={triggerRef}
-            type="button"
-            class={cx(
-              "inline-flex items-center gap-1 rounded-chip border border-accent-edge",
-              "bg-accent/8 px-2 py-1 text-accent-text transition-colors",
-              "hover:bg-accent/12 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
-            )}
-            aria-expanded={open}
-            aria-controls={popoverId}
-            aria-haspopup="dialog"
-            onClick={() => setOpen((value) => !value)}
-          >
-            <span aria-live="polite" aria-atomic="true">
-              {t("context.active.label")} · {count}
-            </span>
-            <span aria-hidden="true" class="text-ink-faint">
-              {open ? "▴" : "▾"}
-            </span>
-          </button>
-          {open && (
-            <span
-              id={popoverId}
-              role="dialog"
-              aria-label={t("context.active.items")}
+          {count > 1 && (
+            <button
+              ref={triggerRef}
+              type="button"
               class={cx(
-                "absolute top-full z-30 mt-1.5 w-56 max-w-[calc(100vw-24px)]",
-                popoverAlign === "start" ? "left-0" : "right-0",
-                "rounded-card border border-line-modal bg-control p-1.5 shadow-modal",
+                "inline-flex shrink-0 items-center gap-1 rounded-badge px-1 py-0.5 text-accent-text transition-colors",
+                "hover:bg-accent/12 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
               )}
+              aria-expanded={open}
+              aria-controls={popoverId}
+              aria-haspopup="dialog"
+              onClick={() => setOpen((value) => !value)}
             >
-              <span class="flex max-h-64 flex-col overflow-y-auto">
-                {chipEntries.map((entry, index) => {
-                  const display = entry;
-                  return (
-                    <span
-                      key={entry.key}
-                      class="flex min-w-0 items-center gap-2 rounded-badge px-1.5 py-1 hover:bg-sunken"
-                    >
-                      <span class="min-w-0 flex-1">
-                        <span class="block truncate text-chip text-ink">
-                          {display.label}
-                        </span>
-                        {display.summary && (
-                          <span class="block whitespace-normal break-words text-micro text-ink-faint">
-                            {display.summary}
-                          </span>
-                        )}
-                        {!display.summary && (
-                          <span class="block truncate text-micro text-ink-faint">
-                            {entry.view}
-                            {entry.value ? ` · ${entry.value}` : ""}
-                          </span>
-                        )}
-                      </span>
-                      <button
-                        ref={(element) => {
-                          const key = entry.key;
-                          if (element) removeRefs.current.set(key, element);
-                          else removeRefs.current.delete(key);
-                        }}
-                        type="button"
-                        class={cx(
-                          "grid size-6 shrink-0 place-items-center rounded-badge",
-                          "text-[14px] leading-none text-ink-faint transition-colors",
-                          "hover:bg-accent/12 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent",
-                        )}
-                        aria-label={t("context.active.clear", {
-                          label: display.label,
-                        })}
-                        title={t("context.active.clear", {
-                          label: display.label,
-                        })}
-                        onClick={() => void remove(entry, index)}
-                      >
-                        <span aria-hidden="true">×</span>
-                      </button>
-                    </span>
-                  );
-                })}
+              <span aria-live="polite" aria-atomic="true">
+                {t("context.active.label")} · {count}
               </span>
-              <button
-                type="button"
-                class={cx(
-                  "mt-1 w-full rounded-badge border-t border-line-soft px-1.5 pt-1.5 text-left",
-                  "text-micro text-ink-faint hover:text-bad focus-visible:outline-2 focus-visible:outline-accent",
-                )}
-                onClick={() => {
-                  void clearAll();
-                }}
+              <span aria-hidden="true" class="text-ink-faint">
+                {open ? "▴" : "▾"}
+              </span>
+            </button>
+          )}
+          <span
+            role="group"
+            aria-label={t("context.active.label")}
+            tabIndex={0}
+            class="flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            {count === 1 && (
+              <span
+                class="inline-flex min-w-0 items-center gap-1"
+                aria-live="polite"
+                aria-atomic="true"
               >
-                {t("context.active.clear_all")}
-              </button>
+                <span
+                  class={cx("shrink-0 text-accent-text", compact && "sr-only")}
+                >
+                  {t("context.active.label")}
+                </span>
+                <span class="truncate text-ink" title={singleItem?.label}>
+                  {singleItem?.label}
+                </span>
+                {singleItem?.summary && (
+                  <span
+                    class="truncate text-micro text-ink-muted"
+                    title={singleItem.summary}
+                  >
+                    {singleItem.summary}
+                  </span>
+                )}
+              </span>
+            )}
+            <span
+              data-context-notices
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              class="inline-flex shrink-0 items-center gap-1"
+            >
+              {[...attachmentNotices.map(({ notice }) => notice), ...notices]
+                .map((notice, index) => (
+                  <span
+                    key={index}
+                    class="shrink-0 whitespace-nowrap rounded-badge bg-accent/12 px-1.5 py-0.5 text-micro text-ink-muted"
+                  >
+                    {notice}
+                  </span>
+                ))}
             </span>
-          )}
-        </>
-      )}
-      {attachmentNotices.length > 0 && (
-        <span
-          aria-live="polite"
-          aria-atomic="true"
-          class="flex min-w-0 basis-full flex-col gap-0.5 whitespace-normal break-words text-micro text-ink-muted"
-        >
-          {attachmentNotices.map(({ key, notice }) => (
-            <span key={key}>{notice}</span>
-          ))}
-        </span>
-      )}
-      {notices.length > 0 && (
-        <span
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-          class="flex min-w-0 basis-full flex-col gap-0.5 whitespace-normal break-words text-micro text-ink-muted"
-        >
-          {notices.map((notice, index) => <span key={index}>{notice}</span>)}
-        </span>
-      )}
-      {pending && (
-        <span
-          role="status"
-          aria-live="polite"
-          class="inline-flex min-w-0 items-center gap-1 text-ink-muted"
-          title={t("context.active.pending")}
-        >
-          <span aria-hidden="true" class="shrink-0 animate-spin">◌</span>
-          <span class="truncate">{t("context.active.pending")}</span>
-        </span>
-      )}
-      {failed && (
-        <span
-          role="status"
-          class="inline-flex shrink-0 items-center gap-1 text-bad"
-          title={t("context.active.error")}
-        >
-          <span aria-hidden="true">!</span>
-          <span class={compact && count > 0 ? "sr-only" : undefined}>
-            {t("context.active.error")}
+            {pending && (
+              <span
+                role="status"
+                aria-live="polite"
+                class="inline-flex shrink-0 items-center gap-1 text-ink-muted"
+                title={t("context.active.pending")}
+              >
+                <span aria-hidden="true" class="shrink-0 animate-spin">◌</span>
+                <span class="truncate">{t("context.active.pending")}</span>
+              </span>
+            )}
+            {failed && (
+              <span
+                role="status"
+                class="inline-flex shrink-0 items-center gap-1 text-bad"
+                title={t("context.active.error")}
+              >
+                <span aria-hidden="true">!</span>
+                <span class={compact && count > 0 ? "sr-only" : undefined}>
+                  {t("context.active.error")}
+                </span>
+              </span>
+            )}
+            {evictedLabel && (
+              <span
+                role="status"
+                aria-live="polite"
+                class={cx(
+                  "truncate text-micro text-ink-muted",
+                  compact ? "max-w-24" : "max-w-36",
+                )}
+                title={t("context.active.evicted", { label: evictedLabel })}
+              >
+                {t("context.active.evicted", { label: evictedLabel })}
+              </span>
+            )}
           </span>
+          {count === 1 && (
+            <button
+              ref={singleRemoveRef}
+              type="button"
+              onClick={() => void remove(chipEntries[0], 0)}
+              class={cx(
+                "-my-0.5 grid size-6 shrink-0 place-items-center rounded-badge",
+                "text-[14px] leading-none text-ink-faint transition-colors",
+                "hover:bg-accent/12 hover:text-ink",
+                "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
+              )}
+              aria-label={t("context.active.clear", {
+                label: singleItem?.label ?? chipEntries[0].label,
+              })}
+              title={t("context.active.clear", {
+                label: singleItem?.label ?? chipEntries[0].label,
+              })}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          )}
         </span>
       )}
-      {evictedLabel && (
+      {count > 1 && open && (
         <span
-          role="status"
-          aria-live="polite"
+          id={popoverId}
+          role="dialog"
+          aria-label={t("context.active.items")}
           class={cx(
-            "truncate text-micro text-ink-muted",
-            compact ? "max-w-24" : "max-w-36",
+            "absolute top-full z-30 mt-1.5 w-56 max-w-[calc(100vw-24px)]",
+            popoverAlign === "start" ? "left-0" : "right-0",
+            "rounded-card border border-line-modal bg-control p-1.5 shadow-modal",
           )}
-          title={t("context.active.evicted", { label: evictedLabel })}
         >
-          {t("context.active.evicted", { label: evictedLabel })}
+          <span class="flex max-h-64 flex-col overflow-y-auto">
+            {chipEntries.map((entry, index) => {
+              const display = entry;
+              return (
+                <span
+                  key={entry.key}
+                  class="flex min-w-0 items-center gap-2 rounded-badge px-1.5 py-1 hover:bg-sunken"
+                >
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-chip text-ink">
+                      {display.label}
+                    </span>
+                    {display.summary && (
+                      <span class="block whitespace-normal break-words text-micro text-ink-faint">
+                        {display.summary}
+                      </span>
+                    )}
+                    {!display.summary && (
+                      <span class="block truncate text-micro text-ink-faint">
+                        {entry.view}
+                        {entry.value ? ` · ${entry.value}` : ""}
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    ref={(element) => {
+                      const key = entry.key;
+                      if (element) removeRefs.current.set(key, element);
+                      else removeRefs.current.delete(key);
+                    }}
+                    type="button"
+                    class={cx(
+                      "grid size-6 shrink-0 place-items-center rounded-badge",
+                      "text-[14px] leading-none text-ink-faint transition-colors",
+                      "hover:bg-accent/12 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent",
+                    )}
+                    aria-label={t("context.active.clear", {
+                      label: display.label,
+                    })}
+                    title={t("context.active.clear", {
+                      label: display.label,
+                    })}
+                    onClick={() => void remove(entry, index)}
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </span>
+              );
+            })}
+          </span>
+          <button
+            type="button"
+            class={cx(
+              "mt-1 w-full rounded-badge border-t border-line-soft px-1.5 pt-1.5 text-left",
+              "text-micro text-ink-faint hover:text-bad focus-visible:outline-2 focus-visible:outline-accent",
+            )}
+            onClick={() => {
+              void clearAll();
+            }}
+          >
+            {t("context.active.clear_all")}
+          </button>
         </span>
       )}
     </span>

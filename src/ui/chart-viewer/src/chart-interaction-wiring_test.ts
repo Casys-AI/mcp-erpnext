@@ -185,3 +185,69 @@ Deno.test("chart wiring - le dernier point activé alimente une barre d'action s
   assertStringIncludes(bar, "aria-controls=");
   assertEquals(source.includes("DetailToggleButton"), false);
 });
+
+Deno.test("chart wiring - Cartesian column clicks share snapping and keep exact marks from selecting twice", () => {
+  const cartesian = between(
+    "function VerticalBarChart",
+    "interface SelectedPieShapeProps",
+  );
+  assertEquals(
+    (cartesian.match(/\.\.\.columnPointerHandlers\(data, onDataClick\)/g) ?? [])
+      .length,
+    4,
+  );
+  assertEquals(
+    (cartesian.match(/<ChartPlotBounds data=\{data\} \/>/g) ?? []).length,
+    4,
+  );
+  const horizontal = between(
+    "function HorizontalBarChart",
+    "function LineChartView",
+  );
+  assertStringIncludes(horizontal, "onDoubleClick={onDataClick");
+  const bars = between(
+    "function VerticalBarChart",
+    "function HorizontalBarChart",
+  );
+  const composed = between(
+    "function ComposedChartView",
+    "interface SelectedPieShapeProps",
+  );
+  assertEquals(bars.includes("onClick={onDataClick"), false);
+  assertEquals(composed.includes("onClick={onDataClick"), false);
+  const handlers = between(
+    "function columnPointerHandlers",
+    "function activateCategoricalPoint",
+  );
+  assertStringIncludes(handlers, "onDoubleClick:");
+  assertStringIncludes(handlers, "onContextMenu:");
+  assertStringIncludes(
+    handlers,
+    "isMacControlClick(event, getBrowserPlatform())",
+  );
+  assertStringIncludes(source, "if (contextMenu) event.preventDefault()");
+  const activate = between(
+    "function activateColumnPoint",
+    "function columnPointerHandlers",
+  );
+  assertStringIncludes(activate, "chartPlotIntent(");
+  assertStringIncludes(activate, "chartColumnSelection(");
+  assertStringIncludes(activate, "event.stopPropagation()");
+  assertStringIncludes(activate, "event.shiftKey");
+  assertStringIncludes(activate, "event.detail");
+});
+
+Deno.test("chart wiring - title, axis labels and frame use the whole-chart gesture", () => {
+  const content = between(
+    "function ChartContent",
+    "export function ChartViewer",
+  );
+  assertEquals(
+    (content.match(/onClick=\{onWholeChartClick\}/g) ?? []).length,
+    2,
+  );
+  assertStringIncludes(
+    content,
+    "const onWholeChartClick = activeContext.supported",
+  );
+});

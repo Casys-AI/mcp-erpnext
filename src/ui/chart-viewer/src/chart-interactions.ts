@@ -801,6 +801,105 @@ export function chartPointLabel(
   return undefined;
 }
 
+export interface ChartPointerPosition {
+  x: number;
+  y: number;
+}
+
+export interface ChartPlotRectangle extends ChartPointerPosition {
+  width: number;
+  height: number;
+}
+
+/** Positions finales fournies par les shapes Recharts, après échelle/empilement. */
+export interface ChartColumnMark extends ChartPointerPosition {
+  index: number;
+  series?: string;
+  kind: "point" | "bar";
+  width?: number;
+  height?: number;
+}
+
+export function chartPlotIntent(
+  plot: ChartPlotRectangle,
+  pointer: ChartPointerPosition,
+  shiftKey = false,
+): "point" | "whole" {
+  return !shiftKey && pointer.x >= plot.x && pointer.x <= plot.x + plot.width &&
+      pointer.y >= plot.y && pointer.y <= plot.y + plot.height
+    ? "point"
+    : "whole";
+}
+
+/** Toute la colonne est une cible, indépendamment de la proximité d'un point. */
+export function chartColumnSelection(
+  data: ChartData,
+  state: Record<string, unknown> | null | undefined,
+  pointer: ChartPointerPosition,
+  marks: readonly ChartColumnMark[],
+  columnXs?: readonly number[],
+): ChartSelection | undefined {
+  if (!Number.isFinite(pointer.x) || !Number.isFinite(pointer.y)) {
+    return undefined;
+  }
+  const columns = columnXs ?? data.labels.map((_, index) => {
+    const column = marks.filter((mark) => mark.index === index);
+    if (!column.length) return NaN;
+    return (Math.min(...column.map((mark) => mark.x)) +
+      Math.max(...column.map((mark) => mark.x + (mark.width ?? 0)))) / 2;
+  });
+  let nearest = -1;
+  let distance = Infinity;
+  columns.forEach((x, index) => {
+    const delta = Math.abs(pointer.x - x);
+    if (delta < distance) {
+      nearest = index;
+      distance = delta;
+    }
+  });
+  const label = chartPointLabel(data.labels, state);
+  const active = label === undefined ? -1 : data.labels.indexOf(label);
+  // Recharts peut encore exposer le survol précédent au premier tap/contextmenu.
+  const index = active >= 0 && (nearest < 0 || active === nearest)
+    ? active
+    : nearest;
+  if (index < 0 || index >= data.labels.length) return undefined;
+  let best: ChartSelection | undefined;
+  let bestDistance = Infinity;
+  for (const mark of marks) {
+    if (
+      mark.index !== index || !Number.isFinite(mark.x) ||
+      !Number.isFinite(mark.y)
+    ) continue;
+    const dataset = data.datasets.find((candidate) =>
+      (candidate.label || undefined) === mark.series
+    );
+    const value = dataset?.values[index];
+    if (typeof value !== "number" || !Number.isFinite(value)) continue;
+    let delta = Math.abs(pointer.y - mark.y);
+    if (mark.kind === "bar") {
+      const right = mark.x + (mark.width ?? 0);
+      const bottom = mark.y + (mark.height ?? 0);
+      const dx = Math.max(
+        Math.min(mark.x, right) - pointer.x,
+        0,
+        pointer.x - Math.max(mark.x, right),
+      );
+      const dy = Math.max(
+        Math.min(mark.y, bottom) - pointer.y,
+        0,
+        pointer.y - Math.max(mark.y, bottom),
+      );
+      delta = Math.hypot(dx, dy);
+    }
+    if (delta < bestDistance) {
+      bestDistance = delta;
+      best = { label: data.labels[index], series: mark.series, value };
+    }
+  }
+  return best;
+}
+
 interface SeriesMarker {
   getAttribute(name: string): string | null;
 }

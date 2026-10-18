@@ -42,6 +42,8 @@ import {
   Sector,
   Tooltip,
   Treemap,
+  usePlotArea,
+  useXAxisScale,
   XAxis,
   YAxis,
   ZAxis,
@@ -66,6 +68,7 @@ import {
 } from "~/shared/ui";
 import { useViewerLayout, type ViewerLayout } from "~/shared/useViewerLayout";
 import { useViewerNav } from "~/shared/useViewerNav";
+import { getBrowserPlatform, isMacControlClick } from "~/shared/platform.ts";
 import { useClickIntent } from "~/shared/useClickIntent.ts";
 import {
   type ClickIntent,
@@ -101,6 +104,8 @@ import {
 import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
 import {
   chartClickOpensDetail,
+  type ChartColumnMark,
+  chartColumnSelection,
   chartContextSelection,
   type ChartCursor,
   chartCursorCounts,
@@ -111,6 +116,7 @@ import {
   type ChartFocus,
   chartFocusedDetailAction,
   chartJumpHint,
+  chartPlotIntent,
   chartPointActionPlan,
   type ChartPointActivation,
   chartPointDetailMode,
@@ -168,6 +174,107 @@ interface ChartPointerEvent {
   target: EventTarget | null;
   detail: number;
   stopPropagation(): void;
+}
+
+interface ColumnPointerEvent extends ChartPointerEvent {
+  currentTarget: EventTarget | null;
+  clientX: number;
+  clientY: number;
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  button: number;
+  preventDefault(): void;
+}
+
+/** Bornes/colonnes exactes : aucune approximation des marges ou des axes. */
+function ChartPlotBounds({ data }: { data: ChartData }) {
+  const plot = usePlotArea();
+  const xScale = useXAxisScale();
+  return plot && (
+    <g pointerEvents="none" aria-hidden="true">
+      <rect data-chart-plot-bounds {...plot} fill="none" />
+      {data.labels.map((label, index) => (
+        <g
+          key={index}
+          data-chart-column-index={index}
+          data-chart-column-x={xScale?.(label, { position: "middle" })}
+        />
+      ))}
+    </g>
+  );
+}
+
+function activateColumnPoint(
+  data: ChartData,
+  onDataClick: ChartDataClick | undefined,
+  state: Record<string, unknown> | null | undefined,
+  event: ColumnPointerEvent,
+  activation: ChartPointActivation,
+  contextMenu = false,
+) {
+  const wrapper = event.currentTarget instanceof Element
+    ? event.currentTarget
+    : null;
+  const svg = wrapper?.querySelector<SVGSVGElement>("svg.recharts-surface");
+  const bounds = svg?.querySelector<SVGRectElement>("[data-chart-plot-bounds]");
+  const matrix = svg?.getScreenCTM();
+  if (!svg || !bounds || !matrix) return;
+  const pointer = new DOMPoint(event.clientX, event.clientY).matrixTransform(
+    matrix.inverse(),
+  );
+  const plot = {
+    x: bounds.x.baseVal.value,
+    y: bounds.y.baseVal.value,
+    width: bounds.width.baseVal.value,
+    height: bounds.height.baseVal.value,
+  };
+  if (chartPlotIntent(plot, pointer, event.shiftKey) === "whole") return;
+  // Même une colonne vide ne doit jamais remonter vers le contexte du graphe.
+  event.stopPropagation();
+  if (contextMenu) event.preventDefault();
+  const marks = Array.from(
+    svg.querySelectorAll<SVGGElement>("[data-chart-point-index]"),
+    (mark): ChartColumnMark => ({
+      index: Number(mark.dataset.chartPointIndex),
+      series: mark.dataset.chartSeries || undefined,
+      kind: mark.dataset.chartMark === "bar" ? "bar" : "point",
+      x: Number(mark.dataset.chartX),
+      y: Number(mark.dataset.chartY),
+      width: Number(mark.dataset.chartWidth ?? 0),
+      height: Number(mark.dataset.chartHeight ?? 0),
+    }),
+  );
+  const columns = Array.from(
+    svg.querySelectorAll<SVGGElement>("[data-chart-column-index]"),
+    (column) => Number(column.dataset.chartColumnX ?? NaN),
+  );
+  const selection = chartColumnSelection(data, state, pointer, marks, columns);
+  if (selection) {
+    onDataClick?.(
+      selection.label,
+      selection.series,
+      activation,
+      contextMenu ? 1 : event.detail,
+    );
+  }
+}
+
+function columnPointerHandlers(data: ChartData, onDataClick?: ChartDataClick) {
+  return {
+    onClick: (state: Record<string, unknown>, event: ColumnPointerEvent) =>
+      activateColumnPoint(data, onDataClick, state, event, "context"),
+    onDoubleClick: (
+      state: Record<string, unknown>,
+      event: ColumnPointerEvent,
+    ) => activateColumnPoint(data, onDataClick, state, event, "drilldown"),
+    onContextMenu: (
+      state: Record<string, unknown>,
+      event: ColumnPointerEvent,
+    ) => {
+      if (!isMacControlClick(event, getBrowserPlatform())) return;
+      activateColumnPoint(data, onDataClick, state, event, "context", true);
+    },
+  };
 }
 
 /**
@@ -291,7 +398,15 @@ function SelectedBarShape(
   const label = String(rows[index]?.name ?? "");
   const selected = label !== "" && selectedAt?.(label, series) === true;
   return (
-    <g data-chart-series={series}>
+    <g
+      data-chart-series={series}
+      data-chart-point-index={index}
+      data-chart-mark="bar"
+      data-chart-x={props.x}
+      data-chart-y={props.y}
+      data-chart-width={props.width}
+      data-chart-height={props.height}
+    >
       <Rectangle
         key="bar"
         {...props}
@@ -336,11 +451,16 @@ function SelectedPointShape(
   const index = typeof props.index === "number" ? props.index : -1;
   const label = String(props.payload?.name ?? rows[index]?.name ?? "");
   const selected = label !== "" && selectedAt?.(label, series) === true;
-  if (!showBase && !selected) return <g />;
   const cx = props.cx ?? 0;
   const cy = props.cy ?? 0;
   return (
-    <g data-chart-series={series}>
+    <g
+      data-chart-series={series}
+      data-chart-point-index={index}
+      data-chart-mark="point"
+      data-chart-x={props.cx}
+      data-chart-y={props.cy}
+    >
       {selected && (
         <circle
           key="selection-halo"
@@ -352,13 +472,15 @@ function SelectedPointShape(
           strokeWidth={3}
         />
       )}
-      <circle
-        key="point"
-        cx={cx}
-        cy={cy}
-        r={selected ? 3.2 : 2.6}
-        fill={color}
-      />
+      {(showBase || selected) && (
+        <circle
+          key="point"
+          cx={cx}
+          cy={cy}
+          r={selected ? 3.2 : 2.6}
+          fill={color}
+        />
+      )}
     </g>
   );
 }
@@ -751,7 +873,13 @@ function VerticalBarChart(
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={rows} margin={MARGIN} barCategoryGap="19%">
+      <BarChart
+        data={rows}
+        margin={MARGIN}
+        barCategoryGap="19%"
+        {...columnPointerHandlers(data, onDataClick)}
+      >
+        <ChartPlotBounds data={data} />
         <CartesianGrid {...GRID} vertical={false} />
         <SharedXAxis data={data} />
         <SharedYAxis />
@@ -782,28 +910,6 @@ function VerticalBarChart(
             yAxisId={ds.yAxisId}
             isAnimationActive={false}
             cursor={onDataClick ? "pointer" : undefined}
-            onClick={onDataClick
-              ? (entry, _index, event) => {
-                event.stopPropagation();
-                onDataClick(
-                  String(entry.payload?.name ?? ""),
-                  ds.label || undefined,
-                  "context",
-                  event.detail,
-                );
-              }
-              : undefined}
-            onDoubleClick={onDataClick
-              ? (entry, _index, event) => {
-                event.stopPropagation();
-                onDataClick(
-                  String(entry.payload?.name ?? ""),
-                  ds.label || undefined,
-                  "drilldown",
-                  event.detail,
-                );
-              }
-              : undefined}
             shape={
               <SelectedBarShape
                 rows={rows}
@@ -920,27 +1026,9 @@ function LineChartView(
       <LineChart
         data={rows}
         margin={MARGIN}
-        onClick={onDataClick
-          ? (state, event) =>
-            activateCategoricalPoint(
-              data,
-              onDataClick,
-              state as unknown as Record<string, unknown>,
-              event,
-              "context",
-            )
-          : undefined}
-        onDoubleClick={onDataClick
-          ? (state, event) =>
-            activateCategoricalPoint(
-              data,
-              onDataClick,
-              state as unknown as Record<string, unknown>,
-              event,
-              "drilldown",
-            )
-          : undefined}
+        {...columnPointerHandlers(data, onDataClick)}
       >
+        <ChartPlotBounds data={data} />
         <CartesianGrid {...GRID} vertical={false} />
         <SharedXAxis data={data} />
         <SharedYAxis />
@@ -1012,27 +1100,9 @@ function AreaChartView(
       <AreaChart
         data={rows}
         margin={MARGIN}
-        onClick={onDataClick
-          ? (state, event) =>
-            activateCategoricalPoint(
-              data,
-              onDataClick,
-              state as unknown as Record<string, unknown>,
-              event,
-              "context",
-            )
-          : undefined}
-        onDoubleClick={onDataClick
-          ? (state, event) =>
-            activateCategoricalPoint(
-              data,
-              onDataClick,
-              state as unknown as Record<string, unknown>,
-              event,
-              "drilldown",
-            )
-          : undefined}
+        {...columnPointerHandlers(data, onDataClick)}
       >
+        <ChartPlotBounds data={data} />
         <defs>
           {data.datasets.map((ds, i) => (
             <linearGradient
@@ -1129,27 +1199,9 @@ function ComposedChartView(
       <ComposedChart
         data={rows}
         margin={MARGIN}
-        onClick={onDataClick
-          ? (state, event) =>
-            activateCategoricalPoint(
-              data,
-              onDataClick,
-              state as unknown as Record<string, unknown>,
-              event,
-              "context",
-            )
-          : undefined}
-        onDoubleClick={onDataClick
-          ? (state, event) =>
-            activateCategoricalPoint(
-              data,
-              onDataClick,
-              state as unknown as Record<string, unknown>,
-              event,
-              "drilldown",
-            )
-          : undefined}
+        {...columnPointerHandlers(data, onDataClick)}
       >
+        <ChartPlotBounds data={data} />
         <CartesianGrid {...GRID} vertical={false} />
         <SharedXAxis data={data} />
         <SharedYAxis />
@@ -1246,30 +1298,6 @@ function ComposedChartView(
               yAxisId={ds.yAxisId}
               isAnimationActive={false}
               cursor={onDataClick ? "pointer" : undefined}
-              onClick={onDataClick
-                ? (entry, _index, event) => {
-                  // Le graphique composé écoute aussi sa colonne entière. Un
-                  // segment exact ne doit donc pas déclencher deux sélections.
-                  event.stopPropagation();
-                  onDataClick(
-                    String(entry.payload?.name ?? ""),
-                    ds.label || undefined,
-                    "context",
-                    event.detail,
-                  );
-                }
-                : undefined}
-              onDoubleClick={onDataClick
-                ? (entry, _index, event) => {
-                  event.stopPropagation();
-                  onDataClick(
-                    String(entry.payload?.name ?? ""),
-                    ds.label || undefined,
-                    "drilldown",
-                    event.detail,
-                  );
-                }
-                : undefined}
               shape={
                 <SelectedBarShape
                   rows={rows}
@@ -2727,6 +2755,13 @@ function ChartContent(
     detailCapabilities,
     detailFocus,
   );
+  const onWholeChartClick = activeContext.supported
+    ? (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+      event.stopPropagation();
+      if (event.detail > 1) return;
+      void activeContext.toggle(chartContext);
+    }
+    : undefined;
   const chartSelected = activeContext.isSelected(chartContext);
   const chartContextActionLabel = t("context.active.toggle", {
     label: data.title,
@@ -2743,6 +2778,7 @@ function ChartContent(
       >
         <div class="flex min-w-0 items-center justify-between gap-3">
           <div
+            onClick={onWholeChartClick}
             class={cx(
               "flex min-w-0 items-center",
               narrow ? "gap-2.5" : "gap-3",
@@ -2826,6 +2862,7 @@ function ChartContent(
       <div class="scroll-slim min-h-0 flex-1 overflow-y-auto">
         {/* Zone de rendu du chart */}
         <div
+          onClick={onWholeChartClick}
           class={cx(
             "flex shrink-0 flex-col gap-[10px]",
             narrow ? "px-3 py-[10px]" : "px-4 py-[18px]",
@@ -2866,12 +2903,6 @@ function ChartContent(
               data-chart-pointer-surface
               title={activeContext.supported
                 ? chartContextActionLabel
-                : undefined}
-              onClick={activeContext.supported
-                ? (event) => {
-                  if (event.detail > 1) return;
-                  void activeContext.toggle(chartContext);
-                }
                 : undefined}
               class={cx(
                 "h-full rounded-[4px] transition-[outline-color,background-color]",

@@ -35,7 +35,8 @@ import { useT } from "~/shared/i18n-hook";
 import { formatCell, isStatusField } from "./helpers";
 import { pickNarrowColumns, shortenId } from "./columns";
 import { StatusCell } from "./StatusCell";
-import { doclistCheckboxEvents } from "./selection.ts";
+import { doclistCheckboxEvents, doclistRowEvents } from "./selection.ts";
+import { getBrowserPlatform } from "~/shared/platform.ts";
 import type { SortDir } from "./types";
 
 export interface DoclistColumn {
@@ -162,6 +163,30 @@ export function DoclistTable(
       hasDetailControls={hasDetailControls}
     />
   );
+}
+
+function rowInteractionProps(
+  target: ContextInteractionTarget | undefined,
+  id: string,
+  row: Record<string, unknown>,
+  index: number,
+  selection: DoclistSelectionControls | undefined,
+  arbiter: ClickIntentArbiter,
+) {
+  const base = contextInteractionProps(target, {
+    arbiter,
+    key: `doclist-row:${id}`,
+  });
+  return {
+    ...base,
+    ...doclistRowEvents(base, {
+      arbiter,
+      platform: getBrowserPlatform(),
+      onToggle: selection
+        ? (shiftKey) => selection.onToggle(row, index, shiftKey)
+        : undefined,
+    }),
+  };
 }
 
 function RowDetailToggle({
@@ -428,10 +453,14 @@ function WideTable(
                 class={`border-b border-line-soft ${
                   rowClasses(active, interactive, struck)
                 }`}
-                {...contextInteractionProps(interactionTarget, {
-                  arbiter: clickIntent,
-                  key: `doclist-row:${id}`,
-                })}
+                {...rowInteractionProps(
+                  interactionTarget,
+                  id,
+                  raw,
+                  index,
+                  selection,
+                  clickIntent,
+                )}
                 role="row"
                 aria-pressed={undefined}
                 aria-selected={interactionTarget?.selected}
@@ -644,10 +673,14 @@ function CompactTable(
                   class={`grid ${mobileGrid} min-w-0 flex-1 items-center px-3 ${
                     rowClasses(active, interactive, struck)
                   }`}
-                  {...contextInteractionProps(interactionTarget, {
-                    arbiter: clickIntent,
-                    key: `doclist-row:${id}`,
-                  })}
+                  {...rowInteractionProps(
+                    interactionTarget,
+                    id,
+                    raw,
+                    index,
+                    selection,
+                    clickIntent,
+                  )}
                 >
                   <span
                     class={`min-w-0 truncate font-mono text-data ${
@@ -769,10 +802,14 @@ function StackedList(
                 class={`flex min-w-0 flex-1 items-center justify-between gap-2.5 px-3 py-[9px] ${
                   rowClasses(active, interactive, struck)
                 }`}
-                {...contextInteractionProps(interactionTarget, {
-                  arbiter: clickIntent,
-                  key: `doclist-row:${id}`,
-                })}
+                {...rowInteractionProps(
+                  interactionTarget,
+                  id,
+                  raw,
+                  index,
+                  selection,
+                  clickIntent,
+                )}
               >
                 <div class="flex min-w-0 flex-col gap-px">
                   <span

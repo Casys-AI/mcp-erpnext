@@ -235,3 +235,28 @@ Deno.test("all viewer context adapters expose relative group actions", async () 
     );
   }
 });
+
+Deno.test("doclist row modifiers share checkbox actions and platform detection in every layout", async () => {
+  const table = await Deno.readTextFile(
+    new URL("./DoclistTable.tsx", import.meta.url),
+  );
+  const body = await Deno.readTextFile(
+    new URL("./DoclistBody.tsx", import.meta.url),
+  );
+  assertEquals(
+    [...table.matchAll(
+      /\.\.\.rowInteractionProps\(\s*interactionTarget,\s*id,\s*raw,\s*index,\s*selection,\s*clickIntent,?\s*\)/g,
+    )].length,
+    3,
+  );
+  assertStringIncludes(table, "doclistRowEvents(");
+  assertStringIncludes(table, "platform: getBrowserPlatform()");
+  assertStringIncludes(table, "selection.onToggle(row, index, shiftKey)");
+  assertStringIncludes(
+    body,
+    "selectionAnchor.current = { key: listContextKey, name: member.name }",
+  );
+  assertStringIncludes(body, "filteredMembers,");
+  assertStringIncludes(body, "context.addGroupMembers(");
+  assertStringIncludes(body, "context.toggleGroupMember(groupConfig, member)");
+});

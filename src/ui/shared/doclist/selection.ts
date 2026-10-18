@@ -1,4 +1,6 @@
 import { DOC_LIST_DEFAULT_LIMIT } from "../../doc-list-defaults.ts";
+import type { ClickIntentArbiter } from "../click-intent.ts";
+import { isMacControlClick } from "../platform.ts";
 import type { DocumentModel } from "../document/types.ts";
 import type { SelectionGroupMemberInput } from "../selection-projection.ts";
 import { pickAmountColumn, pickDateColumn } from "./columns.ts";
@@ -167,6 +169,84 @@ export function doclistCheckboxEvents(
     onDblClick: stop,
     // Ne pas annuler l'action native : Espace doit encore cocher la case.
     onKeyDown: stop,
+  };
+}
+
+interface RowPointerEvent {
+  detail?: number;
+  shiftKey?: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  button?: number;
+  target?: unknown;
+  currentTarget?: unknown;
+  preventDefault(): void;
+  stopPropagation(): void;
+}
+
+function rowControlTarget(event: RowPointerEvent): boolean {
+  const target = event.target;
+  if (
+    !target || typeof target !== "object" || !("closest" in target) ||
+    typeof target.closest !== "function"
+  ) return false;
+  const control = target.closest(
+    'a,button,input,label,select,textarea,[contenteditable]:not([contenteditable="false"]),[role="button"],[role="checkbox"],[role="link"]',
+  );
+  return Boolean(control && control !== event.currentTarget);
+}
+
+/** Les modificateurs de ligne empruntent la case, pas le détail différé. */
+export function doclistRowEvents(
+  base: {
+    onClick?: (event?: { detail?: number }) => void;
+    onDblClick?: () => void;
+  },
+  { onToggle, arbiter, platform }: {
+    onToggle?: (shiftKey: boolean) => void;
+    arbiter: ClickIntentArbiter;
+    platform: string;
+  },
+) {
+  const modified = (event: RowPointerEvent) =>
+    Boolean(event.shiftKey || event.ctrlKey || event.metaKey);
+  const consume = (event: RowPointerEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    arbiter.cancelAll();
+  };
+  return {
+    onMouseDown: (event: RowPointerEvent) => {
+      if (
+        onToggle && event.shiftKey && event.button === 0 &&
+        !rowControlTarget(event)
+      ) event.preventDefault();
+    },
+    onClick: (event: RowPointerEvent) => {
+      if (rowControlTarget(event)) return;
+      if (onToggle && modified(event)) {
+        consume(event);
+        onToggle(Boolean(event.shiftKey));
+        return;
+      }
+      base.onClick?.(event);
+    },
+    onDblClick: (event: RowPointerEvent) => {
+      if (rowControlTarget(event)) return;
+      if (onToggle && modified(event)) {
+        consume(event);
+        return;
+      }
+      base.onDblClick?.();
+    },
+    onContextMenu: (event: RowPointerEvent) => {
+      if (
+        !onToggle || rowControlTarget(event) ||
+        !isMacControlClick(event, platform)
+      ) return;
+      consume(event);
+      onToggle(false);
+    },
   };
 }
 

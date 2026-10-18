@@ -4,6 +4,12 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Server instructions describe the active viewer context schema and document
+  references, helping models understand user selections and retrieve the
+  corresponding ERPNext documents.
+
 ### Fixed
 
 - Frappe request timeouts now cover both response headers and body with a single

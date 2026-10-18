@@ -329,6 +329,8 @@ export const en: Record<string, string> = {
   "message.send_error": "Could not send to the conversation",
   "context.active.label": "Context",
   "context.active.items": "Active context selections",
+  "context.active.attachment":
+    "{name} · {size} · This file will be sent to the model",
   "context.active.select": "Add {label} to active context",
   "context.active.clear": "Remove {label} from active context",
   "context.active.clear_all": "Clear all",

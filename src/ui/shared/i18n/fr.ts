@@ -333,6 +333,8 @@ export const fr: Record<string, string> = {
   "message.send_error": "Envoi à la conversation impossible",
   "context.active.label": "Contexte",
   "context.active.items": "Sélections du contexte actif",
+  "context.active.attachment":
+    "{name} · {size} · Ce fichier sera transmis au modèle",
   "context.active.select": "Ajouter {label} au contexte actif",
   "context.active.clear": "Retirer {label} du contexte actif",
   "context.active.clear_all": "Tout effacer",

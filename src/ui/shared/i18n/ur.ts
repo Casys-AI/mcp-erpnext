@@ -323,6 +323,8 @@ export const ur: Record<string, string> = {
   "message.send_error": "گفتگو میں نہیں بھیجا جا سکا",
   "context.active.label": "سیاق",
   "context.active.items": "فعال سیاق کے انتخابات",
+  "context.active.attachment":
+    "{name} · {size} · یہ فائل ماڈل کو بھیجی جائے گی",
   "context.active.select": "{label} فعال سیاق میں شامل کریں",
   "context.active.clear": "{label} فعال سیاق سے ہٹائیں",
   "context.active.clear_all": "سب صاف کریں",

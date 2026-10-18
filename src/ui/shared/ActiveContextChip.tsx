@@ -3,6 +3,7 @@
 import type { JSX } from "preact";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
 import type { ActiveContextSelection } from "./active-context.ts";
+import { activeContextAttachmentNotice } from "./active-context-attachment.ts";
 import { useT } from "./i18n-hook.ts";
 import { cx } from "./ui.tsx";
 
@@ -91,6 +92,10 @@ export function ActiveContextChip(
   const popoverId = useId();
   const activeSelections = selections;
   const count = activeSelections.length;
+  const attachmentNotices = activeSelections.flatMap((selection) => {
+    const notice = activeContextAttachmentNotice(selection.item);
+    return notice ? [{ key: selectionKey(selection), notice }] : [];
+  });
 
   useEffect(() => {
     if (count <= 1) setOpen(false);
@@ -175,6 +180,7 @@ export function ActiveContextChip(
       aria-busy={pending || undefined}
       class={cx(
         "relative inline-flex min-w-0 max-w-full items-center gap-1.5",
+        attachmentNotices.length > 0 && "flex-wrap",
         "font-mono text-chip text-ink-muted",
         klass,
       )}
@@ -305,6 +311,17 @@ export function ActiveContextChip(
             </span>
           )}
         </>
+      )}
+      {attachmentNotices.length > 0 && (
+        <span
+          aria-live="polite"
+          aria-atomic="true"
+          class="flex min-w-0 basis-full flex-col gap-0.5 whitespace-normal break-words text-micro text-ink-muted"
+        >
+          {attachmentNotices.map(({ key, notice }) => (
+            <span key={key}>{notice}</span>
+          ))}
+        </span>
       )}
       {pending && (
         <span

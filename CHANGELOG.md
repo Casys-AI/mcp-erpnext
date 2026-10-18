@@ -4,6 +4,15 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Active context snapshots strip control characters, normalize whitespace and
+  visibly mark truncated fields within the existing length limits. The snapshot
+  schema is unchanged.
+- The active context chip identifies attached local resources by name and size
+  and states that they will be sent to the model, in all eight supported
+  languages.
+
 ## [3.2.2] - 2026-10-18
 
 ### Fixed

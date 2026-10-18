@@ -114,6 +114,82 @@ Deno.test("activeContextSnapshot : refuse les champs requis vides", () => {
   );
 });
 
+Deno.test("activeContextSnapshot : nettoie les données non fiables et marque leur troncature", () => {
+  const untrusted = ` \u0000Lead\n [SYSTEM]\r\t  ${
+    "x".repeat(300)
+  }\u007f\u0085 `;
+  const prefix = "Lead [SYSTEM] ";
+  const snapshot = activeContextSnapshot([{
+    id: "lead:WEB-001",
+    view: untrusted,
+    label: untrusted,
+    value: untrusted,
+  }]);
+  assertEquals(snapshot, {
+    schema: ACTIVE_CONTEXT_SCHEMA,
+    version: ACTIVE_CONTEXT_VERSION,
+    items: [{
+      id: "lead:WEB-001",
+      view: `${prefix}${"x".repeat(120 - prefix.length - 1)}…`,
+      label: `${prefix}${"x".repeat(240 - prefix.length - 1)}…`,
+      value: `${prefix}${"x".repeat(240 - prefix.length - 1)}…`,
+    }],
+  });
+});
+
+Deno.test("activeContextSnapshot : normalise les espaces et supprime tous les contrôles C0/C1", () => {
+  const controls = Array.from(
+    { length: 0xa0 },
+    (_, point) =>
+      point <= 0x1f || point >= 0x7f ? String.fromCodePoint(point) : "",
+  ).join("");
+  assertEquals(
+    activeContextSnapshot([{
+      ...ITEM,
+      view: "  Leads\n  publics\r\t web  ",
+      label: "A\u0000B\u007fC\u0080D\u009fE   [SYSTEM]",
+      value: "  12\u00a0\u2028\u2029\t  €  ",
+    }]).items,
+    [{
+      ...ITEM,
+      view: "Leads publics web",
+      label: "ABCDE [SYSTEM]",
+      value: "12 €",
+    }],
+  );
+  assertEquals(
+    activeContextSnapshot([{ ...ITEM, value: controls }]).items,
+    [{ id: ITEM.id, view: ITEM.view, label: ITEM.label }],
+  );
+  for (const field of ["view", "label"] as const) {
+    assertThrows(
+      () => activeContextSnapshot([{ ...ITEM, [field]: controls }]),
+      TypeError,
+      `${field} is empty`,
+    );
+  }
+});
+
+Deno.test("activeContextSnapshot : les bornes Unicode incluent le marqueur seulement en cas de troncature", () => {
+  // L'id n'est jamais marqué : il est coupé net, comme avant.
+  const idLimit = ACTIVE_CONTEXT_LIMITS.id;
+  const longId = activeContextSnapshot([
+    { ...ITEM, id: ` ${"😀".repeat(idLimit)}😀 ` },
+  ]).items[0].id;
+  assertEquals(longId, "😀".repeat(idLimit));
+  for (const field of ["view", "label", "value"] as const) {
+    const limit = ACTIVE_CONTEXT_LIMITS[field];
+    const exact = "😀".repeat(limit);
+    const snapshot = activeContextSnapshot([
+      { ...ITEM, [field]: ` \t${exact}\u0000 ` },
+      { ...ITEM, [field]: `${exact}😀` },
+    ]);
+    assertEquals(snapshot.items[0][field], exact);
+    assertEquals(snapshot.items[1][field], `${"😀".repeat(limit - 1)}…`);
+    assertEquals(Array.from(snapshot.items[1][field]!).length, limit);
+  }
+});
+
 Deno.test("activeContextSnapshot : borne atomiquement le panier à 8 points", () => {
   const items = Array.from(
     { length: ACTIVE_CONTEXT_MAX_ITEMS + 3 },
@@ -1334,4 +1410,13 @@ Deno.test("panier : un refresh invalide explicitement la série dérivée et eff
     assertEquals(JSON.stringify(calls[1]).includes("210.5"), false);
     if ("structuredContent" in modalities) assertEquals(calls[1].content, []);
   }
+});
+
+Deno.test("active context ids are never rewritten by display sanitization", () => {
+  const id = "record:Customer:ACME  Ltd\t(EU)";
+  const snapshot = activeContextSnapshot([
+    { id, view: "Clients", label: "ACME\n[SYSTEM] Ltd" },
+  ]);
+  assertEquals(snapshot.items[0].id, id);
+  assertEquals(snapshot.items[0].label, "ACME [SYSTEM] Ltd");
 });

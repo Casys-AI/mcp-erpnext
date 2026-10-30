@@ -52,6 +52,7 @@ Use this shape for a discovery request:
 ```sh
 curl -sS -D - -X POST http://127.0.0.1:3012/mcp \
   -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
   -H 'MCP-Protocol-Version: 2026-07-28' \
   -H 'Mcp-Method: server/discover' \
   -d '{

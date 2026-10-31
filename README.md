@@ -11,7 +11,7 @@ English | [繁體中文](README.zh-TW.md)
 
 > [!IMPORTANT]
 > **Installing 3.3:** for npm/Node use `npx -y @casys/mcp-erpnext@latest`; for
-> Deno use `deno run -A jsr:@casys/mcp-erpnext@3.3.0/server`. 3.3.0 is the
+> Deno use `deno run -A jsr:@casys/mcp-erpnext@3.3.1/server`. 3.3.1 is the
 > stable release and carries npm's `latest` tag; prereleases, when published,
 > use the `next` tag. 3.3 adds graduated selection to the active context: list
 > checkboxes, select-all over the filtered rows, Shift-click ranges and
@@ -99,7 +99,7 @@ stable 3.0.5 and 3.1.0 releases. Features remain capability-gated by the MCP
 host; Buy evidence does not purchase or qualify a live ERP.
 
 For stable npm installations use `@casys/mcp-erpnext@latest`; for Deno use
-`jsr:@casys/mcp-erpnext@3.3.0/server`.
+`jsr:@casys/mcp-erpnext@3.3.1/server`.
 
 See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
 [latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for

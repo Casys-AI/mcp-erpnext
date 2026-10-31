@@ -4,6 +4,13 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-10-31
+
+### Fixed
+
+- The HTTP discovery example explicitly accepts JSON and SSE responses, as
+  required by the MCP Streamable HTTP specification (#92).
+
 ## [3.3.0] - 2026-10-18
 
 ### Added

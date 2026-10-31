@@ -1,6 +1,6 @@
 # Migrate from 3.0 to 3.1 (and 3.2)
 
-The package in this checkout reports **`3.3.0`**, the stable release. The 3.1
+The package in this checkout reports **`3.3.1`**, the stable release. The 3.1
 changes described here were developed as 3.1 prereleases and reach the stable
 channel in 3.2.0; stable 3.1.0 carried only a subset (KPI and funnel context
 selection and creation-error guidance). This guide therefore applies when you
@@ -15,7 +15,7 @@ ERPNext credentials remain valid. This is not a migration of the ERP database.
 ## Choose the deployment
 
 Replace the package argument in your existing MCP host configuration with
-`@casys/mcp-erpnext@latest` (npm/Node), or `jsr:@casys/mcp-erpnext@3.3.0/server`
+`@casys/mcp-erpnext@latest` (npm/Node), or `jsr:@casys/mcp-erpnext@3.3.1/server`
 (Deno). JSR has no npm-style dist-tags, so the Deno command pins the exact
 version. Restart the server process after changing the configuration. An exact
 version such as `@casys/mcp-erpnext@3.2.0` pins the npm package instead of

@@ -4,6 +4,8 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.3.2] - 2026-11-05
+
 ### Fixed
 
 - Analytics tools pass the parent DocType when listing Sales Order and Sales

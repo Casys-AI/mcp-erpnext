@@ -17,6 +17,11 @@ import {
   toNumber,
 } from "../../shared/format.ts";
 import type { KpiData } from "./types.ts";
+import {
+  hasValuationCoverage,
+  valuationCoverage,
+  valuationCoverageText,
+} from "./kpi-coverage.ts";
 
 /** Traducteur injecté : garde ce module testable sans catalogue Preact. */
 export type KpiTranslate = (
@@ -56,8 +61,14 @@ export function currencySymbol(currency: string): string {
  * unité faufilée à droite). `null`, `undefined` et `NaN` valent 0.
  */
 export function kpiParts(
-  data: Pick<KpiData, "value" | "currency" | "unit">,
+  data: Pick<KpiData, "value" | "currency" | "unit" | "secondary">,
 ): KpiParts {
+  if (
+    hasValuationCoverage(data) && (!valuationCoverage(data) ||
+      typeof data.value !== "number" || !Number.isFinite(data.value))
+  ) {
+    return { amount: "—", unit: "" };
+  }
   const v = toNumber(data.value) ?? 0;
   if (data.currency) {
     return { amount: formatNumber(v, 2), unit: currencySymbol(data.currency) };
@@ -103,6 +114,15 @@ export function kpiSecondary(
   data: Pick<KpiData, "secondary">,
   t: KpiTranslate,
 ): KpiSecondaryLine | undefined {
+  if (hasValuationCoverage(data)) {
+    const coverage = valuationCoverage(data);
+    return {
+      label: t(coverage ? "kpi.coverage.label" : "kpi.coverage.badge"),
+      value: coverage
+        ? valuationCoverageText(coverage, t)
+        : t("kpi.coverage.unknown"),
+    };
+  }
   const secondary: unknown = data.secondary;
   if (!secondary || typeof secondary !== "object") return undefined;
   const { kind, value, currency } = secondary as Record<string, unknown>;
@@ -155,4 +175,24 @@ export function kpiCaption(
   if (typeof text !== "string" || text.trim() === "") return undefined;
   if (comparable(text) === comparable(kpiMainText(parts))) return undefined;
   return text.trim();
+}
+
+export function kpiLabel(
+  data: Pick<KpiData, "label" | "secondary">,
+  t: KpiTranslate,
+): string {
+  return hasValuationCoverage(data) ? t("kpi.coverage.title") : data.label;
+}
+
+/** The same qualification accompanies both the visible number and model context. */
+export function kpiNumberSummary(
+  data: KpiData,
+  t: KpiTranslate,
+): { label: string; value: string } {
+  return {
+    label: kpiLabel(data, t),
+    value: [kpiMainText(kpiParts(data)), kpiSecondaryText(data, t)].filter(
+      Boolean,
+    ).join(" · "),
+  };
 }

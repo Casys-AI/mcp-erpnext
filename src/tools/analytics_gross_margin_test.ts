@@ -4,6 +4,7 @@ import type { FrappeClient } from "../api/frappe-client.ts";
 import type { FrappeFilter, FrappeListOptions } from "../api/types.ts";
 import { estimateGrossMargin } from "./analytics-gross-margin.ts";
 import { AnalyticsDataError } from "./analytics-money.ts";
+import { FrappePaginationError } from "../api/list-pages.ts";
 import { analyticsTools } from "./analytics.ts";
 
 type Row = Record<string, unknown>;
@@ -446,4 +447,342 @@ Deno.test("gross margin tool - optional scope reaches the estimate and preserves
     false,
     "percent KPI must not be rendered as currency",
   );
+});
+
+function partialFixture(
+  overrides: Partial<Tables> = {},
+  serverPageSize?: number,
+) {
+  return fixture({
+    "Sales Order Item": [
+      { ...LINE, stock_qty: 3, base_net_amount: 300 },
+      {
+        ...LINE,
+        name: "LINE-0002",
+        item_code: "UNSTOCKED",
+        base_net_amount: 100,
+      },
+    ],
+    ...overrides,
+  }, serverPageSize);
+}
+
+Deno.test("gross margin partial - explicit opt-in excludes uncosted revenue from the margin denominator", async () => {
+  const { client } = partialFixture();
+  const result = await estimateGrossMargin(client, { allow_partial: true });
+  assertEquals(result.revenue, 400);
+  assertEquals(result.estimatedCost, 60);
+  assertEquals(result.margin, 80);
+  assertEquals(result.coverage, {
+    value: 75,
+    costedRevenue: 300,
+    uncostedRevenue: 100,
+    currency: "EUR",
+    costedLineCount: 1,
+    uncostedLineCount: 1,
+    missingValuationCount: 1,
+    missingItemCount: 1,
+    missingValuations: [{
+      item_code: "UNSTOCKED",
+      warehouse: "Main",
+      stock_uom: "Nos",
+      revenue: 100,
+      lineCount: 1,
+    }],
+    omittedValuationCount: 0,
+  });
+  assertEquals("allow_partial" in result, false);
+});
+
+Deno.test("gross margin partial - omission and false keep strict missing-cost behavior", async () => {
+  for (const input of [{}, { allow_partial: false }]) {
+    const error = await assertRejects(
+      () => estimateGrossMargin(partialFixture().client, input),
+      AnalyticsDataError,
+    );
+    assertEquals(error.code, "MISSING_VALUATION");
+    assert(error.recovery.includes("allow_partial: true"));
+  }
+});
+
+Deno.test("gross margin partial - opt-in with complete valuations preserves the complete estimate shape", async () => {
+  const strict = await estimateGrossMargin(fixture().client);
+  const optedIn = await estimateGrossMargin(fixture().client, {
+    allow_partial: true,
+  });
+  assertEquals(optedIn, strict);
+  assertEquals("coverage" in optedIn, false);
+});
+
+Deno.test("gross margin partial - invalid opt-in values fail before I/O", async () => {
+  for (const allow_partial of [null, 1, 0, "true", "false", {}, []]) {
+    const { client, calls } = fixture();
+    await assertRejects(
+      () => estimateGrossMargin(client, { allow_partial }),
+      Error,
+      "INVALID_INPUT",
+    );
+    assertEquals(calls.length, 0);
+  }
+});
+
+Deno.test("gross margin partial - all uncosted revenue remains an error with coverage diagnosis", async () => {
+  const error = await assertRejects(
+    () =>
+      estimateGrossMargin(fixture({ Bin: [] }).client, { allow_partial: true }),
+    AnalyticsDataError,
+    "No positive revenue",
+  );
+  assertEquals(error.code, "MISSING_VALUATION");
+  const coverage = error.context.coverage as Record<string, unknown>;
+  assertEquals(coverage.value, 0);
+  assertEquals(coverage.costedRevenue, 0);
+  assertEquals(coverage.uncostedRevenue, 100);
+  assertEquals(coverage.uncostedLineCount, 1);
+  assert(error.message.includes("100 EUR"));
+  assert(error.message.includes("1 line(s)"));
+  assert(error.message.includes("1 item(s)"));
+});
+
+Deno.test("gross margin partial - missing zero-priced lines remain visible at 100 percent revenue coverage", async () => {
+  const { client } = partialFixture({
+    "Sales Order Item": [
+      LINE,
+      {
+        ...LINE,
+        name: "LINE-0002",
+        item_code: "FREE-UNSTOCKED",
+        base_net_amount: 0,
+      },
+    ],
+  });
+  const result = await estimateGrossMargin(client, { allow_partial: true });
+  assertEquals(result.margin, 60);
+  assertEquals(result.coverage?.value, 100);
+  assertEquals(result.coverage?.uncostedRevenue, 0);
+  assertEquals(result.coverage?.uncostedLineCount, 1);
+  assertEquals(result.coverage?.missingItemCount, 1);
+});
+
+Deno.test("gross margin partial - zero-revenue costed lines do not create a zero-percent margin", async () => {
+  const { client } = partialFixture({
+    "Sales Order Item": [
+      { ...LINE, base_net_amount: 0, stock_qty: 0 },
+      { ...LINE, name: "LINE-0002", item_code: "UNSTOCKED" },
+    ],
+  });
+  const error = await assertRejects(
+    () => estimateGrossMargin(client, { allow_partial: true }),
+    AnalyticsDataError,
+  );
+  assertEquals(error.code, "MISSING_VALUATION");
+});
+
+Deno.test("gross margin partial - signed revenue cannot masquerade as percentage coverage", async () => {
+  for (const negativeItem of ["ITEM-A", "UNSTOCKED"]) {
+    const lines = [
+      { ...LINE, base_net_amount: 300 },
+      { ...LINE, name: "LINE-0002", item_code: "UNSTOCKED" },
+      {
+        ...LINE,
+        name: "LINE-0003",
+        item_code: negativeItem,
+        base_net_amount: -10,
+      },
+    ];
+    const error = await assertRejects(
+      () =>
+        estimateGrossMargin(
+          partialFixture({ "Sales Order Item": lines }).client,
+          { allow_partial: true },
+        ),
+      AnalyticsDataError,
+      "non-negative line revenues",
+    );
+    assertEquals(error.code, "INVALID_AMOUNT");
+  }
+  const strict = await estimateGrossMargin(
+    fixture({
+      "Sales Order Item": [
+        { ...LINE, base_net_amount: 300 },
+        { ...LINE, name: "LINE-0002", base_net_amount: -10 },
+      ],
+    }).client,
+  );
+  assertEquals(strict.revenue, 290);
+});
+
+Deno.test("gross margin partial - costs and exclusions are separated by exact warehouse", async () => {
+  const { client } = fixture({
+    "Sales Order Item": [
+      { ...LINE, base_net_amount: 300, stock_qty: 3 },
+      { ...LINE, name: "LINE-0002", warehouse: "Secondary" },
+      {
+        ...LINE,
+        name: "LINE-0003",
+        warehouse: "Secondary",
+        base_net_amount: 50,
+      },
+    ],
+    Warehouse: [{ name: "Main", company: "Acme" }, {
+      name: "Secondary",
+      company: "Acme",
+    }],
+  }, 1);
+  const result = await estimateGrossMargin(client, { allow_partial: true });
+  assertEquals(result.margin, 80);
+  assertEquals(result.coverage?.costedRevenue, 300);
+  assertEquals(result.coverage?.uncostedRevenue, 150);
+  assertEquals(result.coverage?.uncostedLineCount, 2);
+  assertEquals(result.coverage?.missingValuations[0], {
+    item_code: "ITEM-A",
+    warehouse: "Secondary",
+    stock_uom: "Nos",
+    revenue: 150,
+    lineCount: 2,
+  });
+});
+
+Deno.test("gross margin partial - missing items after multiple pages contribute to full totals and bounded detail", async () => {
+  const missing = Array.from({ length: 30 }, (_, i) => ({
+    ...LINE,
+    name: `LINE-${String(i + 1).padStart(4, "0")}`,
+    item_code: `MISSING-${String(i).padStart(2, "0")}`,
+    base_net_amount: i < 25 ? 100 : 50,
+  }));
+  const { client } = fixture({
+    "Sales Order Item": [
+      { ...LINE, name: "LINE-0000", base_net_amount: 300, stock_qty: 3 },
+      ...missing,
+    ],
+  }, 3);
+  const result = await estimateGrossMargin(client, { allow_partial: true });
+  const coverage = result.coverage!;
+  assertEquals(result.revenue, 3050);
+  assertEquals(result.margin, 80);
+  assertEquals(coverage.costedRevenue, 300);
+  assertEquals(coverage.uncostedRevenue, 2750);
+  assertEquals(coverage.uncostedLineCount, 30);
+  assertEquals(coverage.missingValuationCount, 30);
+  assertEquals(coverage.missingItemCount, 30);
+  assertEquals(coverage.missingValuations.length, 20);
+  assertEquals(coverage.omittedValuationCount, 10);
+  assertEquals(
+    coverage.missingValuations.map((row) => row.item_code),
+    Array.from(
+      { length: 20 },
+      (_, i) => `MISSING-${String(i).padStart(2, "0")}`,
+    ),
+  );
+});
+
+Deno.test("gross margin partial - malformed amounts, valuations, units and ownership never become excluded items", async () => {
+  const invalid: Partial<Tables>[] = [
+    { "Sales Order Item": [{ ...LINE, base_net_amount: undefined }] },
+    { "Sales Order Item": [{ ...LINE, stock_qty: undefined }] },
+    { "Sales Order Item": [{ ...LINE, warehouse: undefined }] },
+    { "Bin": [{ ...BIN, valuation_rate: undefined }] },
+    { "Bin": [{ ...BIN, stock_uom: "Box" }] },
+    { "Bin": [BIN, { ...BIN, name: "BIN-OTHER", valuation_rate: 30 }] },
+    { "Warehouse": [{ name: "Main", company: "Other" }] },
+    { "Company": [{ name: "Acme", default_currency: undefined }] },
+    {
+      "Sales Order": [ORDER, { ...ORDER, name: "SO-OTHER", company: "Other" }],
+    },
+  ];
+  for (const overrides of invalid) {
+    await assertRejects(
+      () =>
+        estimateGrossMargin(partialFixture(overrides).client, {
+          allow_partial: true,
+        }),
+      AnalyticsDataError,
+    );
+  }
+});
+
+Deno.test("gross margin partial - a failed Bin continuation is not a missing valuation", async () => {
+  const { client } = partialFixture({}, 1);
+  const list = client.list.bind(client);
+  const denied = new FrappeAPIError("Insufficient Permission", 403, null);
+  client.list =
+    ((doctype: string, options: FrappeListOptions = {}, request = {}) => {
+      if (
+        doctype === "Bin" &&
+        options.filters?.some((filter) =>
+          filter[0] === "name" && filter[1] === ">"
+        )
+      ) {
+        return Promise.reject(denied);
+      }
+      return list(doctype, options, request);
+    }) as FrappeClient["list"];
+  assertEquals(
+    await assertRejects(
+      () => estimateGrossMargin(client, { allow_partial: true }),
+      FrappeAPIError,
+    ),
+    denied,
+  );
+});
+
+Deno.test("gross margin partial - explicit zero valuation is costed revenue", async () => {
+  const { client } = partialFixture({ Bin: [{ ...BIN, valuation_rate: 0 }] });
+  const result = await estimateGrossMargin(client, { allow_partial: true });
+  assertEquals(result.margin, 100);
+  assertEquals(result.estimatedCost, 0);
+  assertEquals(result.coverage?.value, 75);
+  assertEquals(result.coverage?.costedRevenue, 300);
+  assertEquals(result.coverage?.uncostedRevenue, 100);
+});
+
+Deno.test("gross margin partial - expired reads remain errors instead of missing-cost reports", async () => {
+  const { client } = partialFixture();
+  const list = client.list.bind(client);
+  const originalNow = Date.now;
+  let now = originalNow();
+  Date.now = () => now;
+  client.list =
+    (async (doctype: string, options: FrappeListOptions = {}, request = {}) => {
+      const rows = await list(doctype, options, request);
+      if (doctype === "Bin") now += 60_001;
+      return rows;
+    }) as FrappeClient["list"];
+  try {
+    const error = await assertRejects(
+      () => estimateGrossMargin(client, { allow_partial: true }),
+      FrappePaginationError,
+    );
+    assertEquals(error.code, "PAGINATION_INCOMPLETE");
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+Deno.test("gross margin tool - a partial value is explicitly qualified with coverage and no favorable trend", async () => {
+  const tool = analyticsTools.find(({ name }) =>
+    name === "erpnext_kpi_gross_margin"
+  )!;
+  const result = await tool.handler({ allow_partial: true }, {
+    client: partialFixture().client,
+  }) as Record<string, unknown>;
+  assertEquals(result.label, "Margin on Costed Lines");
+  assertEquals(result.value, 80);
+  assertEquals(result.unit, "%");
+  assertEquals(result.calculation, {
+    revenue: 400,
+    estimatedCost: 60,
+    currency: "EUR",
+    basis: "costed_lines",
+    costedRevenue: 300,
+    uncostedRevenue: 100,
+  });
+  const secondary = result.secondary as Record<string, unknown>;
+  assertEquals(secondary.kind, "valuation_coverage");
+  assertEquals(secondary.value, 75);
+  assertEquals(secondary.uncostedRevenue, 100);
+  assertEquals(secondary.uncostedLineCount, 1);
+  assertEquals("trend" in result, false);
+  assertEquals("trendIsGood" in result, false);
+  assertEquals("currency" in result, false);
 });

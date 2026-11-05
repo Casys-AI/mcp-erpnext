@@ -208,6 +208,20 @@ export const ta: Record<string, string> = {
   "kpi.drilldown.title_trend": "போக்கு விவரத்திற்குக் கிளிக் செய்க",
   "kpi.secondary.invoices": "விலைப்பட்டியல்கள்",
   "kpi.secondary.amount": "தொகை",
+  "kpi.coverage.title": "செலவு தெரிந்த வரிகளின் இலாப விகிதம்",
+  "kpi.coverage.badge": "பகுதி",
+  "kpi.coverage.label": "கணக்கில் கொண்ட விற்பனை வருவாய்",
+  "kpi.coverage.summary":
+    "விற்பனை வருவாயில் {covered}% · {uncovered}% செலவு தெரியவில்லை",
+  "kpi.coverage.excluded_lines": "செலவு தெரியாத வரிகள்: {count}",
+  "kpi.coverage.details": "செலவு தெரியாத பொருட்கள்",
+  "kpi.coverage.costed_revenue": "செலவு தெரிந்த விற்பனை வருவாய்",
+  "kpi.coverage.uncosted_revenue": "செலவு தெரியாத விற்பனை வருவாய்",
+  "kpi.coverage.items": "பொருட்கள்: {count}",
+  "kpi.coverage.groups": "பொருள்/கிடங்கு இணைகள்: {count}",
+  "kpi.coverage.lines": "வரிகள்: {count}",
+  "kpi.coverage.omitted": "காட்டப்படாத கூடுதல் பொருள்/கிடங்கு இணைகள்: {count}",
+  "kpi.coverage.unknown": "கணக்கீட்டு வரம்பு கிடைக்கவில்லை",
   "kpi.drilldown.title_message":
     "உரையாடலில் கேட்க இரட்டைக் கிளிக் செய்யவும் அல்லது என்டர் அழுத்தவும்",
   "kpi.drilldown.title_context":

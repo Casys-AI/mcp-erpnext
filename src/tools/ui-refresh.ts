@@ -576,10 +576,19 @@ function grossMarginDrillDown(
   args: Record<string, unknown>,
   result: UiRefreshableResult,
 ): string {
-  const scope: Record<string, string> = {};
+  const scope: Record<string, string | boolean> = {};
   for (const field of ["company", "date_from", "date_to"]) {
     const value = result[field] ?? args[field];
     if (typeof value === "string" && value.trim()) scope[field] = value.trim();
+  }
+  if (args.allow_partial === true) scope.allow_partial = true;
+  if (
+    isRecord(result.secondary) && result.secondary.kind === "valuation_coverage"
+  ) {
+    message =
+      "Show the costed Sales Order lines used for this partial margin estimate " +
+      "and the excluded lines without readable Bin valuations separately; " +
+      "retain the revenue coverage and do not present it as the whole company's margin";
   }
   return Object.keys(scope).length > 0
     ? `${message}. Scope: ${JSON.stringify(scope)}.`

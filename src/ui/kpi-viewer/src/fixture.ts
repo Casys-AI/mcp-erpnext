@@ -65,9 +65,80 @@ export const KPI_OUTSTANDING_FIXTURE: KpiData = {
   _drillDown: "Show outstanding invoices",
 };
 
+export const KPI_PARTIAL_MARGIN_FIXTURE: KpiData = {
+  label: "Margin on Costed Lines",
+  value: 35,
+  unit: "%",
+  color: "#94a3b8",
+  secondary: {
+    kind: "valuation_coverage",
+    value: 75,
+    costedRevenue: 30_000,
+    uncostedRevenue: 10_000,
+    currency: "MYR",
+    costedLineCount: 900,
+    uncostedLineCount: 100,
+    missingValuationCount: 2,
+    missingItemCount: 2,
+    missingValuations: [
+      {
+        item_code: "FS942-NORMAL",
+        warehouse: "BMLZ - TDTSB",
+        stock_uom: "Nos",
+        revenue: 8_000,
+        lineCount: 80,
+      },
+      {
+        item_code: "MADE-TO-ORDER",
+        warehouse: "BMLZ - TDTSB",
+        stock_uom: "Nos",
+        revenue: 2_000,
+        lineCount: 20,
+      },
+    ],
+    omittedValuationCount: 0,
+  },
+};
+
+export const KPI_PARTIAL_ZERO_FIXTURE: KpiData = {
+  ...KPI_PARTIAL_MARGIN_FIXTURE,
+  secondary: {
+    ...KPI_PARTIAL_MARGIN_FIXTURE.secondary!,
+    kind: "valuation_coverage",
+    value: 100,
+    costedRevenue: 30_000,
+    uncostedRevenue: 0,
+    currency: "MYR",
+    costedLineCount: 900,
+    uncostedLineCount: 2,
+    missingValuationCount: 1,
+    missingItemCount: 1,
+    missingValuations: [{
+      item_code: "FREE-SAMPLE",
+      warehouse: "BMLZ - TDTSB",
+      stock_uom: "Nos",
+      revenue: 0,
+      lineCount: 2,
+    }],
+    omittedValuationCount: 0,
+  },
+};
+
 export function kpiFixtureFromSearch(): KpiData {
   if (typeof window === "undefined") return KPI_FIXTURE;
   switch (new URLSearchParams(globalThis.location.search).get("fixture")) {
+    case "partial-margin":
+      return KPI_PARTIAL_MARGIN_FIXTURE;
+    case "partial-margin-zero":
+      return KPI_PARTIAL_ZERO_FIXTURE;
+    case "gross-margin":
+      return {
+        label: "Gross Margin",
+        value: 35,
+        unit: "%",
+        trend: "up",
+        trendIsGood: true,
+      };
     case "overdue":
       return KPI_OVERDUE_FIXTURE;
     case "outstanding":

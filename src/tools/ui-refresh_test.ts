@@ -330,6 +330,30 @@ Deno.test("ui refresh - gross margin date-only scope never opens an unscoped pro
   assertEquals(result._jumps, {});
 });
 
+Deno.test("ui refresh - partial margin retains opt-in and distinguishes excluded lines", () => {
+  const args = { company: "Acme", allow_partial: true };
+  const result = withUiRefreshRequest(
+    {
+      label: "Margin on Costed Lines",
+      value: 40,
+      secondary: { kind: "valuation_coverage", value: 75 },
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } },
+    },
+    "erpnext_kpi_gross_margin",
+    args,
+  ) as Record<string, unknown>;
+  assertEquals(result.refreshRequest, {
+    toolName: "erpnext_kpi_gross_margin",
+    arguments: args,
+  });
+  assertEquals(
+    result._drillDown,
+    'Show the costed Sales Order lines used for this partial margin estimate and the excluded lines without readable Bin valuations separately; retain the revenue coverage and do not present it as the whole company\'s margin. Scope: {"company":"Acme","allow_partial":true}.',
+  );
+  assertEquals(result._jumps, {});
+  assertEquals(result._trendDrillDown, undefined);
+});
+
 // ── Chart drill-down injection ───────────────────────────────────────────────
 
 Deno.test("ui refresh - injects _drillDown for chart tools", () => {

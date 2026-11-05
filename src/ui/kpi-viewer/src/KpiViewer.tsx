@@ -37,6 +37,8 @@ import {
 } from "~/shared/refresh";
 import { isFixtureMode, kpiFixtureFromSearch } from "./fixture.ts";
 import type { KpiData } from "./types.ts";
+import { hasValuationCoverage, valuationCoverage } from "./kpi-coverage.ts";
+import { KpiCoverageDetails } from "./KpiCoverageDetails.tsx";
 import { currentLocale } from "~/shared/format";
 import { t } from "~/shared/i18n.ts";
 import { type TFunction, useT } from "~/shared/i18n-hook.ts";
@@ -45,11 +47,12 @@ import {
   formatDeltaPercent,
   formatDeltaValue,
   kpiCaption,
+  kpiLabel,
   kpiMainText,
+  kpiNumberSummary,
   kpiParts,
   kpiSecondary,
   type KpiSecondaryLine,
-  kpiSecondaryText,
 } from "./kpi-format.ts";
 import {
   kpiClickAction,
@@ -86,14 +89,10 @@ const TOOL_CALL_TIMEOUT_MS = 10_000;
 /* ── Contexte modèle ──────────────────────────────────────────────── */
 
 function kpiNumberContext(data: KpiData, tf: TFunction): ContextSelectionItem {
-  const secondary = kpiSecondaryText(data, tf);
   return {
     id: `kpi:${data.label}:value`,
     view: "KPI",
-    label: data.label,
-    value: [kpiMainText(kpiParts(data)), secondary].filter(Boolean).join(
-      " · ",
-    ),
+    ...kpiNumberSummary(data, tf),
   };
 }
 
@@ -560,7 +559,10 @@ function KpiCard({
 }) {
   const t = useT();
   const clickIntent = useClickIntent();
-  const sparkline = data.sparkline && data.sparkline.length >= 2
+  const partial = hasValuationCoverage(data);
+  const coverage = valuationCoverage(data);
+  const displayLabel = kpiLabel(data, t);
+  const sparkline = !partial && data.sparkline && data.sparkline.length >= 2
     ? data.sparkline
     : undefined;
   const contextEnabled = kpiContextEnabled(
@@ -810,9 +812,14 @@ function KpiCard({
           {/* Label + dot */}
           <div class="flex min-w-0 items-center gap-2">
             <span class="font-mono text-nano uppercase tracking-eyebrow text-ink-faint">
-              {data.label}
+              {displayLabel}
             </span>
-            {data.trend !== undefined && (
+            {partial && (
+              <span class="shrink-0 rounded-badge border border-line bg-sunken px-1.5 py-0.5 text-[10px] text-ink-muted">
+                {t("kpi.coverage.badge")}
+              </span>
+            )}
+            {!partial && data.trend !== undefined && (
               <StatusDot trend={data.trend} trendIsGood={data.trendIsGood} />
             )}
           </div>
@@ -885,8 +892,10 @@ function KpiCard({
             </p>
           )}
 
+          {coverage && <KpiCoverageDetails coverage={coverage} />}
+
           {/* Delta */}
-          {data.delta !== undefined && (
+          {!partial && data.delta !== undefined && (
             <div class="flex items-center gap-2">
               <DeltaBadge
                 delta={data.delta}
@@ -1011,9 +1020,14 @@ function KpiCard({
           {/* Label + dot */}
           <div class="flex min-w-0 items-center gap-2">
             <span class="font-mono text-micro uppercase tracking-eyebrow text-ink-faint">
-              {data.label}
+              {displayLabel}
             </span>
-            {data.trend !== undefined && (
+            {partial && (
+              <span class="shrink-0 rounded-badge border border-line bg-sunken px-1.5 py-0.5 text-[10px] text-ink-muted">
+                {t("kpi.coverage.badge")}
+              </span>
+            )}
+            {!partial && data.trend !== undefined && (
               <StatusDot trend={data.trend} trendIsGood={data.trendIsGood} />
             )}
           </div>
@@ -1082,8 +1096,10 @@ function KpiCard({
             </p>
           )}
 
+          {coverage && <KpiCoverageDetails coverage={coverage} />}
+
           {/* Delta */}
-          {data.delta !== undefined && (
+          {!partial && data.delta !== undefined && (
             <div class="flex items-center gap-[9px]">
               <DeltaBadge
                 delta={data.delta}

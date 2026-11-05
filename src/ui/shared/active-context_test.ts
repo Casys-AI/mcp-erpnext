@@ -1498,6 +1498,11 @@ const invalidQueries: Array<{
     query: { ...VALID_QUERY, args: { ...VALID_QUERY.args, doctype } },
     field: "query.args.doctype",
   })),
+  ...["", " \t", 123, null].map((parent) => ({
+    description: `parent invalide ${JSON.stringify(parent)}`,
+    query: { ...VALID_QUERY, args: { ...VALID_QUERY.args, parent } },
+    field: "query.args.parent",
+  })),
   ...[undefined, "name", [""], ["  "], [1]].map((fields) => ({
     description: `fields invalide ${JSON.stringify(fields)}`,
     query: { ...VALID_QUERY, args: { ...VALID_QUERY.args, fields } },
@@ -1602,6 +1607,42 @@ Deno.test("snapshot v3 : query conservée et égalité étendue", () => {
     sameActiveContextItem({ ...ITEM, query }, {
       ...ITEM,
       query: { ...query, selectedCount: 2, truncated: true },
+    }),
+    false,
+  );
+});
+
+Deno.test("snapshot v3 : le parent de permission survit à la sérialisation et distingue les requêtes", () => {
+  const names = Array.from({ length: 110 }, (_, i) => ` ROW-${i} `);
+  const query: ContextSelectionQuery = {
+    ...VALID_QUERY,
+    args: {
+      ...VALID_QUERY.args,
+      doctype: "Custom Child",
+      parent: " Custom Parent ",
+      filters: [["name", "in", names]],
+      limit: names.length,
+    },
+    selectedCount: names.length,
+    includedCount: names.length,
+  };
+  const snapshot = activeContextSnapshot([{ ...ITEM, query }]);
+  const replayQuery = JSON.parse(JSON.stringify(snapshot)).items[0].query;
+  assertEquals(replayQuery.args.parent, " Custom Parent ");
+  assertEquals(replayQuery.args.filters[0][2], names.slice(0, 100));
+  assertEquals(replayQuery.args.limit, 100);
+  assertEquals(replayQuery.truncated, true);
+  assertEquals(
+    sameActiveContextItem({ ...ITEM, query }, {
+      ...ITEM,
+      query: { ...query, args: { ...query.args, parent: "Other Parent" } },
+    }),
+    false,
+  );
+  assertEquals(
+    sameActiveContextItem({ ...ITEM, query }, {
+      ...ITEM,
+      query: { ...query, args: { ...query.args, parent: undefined } },
     }),
     false,
   );

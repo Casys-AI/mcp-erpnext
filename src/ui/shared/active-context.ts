@@ -63,6 +63,7 @@ export interface ContextSelectionQuery {
   tool: "erpnext_doc_list";
   args: {
     doctype: string;
+    parent?: string;
     filters: [["name", "in", string[]]];
     fields: string[];
     limit: number;
@@ -300,6 +301,7 @@ function sameQuery(
     left.includedCount === right.includedCount &&
     left.truncated === right.truncated &&
     left.args.doctype === right.args.doctype &&
+    left.args.parent === right.args.parent &&
     left.args.limit === right.args.limit &&
     JSON.stringify(left.args.fields) === JSON.stringify(right.args.fields) &&
     JSON.stringify(left.args.filters) === JSON.stringify(right.args.filters);
@@ -730,6 +732,12 @@ function boundQuery(query: ContextSelectionQuery): ContextSelectionQuery {
   if (!nonBlankString(query.args.doctype)) {
     invalidQuery("query.args.doctype", "must be a non-blank string");
   }
+  if (query.args.parent !== undefined && !nonBlankString(query.args.parent)) {
+    invalidQuery(
+      "query.args.parent",
+      "must be a non-blank string when provided",
+    );
+  }
   if (!Array.isArray(query.args.fields)) {
     invalidQuery("query.args.fields", "must be an array of non-empty strings");
   }
@@ -777,6 +785,7 @@ function boundQuery(query: ContextSelectionQuery): ContextSelectionQuery {
     tool: "erpnext_doc_list",
     args: {
       doctype: query.args.doctype,
+      ...(query.args.parent !== undefined ? { parent: query.args.parent } : {}),
       filters: [["name", "in", names]],
       fields: query.args.fields.slice(),
       limit: names.length,

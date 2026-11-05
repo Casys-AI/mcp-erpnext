@@ -702,6 +702,70 @@ Deno.test("erpnext_doc_list - has _meta.ui for doclist-viewer", () => {
   assertEquals(tool._meta?.ui?.resourceUri, "ui://mcp-erpnext/doclist-viewer");
 });
 
+Deno.test("erpnext_doc_list - forwards a child parent DocType and document filter", async () => {
+  const calls: unknown[][] = [];
+  const filters = [["parent", "=", "SAL-ORD-001"]];
+  const tool = getTool("erpnext_doc_list");
+  const result = await tool.handler(
+    {
+      doctype: "Sales Order Item",
+      parent: " Sales Order ",
+      fields: ["item_code", "qty"],
+      filters,
+      limit: 5,
+      offset: 10,
+      skip_cache: true,
+    },
+    makeCtx(makeMockClient({
+      list: async (...args: unknown[]) => {
+        calls.push(args);
+        return [{ name: "ROW-1", item_code: "SKU-1", qty: 2 }];
+      },
+    })),
+  ) as { count: number };
+  assertEquals(result.count, 1);
+  assertEquals(calls, [["Sales Order Item", {
+    parent: "Sales Order",
+    fields: ["item_code", "qty"],
+    filters,
+    limit: 5,
+    limit_start: 10,
+    order_by: "modified desc",
+  }, { skipCache: true }]]);
+  const validator = new SchemaValidator();
+  validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
+  assertEquals(
+    validator.validate(tool.name, {
+      doctype: "Sales Order Item",
+      parent: "Sales Order",
+    }),
+    { valid: true, errors: [] },
+  );
+});
+
+Deno.test("erpnext_doc_list - rejects invalid parent before a request", async () => {
+  let calls = 0;
+  const ctx = makeCtx(makeMockClient({
+    list: async () => {
+      calls++;
+      return [];
+    },
+  }));
+  for (const parent of [null, false, 42, [], {}, "", "   "]) {
+    const error = await assertRejects(
+      () =>
+        getTool("erpnext_doc_list").handler({
+          doctype: "Sales Order Item",
+          parent,
+        }, ctx),
+      ToolInputError,
+    );
+    assertEquals(error.code, "INVALID_INPUT");
+    assertEquals(error.context.field, "parent");
+  }
+  assertEquals(calls, 0);
+});
+
 Deno.test("erpnext_doc_list - schema accepts every Frappe filter value", () => {
   const tool = getTool("erpnext_doc_list");
   const validator = new SchemaValidator();

@@ -37,6 +37,7 @@ import {
   doclistGroupMember,
   doclistHeaderSelection,
   doclistQueryFields,
+  doclistQueryParent,
   extendDoclistRange,
   isDoclistResultComplete,
 } from "./selection.ts";
@@ -168,6 +169,7 @@ export function DoclistBody(
     ? {
       reconcileKey: listContextKey,
       doctype: data.doctype,
+      parent: doclistQueryParent(data),
       view: listContextView,
       doctypeLabel: data.doctype,
       fields: doclistQueryFields(data),

@@ -303,15 +303,16 @@ hidden tools to the model when attachment content is sensitive.
 
 Lists any DocType through Frappe's `get_list`. Arguments:
 
-| Argument     | Type              | Default               | Notes                                                       |
-| ------------ | ----------------- | --------------------- | ----------------------------------------------------------- |
-| `doctype`    | string (required) |                       | DocType name, e.g. `Lead`.                                  |
-| `fields`     | array of strings  | `["name","modified"]` | `["*"]` for every column.                                   |
-| `filters`    | array of tuples   | none                  | See below.                                                  |
-| `limit`      | integer, `>= 0`   | `20`                  | No server-side cap. `0` = every row (Frappe semantics).     |
-| `offset`     | integer, `>= 0`   | none                  | Rows to skip; use with a positive `limit`.                  |
-| `skip_cache` | boolean           | `false`               | Bypass the short-lived list cache for a fresh ERPNext read. |
-| `order_by`   | string            | `modified desc`       | SQL order clause; see the child-table note below.           |
+| Argument     | Type              | Default               | Notes                                                                   |
+| ------------ | ----------------- | --------------------- | ----------------------------------------------------------------------- |
+| `doctype`    | string (required) |                       | DocType name, e.g. `Lead`.                                              |
+| `parent`     | string            | none                  | Parent DocType when listing a child table directly, e.g. `Sales Order`. |
+| `fields`     | array of strings  | `["name","modified"]` | `["*"]` for every column.                                               |
+| `filters`    | array of tuples   | none                  | See below.                                                              |
+| `limit`      | integer, `>= 0`   | `20`                  | No server-side cap. `0` = every row (Frappe semantics).                 |
+| `offset`     | integer, `>= 0`   | none                  | Rows to skip; use with a positive `limit`.                              |
+| `skip_cache` | boolean           | `false`               | Bypass the short-lived list cache for a fresh ERPNext read.             |
+| `order_by`   | string            | `modified desc`       | SQL order clause; see the child-table note below.                       |
 
 **Filters.** Each entry is `[fieldname, operator, value]` or, to filter on a
 child table, `[child doctype, fieldname, operator, value]` (for example
@@ -325,6 +326,16 @@ longer 3.0.x string tuples (Frappe keeps the first 4 elements; recent versions
 may refuse 6 or more, in which case Frappe's own error is returned). Fewer than
 3 elements, a non-array entry or a wrongly typed position fail with
 `INVALID_FILTER` before any request is made.
+
+**Listing child rows.** To list `Sales Order Item` directly, pass
+`parent: "Sales Order"`. This is the parent **DocType**, not a document name:
+Frappe uses it to check parent permissions. The client also restricts
+`parenttype` to that DocType, so shared child tables cannot mix parent types. To
+read the rows of one order, additionally pass
+`filters: [["parent", "=", "SAL-ORD-2026-00001"]]`. Frappe still enforces
+permissions and returns its own errors; no extra role or method allowlist is
+needed just to supply this parameter. Omit `parent` for regular DocTypes and for
+parent-document queries using child-table filters.
 
 **Pagination.** `limit` and `offset` are passed to Frappe unchanged, without a
 ceiling. `limit: 0` returns every row and can be very large, so prefer `limit`
@@ -355,9 +366,10 @@ has two side effects the tool absorbs:
 
 **Errors.** Input errors read
 `[erpnext_doc_list] <CODE>: <message>. Recovery: <recovery>`. Codes:
-`INVALID_INPUT` (missing `doctype`, wrong type for `fields` or `skip_cache`),
-`INVALID_FILTER`, `INVALID_PAGINATION`. The shared helper is `ToolInputError` in
-`src/tools/errors.ts`; the message is parseable with `parseToolInputError`.
+`INVALID_INPUT` (missing `doctype`, invalid `parent`, wrong type for `fields` or
+`skip_cache`), `INVALID_FILTER`, `INVALID_PAGINATION`. The shared helper is
+`ToolInputError` in `src/tools/errors.ts`; the message is parseable with
+`parseToolInputError`.
 
 ## Buy → buy-evidence-viewer
 
@@ -420,3 +432,11 @@ calendar. Delta values are percentage points: `2.8` displays as `2.8%`.
 
 Other monetary analytics retain legacy currency assumptions and record limits;
 the three corrected financial KPIs do not link to those charts.
+
+The gross-margin KPI remains an estimate from non-cancelled Sales Order item
+`amount` and `qty`, using current Bin valuation rates. It refuses to return a
+percentage if there are more than 1,000 order rows or 500 Bin rows, a required
+numeric field or item cost is unavailable, or warehouses have different rates
+for the same item. Missing fields are not treated as zero; an explicitly zero
+valuation is accepted. Use an ERPNext report for a larger dataset or a cost
+basis specific to a warehouse, currency or accounting period.

@@ -691,6 +691,7 @@ export const operationsTools: ErpNextTool[] = [
       "List any ERPNext documents by DocType. Useful for DocTypes not covered " +
       "by dedicated tools. Supports field selection, filters (as JSON array, " +
       "including child-table filters), limit/offset pagination, and an optional fresh read. " +
+      "When listing a child DocType directly, pass its parent DocType in 'parent'. " +
       "Errors read '[erpnext_doc_list] CODE: message. Recovery: ...'.",
     category: "operations",
     inputSchema: {
@@ -700,6 +701,12 @@ export const operationsTools: ErpNextTool[] = [
           type: "string",
           description:
             "ERPNext DocType name (e.g. 'Lead', 'Asset', 'BOM', 'Cost Center')",
+        },
+        parent: {
+          type: "string",
+          minLength: 1,
+          description:
+            "Parent DocType when listing a child table (e.g. 'Sales Order' for 'Sales Order Item'), not a document name. Checks parent permissions and restricts parenttype; use a 'parent' filter for one document.",
         },
         fields: {
           type: "array",
@@ -736,6 +743,21 @@ export const operationsTools: ErpNextTool[] = [
     },
     handler: async (input, ctx) => {
       const tool = "erpnext_doc_list";
+      if (
+        input.parent !== undefined &&
+        (typeof input.parent !== "string" || !input.parent.trim())
+      ) {
+        throw new ToolInputError(
+          tool,
+          "INVALID_INPUT",
+          "'parent' must be a non-empty DocType name",
+          {
+            recovery:
+              "Pass the parent DocType, e.g. parent: 'Sales Order', or omit it for a regular DocType.",
+            context: { field: "parent" },
+          },
+        );
+      }
       if (typeof input.doctype !== "string" || !input.doctype.trim()) {
         throw new ToolInputError(
           tool,
@@ -796,6 +818,9 @@ export const operationsTools: ErpNextTool[] = [
         order_by: input.order_by,
       });
       const listOptions = {
+        ...(typeof input.parent === "string"
+          ? { parent: input.parent.trim() }
+          : {}),
         fields,
         filters,
         limit,

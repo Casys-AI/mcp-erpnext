@@ -282,6 +282,95 @@ Deno.test("FrappeClient.list() - sends limit 0, limit_start and group_by verbati
 
 // ── get() ─────────────────────────────────────────────────────────────────────
 
+Deno.test("FrappeClient.list() - child parent scopes the request and cache", async () => {
+  const urls: URL[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const request = new URL(url.toString());
+    urls.push(request);
+    const parent = request.searchParams.get("parent");
+    if (!parent || parent === "Denied Parent") {
+      return jsonResponse({ exc_type: "PermissionError" }, { status: 403 });
+    }
+    return jsonResponse({ data: [{ name: `${parent}-ROW` }] });
+  };
+  try {
+    const client = makeClient();
+    const options = {
+      parent: "Sales Order",
+      filters: [["docstatus", "!=", 2] as [string, string, number]],
+      fields: ["name", "item_code"],
+      limit: 10,
+    };
+    const before = structuredClone(options);
+    const orders = await client.list("Shared Item", options);
+    assertEquals(orders, [{ name: "Sales Order-ROW" }]);
+    assertEquals(await client.list("Shared Item", options), orders);
+    assertEquals(urls.length, 1, "same parent uses its cached result");
+    assertEquals(
+      await client.list("Shared Item", { ...options, parent: "Sales Invoice" }),
+      [{ name: "Sales Invoice-ROW" }],
+    );
+    assertEquals(urls.length, 2, "another parent has a separate cache entry");
+    assertEquals(urls[0].searchParams.get("parent"), "Sales Order");
+    assertEquals(JSON.parse(urls[0].searchParams.get("filters")!), [
+      ["docstatus", "!=", 2],
+      ["parenttype", "=", "Sales Order"],
+    ]);
+    assertEquals(JSON.parse(urls[1].searchParams.get("filters")!), [
+      ["docstatus", "!=", 2],
+      ["parenttype", "=", "Sales Invoice"],
+    ]);
+    assertEquals(options, before, "list must not mutate caller filters");
+    const denied = await assertRejects(
+      () => client.list("Shared Item", { ...options, parent: "Denied Parent" }),
+      FrappeAPIError,
+    );
+    assertEquals(
+      denied.status,
+      403,
+      "Frappe remains responsible for permissions",
+    );
+    assertEquals(
+      urls.length,
+      3,
+      "a denied parent is not retried with another context",
+    );
+    const error = await assertRejects(
+      () => client.list("Shared Item", { fields: ["name"] }),
+      FrappeAPIError,
+    );
+    assertEquals(
+      error.status,
+      403,
+      "parentless reads cannot reuse scoped rows",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("FrappeClient.list() - parent scopes requests without caller filters", async () => {
+  const urls: URL[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    urls.push(new URL(url.toString()));
+    return jsonResponse({ data: [] });
+  };
+  try {
+    const client = makeClient();
+    await client.list("Sales Order Item", { parent: "Sales Order" });
+    await client.list("Sales Order");
+    assertEquals(JSON.parse(urls[0].searchParams.get("filters")!), [
+      ["parenttype", "=", "Sales Order"],
+    ]);
+    assertEquals(urls[1].searchParams.get("parent"), null);
+    assertEquals(urls[1].searchParams.get("filters"), null);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("FrappeClient.get() - returns single document", async () => {
   const restore = mockFetch([
     {

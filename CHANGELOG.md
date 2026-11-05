@@ -4,6 +4,18 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.3.2] - 2026-11-05
+
+### Fixed
+
+- Analytics tools pass the parent DocType when listing Sales Order and Sales
+  Invoice items, fixing Frappe child-table permission errors. Generic document
+  listing accepts the same parent context and restricts rows to that parent type
+  (#94).
+- The gross-margin KPI rejects truncated inputs, missing amounts or costs, and
+  conflicting warehouse valuation rates instead of returning a misleading
+  percentage (#94).
+
 ## [3.3.1] - 2026-10-31
 
 ### Fixed

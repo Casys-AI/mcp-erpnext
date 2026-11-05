@@ -216,6 +216,21 @@ export const fr: Record<string, string> = {
   "kpi.drilldown.title_trend": "Cliquer pour voir la tendance",
   "kpi.secondary.invoices": "Factures",
   "kpi.secondary.amount": "Montant",
+  "kpi.coverage.title": "Marge sur les lignes valorisées",
+  "kpi.coverage.badge": "Partielle",
+  "kpi.coverage.label": "CA couvert",
+  "kpi.coverage.summary":
+    "Calculée sur {covered} % du CA · {uncovered} % sans coût connu",
+  "kpi.coverage.excluded_lines": "Lignes sans coût connu : {count}",
+  "kpi.coverage.details": "Articles sans coût connu",
+  "kpi.coverage.costed_revenue": "CA avec coût connu",
+  "kpi.coverage.uncosted_revenue": "CA sans coût connu",
+  "kpi.coverage.items": "Articles : {count}",
+  "kpi.coverage.groups": "Couples article/entrepôt : {count}",
+  "kpi.coverage.lines": "Lignes : {count}",
+  "kpi.coverage.omitted":
+    "Autres couples article/entrepôt non affichés : {count}",
+  "kpi.coverage.unknown": "Couverture indisponible",
   "kpi.drilldown.title_message":
     "Double-clic ou Entrée pour demander dans la conversation",
   "kpi.drilldown.title_context":

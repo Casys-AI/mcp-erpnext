@@ -490,3 +490,49 @@ or a report with an appropriate cost basis.
 **This remains an estimate at current stock valuation**, even for historical
 order dates. It is not recognized accounting gross profit or historical cost of
 goods sold. Use the appropriate ERPNext accounting report for those figures.
+
+#### Optional estimate on costed lines
+
+`allow_partial` defaults to `false`. Set it to `true` to calculate a margin on
+lines whose exact item/warehouse valuation is readable, while reporting the
+excluded revenue separately:
+
+```json
+{
+  "company": "Acme",
+  "date_from": "2026-10-01",
+  "date_to": "2026-10-31",
+  "allow_partial": true
+}
+```
+
+Only an absent Bin valuation after a complete read is eligible for exclusion.
+Permission failures, timeouts, missing fields, mismatched units or companies,
+and conflicting valuations still fail explicitly. If every line is costed, the
+normal card and result are preserved. If no positive costed revenue remains,
+there is no calculable partial margin and the tool returns an explicit error.
+Partial populations with negative revenue are rejected because their revenue
+coverage would be misleading.
+
+For partial results the formula is
+`(costedRevenue - estimatedCost) / costedRevenue * 100`. The `calculation`
+object retains total `revenue`, adds `costedRevenue`, `uncostedRevenue` and
+`basis: "costed_lines"`, and reports amounts in company currency. For example,
+with total revenue 400, costed revenue 300 and estimated cost 180, the partial
+margin is 40%, covering 75% of revenue. It does not estimate the margin on the
+remaining 100 of revenue.
+
+The `secondary` object has `kind: "valuation_coverage"`. It contains the revenue
+coverage percentage (`value`), both revenue amounts, currency, costed/uncosted
+line counts, distinct missing item count and missing item/warehouse valuation
+count. `missingValuations` lists up to 20 groups ranked by excluded revenue,
+with item, warehouse, stock unit, revenue and line count;
+`omittedValuationCount` explicitly reports how many groups are not listed.
+Totals and counts always cover the complete population, not just those 20
+groups.
+
+The card identifies the partial estimate and displays coverage beside it. A
+collapsed detail contains the amounts and missing valuations. The same
+qualification accompanies the tool output and the viewer's model context. There
+is no favorable trend indicator for this partial result. Uncosted free lines
+remain explicitly counted even when they do not reduce revenue coverage.

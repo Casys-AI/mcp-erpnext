@@ -1194,27 +1194,43 @@ export const analyticsTools: ErpNextTool[] = [
       "Reads all matching rows in fresh pages; optional date_from/date_to filter order dates. " +
       "Uses base_net_amount in company currency and stock_qty times the current Bin valuation " +
       "for each item's warehouse and stock unit. Select company when multiple companies match. " +
-      "Missing costs or fields fail explicitly; reads exceeding 60 seconds return no partial result. " +
+      "By default missing costs fail explicitly. Set allow_partial=true to estimate only costed lines " +
+      "when Bin valuations are absent, with excluded revenue and coverage shown separately. " +
+      "Missing fields, failed requests and reads exceeding 60 seconds still fail explicitly. " +
       "Valuation is current, including for historical order dates; this is an estimate, not accounting gross profit.",
     category: "analytics",
     inputSchema: GROSS_MARGIN_SCHEMA,
     handler: async (input, ctx) => {
-      const { margin, revenue, estimatedCost, currency, ...scope } =
+      const { margin, revenue, estimatedCost, currency, coverage, ...scope } =
         await estimateGrossMargin(ctx.client, input);
 
       return {
-        label: "Gross Margin",
+        label: coverage ? "Margin on Costed Lines" : "Gross Margin",
         ...scope,
         calculation: {
           revenue,
           estimatedCost,
           ...(currency ? { currency } : {}),
+          ...(coverage
+            ? {
+              basis: "costed_lines",
+              costedRevenue: coverage.costedRevenue,
+              uncostedRevenue: coverage.uncostedRevenue,
+            }
+            : {}),
         },
         value: Math.round(margin * 10) / 10,
         unit: "%",
-        trend: margin >= 30 ? "up" : margin >= 15 ? "flat" : "down",
-        trendIsGood: true,
-        color: "#c084fc",
+        ...(coverage
+          ? {
+            secondary: { kind: "valuation_coverage", ...coverage },
+            color: "#94a3b8",
+          }
+          : {
+            trend: margin >= 30 ? "up" : margin >= 15 ? "flat" : "down",
+            trendIsGood: true,
+            color: "#c084fc",
+          }),
         _meta: KPI_META,
       };
     },

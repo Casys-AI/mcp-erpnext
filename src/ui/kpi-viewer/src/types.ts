@@ -1,3 +1,4 @@
+import type { ValuationCoverage } from "../../kpi-coverage.ts";
 import type { UiRefreshRequestData } from "../../shared/refresh.ts";
 import type { NavHint } from "../../shared/jumps.ts";
 
@@ -7,7 +8,8 @@ import type { NavHint } from "../../shared/jumps.ts";
  */
 export type KpiSecondary =
   | { kind: "invoice_count"; value: number }
-  | { kind: "amount"; value: number; currency: string };
+  | { kind: "amount"; value: number; currency: string }
+  | ({ kind: "valuation_coverage" } & ValuationCoverage);
 
 export interface KpiData {
   label: string;
@@ -17,7 +19,7 @@ export interface KpiData {
    * rend qu'en légende de repli quand `secondary` est absent.
    */
   formattedValue?: string;
-  /** Information complémentaire : compte de factures ou montant en retard. */
+  /** Information complémentaire : montant, nombre ou périmètre valorisé. */
   secondary?: KpiSecondary;
   unit?: string;
   currency?: string;

@@ -4,6 +4,17 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-11-05
+
+### Added
+
+- Optional `allow_partial` mode for the gross-margin KPI, estimating margin on
+  costed lines and reporting excluded revenue, line counts and missing
+  item/warehouse valuations. Strict behavior remains the default (#94).
+- Compact partial-margin cards show revenue coverage and reveal valuation
+  details on demand. The same qualification accompanies model context; partial
+  estimates do not display a favorable trend indicator.
+
 ## [3.4.0] - 2026-11-05
 
 ### Added

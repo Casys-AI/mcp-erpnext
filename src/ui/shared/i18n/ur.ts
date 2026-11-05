@@ -210,6 +210,20 @@ export const ur: Record<string, string> = {
   "kpi.drilldown.title_trend": "رجحان کی تفصیل کے لیے کلک کریں",
   "kpi.secondary.invoices": "انوائسز",
   "kpi.secondary.amount": "رقم",
+  "kpi.coverage.title": "معلوم لاگت والی سطور کا مارجن",
+  "kpi.coverage.badge": "جزوی",
+  "kpi.coverage.label": "شامل فروخت کی آمدنی",
+  "kpi.coverage.summary":
+    "فروخت کی آمدنی کا {covered}% · {uncovered}% کی لاگت نامعلوم",
+  "kpi.coverage.excluded_lines": "نامعلوم لاگت والی سطور: {count}",
+  "kpi.coverage.details": "نامعلوم لاگت والی اشیاء",
+  "kpi.coverage.costed_revenue": "معلوم لاگت والی فروخت کی آمدنی",
+  "kpi.coverage.uncosted_revenue": "نامعلوم لاگت والی فروخت کی آمدنی",
+  "kpi.coverage.items": "اشیاء: {count}",
+  "kpi.coverage.groups": "شے/گودام کے جوڑے: {count}",
+  "kpi.coverage.lines": "سطور: {count}",
+  "kpi.coverage.omitted": "نہ دکھائے گئے اضافی شے/گودام کے جوڑے: {count}",
+  "kpi.coverage.unknown": "کوریج دستیاب نہیں",
   "kpi.drilldown.title_message":
     "گفتگو میں پوچھنے کے لیے ڈبل کلک کریں یا انٹر دبائیں",
   "kpi.drilldown.title_context":

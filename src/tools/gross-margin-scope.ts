@@ -8,9 +8,19 @@ export interface GrossMarginScope {
   date_to?: string;
 }
 
+export interface GrossMarginOptions extends GrossMarginScope {
+  allow_partial?: boolean;
+}
+
 export const GROSS_MARGIN_SCHEMA: JSONSchema = {
   type: "object",
   properties: {
+    allow_partial: {
+      type: "boolean",
+      default: false,
+      description:
+        "Opt in to an estimate on lines with readable Bin valuations only. Missing valuations are reported separately with revenue coverage; strict behavior is the default.",
+    },
     company: {
       type: "string",
       minLength: 1,
@@ -30,8 +40,23 @@ export const GROSS_MARGIN_SCHEMA: JSONSchema = {
 
 export function parseGrossMarginScope(
   input: Record<string, unknown>,
-): GrossMarginScope {
-  const scope: GrossMarginScope = {};
+): GrossMarginOptions {
+  const scope: GrossMarginOptions = {};
+  if (input.allow_partial !== undefined) {
+    if (typeof input.allow_partial !== "boolean") {
+      throw new ToolInputError(
+        "erpnext_kpi_gross_margin",
+        "INVALID_INPUT",
+        "'allow_partial' must be a boolean",
+        {
+          recovery:
+            "Pass true to request a partial estimate, false for strict behavior, or omit it.",
+          context: { field: "allow_partial" },
+        },
+      );
+    }
+    scope.allow_partial = input.allow_partial;
+  }
   for (const field of ["company", "date_from", "date_to"] as const) {
     const raw = input[field];
     if (raw === undefined) continue;

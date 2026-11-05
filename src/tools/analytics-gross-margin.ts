@@ -1,4 +1,8 @@
 import type { FrappeClient } from "../api/frappe-client.ts";
+import type {
+  MissingValuation,
+  ValuationCoverage,
+} from "../ui/kpi-coverage.ts";
 import {
   createReadBudget,
   FrappePaginationError,
@@ -13,17 +17,21 @@ import type { GrossMarginScope } from "./gross-margin-scope.ts";
 
 const TOOL = "erpnext_kpi_gross_margin";
 const BATCH_SIZE = 50;
+const MISSING_VALUATION_DETAIL_LIMIT = 20;
 
 export interface GrossMarginEstimate extends GrossMarginScope {
   margin: number;
   revenue: number;
   estimatedCost: number;
   currency?: string;
+  coverage?: ValuationCoverage;
 }
 
 interface ItemQuantity {
   quantity: number;
   stockUom: string;
+  revenue: number;
+  lineCount: number;
 }
 
 function* batches<T>(values: T[]): Generator<T[]> {
@@ -81,11 +89,12 @@ export async function estimateGrossMargin(
   client: FrappeClient,
   input: Record<string, unknown> = {},
 ): Promise<GrossMarginEstimate> {
-  const scope = parseGrossMarginScope(input);
+  const { allow_partial = false, ...scope } = parseGrossMarginScope(input);
   const budget = createReadBudget();
   let company = scope.company;
   let revenue = 0;
   let lineCount = 0;
+  let hasNegativeRevenue = false;
   const quantities = new Map<string, Map<string, ItemQuantity>>();
 
   for await (
@@ -135,7 +144,13 @@ export async function estimateGrossMargin(
           const warehouse = textField(row, "warehouse", "Sales Order Item");
           const stockUom = textField(row, "stock_uom", "Sales Order Item");
           const quantity = numericField(row, "stock_qty", "Sales Order Item");
-          revenue += numericField(row, "base_net_amount", "Sales Order Item");
+          const lineRevenue = numericField(
+            row,
+            "base_net_amount",
+            "Sales Order Item",
+          );
+          hasNegativeRevenue ||= lineRevenue < 0;
+          revenue += lineRevenue;
           lineCount++;
           let items = quantities.get(warehouse);
           if (!items) quantities.set(warehouse, items = new Map());
@@ -146,6 +161,8 @@ export async function estimateGrossMargin(
           items.set(code, {
             quantity: (previous?.quantity ?? 0) + quantity,
             stockUom,
+            revenue: (previous?.revenue ?? 0) + lineRevenue,
+            lineCount: (previous?.lineCount ?? 0) + 1,
           });
         }
       }
@@ -198,6 +215,9 @@ export async function estimateGrossMargin(
   }
 
   let estimatedCost = 0;
+  let costedRevenue = 0;
+  let costedLineCount = 0;
+  const missingValuations: MissingValuation[] = [];
   for (const [warehouse, items] of quantities) {
     for (const codes of batches([...items.keys()])) {
       const pending = new Set(codes);
@@ -245,16 +265,29 @@ export async function estimateGrossMargin(
           pending.delete(code);
         }
       }
-      if (pending.size) {
+      if (pending.size && !allow_partial) {
         throw new AnalyticsDataError(
           TOOL,
           "MISSING_VALUATION",
           `No readable Bin valuation for item '${pending.values().next().value}' in '${warehouse}'`,
-          "Check stock valuation and Bin permissions for this warehouse. For services or other cost bases, use the appropriate ERPNext report; missing cost is not zero cost.",
+          "Check stock valuation and Bin permissions for this warehouse, or explicitly pass allow_partial: true to estimate only the costed lines and report missing valuations separately. For other cost bases, use the appropriate ERPNext report; missing cost is not zero cost.",
         );
       }
+      for (const code of pending) {
+        const item = items.get(code)!;
+        missingValuations.push({
+          item_code: code,
+          warehouse,
+          stock_uom: item.stockUom,
+          revenue: item.revenue,
+          lineCount: item.lineCount,
+        });
+      }
       for (const [code, rate] of rates) {
-        estimatedCost += items.get(code)!.quantity * rate;
+        const item = items.get(code)!;
+        estimatedCost += item.quantity * rate;
+        costedRevenue += item.revenue;
+        costedLineCount += item.lineCount;
       }
     }
   }
@@ -264,9 +297,50 @@ export async function estimateGrossMargin(
       "The read deadline was exceeded",
     );
   }
-  const margin = revenue > 0 ? ((revenue - estimatedCost) / revenue) * 100 : 0;
   if (
     !Number.isFinite(revenue) || !Number.isFinite(estimatedCost) ||
+    !Number.isFinite(costedRevenue)
+  ) {
+    throw new AnalyticsDataError(
+      TOOL,
+      "INVALID_AMOUNT",
+      "The margin requires finite revenue and cost totals",
+      "Inspect the source amounts and quantities, or narrow the period before calculating this KPI.",
+    );
+  }
+  const partial = missingValuations.length > 0;
+  if (partial && hasNegativeRevenue) {
+    throw new AnalyticsDataError(
+      TOOL,
+      "INVALID_AMOUNT",
+      "Partial revenue coverage requires non-negative line revenues",
+      "Narrow the scope to non-negative Sales Order lines, or use an ERPNext report that handles signed revenue and cost coverage explicitly.",
+    );
+  }
+  const coverage = partial
+    ? valuationCoverage(
+      missingValuations,
+      costedRevenue,
+      costedLineCount,
+      currency,
+    )
+    : undefined;
+  if (coverage && costedRevenue <= 0) {
+    throw new AnalyticsDataError(
+      TOOL,
+      "MISSING_VALUATION",
+      `No positive revenue has a readable Bin valuation; a partial margin cannot be calculated. ` +
+        `${coverage.uncostedRevenue} ${currency} across ${coverage.uncostedLineCount} line(s) ` +
+        `and ${coverage.missingItemCount} item(s) has no readable valuation`,
+      "Inspect the missing valuations or narrow the scope to lines with a known cost. No zero margin is inferred from uncosted revenue.",
+      { coverage },
+    );
+  }
+  const marginRevenue = partial ? costedRevenue : revenue;
+  const margin = marginRevenue > 0
+    ? ((marginRevenue - estimatedCost) / marginRevenue) * 100
+    : 0;
+  if (
     !Number.isFinite(margin) ||
     (revenue <= 0 && estimatedCost !== 0)
   ) {
@@ -277,5 +351,44 @@ export async function estimateGrossMargin(
       "Inspect the source amounts and quantities, or narrow the period before calculating this KPI.",
     );
   }
-  return { ...scope, company, currency, margin, revenue, estimatedCost };
+  return {
+    ...scope,
+    company,
+    currency,
+    margin,
+    revenue,
+    estimatedCost,
+    ...(coverage ? { coverage } : {}),
+  };
+}
+
+function valuationCoverage(
+  missing: MissingValuation[],
+  costedRevenue: number,
+  costedLineCount: number,
+  currency: string,
+): ValuationCoverage {
+  const uncostedRevenue = missing.reduce((sum, row) => sum + row.revenue, 0);
+  const totalRevenue = costedRevenue + uncostedRevenue;
+  const compareText = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
+  const sorted = missing.toSorted((left, right) =>
+    right.revenue - left.revenue ||
+    compareText(left.item_code, right.item_code) ||
+    compareText(left.warehouse, right.warehouse)
+  );
+  return {
+    value: totalRevenue > 0 ? costedRevenue / totalRevenue * 100 : 0,
+    costedRevenue,
+    uncostedRevenue,
+    currency,
+    costedLineCount,
+    uncostedLineCount: missing.reduce((sum, row) => sum + row.lineCount, 0),
+    missingValuationCount: missing.length,
+    missingItemCount: new Set(missing.map((row) => row.item_code)).size,
+    missingValuations: sorted.slice(0, MISSING_VALUATION_DETAIL_LIMIT),
+    omittedValuationCount: Math.max(
+      0,
+      missing.length - MISSING_VALUATION_DETAIL_LIMIT,
+    ),
+  };
 }

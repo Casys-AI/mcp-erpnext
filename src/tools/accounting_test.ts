@@ -58,8 +58,10 @@ Deno.test("erpnext_payment_entry_list - resolves party against the party_type do
     get: async () => {
       throw new FrappeAPIError("not found", 404, null);
     },
-    list: async (doctype: string) => {
-      if (doctype === "Payment Entry") return [];
+    list: async (doctype: string, options: { filters?: unknown[] }) => {
+      if (doctype === "Payment Entry" || options.filters?.length !== 1) {
+        return [];
+      }
       resolvedDoctype = doctype;
       return [{ name: "SUPP-007" }];
     },

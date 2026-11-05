@@ -182,7 +182,7 @@ export const ta: Record<string, string> = {
   "stock.col.projected": "எதிர்பார்ப்பு",
   "stock.col.rate": "விலை",
   "stock.col.value": "மதிப்பு",
-  "stock.footer.total_value": "மொத்தச் சரக்கு மதிப்பு",
+  "stock.footer.total_value": "காட்டப்படும் வரிசைகளின் மதிப்பு",
   "stock.detail.loading": "உருப்படி ஏறுகிறது…",
   "stock.detail.label.name": "பெயர்",
   "stock.detail.label.group": "குழு",

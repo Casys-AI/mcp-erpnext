@@ -421,8 +421,8 @@ Deno.test("doclist query - neuf lignes enfants partagent des arguments rejouable
   });
 });
 
-Deno.test("doclist refresh - seule une fenêtre complète confirme une absence", () => {
-  assertEquals(isDoclistResultComplete(result(19, { limit: 20 })), true);
+Deno.test("doclist refresh - seule une première page vide confirme une absence", () => {
+  assertEquals(isDoclistResultComplete(result(19, { limit: 20 })), false);
   assertEquals(isDoclistResultComplete(result(20, { limit: 20 })), false);
   assertEquals(isDoclistResultComplete(result(50, { limit: 50 })), false);
   assertEquals(isDoclistResultComplete(result(0, { limit: 20 })), true);
@@ -434,7 +434,8 @@ Deno.test("doclist refresh - seule une fenêtre complète confirme une absence",
     isDoclistResultComplete(result(19, { limit: 20, limit_start: 20 })),
     false,
   );
-  assertEquals(isDoclistResultComplete(result(50, { limit: 0 })), true);
+  assertEquals(isDoclistResultComplete(result(50, { limit: 0 })), false);
+  assertEquals(isDoclistResultComplete(result(0, { limit: 0 })), true);
   assertEquals(isDoclistResultComplete(result(19)), false);
   assertEquals(
     isDoclistResultComplete({ ...result(10, { limit: 20 }), count: 30 }),
@@ -442,10 +443,10 @@ Deno.test("doclist refresh - seule une fenêtre complète confirme une absence",
   );
 });
 
-Deno.test("doclist refresh - seul doc_list garantit le contrat de complétude", () => {
+Deno.test("doclist refresh - un outil dédié ou une page non vide ne prouve pas la complétude", () => {
   assertEquals(
     isDoclistResultComplete(result(DOC_LIST_DEFAULT_LIMIT - 1, {})),
-    true,
+    false,
   );
   assertEquals(
     isDoclistResultComplete(result(DOC_LIST_DEFAULT_LIMIT, {})),
@@ -481,6 +482,45 @@ Deno.test("doclist refresh - seul doc_list garantit le contrat de complétude", 
     isDoclistResultComplete(
       result(9, { limit: 100, offset: 0, limit_start: 0 }),
     ),
-    true,
+    false,
   );
+  assertEquals(isDoclistResultComplete(result(0, {})), true);
+  assertEquals(
+    isDoclistResultComplete(result(0, {}, "erpnext_sales_invoice_list")),
+    false,
+  );
+});
+
+Deno.test("doclist refresh - une page plafonnée ne retire pas les sélections hors page", () => {
+  const state = setSelectionGroupMembers(emptySelectionState(), {
+    scopeKey: "invoices",
+    reconcileKey: "invoices",
+    doctype: "Sales Invoice",
+    view: "Invoices",
+    fields: ["name"],
+  }, [member("INV-0"), member("INV-99")]);
+  for (const limit of [100, 0]) {
+    const data = result(37, { limit });
+    const refreshed = reconcileSelectionGroup(
+      state,
+      "invoices",
+      "invoices",
+      data.data.map((row) => ({
+        ...member(String(row.name)),
+        label: `Updated ${row.name}`,
+      })),
+      isDoclistResultComplete(data),
+    );
+    assertEquals(names(refreshed.groups[0].members), ["INV-0", "INV-99"]);
+    assertEquals(refreshed.groups[0].members[0].label, "Updated INV-0");
+  }
+  const empty = result(0, { limit: 100, offset: 0 });
+  const refreshed = reconcileSelectionGroup(
+    state,
+    "invoices",
+    "invoices",
+    [],
+    isDoclistResultComplete(empty),
+  );
+  assertEquals(refreshed.groups.length, 0);
 });

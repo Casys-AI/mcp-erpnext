@@ -8,6 +8,11 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOC_META, DOCLIST_META, INVOICE_META } from "./viewer-meta.ts";
 import { resolveCustomer, resolveDynamicLink } from "../api/resolve.ts";
@@ -97,7 +102,12 @@ export const salesTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         customer_group: {
           type: "string",
           description: "Filter by customer group",
@@ -110,7 +120,7 @@ export const salesTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_customer_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (!(input.include_disabled as boolean)) {
         filters.push(["disabled", "=", 0]);
@@ -132,8 +142,8 @@ export const salesTools: ErpNextTool[] = [
           "disabled",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -280,7 +290,12 @@ export const salesTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         customer: {
           type: "string",
           description:
@@ -299,7 +314,7 @@ export const salesTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_sales_order_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.customer) {
         filters.push([
@@ -330,8 +345,8 @@ export const salesTools: ErpNextTool[] = [
           "currency",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -625,7 +640,12 @@ export const salesTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         customer: {
           type: "string",
           description:
@@ -644,7 +664,11 @@ export const salesTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_sales_invoice_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.customer) {
         filters.push([
@@ -676,8 +700,8 @@ export const salesTools: ErpNextTool[] = [
           "outstanding_amount",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -890,7 +914,12 @@ export const salesTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         quotation_to: {
           type: "string",
           description:
@@ -916,7 +945,7 @@ export const salesTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_quotation_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.party_name) {
         if (!input.quotation_to) {
@@ -954,8 +983,8 @@ export const salesTools: ErpNextTool[] = [
           "grand_total",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {

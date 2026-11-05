@@ -184,7 +184,7 @@ export const ur: Record<string, string> = {
   "stock.col.projected": "متوقع",
   "stock.col.rate": "نرخ",
   "stock.col.value": "مالیت",
-  "stock.footer.total_value": "اسٹاک کی کل مالیت",
+  "stock.footer.total_value": "دکھائی گئی قطاروں کی مالیت",
   "stock.detail.loading": "آئٹم لوڈ ہو رہا ہے…",
   "stock.detail.label.name": "نام",
   "stock.detail.label.group": "گروپ",

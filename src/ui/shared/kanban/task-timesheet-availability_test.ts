@@ -39,7 +39,9 @@ Deno.test("task timesheet count reads only the exact task with bounded fresh pag
   const host: ToolHost = {
     callServerTool: (params, options) => {
       calls.push({ params, options });
-      return Promise.resolve(result([{ name: "TS-001" }], 50));
+      return Promise.resolve(
+        result(params.arguments.offset === 0 ? [{ name: "TS-001" }] : [], 50),
+      );
     },
   };
 
@@ -47,21 +49,24 @@ Deno.test("task timesheet count reads only the exact task with bounded fresh pag
     status: "present",
     count: 1,
   });
-  assertEquals(calls, [{
-    params: {
-      name: "erpnext_doc_list",
-      arguments: {
-        doctype: "Timesheet",
-        fields: ["name"],
-        filters: [["Timesheet Detail", "task", "=", "TASK-001"]],
-        limit: TASK_TIMESHEET_PAGE_SIZE,
-        offset: 0,
-        order_by: "name asc",
-        skip_cache: true,
+  assertEquals(
+    calls,
+    [0, 1].map((offset) => ({
+      params: {
+        name: "erpnext_doc_list",
+        arguments: {
+          doctype: "Timesheet",
+          fields: ["name"],
+          filters: [["Timesheet Detail", "task", "=", "TASK-001"]],
+          limit: TASK_TIMESHEET_PAGE_SIZE,
+          offset,
+          order_by: "name asc",
+          skip_cache: true,
+        },
       },
-    },
-    options: { timeout: 10_000 },
-  }]);
+      options: { timeout: 10_000 },
+    })),
+  );
 });
 
 Deno.test("task timesheet availability accepts structured and legacy empty lists", async () => {
@@ -83,13 +88,6 @@ Deno.test("task timesheet availability accepts structured and legacy empty lists
       { status: "empty" },
     );
   }
-  assertEquals(
-    await loadTaskTimesheetAvailability({
-      callServerTool: () =>
-        Promise.resolve(result([{ name: "TS-001" }, { name: "TS-001" }])),
-    }, "TASK-001"),
-    { status: "present", count: 1 },
-  );
 });
 
 Deno.test("task timesheet count label remains localized and interpolated", () => {
@@ -126,25 +124,30 @@ Deno.test("a saturated relation remains navigable without claiming a count", () 
   );
 });
 
-Deno.test("task timesheet count deduplicates parent names across pages", async () => {
-  const firstPage = Array.from(
-    { length: TASK_TIMESHEET_PAGE_SIZE },
+Deno.test("task timesheet count advances by actual rows through server-capped pages", async () => {
+  const allRows = Array.from(
+    { length: 203 },
     (_, index) => ({ name: `TS-${String(index).padStart(3, "0")}` }),
   );
   const calls: Array<Record<string, unknown>> = [];
   const availability = await loadTaskTimesheetAvailability({
     callServerTool: (params) => {
       calls.push(params.arguments);
-      return Promise.resolve(
-        params.arguments.offset === 0
-          ? result(firstPage)
-          : result([{ name: "TS-000" }, { name: "TS-200" }]),
-      );
+      const offset = Number(params.arguments.offset);
+      return Promise.resolve(result(allRows.slice(offset, offset + 37)));
     },
   }, "TASK-001");
 
-  assertEquals(availability, { status: "present", count: 201 });
-  assertEquals(calls.map((call) => call.offset), [0, TASK_TIMESHEET_PAGE_SIZE]);
+  assertEquals(availability, { status: "present", count: 203 });
+  assertEquals(calls.map((call) => call.offset), [
+    0,
+    37,
+    74,
+    111,
+    148,
+    185,
+    203,
+  ]);
   assertEquals(
     calls.every((call) =>
       call.filters instanceof Array &&
@@ -153,6 +156,29 @@ Deno.test("task timesheet count deduplicates parent names across pages", async (
     ),
     true,
   );
+});
+
+Deno.test("task timesheet count rejects repeated pages and later errors without partial counts", async () => {
+  for (const fail of [false, true]) {
+    let calls = 0;
+    const availability = await loadTaskTimesheetAvailability({
+      callServerTool: () => {
+        calls++;
+        if (fail && calls > 1) {
+          return Promise.reject(new Error("Later read denied"));
+        }
+        return Promise.resolve(result([{ name: "TS-001" }]));
+      },
+    }, "TASK-001");
+    assertEquals(calls, 2);
+    assertEquals(availability.status, "error");
+    if (availability.status === "error") {
+      assertStringIncludes(
+        availability.message,
+        fail ? "Later read denied" : "PAGINATION_INCOMPLETE",
+      );
+    }
+  }
 });
 
 Deno.test("task timesheet errors and malformed payloads never become a confirmed empty list", async () => {
@@ -223,7 +249,10 @@ Deno.test("changing or closing the task drops its delayed timesheet response", a
   oldCheck.cancel();
   const newCheck = startTaskTimesheetAvailabilityCheck(
     {
-      callServerTool: () => newResponse.promise,
+      callServerTool: (params) =>
+        params.arguments.offset === 0
+          ? newResponse.promise
+          : Promise.resolve(result([])),
     },
     "TASK-NEW",
     (availability) => states.push(availability),
@@ -296,15 +325,15 @@ Deno.test("closing a Task detail prevents the next timesheet page call", async (
 });
 
 Deno.test("a saturated bounded timesheet relation returns a localized explicit error", async () => {
-  const fullPage = result(Array.from(
-    { length: TASK_TIMESHEET_PAGE_SIZE },
-    (_, index) => ({ name: `TS-${index}` }),
-  ));
   let calls = 0;
   const availability = await loadTaskTimesheetAvailability({
-    callServerTool: () => {
+    callServerTool: (params) => {
       calls++;
-      return Promise.resolve(fullPage);
+      const offset = Number(params.arguments.offset);
+      return Promise.resolve(result(Array.from(
+        { length: TASK_TIMESHEET_PAGE_SIZE },
+        (_, index) => ({ name: `TS-${offset + index}` }),
+      )));
     },
   }, "TASK-001");
 

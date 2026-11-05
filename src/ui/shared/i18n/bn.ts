@@ -176,7 +176,7 @@ export const bn: Record<string, string> = {
   "stock.col.projected": "প্রক্ষেপিত",
   "stock.col.rate": "দর",
   "stock.col.value": "মূল্য",
-  "stock.footer.total_value": "মোট মজুত মূল্য",
+  "stock.footer.total_value": "প্রদর্শিত সারিগুলির মূল্য",
   "stock.detail.loading": "আইটেম লোড হচ্ছে…",
   "stock.detail.label.name": "নাম",
   "stock.detail.label.group": "গ্রুপ",

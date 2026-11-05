@@ -259,6 +259,75 @@ Deno.test("ui refresh - gross margin fallback names the KPI's actual inputs", ()
     result._drillDown,
     "Show the non-cancelled Sales Order Items and Bin valuation rates used to estimate this gross margin",
   );
+  assertEquals(result._trendDrillDown, undefined);
+  assertEquals(result._jumps, {});
+});
+
+Deno.test("ui refresh - gross margin fallback retains the selected company and order-date scope", () => {
+  const args = {
+    company: " Taiwan Company ",
+    date_from: "2026-01-01",
+    date_to: "2026-09-30",
+  };
+  const result = withUiRefreshRequest(
+    {
+      label: "Gross Margin",
+      value: 32,
+      company: "Taiwan Company",
+      date_from: "2026-01-01",
+      date_to: "2026-09-30",
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } },
+    },
+    "erpnext_kpi_gross_margin",
+    args,
+  ) as Record<string, unknown>;
+  assertEquals(
+    result._drillDown,
+    'Show the non-cancelled Sales Order Items and Bin valuation rates used to estimate this gross margin. Scope: {"company":"Taiwan Company","date_from":"2026-01-01","date_to":"2026-09-30"}.',
+  );
+  assertEquals(result._trendDrillDown, undefined);
+  assertEquals(result._jumps, {});
+  assertEquals(result.refreshRequest, {
+    toolName: "erpnext_kpi_gross_margin",
+    arguments: args,
+  });
+});
+
+Deno.test("ui refresh - gross margin uses its auto-selected company and falls back to supplied dates", () => {
+  const result = withUiRefreshRequest(
+    {
+      label: "Gross Margin",
+      value: 32,
+      company: "Taiwan Company",
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } },
+    },
+    "erpnext_kpi_gross_margin",
+    { date_from: "2026-01-01" },
+  ) as Record<string, unknown>;
+  assertEquals(
+    result._drillDown,
+    'Show the non-cancelled Sales Order Items and Bin valuation rates used to estimate this gross margin. Scope: {"company":"Taiwan Company","date_from":"2026-01-01"}.',
+  );
+  assertEquals(result._trendDrillDown, undefined);
+  assertEquals(result._jumps, {});
+});
+
+Deno.test("ui refresh - gross margin date-only scope never opens an unscoped profit/loss chart", () => {
+  const result = withUiRefreshRequest(
+    {
+      label: "Gross Margin",
+      value: 0,
+      _meta: { ui: { resourceUri: "ui://mcp-erpnext/kpi-viewer" } },
+    },
+    "erpnext_kpi_gross_margin",
+    { date_to: "2026-09-30" },
+  ) as Record<string, unknown>;
+  assertEquals(
+    result._drillDown,
+    'Show the non-cancelled Sales Order Items and Bin valuation rates used to estimate this gross margin. Scope: {"date_to":"2026-09-30"}.',
+  );
+  assertEquals(result._trendDrillDown, undefined);
+  assertEquals(result._jumps, {});
 });
 
 // ── Chart drill-down injection ───────────────────────────────────────────────

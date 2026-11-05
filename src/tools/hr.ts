@@ -10,6 +10,12 @@ import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveEmployee, resolveLink } from "../api/resolve.ts";
+import { listAll } from "../api/list-pages.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 
 export const hrTools: ErpNextTool[] = [
   // ── Employees ─────────────────────────────────────────────────────────────
@@ -24,7 +30,12 @@ export const hrTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         department: { type: "string", description: "Filter by department" },
         status: {
           type: "string",
@@ -35,7 +46,7 @@ export const hrTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_employee_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.department) {
         filters.push(["department", "=", input.department as string]);
@@ -58,8 +69,8 @@ export const hrTools: ErpNextTool[] = [
           "date_of_joining",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -121,7 +132,12 @@ export const hrTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         employee: {
           type: "string",
           description:
@@ -140,7 +156,7 @@ export const hrTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_attendance_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.employee) {
         filters.push([
@@ -170,8 +186,8 @@ export const hrTools: ErpNextTool[] = [
           "status",
         ],
         filters,
-        limit,
-        order_by: "attendance_date desc",
+        ...pagination,
+        order_by: stablePageOrder("attendance_date desc"),
       });
 
       return {
@@ -196,7 +212,12 @@ export const hrTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         employee: {
           type: "string",
           description:
@@ -219,7 +240,11 @@ export const hrTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_leave_application_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.employee) {
         filters.push([
@@ -254,8 +279,8 @@ export const hrTools: ErpNextTool[] = [
           "status",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -377,7 +402,12 @@ export const hrTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         employee: {
           type: "string",
           description:
@@ -399,7 +429,7 @@ export const hrTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_salary_slip_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.employee) {
         filters.push([
@@ -433,8 +463,8 @@ export const hrTools: ErpNextTool[] = [
           "status",
         ],
         filters,
-        limit,
-        order_by: "posting_date desc",
+        ...pagination,
+        order_by: stablePageOrder("posting_date desc"),
       });
 
       return {
@@ -484,7 +514,12 @@ export const hrTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         company: { type: "string", description: "Filter by company" },
         status: {
           type: "string",
@@ -499,7 +534,11 @@ export const hrTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_payroll_entry_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.company) {
         filters.push(["company", "=", input.company as string]);
@@ -523,8 +562,8 @@ export const hrTools: ErpNextTool[] = [
           "status",
         ],
         filters,
-        limit,
-        order_by: "posting_date desc",
+        ...pagination,
+        order_by: stablePageOrder("posting_date desc"),
       });
 
       return {
@@ -549,7 +588,12 @@ export const hrTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         employee: {
           type: "string",
           description:
@@ -574,7 +618,11 @@ export const hrTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_expense_claim_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.employee) {
         filters.push([
@@ -609,8 +657,8 @@ export const hrTools: ErpNextTool[] = [
           "approval_status",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -715,7 +763,7 @@ export const hrTools: ErpNextTool[] = [
     annotations: { readOnlyHint: true },
     _meta: DOCLIST_META,
     description: "Get leave balance (allocations) for an employee. " +
-      "Returns Leave Allocations with leave_type, total_leaves_allocated, new_leaves_allocated.",
+      "Reads all submitted Leave Allocations in fresh pages, with leave_type, total_leaves_allocated, new_leaves_allocated.",
     category: "hr",
     inputSchema: {
       type: "object",
@@ -744,7 +792,7 @@ export const hrTools: ErpNextTool[] = [
         ["docstatus", "=", 1],
       ];
 
-      const docs = await ctx.client.list("Leave Allocation", {
+      const docs = await listAll(ctx.client, "Leave Allocation", {
         fields: [
           "name",
           "leave_type",
@@ -754,9 +802,13 @@ export const hrTools: ErpNextTool[] = [
           "to_date",
         ],
         filters,
-        limit: 50,
-        order_by: "leave_type asc",
       });
+      docs.sort((left, right) =>
+        String(left.leave_type ?? "").localeCompare(
+          String(right.leave_type ?? ""),
+        ) ||
+        left.name.localeCompare(right.name)
+      );
 
       return {
         doctype: "Leave Allocation",

@@ -41,9 +41,12 @@ import {
 import {
   DOC_LIST_DEFAULT_LIMIT,
   FRAPPE_FILTERS_INPUT_SCHEMA,
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
   parseFrappeFilters,
   parsePagination,
   planListQuery,
+  stablePageOrder,
 } from "./doc-list-query.ts";
 import { ToolInputError } from "./errors.ts";
 import {
@@ -124,11 +127,12 @@ export const operationsTools: ErpNextTool[] = [
           minLength: 1,
         },
         limit: {
-          type: "number",
+          type: "integer",
           description: "Maximum number of files to return. Defaults to 50.",
           minimum: 1,
           maximum: 500,
         },
+        offset: OFFSET_INPUT_SCHEMA,
       },
       required: ["attached_to_doctype", "attached_to_name"],
     },
@@ -171,8 +175,8 @@ export const operationsTools: ErpNextTool[] = [
           ["attached_to_doctype", "=", input.attached_to_doctype as string],
           ["attached_to_name", "=", input.attached_to_name as string],
         ],
-        order_by: "creation desc",
-        limit: (input.limit as number | undefined) ?? 50,
+        order_by: stablePageOrder("creation desc"),
+        ...listPageOptions("erpnext_file_list", input, 50),
       });
 
       return {

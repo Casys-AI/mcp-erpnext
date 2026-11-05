@@ -128,6 +128,145 @@ Deno.test("erpnext_kanban_get_board - handles localized v16 rejection and an emp
   assertEquals(result.pagination.hasMore, false);
 });
 
+for (
+  const scenario of [
+    {
+      name: "server cap below page size",
+      cap: 1,
+      offset: 1,
+      hasMore: true,
+      calls: 2,
+    },
+    {
+      name: "server cap at page size",
+      cap: 3,
+      offset: 1,
+      hasMore: true,
+      calls: 2,
+    },
+    {
+      name: "lookahead row already present",
+      cap: 10,
+      offset: 1,
+      hasMore: true,
+      calls: 1,
+    },
+    { name: "short final page", cap: 10, offset: 6, hasMore: false, calls: 2 },
+    { name: "exact final page", cap: 10, offset: 4, hasMore: false, calls: 2 },
+    { name: "empty page", cap: 10, offset: 7, hasMore: false, calls: 1 },
+  ]
+) {
+  Deno.test(`erpnext_kanban_get_board - probes pagination correctly for ${scenario.name}`, async () => {
+    const calls: FrappeListOptions[] = [];
+    const rows = Array.from({ length: 7 }, (_, index) => ({
+      name: `TASK-${index}`,
+      subject: `Task ${index}`,
+      status: "Open",
+    }));
+    const result = await getTool("erpnext_kanban_get_board").handler(
+      {
+        doctype: "Task",
+        limit: 3,
+        offset: scenario.offset,
+        project: "Alpha",
+      },
+      makeCtx(makeMockClient({
+        list: async (doctype: string, options: FrappeListOptions) => {
+          assertEquals(doctype, "Task");
+          calls.push(options);
+          const start = options.limit_start ?? 0;
+          return rows.slice(
+            start,
+            start + Math.min(options.limit ?? 20, scenario.cap),
+          );
+        },
+      })),
+    ) as KanbanBoard;
+
+    const visibleCount = Math.min(
+      3,
+      scenario.cap,
+      rows.length - scenario.offset,
+    );
+    assertEquals(result.pagination, {
+      limit: 3,
+      offset: scenario.offset,
+      loadedCount: scenario.offset + visibleCount,
+      hasMore: scenario.hasMore,
+    });
+    assertEquals(
+      result.cards.map((card) => card.id),
+      rows.slice(
+        scenario.offset,
+        scenario.offset + visibleCount,
+      ).map((row) => row.name),
+    );
+    assertEquals(calls.length, scenario.calls);
+    for (const call of calls) {
+      assertEquals(call.order_by, "modified desc, name asc");
+      assertEquals(call.filters, [["project", "=", "Alpha"]]);
+    }
+    if (calls.length === 2) {
+      assertEquals(calls[1], {
+        ...calls[0],
+        limit: 1,
+        limit_start: scenario.offset + visibleCount,
+      });
+    }
+  });
+}
+
+Deno.test("erpnext_kanban_get_board - pagination probe preserves the resolved Opportunity source field", async () => {
+  const calls: FrappeListOptions[] = [];
+  const result = await getTool("erpnext_kanban_get_board").handler(
+    {
+      doctype: "Opportunity",
+      status: "Open",
+      limit: 20,
+      offset: 5,
+    },
+    makeCtx(makeMockClient({
+      list: async (_doctype: string, options: FrappeListOptions) => {
+        calls.push(options);
+        if (calls.length === 1) throw missingOpportunitySource();
+        return [{
+          name: `OPP-${calls.length}`,
+          status: "Open",
+          utm_source: "Website",
+        }];
+      },
+    })),
+  ) as KanbanBoard;
+
+  assertEquals(calls.length, 3);
+  assert(calls[1].fields?.includes("utm_source"));
+  assertEquals(calls[2], { ...calls[1], limit: 1, limit_start: 6 });
+  assertEquals(calls[2].filters, [["status", "=", "Open"]]);
+  assertEquals(result.pagination.hasMore, true);
+  assertEquals(result.cards.length, 1);
+  assertEquals(result.cards[0].badges, [{ label: "Website", tone: "info" }]);
+});
+
+Deno.test("erpnext_kanban_get_board - a failed pagination probe propagates without claiming completeness", async () => {
+  const probeError = new FrappeAPIError("Probe denied", 403, null);
+  let calls = 0;
+  const actual = await assertRejects(() =>
+    getTool("erpnext_kanban_get_board").handler(
+      { doctype: "Task" },
+      makeCtx(makeMockClient({
+        list: async () => {
+          if (++calls === 1) {
+            return [{ name: "TASK-1", subject: "Task 1", status: "Open" }];
+          }
+          throw probeError;
+        },
+      })),
+    )
+  );
+  assertStrictEquals(actual, probeError);
+  assertEquals(calls, 2);
+});
+
 Deno.test("erpnext_kanban_get_board - propagates unrelated errors without a source retry", async () => {
   const errors = [
     missingOpportunitySource("Field not permitted in query: source_detail"),
@@ -351,6 +490,7 @@ Deno.test("erpnext_kanban_get_board - returns an Opportunity board", async () =>
       calls++;
       capturedFields = opts.fields ?? [];
       capturedFilters = opts.filters ?? [];
+      if (calls > 1) return [];
       return [
         {
           name: "CRM-OPP-2026-00001",
@@ -378,7 +518,7 @@ Deno.test("erpnext_kanban_get_board - returns an Opportunity board", async () =>
     makeCtx(mockClient),
   ) as Record<string, unknown>;
 
-  assertEquals(calls, 1);
+  assertEquals(calls, 2);
   assertEquals(capturedFields, [
     "name",
     "title",

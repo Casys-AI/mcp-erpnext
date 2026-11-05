@@ -15,11 +15,11 @@ import {
 } from "./attachments-state.ts";
 import type { DocumentCapabilities } from "./capabilities.ts";
 import {
-  attachmentListFromToolResult,
   type DocumentAttachment,
   downloadResourceFromToolResult,
   type EmbeddedDownloadResource,
 } from "./attachment-results.ts";
+import { readAttachmentMetadata } from "./attachment-pages.ts";
 import {
   prepareAttachmentPreview,
   type PreparedAttachmentPreview,
@@ -169,6 +169,10 @@ export function useAttachments({
     const base = resetAttachmentsState(stateRef.current, key);
     const reserved = reserveAttachmentRequest(base);
     const token = reserved.token;
+    const generation = lifecycleRef.current;
+    const isCurrent = () =>
+      identityRef.current === key && lifecycleRef.current === generation &&
+      acceptsAttachmentToken(stateRef.current, token);
     commitState(() => ({
       ...reserved.state,
       load: "loading",
@@ -176,19 +180,19 @@ export function useAttachments({
     }));
 
     try {
-      const result = await app.callServerTool({
-        name: "erpnext_file_list",
-        arguments: {
-          attached_to_doctype: doctype,
-          attached_to_name: name,
-          limit: 50,
-        },
-      }, { timeout: TOOL_CALL_TIMEOUT_MS });
-      if (
-        identityRef.current !== key ||
-        !acceptsAttachmentToken(stateRef.current, token)
-      ) return false;
-      const nextFiles = attachmentListFromToolResult(result);
+      const nextFiles = await readAttachmentMetadata(
+        (page) =>
+          app.callServerTool({
+            name: "erpnext_file_list",
+            arguments: {
+              attached_to_doctype: doctype,
+              attached_to_name: name,
+              ...page,
+            },
+          }, { timeout: TOOL_CALL_TIMEOUT_MS }),
+        isCurrent,
+      );
+      if (nextFiles === null || !isCurrent()) return false;
       setFiles(nextFiles);
       commitState((current) => ({
         ...current,
@@ -201,10 +205,7 @@ export function useAttachments({
       }));
       return true;
     } catch {
-      if (
-        identityRef.current !== key ||
-        !acceptsAttachmentToken(stateRef.current, token)
-      ) return false;
+      if (!isCurrent()) return false;
       commitState((current) => ({
         ...current,
         load: "error",

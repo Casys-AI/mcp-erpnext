@@ -189,7 +189,7 @@ export const fr: Record<string, string> = {
   "stock.col.projected": "Projeté",
   "stock.col.rate": "Taux",
   "stock.col.value": "Valeur",
-  "stock.footer.total_value": "Valeur totale du stock",
+  "stock.footer.total_value": "Valeur des lignes affichées",
   "stock.detail.loading": "Chargement de l'article…",
   "stock.detail.label.name": "Désignation",
   "stock.detail.label.group": "Famille",

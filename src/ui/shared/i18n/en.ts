@@ -189,7 +189,7 @@ export const en: Record<string, string> = {
   "stock.col.projected": "Projected",
   "stock.col.rate": "Rate",
   "stock.col.value": "Value",
-  "stock.footer.total_value": "Total stock value",
+  "stock.footer.total_value": "Value of displayed rows",
   "stock.detail.loading": "Loading item…",
   "stock.detail.label.name": "Name",
   "stock.detail.label.group": "Group",

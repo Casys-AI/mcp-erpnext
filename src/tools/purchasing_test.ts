@@ -191,8 +191,8 @@ Deno.test("erpnext_purchase_order_create - accepts a supplier name, not just an 
       }
       return { name };
     },
-    list: async (doctype: string) =>
-      doctype === "Supplier"
+    list: async (doctype: string, options: { filters?: unknown[] }) =>
+      doctype === "Supplier" && options.filters?.length === 1
         ? [{ name: "SUPP-00031", supplier_name: "Acme Supplies" }]
         : [],
     create: async (_doctype: string, data: unknown) => {
@@ -227,8 +227,8 @@ Deno.test("erpnext_purchase_order_create - refuses to guess between two supplier
       if (name === "Acme") throw new FrappeAPIError("Not Found", 404, null);
       return { name };
     },
-    list: async (doctype: string) =>
-      doctype === "Supplier"
+    list: async (doctype: string, options: { filters?: unknown[] }) =>
+      doctype === "Supplier" && options.filters?.length === 1
         ? [
           { name: "SUPP-00031", supplier_name: "Acme" },
           { name: "SUPP-00087", supplier_name: "Acme" },

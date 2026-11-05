@@ -1,19 +1,58 @@
 import type { FrappeClient } from "../api/frappe-client.ts";
+import {
+  createReadBudget,
+  FrappePaginationError,
+  listPages,
+} from "../api/list-pages.ts";
 import { AnalyticsDataError } from "./analytics-money.ts";
+import {
+  grossMarginOrderFilters,
+  parseGrossMarginScope,
+} from "./gross-margin-scope.ts";
+import type { GrossMarginScope } from "./gross-margin-scope.ts";
 
 const TOOL = "erpnext_kpi_gross_margin";
-const MAX_ORDER_ROWS = 1000;
-const MAX_BIN_ROWS = 500;
+const BATCH_SIZE = 50;
 
-function requireComplete(doctype: string, count: number, limit: number): void {
-  if (count <= limit) return;
+export interface GrossMarginEstimate extends GrossMarginScope {
+  margin: number;
+  revenue: number;
+  estimatedCost: number;
+  currency?: string;
+}
+
+interface ItemQuantity {
+  quantity: number;
+  stockUom: string;
+}
+
+function* batches<T>(values: T[]): Generator<T[]> {
+  for (let start = 0; start < values.length; start += BATCH_SIZE) {
+    yield values.slice(start, start + BATCH_SIZE);
+  }
+}
+
+function invalidData(detail: string): never {
   throw new AnalyticsDataError(
     TOOL,
-    "INCOMPLETE_DATA",
-    `More than ${limit} ${doctype} rows are available; no partial margin is returned`,
-    "Use a scoped ERPNext report or retrieve the source rows with pagination before calculating a complete estimate.",
-    { doctype, limit },
+    "INVALID_DATA",
+    detail,
+    "Check source fields, their read permissions and the selected company; no missing value or unit is guessed.",
   );
+}
+
+function textField(
+  row: Record<string, unknown>,
+  field: string,
+  doctype: string,
+): string {
+  const value = row[field];
+  if (typeof value !== "string" || !value.trim()) {
+    invalidData(
+      `${doctype} '${row.name ?? "unknown"}' has no readable '${field}'`,
+    );
+  }
+  return value;
 }
 
 function numericField(
@@ -22,19 +61,17 @@ function numericField(
   doctype: string,
 ): number {
   const raw = row[field];
-  const value = typeof raw === "number" ||
-      (typeof raw === "string" && raw.trim())
-    ? Number(raw)
-    : Number.NaN;
+  const value =
+    typeof raw === "number" || (typeof raw === "string" && raw.trim())
+      ? Number(raw)
+      : Number.NaN;
   if (!Number.isFinite(value)) {
     throw new AnalyticsDataError(
       TOOL,
       "INVALID_AMOUNT",
-      `${doctype} row for '${
-        row.item_code ?? "unknown item"
-      }' has no finite '${field}'`,
+      `${doctype} '${row.name ?? "unknown"}' has no finite '${field}'`,
       `Check read permissions and the stored '${field}' value; missing fields cannot be treated as zero.`,
-      { doctype, field, item_code: row.item_code },
+      { doctype, field, name: row.name },
     );
   }
   return value;
@@ -42,96 +79,203 @@ function numericField(
 
 export async function estimateGrossMargin(
   client: FrappeClient,
-): Promise<number> {
-  // One extra row distinguishes a complete boundary-sized result from a
-  // truncated aggregate without reading an unbounded table.
-  const soItems = await client.list("Sales Order Item", {
-    parent: "Sales Order",
-    fields: ["item_code", "qty", "amount"],
-    filters: [["docstatus", "!=", 2]],
-    limit: MAX_ORDER_ROWS + 1,
-  });
-  requireComplete("Sales Order Item", soItems.length, MAX_ORDER_ROWS);
-  if (soItems.length === 0) return 0;
-
+  input: Record<string, unknown> = {},
+): Promise<GrossMarginEstimate> {
+  const scope = parseGrossMarginScope(input);
+  const budget = createReadBudget();
+  let company = scope.company;
   let revenue = 0;
-  const itemQty = new Map<string, number>();
-  for (const row of soItems) {
-    const code = row.item_code;
-    if (typeof code !== "string" || !code.trim()) {
-      throw new AnalyticsDataError(
-        TOOL,
-        "INVALID_DATA",
-        "A Sales Order Item row has no item_code",
-        "Check item_code read permissions and the source order before estimating its cost.",
-        { doctype: "Sales Order Item", field: "item_code" },
+  let lineCount = 0;
+  const quantities = new Map<string, Map<string, ItemQuantity>>();
+
+  for await (
+    const orders of listPages(client, "Sales Order", {
+      fields: ["name", "company"],
+      filters: grossMarginOrderFilters(scope),
+    }, budget)
+  ) {
+    for (const order of orders) {
+      const orderCompany = textField(order, "company", "Sales Order");
+      if (company && company !== orderCompany) {
+        throw new AnalyticsDataError(
+          TOOL,
+          "MIXED_COMPANIES",
+          "Matching Sales Orders span different companies",
+          "Call this KPI with one 'company'; company-currency amounts and warehouse costs are not combined across companies.",
+        );
+      }
+      company = orderCompany;
+    }
+
+    // Scope through readable parents: company is not a Sales Order Item field.
+    for (const names of batches(orders.map((order) => order.name))) {
+      const parents = new Set(names);
+      for await (
+        const rows of listPages(client, "Sales Order Item", {
+          parent: "Sales Order",
+          fields: [
+            "name",
+            "parent",
+            "item_code",
+            "warehouse",
+            "stock_uom",
+            "stock_qty",
+            "base_net_amount",
+          ],
+          filters: [["parent", "in", names], ["docstatus", "!=", 2]],
+        }, budget)
+      ) {
+        for (const row of rows) {
+          if (!parents.has(textField(row, "parent", "Sales Order Item"))) {
+            invalidData(
+              "A Sales Order Item is outside the requested parent scope",
+            );
+          }
+          const code = textField(row, "item_code", "Sales Order Item");
+          const warehouse = textField(row, "warehouse", "Sales Order Item");
+          const stockUom = textField(row, "stock_uom", "Sales Order Item");
+          const quantity = numericField(row, "stock_qty", "Sales Order Item");
+          revenue += numericField(row, "base_net_amount", "Sales Order Item");
+          lineCount++;
+          let items = quantities.get(warehouse);
+          if (!items) quantities.set(warehouse, items = new Map());
+          const previous = items.get(code);
+          if (previous && previous.stockUom !== stockUom) {
+            invalidData(`Item '${code}' has inconsistent stock units`);
+          }
+          items.set(code, {
+            quantity: (previous?.quantity ?? 0) + quantity,
+            stockUom,
+          });
+        }
+      }
+    }
+  }
+
+  if (lineCount === 0) {
+    return {
+      ...scope,
+      ...(company ? { company } : {}),
+      margin: 0,
+      revenue: 0,
+      estimatedCost: 0,
+    };
+  }
+  const companies = await client.list("Company", {
+    fields: ["name", "default_currency"],
+    filters: [["name", "=", company!]],
+    limit: 1,
+  }, { skipCache: true });
+  if (companies.length !== 1 || companies[0].name !== company) {
+    invalidData("The order company's currency could not be read");
+  }
+  const currency = textField(companies[0], "default_currency", "Company");
+
+  // Bin.company is unavailable before ERPNext v16; validate Warehouse.company.
+  for (const names of batches([...quantities.keys()])) {
+    const remaining = new Set(names);
+    for await (
+      const warehouses of listPages(client, "Warehouse", {
+        fields: ["name", "company"],
+        filters: [["name", "in", names]],
+      }, budget)
+    ) {
+      for (const warehouse of warehouses) {
+        if (
+          !remaining.delete(warehouse.name) || warehouse.company !== company
+        ) {
+          invalidData(
+            `Warehouse '${warehouse.name}' does not match the order company`,
+          );
+        }
+      }
+    }
+    if (remaining.size) {
+      invalidData(
+        `Warehouse '${remaining.values().next().value}' could not be read`,
       );
     }
-    revenue += numericField(row, "amount", "Sales Order Item");
-    itemQty.set(
-      code,
-      (itemQty.get(code) ?? 0) + numericField(row, "qty", "Sales Order Item"),
+  }
+
+  let estimatedCost = 0;
+  for (const [warehouse, items] of quantities) {
+    for (const codes of batches([...items.keys()])) {
+      const pending = new Set(codes);
+      const rates = new Map<string, number>();
+      for await (
+        const bins of listPages(client, "Bin", {
+          fields: [
+            "name",
+            "item_code",
+            "warehouse",
+            "stock_uom",
+            "valuation_rate",
+          ],
+          filters: [["warehouse", "=", warehouse], ["item_code", "in", codes]],
+        }, budget)
+      ) {
+        for (const bin of bins) {
+          const code = textField(bin, "item_code", "Bin");
+          const item = items.get(code);
+          if (!item || !codes.includes(code) || bin.warehouse !== warehouse) {
+            invalidData(
+              "A Bin is outside the requested item and warehouse scope",
+            );
+          }
+          if (textField(bin, "stock_uom", "Bin") !== item.stockUom) {
+            invalidData(
+              `Item '${code}' has inconsistent stock units in '${warehouse}'`,
+            );
+          }
+          const rate = numericField(bin, "valuation_rate", "Bin");
+          if (rate < 0) {
+            invalidData(
+              `Item '${code}' has a negative valuation in '${warehouse}'`,
+            );
+          }
+          if (rates.has(code) && rates.get(code) !== rate) {
+            throw new AnalyticsDataError(
+              TOOL,
+              "AMBIGUOUS_VALUATION",
+              `Item '${code}' has conflicting valuation rates in warehouse '${warehouse}'`,
+              "Inspect the duplicate Bin records for this item and warehouse before calculating a margin.",
+            );
+          }
+          rates.set(code, rate);
+          pending.delete(code);
+        }
+      }
+      if (pending.size) {
+        throw new AnalyticsDataError(
+          TOOL,
+          "MISSING_VALUATION",
+          `No readable Bin valuation for item '${pending.values().next().value}' in '${warehouse}'`,
+          "Check stock valuation and Bin permissions for this warehouse. For services or other cost bases, use the appropriate ERPNext report; missing cost is not zero cost.",
+        );
+      }
+      for (const [code, rate] of rates) {
+        estimatedCost += items.get(code)!.quantity * rate;
+      }
+    }
+  }
+  if (Date.now() >= budget.deadlineMs) {
+    throw new FrappePaginationError(
+      "Gross margin",
+      "The read deadline was exceeded",
     );
   }
-
-  const bins = await client.list("Bin", {
-    fields: ["item_code", "valuation_rate"],
-    limit: MAX_BIN_ROWS + 1,
-  });
-  requireComplete("Bin", bins.length, MAX_BIN_ROWS);
-
-  const rates = new Map<string, number>();
-  for (const bin of bins) {
-    const code = bin.item_code;
-    if (typeof code !== "string" || !code.trim()) {
-      throw new AnalyticsDataError(
-        TOOL,
-        "INVALID_DATA",
-        "A Bin row has no item_code; its valuation cannot be matched safely",
-        "Check item_code read permissions and the source Bin before estimating costs.",
-        { doctype: "Bin", field: "item_code" },
-      );
-    }
-    if (!itemQty.has(code)) continue;
-    const rate = numericField(bin, "valuation_rate", "Bin");
-    if (rates.has(code) && rates.get(code) !== rate) {
-      throw new AnalyticsDataError(
-        TOOL,
-        "AMBIGUOUS_VALUATION",
-        `Item '${code}' has different valuation rates across warehouses`,
-        "Use a warehouse-specific ERPNext report; this estimate cannot choose an arbitrary warehouse's cost.",
-        { item_code: code },
-      );
-    }
-    rates.set(code, rate);
-  }
-
-  let cost = 0;
-  for (const [code, qty] of itemQty) {
-    const rate = rates.get(code);
-    if (rate === undefined) {
-      throw new AnalyticsDataError(
-        TOOL,
-        "MISSING_VALUATION",
-        `No readable Bin valuation rate is available for item '${code}'`,
-        "Check stock valuation and Bin read permissions, or use an ERPNext report with the appropriate cost basis; missing cost is not zero cost.",
-        { item_code: code },
-      );
-    }
-    cost += rate * qty;
-  }
-
-  const margin = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
+  const margin = revenue > 0 ? ((revenue - estimatedCost) / revenue) * 100 : 0;
   if (
-    !Number.isFinite(revenue) || !Number.isFinite(cost) ||
-    !Number.isFinite(margin)
+    !Number.isFinite(revenue) || !Number.isFinite(estimatedCost) ||
+    !Number.isFinite(margin) ||
+    (revenue <= 0 && estimatedCost !== 0)
   ) {
     throw new AnalyticsDataError(
       TOOL,
       "INVALID_AMOUNT",
-      "The gross-margin calculation exceeds the supported numeric range",
-      "Inspect unusually large source quantities, amounts and valuation rates before calculating this KPI.",
+      "The margin requires finite totals and positive revenue when costs are nonzero",
+      "Inspect the source amounts and quantities, or narrow the period before calculating this KPI.",
     );
   }
-  return margin;
+  return { ...scope, company, currency, margin, revenue, estimatedCost };
 }

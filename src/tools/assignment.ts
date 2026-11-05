@@ -11,12 +11,12 @@
  */
 
 import type { ErpNextToolContext, JSONSchema } from "./types.ts";
+import { listAll } from "../api/list-pages.ts";
 
 const ASSIGNMENT_METHOD = "frappe.desk.form.assign_to.add";
 const UNASSIGNMENT_METHOD = "frappe.desk.form.assign_to.remove";
 
-// Keeps the validation query well under Frappe's result cap (500) and the
-// native per-assignee ToDo/notification fan-out within a sane request.
+// Bounds the native per-assignee ToDo/notification fan-out per request.
 const MAX_ASSIGNEES_PER_CALL = 50;
 
 export type PreparedAssignment = {
@@ -148,10 +148,9 @@ export async function validateAssignees(
   toolName: string,
   ctx: ErpNextToolContext,
 ): Promise<void> {
-  const users = await ctx.client.list("User", {
+  const users = await listAll(ctx.client, "User", {
     fields: ["name", "enabled"],
     filters: [["name", "in", assignees]],
-    limit: assignees.length,
   });
   const enabledByName = new Map(
     users.map((user) => [user.name as string, user.enabled]),

@@ -9,9 +9,12 @@ import { assert, assertEquals, assertThrows } from "@std/assert";
 import {
   FRAPPE_FILTERS_INPUT_SCHEMA,
   hasChildTableFilter,
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
   parseFrappeFilters,
   parsePagination,
   planListQuery,
+  stablePageOrder,
 } from "./doc-list-query.ts";
 import { parseToolInputError, ToolInputError } from "./errors.ts";
 
@@ -157,6 +160,76 @@ Deno.test("parsePagination - defaults to 20 rows and no offset", () => {
   assertEquals(parsePagination(TOOL, {}), { limit: 20 });
 });
 
+Deno.test("parsePagination - dedicated tools retain their own default page size", () => {
+  assertEquals(parsePagination(TOOL, {}, 50), { limit: 50 });
+  assertEquals(parsePagination(TOOL, { offset: 50 }, 50), {
+    limit: 50,
+    offset: 50,
+  });
+  assertEquals(parsePagination(TOOL, { limit: 10 }, 50), { limit: 10 });
+  assertEquals(parsePagination(TOOL, { limit: 0 }, 50), { limit: 0 });
+  const error = rejection(() => parsePagination(TOOL, { limit: -1 }, 50));
+  assert(error.recovery.includes("default 50"));
+});
+
+Deno.test("listPageOptions - translates offset without changing defaults or explicit zero", () => {
+  assertEquals(listPageOptions(TOOL, {}), { limit: 20 });
+  assertEquals(listPageOptions(TOOL, {}, 50), { limit: 50 });
+  assertEquals(listPageOptions(TOOL, { offset: 50 }, 50), {
+    limit: 50,
+    limit_start: 50,
+  });
+  assertEquals(listPageOptions(TOOL, { limit: 10, offset: 0 }), {
+    limit: 10,
+    limit_start: 0,
+  });
+  assertEquals(listPageOptions(TOOL, { limit: 0 }), { limit: 0 });
+  assertEquals(listPageOptions(TOOL, { limit: 0, offset: 0 }), {
+    limit: 0,
+    limit_start: 0,
+  });
+});
+
+Deno.test("listPageOptions - malformed public pagination cannot reach the Frappe client", () => {
+  for (
+    const input of [
+      { limit: 1.5 },
+      { limit: null },
+      { offset: -1 },
+      { offset: "20" },
+      { limit: 0, offset: 1 },
+    ]
+  ) {
+    assertEquals(
+      rejection(() => listPageOptions(TOOL, input)).code,
+      "INVALID_PAGINATION",
+    );
+  }
+  assertEquals(OFFSET_INPUT_SCHEMA.type, "integer");
+  assertEquals(OFFSET_INPUT_SCHEMA.minimum, 0);
+});
+
+Deno.test("stablePageOrder - dedicated page ordering has a unique identity tie-breaker", () => {
+  assertEquals(stablePageOrder("modified desc"), "modified desc, name asc");
+  assertEquals(stablePageOrder("item_code asc"), "item_code asc, name asc");
+  assertEquals(stablePageOrder("employee_name"), "employee_name, name asc");
+  assertEquals(stablePageOrder("name asc"), "name asc");
+  assertEquals(stablePageOrder("name desc"), "name desc");
+  assertEquals(
+    stablePageOrder("modified desc, `name` DESC"),
+    "modified desc, `name` DESC",
+  );
+  assertEquals(stablePageOrder(""), "name asc");
+});
+
+Deno.test("stablePageOrder - does not pretend to parse arbitrary SQL ordering", () => {
+  for (
+    const orderBy of ["SUM(amount) desc", "`tabStock Entry`.modified desc"]
+  ) {
+    assertThrows(() => stablePageOrder(orderBy), TypeError);
+  }
+});
+
 Deno.test("parsePagination - forwards limit and offset untouched", () => {
   assertEquals(parsePagination(TOOL, { limit: 1 }), { limit: 1 });
   assertEquals(parsePagination(TOOL, { limit: 200, offset: 400 }), {
@@ -251,10 +324,10 @@ Deno.test("hasChildTableFilter - only a filter on another doctype joins a child 
   );
 });
 
-Deno.test("planListQuery - without a child filter nothing changes from 3.0.x", () => {
+Deno.test("planListQuery - default and simple ordering have a unique name tie-breaker", () => {
   const fields = ["name", "modified"];
   assertEquals(planListQuery("Task", { filters: [], fields }), {
-    order_by: "modified desc",
+    order_by: "modified desc, name asc",
   });
   assertEquals(
     planListQuery("Task", {
@@ -277,7 +350,7 @@ Deno.test("planListQuery - qualifies the default ordering and groups when a chil
       fields: ["name", "modified"],
     }),
     {
-      order_by: "`tabSales Invoice`.modified desc",
+      order_by: "`tabSales Invoice`.modified desc, `tabSales Invoice`.name asc",
       group_by: "`tabSales Invoice`.name",
     },
   );
@@ -299,7 +372,10 @@ Deno.test("planListQuery - qualifies a simple caller ordering when a child filte
     plan("modified DESC, name").order_by,
     "`tabTimesheet`.modified DESC, `tabTimesheet`.name",
   );
-  assertEquals(plan("creation").order_by, "`tabTimesheet`.creation");
+  assertEquals(
+    plan("creation").order_by,
+    "`tabTimesheet`.creation, `tabTimesheet`.name asc",
+  );
 });
 
 Deno.test("planListQuery - qualifies a backtick-quoted bare column too", () => {
@@ -311,7 +387,7 @@ Deno.test("planListQuery - qualifies a backtick-quoted bare column too", () => {
     });
 
   assertEquals(plan("`modified` desc"), {
-    order_by: "`tabTimesheet`.modified desc",
+    order_by: "`tabTimesheet`.modified desc, `tabTimesheet`.name asc",
     group_by: "`tabTimesheet`.name",
   });
   assertEquals(
@@ -320,7 +396,7 @@ Deno.test("planListQuery - qualifies a backtick-quoted bare column too", () => {
   );
 });
 
-Deno.test("planListQuery - leaves already qualified or computed orderings alone", () => {
+Deno.test("planListQuery - stabilizes qualified parent ordering while preserving child and computed clauses", () => {
   const plan = (order_by: string) =>
     planListQuery("Sales Invoice", {
       filters: [CHILD],
@@ -328,9 +404,14 @@ Deno.test("planListQuery - leaves already qualified or computed orderings alone"
       order_by,
     });
 
-  // Qualified on the parent: kept, still one row per document.
+  // Qualified on the parent: add its unique name, still one row per document.
   assertEquals(plan("`tabSales Invoice`.posting_date desc"), {
-    order_by: "`tabSales Invoice`.posting_date desc",
+    order_by:
+      "`tabSales Invoice`.posting_date desc, `tabSales Invoice`.name asc",
+    group_by: "`tabSales Invoice`.name",
+  });
+  assertEquals(plan("`tabSales Invoice`.`name` desc"), {
+    order_by: "`tabSales Invoice`.`name` desc",
     group_by: "`tabSales Invoice`.name",
   });
   // Qualified on the child, or an expression: the caller wants the joined
@@ -357,7 +438,10 @@ Deno.test("planListQuery - keeps the joined rows when child columns or expressio
   ) {
     assertEquals(
       planListQuery("Sales Invoice", { filters: [CHILD], fields }),
-      { order_by: "`tabSales Invoice`.modified desc" },
+      {
+        order_by:
+          "`tabSales Invoice`.modified desc, `tabSales Invoice`.name asc",
+      },
       JSON.stringify(fields),
     );
   }
@@ -367,6 +451,30 @@ Deno.test("planListQuery - keeps the joined rows when child columns or expressio
       .group_by,
     "`tabSales Invoice`.name",
   );
+});
+
+Deno.test("planListQuery - explicit parent ordering stays deterministic without child joins", () => {
+  const plan = (order_by: string) =>
+    planListQuery("Task", { fields: ["name"], filters: [], order_by }).order_by;
+  assertEquals(plan("priority desc"), "priority desc, name asc");
+  assertEquals(
+    plan("modified desc, priority asc"),
+    "modified desc, priority asc, name asc",
+  );
+  assertEquals(
+    plan("`tabTask`.modified desc"),
+    "`tabTask`.modified desc, `tabTask`.name asc",
+  );
+  assertEquals(
+    plan("tabTask.modified desc"),
+    "tabTask.modified desc, `tabTask`.name asc",
+  );
+  assertEquals(plan("`tabTask`.name desc"), "`tabTask`.name desc");
+  assertEquals(
+    plan("field(status, 'Open', 'Paid')"),
+    "field(status, 'Open', 'Paid')",
+  );
+  assertEquals(plan("other_table.modified desc"), "other_table.modified desc");
 });
 
 Deno.test("planListQuery - an empty caller ordering falls back to Frappe's own default", () => {

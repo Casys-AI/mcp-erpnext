@@ -4,6 +4,37 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-11-05
+
+### Added
+
+- Optional `offset` pagination on all dedicated document list tools and stock
+  balances, with stable ordering and shared input validation.
+- Gross-margin KPI filters for company and inclusive order dates (`date_from`,
+  `date_to`), with a revenue/cost breakdown in company currency.
+
+### Fixed
+
+- Analytics aggregates and leave allocations read their complete filtered
+  populations in bounded pages, including when ERPNext returns fewer rows than
+  requested. Display limits are applied after aggregation.
+- Attachment lists, assignable-user pickers and related-timesheet counts follow
+  continuation pages. Failed reads never replace them with partial results.
+- Document selections survive refreshes with short or server-capped pages. The
+  stock viewer labels its subtotal as the value of displayed rows.
+- Kanban boards detect remaining cards even when ERPNext caps a page. Assignment
+  validation and name resolution also follow short pages before deciding that a
+  user is missing or a name is unique.
+- Gross-margin calculations read all matching orders, lines and relevant stock
+  valuations in fresh pages, removing the 1,000-line and 500-Bin limits. A
+  failed or interrupted read returns an explicit error instead of a partial
+  margin (#94).
+- Gross margin consistently uses company-currency net revenue
+  (`base_net_amount`) and stock quantities, matched to the exact item's
+  warehouse and stock unit. Transaction-currency `amount` is no longer required,
+  and different warehouse valuations no longer conflict when each order line
+  identifies its warehouse (#94).
+
 ## [3.3.2] - 2026-11-05
 
 ### Fixed

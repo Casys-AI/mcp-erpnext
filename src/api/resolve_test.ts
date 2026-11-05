@@ -14,6 +14,7 @@ import {
 import { FrappeAPIError, type FrappeClient } from "./frappe-client.ts";
 import { setCache } from "../cache/cache.ts";
 import { MemoryCache } from "../cache/memory.ts";
+import type { FrappeDoc, FrappeListOptions } from "./types.ts";
 
 // deno-lint-ignore no-explicit-any
 type AnyFn = (...args: any[]) => any;
@@ -25,6 +26,20 @@ function makeMockClient(overrides: Record<string, AnyFn> = {}): FrappeClient {
     },
     list: async () => [],
     ...overrides,
+  };
+  const list = mock.list;
+  mock.list = async (
+    doctype: string,
+    options: FrappeListOptions,
+    readOptions: unknown,
+  ) => {
+    const rows: FrappeDoc[] = await list(doctype, options, readOptions);
+    const cursor = options.filters?.find((filter) =>
+      filter[0] === "name" && filter[1] === ">"
+    )?.[2];
+    return cursor === undefined
+      ? rows
+      : rows.filter((row) => row.name > String(cursor));
   };
   return mock as unknown as FrappeClient;
 }
@@ -222,8 +237,8 @@ Deno.test("resolveLink - caches a confirmed 404 so repeat calls skip the get() p
   );
   assertEquals(
     listCount,
-    2,
-    "list() fallback still runs each call (not memoized itself)",
+    4,
+    "each fallback checks the unique match and the following empty page",
   );
 });
 
@@ -277,4 +292,81 @@ Deno.test("resolveDynamicLink - supports Customer, Employee, and Lead targets", 
     const result = await resolveDynamicLink(client, doctype, "some name");
     assertEquals(result, `${doctype}-ID`);
   }
+});
+
+Deno.test("resolveLink - a clamped exact page cannot hide a second matching record", async () => {
+  setCache(new MemoryCache());
+  const calls: FrappeListOptions[] = [];
+  const client = makeMockClient({
+    list: async (
+      _doctype: string,
+      options: FrappeListOptions,
+      readOptions: unknown,
+    ) => {
+      calls.push(options);
+      assertEquals(readOptions, { skipCache: true });
+      assertEquals(options.limit, 2);
+      assertEquals(options.order_by, "name asc");
+      return options.filters?.length === 1
+        ? [{ name: "EMP-1", employee_name: "Sam" }]
+        : [{ name: "EMP-2", employee_name: "Sam" }];
+    },
+  });
+  const error = await assertRejects(() => resolveEmployee(client, "Sam"));
+  assertInstanceOf(error, AmbiguousLinkError);
+  assertEquals(error.candidates, [
+    { id: "EMP-1", label: "Sam" },
+    { id: "EMP-2", label: "Sam" },
+  ]);
+  assertEquals(calls.length, 2);
+  assertEquals(calls[1].filters, [
+    ["employee_name", "=", "Sam"],
+    ["name", ">", "EMP-1"],
+  ]);
+});
+
+Deno.test("resolveLink - partial probes stop at five candidates across clamped pages", async () => {
+  setCache(new MemoryCache());
+  const calls: FrappeListOptions[] = [];
+  const rows = Array.from({ length: 8 }, (_, index) => ({
+    name: `EMP-${index + 1}`,
+    employee_name: `Sam ${index + 1}`,
+  }));
+  const client = makeMockClient({
+    list: async (_doctype: string, options: FrappeListOptions) => {
+      calls.push(options);
+      if (options.filters?.[0][1] === "=") return [];
+      const cursor = String(options.filters?.[1]?.[2] ?? "");
+      return rows.filter((row) => row.name > cursor).slice(0, 1);
+    },
+  });
+  const error = await assertRejects(() => resolveEmployee(client, "Sam"));
+  assertInstanceOf(error, AmbiguousLinkError);
+  assertEquals(error.candidates.map((candidate) => candidate.id), [
+    "EMP-1",
+    "EMP-2",
+    "EMP-3",
+    "EMP-4",
+    "EMP-5",
+  ]);
+  assertEquals(error.truncated, true);
+  assertEquals(calls.length, 6);
+  assertEquals(calls.map((options) => options.limit), [2, 5, 5, 5, 5, 5]);
+});
+
+Deno.test("resolveLink - an unreadable continuation never turns one candidate into a unique match", async () => {
+  setCache(new MemoryCache());
+  const client = makeMockClient({
+    list: async (_doctype: string, options: FrappeListOptions) => {
+      if (options.filters?.length === 1) {
+        return [{ name: "EMP-1", employee_name: "Sam" }];
+      }
+      throw new FrappeAPIError("continuation failed", 503, null);
+    },
+  });
+  await assertRejects(
+    () => resolveEmployee(client, "Sam"),
+    FrappeAPIError,
+    "continuation failed",
+  );
 });

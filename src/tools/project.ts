@@ -8,6 +8,11 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import {
   applyAssignment,
@@ -32,7 +37,12 @@ export const projectTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         status: {
           type: "string",
           description: "Filter by status (Open, Completed, Cancelled)",
@@ -47,7 +57,7 @@ export const projectTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_project_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -73,8 +83,8 @@ export const projectTools: ErpNextTool[] = [
           "estimated_costing",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -121,7 +131,12 @@ export const projectTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         project: { type: "string", description: "Filter by project name" },
         status: {
           type: "string",
@@ -141,7 +156,7 @@ export const projectTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_task_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.project) {
         filters.push(["project", "=", input.project as string]);
@@ -171,8 +186,8 @@ export const projectTools: ErpNextTool[] = [
           "progress",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -426,7 +441,12 @@ export const projectTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         employee: {
           type: "string",
           description:
@@ -445,7 +465,7 @@ export const projectTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_timesheet_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.employee) {
         filters.push([
@@ -479,8 +499,8 @@ export const projectTools: ErpNextTool[] = [
           "total_hours",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {

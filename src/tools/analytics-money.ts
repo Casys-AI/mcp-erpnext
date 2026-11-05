@@ -78,6 +78,7 @@ export class AnalyticsDataError extends Error {
     readonly code:
       | "MISSING_CURRENCY"
       | "MIXED_CURRENCIES"
+      | "MIXED_COMPANIES"
       | "INVALID_AMOUNT"
       | "INVALID_DATE"
       | "INVALID_DATA"

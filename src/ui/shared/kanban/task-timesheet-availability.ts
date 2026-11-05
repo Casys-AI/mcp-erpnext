@@ -2,6 +2,7 @@ import { t } from "../i18n.ts";
 import type { ToolHost } from "../jumps.ts";
 import { extractToolResultText } from "../refresh.ts";
 import { canCallViewerTool } from "../viewer-tools.ts";
+import { collectToolPages } from "../tool-pages.ts";
 
 export type TaskTimesheetAvailability =
   | { status: "unavailable" | "loading" | "empty" }
@@ -68,85 +69,91 @@ function relationTooLarge(): Extract<
   };
 }
 
+class TaskTimesheetReadError extends Error {
+  constructor(
+    readonly availability: Extract<
+      TaskTimesheetAvailability,
+      { status: "error" }
+    >,
+  ) {
+    super(availability.message);
+  }
+}
+
 export async function loadTaskTimesheetAvailability(
   host: ToolHost,
   taskId: string,
   isCancelled: () => boolean = () => false,
 ): Promise<TaskTimesheetAvailability> {
   if (!taskId.trim() || isCancelled()) return { status: "unavailable" };
-  const distinctNames = new Set<string>();
-
-  for (let page = 0; page < TASK_TIMESHEET_MAX_PAGES; page++) {
+  let pages = 0;
+  try {
+    const rows = await collectToolPages<{ name: string }>(
+      async (offset) => {
+        if (pages++ >= TASK_TIMESHEET_MAX_PAGES) {
+          throw new TaskTimesheetReadError(relationTooLarge());
+        }
+        const result = await host.callServerTool({
+          name: "erpnext_doc_list",
+          arguments: taskTimesheetAvailabilityArguments(taskId, offset),
+        }, { timeout: 10_000 });
+        const text = extractToolResultText(result);
+        if (result.isError) {
+          throw new TaskTimesheetReadError({
+            status: "error",
+            message: text ?? t("common.error.tool_failed"),
+            ...(text ? {} : { messageKey: "common.error.tool_failed" }),
+          });
+        }
+        if (!text) {
+          throw new TaskTimesheetReadError({
+            status: "error",
+            message: t("common.error.no_payload"),
+            messageKey: "common.error.no_payload",
+          });
+        }
+        let payload: unknown;
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          throw new TaskTimesheetReadError(invalidPayload());
+        }
+        if (
+          !payload || typeof payload !== "object" ||
+          !("doctype" in payload) || payload.doctype !== "Timesheet" ||
+          !("data" in payload) || !Array.isArray(payload.data) ||
+          !payload.data.every((doc: unknown) =>
+            doc !== null && typeof doc === "object" && "name" in doc &&
+            typeof doc.name === "string" && doc.name.trim().length > 0
+          )
+        ) {
+          throw new TaskTimesheetReadError(invalidPayload());
+        }
+        return payload.data as Array<{ name: string }>;
+      },
+      (row) => row.name,
+      () => !isCancelled(),
+      {
+        pageSize: TASK_TIMESHEET_PAGE_SIZE,
+      },
+    );
+    if (rows === null) return { status: "unavailable" };
+    return rows.length > 0
+      ? { status: "present", count: rows.length }
+      : { status: "empty" };
+  } catch (cause) {
     if (isCancelled()) return { status: "unavailable" };
-    try {
-      const result = await host.callServerTool({
-        name: "erpnext_doc_list",
-        arguments: taskTimesheetAvailabilityArguments(
-          taskId,
-          page * TASK_TIMESHEET_PAGE_SIZE,
-        ),
-      }, { timeout: 10_000 });
-      if (isCancelled()) return { status: "unavailable" };
-      const text = extractToolResultText(result);
-      if (result.isError) {
-        return {
-          status: "error",
-          message: text ?? t("common.error.tool_failed"),
-          ...(text ? {} : { messageKey: "common.error.tool_failed" }),
-        };
-      }
-      if (!text) {
-        return {
-          status: "error",
-          message: t("common.error.no_payload"),
-          messageKey: "common.error.no_payload",
-        };
-      }
-
-      let payload: unknown;
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        return invalidPayload();
-      }
-      if (
-        !payload || typeof payload !== "object" ||
-        !("doctype" in payload) || payload.doctype !== "Timesheet" ||
-        !("data" in payload) || !Array.isArray(payload.data) ||
-        payload.data.length > TASK_TIMESHEET_PAGE_SIZE ||
-        !payload.data.every((doc: unknown) =>
-          doc !== null && typeof doc === "object" && "name" in doc &&
-          typeof doc.name === "string" && doc.name.length > 0
-        )
-      ) {
-        return invalidPayload();
-      }
-
-      for (const doc of payload.data) {
-        distinctNames.add((doc as { name: string }).name);
-      }
-      if (payload.data.length < TASK_TIMESHEET_PAGE_SIZE) {
-        return distinctNames.size > 0
-          ? { status: "present", count: distinctNames.size }
-          : { status: "empty" };
-      }
-    } catch (cause) {
-      if (isCancelled()) return { status: "unavailable" };
-      return {
-        status: "error",
-        message: cause instanceof Error
-          ? cause.message
-          : t("common.error.tool_failed"),
-        ...(cause instanceof Error
-          ? {}
-          : { messageKey: "common.error.tool_failed" }),
-      };
-    }
+    if (cause instanceof TaskTimesheetReadError) return cause.availability;
+    return {
+      status: "error",
+      message: cause instanceof Error
+        ? cause.message
+        : t("common.error.tool_failed"),
+      ...(cause instanceof Error
+        ? {}
+        : { messageKey: "common.error.tool_failed" }),
+    };
   }
-
-  // Never publish a truncated count: an unusually large relation remains an
-  // explicit error instead of masquerading as an exact value.
-  return relationTooLarge();
 }
 
 export function startTaskTimesheetAvailabilityCheck(

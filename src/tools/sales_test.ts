@@ -272,8 +272,8 @@ Deno.test("erpnext_quotation_list - resolves party_name against the quotation_to
     get: async () => {
       throw new FrappeAPIError("not found", 404, null);
     },
-    list: async (doctype: string) => {
-      if (doctype === "Quotation") return [];
+    list: async (doctype: string, options: { filters?: unknown[] }) => {
+      if (doctype === "Quotation" || options.filters?.length !== 1) return [];
       resolvedDoctype = doctype;
       return [{ name: "CUST-042" }];
     },
@@ -297,7 +297,8 @@ Deno.test("erpnext_quotation_create - resolves party_name before building the cr
     get: async () => {
       throw new FrappeAPIError("not found", 404, null);
     },
-    list: async () => [{ name: "CUST-042" }],
+    list: async (_doctype: string, options: { filters?: unknown[] }) =>
+      options.filters?.length === 1 ? [{ name: "CUST-042" }] : [],
     create: async (_doctype: string, data: Record<string, unknown>) => {
       createdData = data;
       return { name: "QTN-NEW-001", ...data };

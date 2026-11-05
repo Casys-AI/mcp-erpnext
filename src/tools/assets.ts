@@ -9,6 +9,11 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveEmployee } from "../api/resolve.ts";
 
@@ -29,7 +34,12 @@ export const assetsTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         status: {
           type: "string",
           description:
@@ -56,7 +66,7 @@ export const assetsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_asset_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -87,8 +97,8 @@ export const assetsTools: ErpNextTool[] = [
         // The purchase amount was renamed in v16. Project only the list columns below.
         fields: ["*"],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -248,7 +258,12 @@ export const assetsTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         purpose: {
           type: "string",
           description: "Filter by purpose (Issue, Transfer, Receipt)",
@@ -264,7 +279,11 @@ export const assetsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_asset_movement_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.purpose) {
         filters.push(["purpose", "=", input.purpose as string]);
@@ -279,8 +298,8 @@ export const assetsTools: ErpNextTool[] = [
       const docs = await ctx.client.list("Asset Movement", {
         fields: ["name", "transaction_date", "purpose", "company"],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -328,7 +347,12 @@ export const assetsTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         asset_name: { type: "string", description: "Filter by asset name" },
         maintenance_status: {
           type: "string",
@@ -338,7 +362,11 @@ export const assetsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_asset_maintenance_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.asset_name) {
         filters.push(["asset_name", "=", input.asset_name as string]);
@@ -360,8 +388,8 @@ export const assetsTools: ErpNextTool[] = [
           "maintenance_status",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -411,17 +439,26 @@ export const assetsTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_asset_category_list",
+        input,
+        20,
+      );
 
       const docs = await ctx.client.list("Asset Category", {
         fields: ["name", "asset_category_name"],
         filters: [],
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {

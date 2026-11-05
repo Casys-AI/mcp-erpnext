@@ -11,6 +11,8 @@
 
 import { FrappeAPIError, type FrappeClient } from "./frappe-client.ts";
 import { getCache } from "../cache/cache.ts";
+import { listPages } from "./list-pages.ts";
+import type { FrappeDoc } from "./types.ts";
 
 /** How long a confirmed "identifier is not a valid ID" result is remembered. */
 const NEGATIVE_CACHE_TTL_MS = 15_000;
@@ -80,11 +82,16 @@ async function resolveUnique(
   ambiguityHint: string,
   inputPath?: string,
 ): Promise<string | undefined> {
-  const rows = await client.list(doctype, {
-    filters: [[searchField, op, value]],
-    fields: ["name", searchField],
-    limit: probeLimit,
-  });
+  const rows: FrappeDoc[] = [];
+  for await (
+    const page of listPages(client, doctype, {
+      filters: [[searchField, op, value]],
+      fields: ["name", searchField],
+    }, { pageSize: probeLimit })
+  ) {
+    rows.push(...page.slice(0, probeLimit - rows.length));
+    if (rows.length === probeLimit) break;
+  }
   if (rows.length === 0) return undefined;
   if (rows.length === 1) return rows[0].name as string;
 

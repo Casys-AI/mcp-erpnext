@@ -9,6 +9,11 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveLink, resolveSupplier } from "../api/resolve.ts";
@@ -27,7 +32,12 @@ export const purchasingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         supplier_group: {
           type: "string",
           description: "Filter by supplier group",
@@ -43,7 +53,7 @@ export const purchasingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_supplier_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (!(input.include_disabled as boolean)) {
         filters.push(["disabled", "=", 0]);
@@ -65,8 +75,8 @@ export const purchasingTools: ErpNextTool[] = [
           "disabled",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -174,7 +184,12 @@ export const purchasingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         supplier: {
           type: "string",
           description:
@@ -193,7 +208,11 @@ export const purchasingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_purchase_order_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.supplier) {
         filters.push([
@@ -225,8 +244,8 @@ export const purchasingTools: ErpNextTool[] = [
           "currency",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -364,7 +383,12 @@ export const purchasingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         supplier: {
           type: "string",
           description:
@@ -383,7 +407,11 @@ export const purchasingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_purchase_invoice_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.supplier) {
         filters.push([
@@ -415,8 +443,8 @@ export const purchasingTools: ErpNextTool[] = [
           "outstanding_amount",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -470,7 +498,12 @@ export const purchasingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         supplier: {
           type: "string",
           description:
@@ -489,7 +522,11 @@ export const purchasingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_purchase_receipt_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.supplier) {
         filters.push([
@@ -520,8 +557,8 @@ export const purchasingTools: ErpNextTool[] = [
           "grand_total",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -575,7 +612,12 @@ export const purchasingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         supplier: {
           type: "string",
           description:
@@ -594,7 +636,11 @@ export const purchasingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_supplier_quotation_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.supplier) {
         filters.push([
@@ -624,8 +670,8 @@ export const purchasingTools: ErpNextTool[] = [
           "grand_total",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {

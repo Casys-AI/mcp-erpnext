@@ -33,6 +33,7 @@ export interface SelectionGroupConfig {
   scopeKey: string;
   reconcileKey: string;
   doctype: string;
+  parent?: string;
   view: string;
   doctypeLabel?: string;
   fields: string[];
@@ -415,6 +416,7 @@ function queryItem(group: SelectionGroup): ContextSelectionItem {
       tool: "erpnext_doc_list",
       args: {
         doctype: group.doctype,
+        ...(group.parent !== undefined ? { parent: group.parent } : {}),
         filters: [["name", "in", included]],
         fields: group.fields.slice(),
         limit: included.length,

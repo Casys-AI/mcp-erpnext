@@ -114,6 +114,27 @@ Deno.test("projectSelection : paliers 1, 2, 3, 4 et 8, groupe 8 puis 9", () => {
   assertEquals(query.length, 1);
   assertEquals(query[0].query?.selectedCount, 9);
 });
+
+Deno.test("projectSelection : une requête de lignes enfants conserve son parent de permission", () => {
+  const selected = members(9).map((member, index) => ({
+    ...member,
+    name: ` CHILD-${index} `,
+  }));
+  const state = setSelectionGroupMembers(
+    emptySelectionState(),
+    { ...CONFIG, doctype: "Custom Child", parent: " Custom Parent " },
+    selected,
+  );
+  const [projected] = projectSelection(state);
+  const query = boundActiveContextItem(projected).query;
+  assertEquals(query?.args, {
+    doctype: "Custom Child",
+    parent: " Custom Parent ",
+    filters: [["name", "in", selected.map(({ name }) => name)]],
+    fields: CONFIG.fields,
+    limit: 9,
+  });
+});
 Deno.test("projectSelection : FIFO sur entrées et membres retirés atomiquement", () => {
   let state = group(9);
   for (let index = 0; index < 8; index++) state = single(state, index);

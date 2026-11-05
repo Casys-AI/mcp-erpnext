@@ -2,6 +2,7 @@ import { assertEquals } from "@std/assert";
 import { DOC_LIST_DEFAULT_LIMIT } from "../../../tools/doc-list-query.ts";
 import { DOC_LIST_DEFAULT_LIMIT as UI_DOC_LIST_DEFAULT_LIMIT } from "../../doc-list-defaults.ts";
 import { documentModelOf } from "../document/model.ts";
+import { activeContextSnapshot } from "../active-context.ts";
 import {
   DEFAULT_SELECTION_POLICY,
   emptySelectionState,
@@ -17,6 +18,7 @@ import {
   doclistGroupMember,
   doclistHeaderSelection,
   doclistQueryFields,
+  doclistQueryParent,
   extendDoclistRange,
   isDoclistResultComplete,
   toggleDoclistFilteredMembers,
@@ -367,6 +369,56 @@ Deno.test("doclist query - doc_list reprend seulement un tableau de champs natif
     assertEquals(doclistQueryFields(result(1, { fields })), ["name"]);
   }
   assertEquals(doclistQueryFields(result(1)), ["name"]);
+});
+
+Deno.test("doclist query - le parent provient seulement du refresh générique et reste exact", () => {
+  assertEquals(
+    doclistQueryParent(result(1, { parent: " Custom Parent " })),
+    " Custom Parent ",
+  );
+  assertEquals(
+    doclistQueryParent(
+      result(1, { parent: "Sales Order" }, "erpnext_sales_order_list"),
+    ),
+    undefined,
+  );
+  for (const parent of [undefined, null, "", " \t", 12]) {
+    assertEquals(doclistQueryParent(result(1, { parent })), undefined);
+  }
+  assertEquals(doclistQueryParent(result(1)), undefined);
+});
+
+Deno.test("doclist query - neuf lignes enfants partagent des arguments rejouables avec leur parent", () => {
+  const data: DoclistData = {
+    ...result(9, {
+      doctype: "Sales Order Item",
+      parent: "Sales Order",
+      fields: ["name", "item_code"],
+    }),
+    doctype: "Sales Order Item",
+  };
+  const selection = setSelectionGroupMembers(
+    emptySelectionState(),
+    {
+      scopeKey: "root",
+      reconcileKey: "order-items",
+      doctype: data.doctype!,
+      parent: doclistQueryParent(data),
+      view: "Order items",
+      fields: doclistQueryFields(data),
+    },
+    data.data.map((row) => member(String(row.name))),
+  );
+  const snapshot = activeContextSnapshot(projectSelection(selection));
+  const replay = JSON.parse(JSON.stringify(snapshot)).items[0].query;
+  assertEquals(replay.tool, "erpnext_doc_list");
+  assertEquals(replay.args, {
+    doctype: "Sales Order Item",
+    parent: "Sales Order",
+    filters: [["name", "in", data.data.map((row) => row.name)]],
+    fields: ["name", "item_code"],
+    limit: 9,
+  });
 });
 
 Deno.test("doclist refresh - seule une fenêtre complète confirme une absence", () => {

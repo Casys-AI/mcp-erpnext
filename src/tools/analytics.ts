@@ -13,6 +13,7 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import { estimateGrossMargin } from "./analytics-gross-margin.ts";
 import { CHART_META, FUNNEL_META, KPI_META } from "./viewer-meta.ts";
 import {
   AnalyticsDataError,
@@ -242,6 +243,7 @@ export const analyticsTools: ErpNextTool[] = [
       if (groupBy === "item") {
         // Fetch invoice items (Sales Invoice Item child table)
         const items = await ctx.client.list("Sales Invoice Item", {
+          parent: "Sales Invoice",
           fields: ["item_code", "item_name", "amount"],
           filters: [["docstatus", "=", 1]],
           limit: 500,
@@ -849,6 +851,7 @@ export const analyticsTools: ErpNextTool[] = [
 
       // Order data — fetch all, filter in memory (the item set can exceed a sane "in" filter size)
       const soItems = await ctx.client.list("Sales Order Item", {
+        parent: "Sales Order",
         fields: ["item_code", "qty", "amount"],
         filters: [["docstatus", "!=", 2]],
         limit: 500,
@@ -924,6 +927,7 @@ export const analyticsTools: ErpNextTool[] = [
 
       // Get order quantities
       const soItems = await ctx.client.list("Sales Order Item", {
+        parent: "Sales Order",
         fields: ["item_code", "qty"],
         filters: [["docstatus", "!=", 2]],
         limit: 500,
@@ -1201,54 +1205,14 @@ export const analyticsTools: ErpNextTool[] = [
     _meta: KPI_META,
     description:
       "KPI card: estimated gross margin % based on Sales Order revenue vs " +
-      "valuation rate from stock (Bin). Margin = (revenue - cost) / revenue * 100.",
+      "valuation rate from stock (Bin). Margin = (revenue - cost) / revenue * 100. " +
+      "Requires readable amounts and one consistent valuation rate per item. " +
+      "Returns an error for incomplete data (over 1000 order rows or 500 Bin rows), " +
+      "missing cost or conflicting warehouse rates; this is not an accounting gross-profit report.",
     category: "analytics",
     inputSchema: { type: "object", properties: {} },
     handler: async (_input, ctx) => {
-      // Revenue from Sales Order Items (all non-cancelled)
-      const soItems = await ctx.client.list("Sales Order Item", {
-        fields: ["item_code", "qty", "amount"],
-        filters: [
-          ["docstatus", "!=", 2],
-        ],
-        limit: 1000,
-      });
-
-      const revenue = soItems.reduce(
-        (sum, row) => sum + (Number(row.amount) || 0),
-        0,
-      );
-
-      // Cost from Bin valuation_rate * qty sold
-      const itemQty: Record<string, number> = {};
-      for (const row of soItems) {
-        const code = row.item_code as string;
-        itemQty[code] = (itemQty[code] ?? 0) + (Number(row.qty) || 0);
-      }
-
-      // Fetch valuation rates
-      const bins = await ctx.client.list("Bin", {
-        fields: ["item_code", "valuation_rate"],
-        filters: [["valuation_rate", ">", 0]],
-        limit: 500,
-      });
-
-      const valMap: Record<string, number> = {};
-      for (const bin of bins) {
-        const code = bin.item_code as string;
-        if (!valMap[code]) {
-          valMap[code] = Number(bin.valuation_rate) || 0;
-        }
-      }
-
-      let cost = 0;
-      for (const [code, qty] of Object.entries(itemQty)) {
-        if (valMap[code]) {
-          cost += valMap[code] * qty;
-        }
-      }
-
-      const margin = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
+      const margin = await estimateGrossMargin(ctx.client);
 
       return {
         label: "Gross Margin",
@@ -1622,6 +1586,7 @@ export const analyticsTools: ErpNextTool[] = [
       const [siItems, bins, invoices] = await Promise.all([
         // Submitted Sales Invoice Items for revenue
         ctx.client.list("Sales Invoice Item", {
+          parent: "Sales Invoice",
           fields: ["parent", "item_code", "item_name", "amount", "qty"],
           filters: [["docstatus", "=", 1]],
           limit: 500,

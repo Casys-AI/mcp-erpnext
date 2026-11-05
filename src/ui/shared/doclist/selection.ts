@@ -18,6 +18,15 @@ export function doclistQueryFields(data: DoclistData): string[] {
   return [...new Set(["name", ...fields])];
 }
 
+export function doclistQueryParent(data: DoclistData): string | undefined {
+  const request = data.refreshRequest;
+  const parent = request?.arguments.parent;
+  return request?.toolName === "erpnext_doc_list" &&
+      typeof parent === "string" && parent.trim()
+    ? parent
+    : undefined;
+}
+
 function amountCurrency(
   document: Record<string, unknown>,
   amountKey: string | undefined,

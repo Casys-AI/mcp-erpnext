@@ -79,7 +79,11 @@ export class AnalyticsDataError extends Error {
       | "MISSING_CURRENCY"
       | "MIXED_CURRENCIES"
       | "INVALID_AMOUNT"
-      | "INVALID_DATE",
+      | "INVALID_DATE"
+      | "INVALID_DATA"
+      | "INCOMPLETE_DATA"
+      | "MISSING_VALUATION"
+      | "AMBIGUOUS_VALUATION",
     detail: string,
     readonly recovery: string,
     context: Record<string, unknown> = {},

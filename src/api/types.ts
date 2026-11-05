@@ -137,6 +137,8 @@ export type FrappeFilter =
 
 /** Options for Frappe list queries (`GET /api/resource/{doctype}`). */
 export interface FrappeListOptions {
+  /** Parent DocType for child-table permissions and parenttype scope (not a document name). */
+  parent?: string;
   /** Fields to return, e.g. `["name", "customer_name", "grand_total"]`. Defaults to all. */
   fields?: string[];
   /** Frappe filters as `[field, operator, value]` tuples, e.g. `[["status", "=", "Active"]]` */

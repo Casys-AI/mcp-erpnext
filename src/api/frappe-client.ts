@@ -903,8 +903,15 @@ export class FrappeClient {
     if (options.fields && options.fields.length > 0) {
       params.set("fields", JSON.stringify(options.fields));
     }
-    if (options.filters && options.filters.length > 0) {
-      params.set("filters", JSON.stringify(options.filters));
+    // Frappe's parent selects permission context, not the child rows' parenttype.
+    const filters = options.parent
+      ? [...(options.filters ?? []), ["parenttype", "=", options.parent]]
+      : options.filters;
+    if (options.parent) {
+      params.set("parent", options.parent);
+    }
+    if (filters && filters.length > 0) {
+      params.set("filters", JSON.stringify(filters));
     }
     if (options.order_by) {
       params.set("order_by", options.order_by);

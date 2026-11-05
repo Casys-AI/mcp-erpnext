@@ -76,8 +76,8 @@ Deno.test("erpnext_opportunity_list - resolves party_name against the opportunit
     get: async () => {
       throw new FrappeAPIError("not found", 404, null);
     },
-    list: async (doctype: string) => {
-      if (doctype === "Opportunity") return [];
+    list: async (doctype: string, options: { filters?: unknown[] }) => {
+      if (doctype === "Opportunity" || options.filters?.length !== 1) return [];
       resolvedDoctype = doctype;
       return [{ name: "LEAD-099" }];
     },

@@ -29,12 +29,19 @@ import type { JSONSchema } from "./types.ts";
 import { ToolInputError } from "./errors.ts";
 
 export { DOC_LIST_DEFAULT_LIMIT };
-export const DEFAULT_ORDER_BY = "modified desc";
+export const DEFAULT_ORDER_BY = "modified desc, name asc";
 
 const FILTER_FORMS =
   "[fieldname, operator, value] or [child doctype, fieldname, operator, value]";
 
 // ── Input schema ────────────────────────────────────────────────────────────
+
+export const OFFSET_INPUT_SCHEMA: JSONSchema = {
+  type: "integer",
+  minimum: 0,
+  description:
+    "Rows to skip (default 0). A positive offset requires a positive limit.",
+};
 
 /**
  * Portable `filters` schema: every array has `items`, no `prefixItems`,
@@ -205,6 +212,7 @@ export interface Pagination {
 export function parsePagination(
   tool: string,
   input: { limit?: unknown; offset?: unknown },
+  defaultLimit = DOC_LIST_DEFAULT_LIMIT,
 ): Pagination {
   const invalid = (
     field: "limit" | "offset",
@@ -216,18 +224,16 @@ export function parsePagination(
       `'${field}' must be a non-negative integer, got ${preview(value)}`,
       {
         recovery: field === "limit"
-          ? "Send an integer >= 1 (default 20), or 0 for every row."
+          ? `Send an integer >= 1 (default ${defaultLimit}), or 0 for every row.`
           : "Send an integer >= 0, or omit 'offset'.",
         context: { field, value },
       },
     );
   };
 
-  const limit = input.limit === undefined
-    ? DOC_LIST_DEFAULT_LIMIT
-    : input.limit;
+  const limit = input.limit === undefined ? defaultLimit : input.limit;
   if (typeof limit !== "number" || !Number.isSafeInteger(limit) || limit < 0) {
-    return invalid("limit", input.limit);
+    return invalid("limit", limit);
   }
   const offset = input.offset;
   if (offset !== undefined) {
@@ -254,6 +260,41 @@ export function parsePagination(
   return { limit };
 }
 
+/** Translate public offset pagination to Frappe's list options. */
+export function listPageOptions(
+  tool: string,
+  input: { limit?: unknown; offset?: unknown },
+  defaultLimit = DOC_LIST_DEFAULT_LIMIT,
+): { limit: number; limit_start?: number } {
+  const { limit, offset } = parsePagination(tool, input, defaultLimit);
+  return {
+    limit,
+    ...(offset !== undefined ? { limit_start: offset } : {}),
+  };
+}
+
+/** Fixed dedicated-tool clauses, before any child-table qualification. */
+export function stablePageOrder(orderBy: string): string {
+  const clauses = orderBy.split(",").map((clause) => clause.trim()).filter(
+    Boolean,
+  );
+  if (
+    clauses.some((clause) =>
+      !/^`?[A-Za-z_][A-Za-z0-9_]*`?(?:\s+(?:asc|desc))?$/i.test(clause)
+    )
+  ) {
+    throw new TypeError(
+      "stablePageOrder requires simple field ordering clauses",
+    );
+  }
+  if (
+    !clauses.some((clause) => /^`?name`?(?:\s+(?:asc|desc))?$/i.test(clause))
+  ) {
+    clauses.push("name asc");
+  }
+  return clauses.join(", ");
+}
+
 // ── Child-table queries: ordering and de-duplication ────────────────────────
 
 /** Doctype names `db_query.py` lets through once wrapped as `` `tab<name>` ``. */
@@ -264,6 +305,27 @@ const BARE_ORDER_CLAUSE = /^`?([A-Za-z_][A-Za-z0-9_]*)`?(?:\s+(asc|desc))?$/i;
 
 function tableOf(doctype: string): string {
   return `\`tab${doctype}\``;
+}
+
+function stableQueryOrder(doctype: string, orderBy: string): string {
+  const clauses = orderBy.split(",").map((clause) => clause.trim());
+  if (clauses.every((clause) => BARE_ORDER_CLAUSE.test(clause))) {
+    return stablePageOrder(orderBy);
+  }
+  if (!QUOTABLE_DOCTYPE.test(doctype)) return orderBy;
+  const qualifiers = [`${tableOf(doctype)}.`];
+  if (PLAIN_IDENTIFIER.test(`tab${doctype}`)) qualifiers.push(`tab${doctype}.`);
+  const fields = clauses.map((clause) => {
+    const qualifier = qualifiers.find((prefix) => clause.startsWith(prefix));
+    return BARE_ORDER_CLAUSE.exec(
+      qualifier ? clause.slice(qualifier.length) : clause,
+    )?.[1];
+  });
+  // Child columns and expressions describe joined/custom rows. Their caller
+  // must supply a unique ordering; adding a parent id would not guarantee it.
+  if (fields.some((field) => field === undefined)) return orderBy;
+  if (fields.some((field) => field?.toLowerCase() === "name")) return orderBy;
+  return `${orderBy}, ${tableOf(doctype)}.name asc`;
 }
 
 /** True when a filter targets another doctype than the listed one (LEFT JOIN). */
@@ -299,8 +361,9 @@ export interface ListQueryPlan {
 /**
  * Decides the `order_by` / `group_by` to send to Frappe.
  *
- * Without a child-table filter nothing changes: `order_by` is the caller's, or
- * `modified desc`.
+ * The default is `modified desc, name asc`. Simple parent-column orderings
+ * retain a unique name tie-breaker. Explicit empty, child-column and advanced
+ * orderings keep their accepted behavior; their caller owns deterministic ties.
  *
  * With one, Frappe LEFT JOINs the child table, which breaks two things:
  * - an unqualified `modified` is ambiguous (MariaDB error 1052, HTTP 500 on
@@ -325,13 +388,18 @@ export function planListQuery(
 ): ListQueryPlan {
   const requested = input.order_by;
   if (!hasChildTableFilter(doctype, input.filters)) {
-    return { order_by: requested ?? DEFAULT_ORDER_BY };
+    return {
+      order_by: stableQueryOrder(doctype, requested ?? DEFAULT_ORDER_BY),
+    };
   }
   if (!QUOTABLE_DOCTYPE.test(doctype)) {
     return requested === undefined ? {} : { order_by: requested };
   }
 
-  const order_by = qualifyOrderBy(doctype, requested ?? DEFAULT_ORDER_BY);
+  const order_by = qualifyOrderBy(
+    doctype,
+    stableQueryOrder(doctype, requested ?? DEFAULT_ORDER_BY),
+  );
   // An explicit empty ordering means "Frappe's default", same as without joins.
   if (order_by === "") return {};
   const parentColumn = `${tableOf(doctype)}.`;

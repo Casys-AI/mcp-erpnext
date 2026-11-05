@@ -2,6 +2,7 @@ import { assert, assertEquals } from "@std/assert";
 import { setLocaleSource } from "../../shared/format.ts";
 import { translatorForLocale } from "../../shared/i18n.ts";
 import { analyticsTools } from "../../../tools/analytics.ts";
+import { paginatedFixture } from "../../../tools/analytics-fixture.test.ts";
 import type { FrappeClient } from "../../../api/frappe-client.ts";
 import {
   currencySymbol,
@@ -43,8 +44,8 @@ async function payload(
   rows: Record<string, unknown>[],
 ): Promise<KpiData> {
   const client = {
-    list: async () => rows,
-    get: async () => ({}),
+    list: paginatedFixture(() => Promise.resolve(rows)),
+    get: () => Promise.resolve({}),
     invalidate: () => {},
   } as unknown as FrappeClient;
   return await handlerFor(name)({}, { client }) as unknown as KpiData;
@@ -61,11 +62,14 @@ Deno.test("kpi contract - order growth stays in percentage points from handler t
   ) {
     let reads = 0;
     const client = {
-      list: async () =>
-        Array.from(
-          { length: reads++ === 0 ? currentCount : previousCount },
-          () => ({}),
-        ),
+      list: paginatedFixture(() =>
+        Promise.resolve(
+          Array.from(
+            { length: reads++ === 0 ? currentCount : previousCount },
+            () => ({}),
+          ),
+        )
+      ),
     } as unknown as FrappeClient;
     const data = await handlerFor("erpnext_kpi_orders")({}, {
       client,

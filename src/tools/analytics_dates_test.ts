@@ -2,6 +2,7 @@ import { assertEquals, assertRejects } from "@std/assert";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { FrappeFilter } from "../api/types.ts";
 import { analyticsTools } from "./analytics.ts";
+import { paginatedFixture } from "./analytics-fixture.test.ts";
 
 type ListOptions = NonNullable<Parameters<FrappeClient["list"]>[1]>;
 
@@ -45,7 +46,7 @@ function mockClient(
     options: ListOptions,
   ) => Promise<Record<string, unknown>[]>,
 ): FrappeClient {
-  return { list } as unknown as FrappeClient;
+  return { list: paginatedFixture(list) } as unknown as FrappeClient;
 }
 
 function getTool(name: string) {

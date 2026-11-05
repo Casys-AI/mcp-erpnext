@@ -12,8 +12,10 @@
  */
 
 import type { FrappeFilter } from "../api/types.ts";
+import { createReadBudget, listAll } from "../api/list-pages.ts";
 import type { ErpNextTool } from "./types.ts";
 import { estimateGrossMargin } from "./analytics-gross-margin.ts";
+import { GROSS_MARGIN_SCHEMA } from "./gross-margin-scope.ts";
 import { CHART_META, FUNNEL_META, KPI_META } from "./viewer-meta.ts";
 import {
   AnalyticsDataError,
@@ -108,6 +110,7 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const limit = (input.limit as number) ?? 20;
       const filters: FrappeFilter[] = [[
         "actual_qty",
@@ -123,21 +126,17 @@ export const analyticsTools: ErpNextTool[] = [
       // filter in memory (the code set can exceed a sane "in" filter size).
       let allowedItems: Set<string> | null = null;
       if (input.item_group) {
-        const groupItems = await ctx.client.list("Item", {
+        const groupItems = await listAll(ctx.client, "Item", {
           fields: ["name"],
           filters: [["item_group", "=", input.item_group as string]],
-          limit: 1000,
-        });
+        }, budget);
         allowedItems = new Set(groupItems.map((i) => i.name as string));
       }
 
-      const bins = await ctx.client.list("Bin", {
+      const bins = await listAll(ctx.client, "Bin", {
         fields: ["item_code", "warehouse", "actual_qty", "stock_value"],
         filters,
-        // widen the fetch when filtering by group in memory, then slice below
-        limit: allowedItems ? 1000 : limit,
-        order_by: "actual_qty desc",
-      });
+      }, budget);
 
       // Aggregate by item_code (sum across warehouses if no filter)
       const byItem: Record<string, { qty: number; value: number }> = {};
@@ -204,6 +203,7 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const limit = (input.limit as number) ?? 10;
       const groupBy = (input.group_by as string) ?? "customer";
       const filters: FrappeFilter[] = [];
@@ -213,13 +213,11 @@ export const analyticsTools: ErpNextTool[] = [
       }
 
       if (groupBy === "status") {
-        // Get invoice counts + amounts by status — fetch more to cover all statuses
-        const invoices = await ctx.client.list("Sales Invoice", {
+        // Every invoice contributes to its status total.
+        const invoices = await listAll(ctx.client, "Sales Invoice", {
           fields: ["name", "status", "grand_total"],
           filters: [["docstatus", "!=", 2]],
-          limit: 500,
-          order_by: "modified desc",
-        });
+        }, budget);
 
         const byStatus: Record<string, number> = {};
         for (const inv of invoices) {
@@ -242,13 +240,11 @@ export const analyticsTools: ErpNextTool[] = [
 
       if (groupBy === "item") {
         // Fetch invoice items (Sales Invoice Item child table)
-        const items = await ctx.client.list("Sales Invoice Item", {
+        const items = await listAll(ctx.client, "Sales Invoice Item", {
           parent: "Sales Invoice",
           fields: ["item_code", "item_name", "amount"],
           filters: [["docstatus", "=", 1]],
-          limit: 500,
-          order_by: "amount desc",
-        });
+        }, budget);
 
         const byItem: Record<string, { name: string; total: number }> = {};
         for (const row of items) {
@@ -283,12 +279,10 @@ export const analyticsTools: ErpNextTool[] = [
       }
 
       // Default: group by customer
-      const invoices = await ctx.client.list("Sales Invoice", {
+      const invoices = await listAll(ctx.client, "Sales Invoice", {
         fields: ["customer", "customer_name", "grand_total"],
         filters,
-        limit: 500,
-        order_by: "modified desc",
-      });
+      }, budget);
 
       const byCustomer: Record<string, { name: string; total: number }> = {};
       for (const inv of invoices) {
@@ -359,6 +353,7 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const tool = "erpnext_revenue_trend";
       const scope = parseMoneyScope(tool, input);
       const monthsBack = (input.months as number) ?? 6;
@@ -374,7 +369,7 @@ export const analyticsTools: ErpNextTool[] = [
       );
       const startStr = localCalendarDate(startDate);
 
-      const orders = await ctx.client.list("Sales Order", {
+      const orders = await listAll(ctx.client, "Sales Order", {
         fields: [
           "name",
           "customer_name",
@@ -389,9 +384,7 @@ export const analyticsTools: ErpNextTool[] = [
           ["docstatus", "!=", 2],
           ...moneyScopeFilters(scope),
         ],
-        limit: 0,
-        order_by: "transaction_date asc",
-      }, { skipCache: true });
+      }, budget);
       const { currency, amounts } = moneyValues(
         tool,
         orders,
@@ -527,15 +520,14 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const chartType = (input.type as string) ?? "stacked-bar";
       const limit = (input.limit as number) ?? 8;
 
-      const orders = await ctx.client.list("Sales Order", {
+      const orders = await listAll(ctx.client, "Sales Order", {
         fields: ["customer_name", "status", "grand_total"],
         filters: [["docstatus", "!=", 2]],
-        limit: 500,
-        order_by: "modified desc",
-      });
+      }, budget);
 
       if (chartType === "pie" || chartType === "donut") {
         const byCustomer: Record<string, number> = {};
@@ -630,13 +622,12 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const limit = (input.limit as number) ?? 8;
-      const orders = await ctx.client.list("Sales Order", {
+      const orders = await listAll(ctx.client, "Sales Order", {
         fields: ["customer_name", "grand_total"],
         filters: [["docstatus", "!=", 2]],
-        limit: 500,
-        order_by: "modified desc",
-      });
+      }, budget);
 
       const byCustomer: Record<string, { total: number; count: number }> = {};
       for (const o of orders) {
@@ -703,15 +694,14 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const groupBy = (input.group_by as string) ?? "item";
       const limit = (input.limit as number) ?? 15;
 
-      const bins = await ctx.client.list("Bin", {
+      const bins = await listAll(ctx.client, "Bin", {
         fields: ["item_code", "warehouse", "stock_value"],
         filters: [["stock_value", ">", 0]],
-        limit: 500,
-        order_by: "stock_value desc",
-      });
+      }, budget);
 
       const grouped: Record<string, number> = {};
       for (const bin of bins) {
@@ -784,6 +774,7 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       let itemCodes = (input.items as string[]) ?? [];
 
       // Not redundant with the schema's `maxItems`: this handler is also reached
@@ -797,7 +788,7 @@ export const analyticsTools: ErpNextTool[] = [
         );
       }
 
-      // Auto-select top items if not provided
+      // This bounded probe chooses four comparison candidates, not an aggregate.
       if (itemCodes.length === 0) {
         const topBins = await ctx.client.list("Bin", {
           fields: ["item_code"],
@@ -822,17 +813,13 @@ export const analyticsTools: ErpNextTool[] = [
       const dimensions = ["Stock Qty", "Stock Value", "Order Lines", "Revenue"];
       const raw: Record<string, number[]> = {};
 
-      // Stock data — one Bin query per item, issued together rather than in
-      // sequence. A per-item query (rather than a single `in` filter) is
-      // deliberate: `limit` then applies per item, so an item fragmented across
-      // many warehouses cannot be truncated by a sibling item's rows.
+      // Each selected item reads all of its warehouses; independent reads run together.
       const binResults = await Promise.all(
         itemCodes.map((code) =>
-          ctx.client.list("Bin", {
+          listAll(ctx.client, "Bin", {
             fields: ["actual_qty", "stock_value"],
             filters: [["item_code", "=", code]],
-            limit: 100,
-          })
+          }, budget)
         ),
       );
 
@@ -849,13 +836,12 @@ export const analyticsTools: ErpNextTool[] = [
         raw[code] = [totalQty, totalVal, 0, 0];
       });
 
-      // Order data — fetch all, filter in memory (the item set can exceed a sane "in" filter size)
-      const soItems = await ctx.client.list("Sales Order Item", {
+      // Every matching order line contributes before the chart is normalized.
+      const soItems = await listAll(ctx.client, "Sales Order Item", {
         parent: "Sales Order",
         fields: ["item_code", "qty", "amount"],
         filters: [["docstatus", "!=", 2]],
-        limit: 500,
-      });
+      }, budget);
 
       const itemSet = new Set(itemCodes);
       for (const row of soItems) {
@@ -909,16 +895,19 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const limit = (input.limit as number) ?? 30;
 
       // Get items with selling price
-      const items = await ctx.client.list("Item Price", {
-        fields: ["item_code", "price_list_rate"],
+      const items = await listAll(ctx.client, "Item Price", {
+        fields: ["item_code", "price_list_rate", "modified"],
         filters: [["selling", "=", 1]],
-        limit: 200,
-        order_by: "modified desc",
-      });
+      }, budget);
 
+      // Keyset pagination orders by name; price precedence still follows modification time.
+      items.sort((a, b) =>
+        String(b.modified ?? "").localeCompare(String(a.modified ?? ""))
+      );
       const priceMap: Record<string, number> = {};
       for (const ip of items) {
         const code = ip.item_code as string;
@@ -926,12 +915,11 @@ export const analyticsTools: ErpNextTool[] = [
       }
 
       // Get order quantities
-      const soItems = await ctx.client.list("Sales Order Item", {
+      const soItems = await listAll(ctx.client, "Sales Order Item", {
         parent: "Sales Order",
         fields: ["item_code", "qty"],
         filters: [["docstatus", "!=", 2]],
-        limit: 500,
-      });
+      }, budget);
 
       const qtyMap: Record<string, number> = {};
       for (const row of soItems) {
@@ -944,7 +932,7 @@ export const analyticsTools: ErpNextTool[] = [
       const limited = allItems.slice(0, limit);
 
       if (limited.length === 0) {
-        // Fallback: use stock data
+        // Each fallback point is one Bin: limit is the number of points to display.
         const bins = await ctx.client.list("Bin", {
           fields: ["item_code", "valuation_rate", "actual_qty"],
           filters: [["actual_qty", ">", 0], ["valuation_rate", ">", 0]],
@@ -1007,14 +995,15 @@ export const analyticsTools: ErpNextTool[] = [
       "Filter by Sales Order document currency (e.g. USD); no conversion",
     ),
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const tool = "erpnext_kpi_revenue";
       const scope = parseMoneyScope(tool, input);
       const now = new Date();
-      // Single API call: fetch all orders from 6 months ago to today
+      // One paginated population feeds the current month, comparison and sparkline.
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
       const sinceStr = localCalendarDate(sixMonthsAgo);
 
-      const allOrders = await ctx.client.list("Sales Order", {
+      const allOrders = await listAll(ctx.client, "Sales Order", {
         fields: ["name", "grand_total", "transaction_date", "currency"],
         filters: [
           ["transaction_date", ">=", sinceStr],
@@ -1022,9 +1011,7 @@ export const analyticsTools: ErpNextTool[] = [
           ["docstatus", "!=", 2],
           ...moneyScopeFilters(scope),
         ],
-        // Frappe limit 0 fetches every match, without a silent total cap.
-        limit: 0,
-      }, { skipCache: true });
+      }, budget);
       const { currency, amounts } = moneyValues(
         tool,
         allOrders,
@@ -1095,17 +1082,17 @@ export const analyticsTools: ErpNextTool[] = [
       "Filter by receivable party account currency, not invoice currency (e.g. USD)",
     ),
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const tool = "erpnext_kpi_outstanding";
       const scope = parseMoneyScope(tool, input);
-      const invoices = await ctx.client.list("Sales Invoice", {
+      const invoices = await listAll(ctx.client, "Sales Invoice", {
         fields: ["name", "outstanding_amount", "party_account_currency"],
         filters: [
           ["outstanding_amount", ">", 0],
           ["docstatus", "=", 1],
           ...moneyScopeFilters(scope, "party_account_currency"),
         ],
-        limit: 0,
-      }, { skipCache: true });
+      }, budget);
       const { currency, amounts } = moneyValues(
         tool,
         invoices,
@@ -1144,6 +1131,7 @@ export const analyticsTools: ErpNextTool[] = [
       "Filter by Sales Order document currency (e.g. USD)",
     ),
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const scope = parseMoneyScope("erpnext_kpi_orders", input);
       const now = new Date();
       const thisMonthStart = `${now.getFullYear()}-${
@@ -1154,7 +1142,7 @@ export const analyticsTools: ErpNextTool[] = [
       const lastMonthStartStr = localCalendarDate(lastMonthStart);
       const lastMonthEndStr = localCalendarDate(lastMonthEnd);
 
-      const currentOrders = await ctx.client.list("Sales Order", {
+      const currentOrders = await listAll(ctx.client, "Sales Order", {
         fields: ["name"],
         filters: [
           ["transaction_date", ">=", thisMonthStart],
@@ -1162,11 +1150,10 @@ export const analyticsTools: ErpNextTool[] = [
           ["docstatus", "!=", 2],
           ...moneyScopeFilters(scope),
         ],
-        limit: 0,
-      }, { skipCache: true });
+      }, budget);
       const currentCount = currentOrders.length;
 
-      const prevOrders = await ctx.client.list("Sales Order", {
+      const prevOrders = await listAll(ctx.client, "Sales Order", {
         fields: ["name"],
         filters: [
           ["transaction_date", ">=", lastMonthStartStr],
@@ -1174,8 +1161,7 @@ export const analyticsTools: ErpNextTool[] = [
           ["docstatus", "!=", 2],
           ...moneyScopeFilters(scope),
         ],
-        limit: 0,
-      }, { skipCache: true });
+      }, budget);
       const prevCount = prevOrders.length;
 
       const delta = prevCount > 0
@@ -1204,18 +1190,26 @@ export const analyticsTools: ErpNextTool[] = [
     annotations: { readOnlyHint: true },
     _meta: KPI_META,
     description:
-      "KPI card: estimated gross margin % based on Sales Order revenue vs " +
-      "valuation rate from stock (Bin). Margin = (revenue - cost) / revenue * 100. " +
-      "Requires readable amounts and one consistent valuation rate per item. " +
-      "Returns an error for incomplete data (over 1000 order rows or 500 Bin rows), " +
-      "missing cost or conflicting warehouse rates; this is not an accounting gross-profit report.",
+      "KPI card: estimated gross margin % from non-cancelled Sales Orders. " +
+      "Reads all matching rows in fresh pages; optional date_from/date_to filter order dates. " +
+      "Uses base_net_amount in company currency and stock_qty times the current Bin valuation " +
+      "for each item's warehouse and stock unit. Select company when multiple companies match. " +
+      "Missing costs or fields fail explicitly; reads exceeding 60 seconds return no partial result. " +
+      "Valuation is current, including for historical order dates; this is an estimate, not accounting gross profit.",
     category: "analytics",
-    inputSchema: { type: "object", properties: {} },
-    handler: async (_input, ctx) => {
-      const margin = await estimateGrossMargin(ctx.client);
+    inputSchema: GROSS_MARGIN_SCHEMA,
+    handler: async (input, ctx) => {
+      const { margin, revenue, estimatedCost, currency, ...scope } =
+        await estimateGrossMargin(ctx.client, input);
 
       return {
         label: "Gross Margin",
+        ...scope,
+        calculation: {
+          revenue,
+          estimatedCost,
+          ...(currency ? { currency } : {}),
+        },
         value: Math.round(margin * 10) / 10,
         unit: "%",
         trend: margin >= 30 ? "up" : margin >= 15 ? "flat" : "down",
@@ -1240,6 +1234,7 @@ export const analyticsTools: ErpNextTool[] = [
       "Filter by receivable party account currency, not invoice currency (e.g. USD)",
     ),
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const tool = "erpnext_kpi_overdue";
       const scope = parseMoneyScope(tool, input);
       // Heure locale, comme `monthRange` côté sauts : le KPI et sa liste
@@ -1250,7 +1245,7 @@ export const analyticsTools: ErpNextTool[] = [
         pad(now.getDate())
       }`;
 
-      const invoices = await ctx.client.list("Sales Invoice", {
+      const invoices = await listAll(ctx.client, "Sales Invoice", {
         fields: [
           "name",
           "outstanding_amount",
@@ -1263,8 +1258,7 @@ export const analyticsTools: ErpNextTool[] = [
           ["docstatus", "=", 1],
           ...moneyScopeFilters(scope, "party_account_currency"),
         ],
-        limit: 0,
-      }, { skipCache: true });
+      }, budget);
 
       const count = invoices.length;
       const { currency, amounts } = moneyValues(
@@ -1314,6 +1308,7 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (_input, ctx) => {
+      const budget = createReadBudget();
       const period = (_input.period as string) ?? "all";
       const now = new Date();
       let sinceDate: string | null = null;
@@ -1342,30 +1337,24 @@ export const analyticsTools: ErpNextTool[] = [
         ["docstatus", "!=", 2],
       ];
 
-      // The four funnel stages are independent queries — none feeds the next —
-      // so they go out together. Awaiting them in sequence cost four round-trips
-      // to Frappe for one tool call.
+      // Independent stage populations paginate concurrently under one deadline.
       const [leads, opps, quots, orders] = await Promise.all([
-        ctx.client.list("Lead", {
+        listAll(ctx.client, "Lead", {
           fields: ["name"],
           filters: leadFilters,
-          limit: 500,
-        }),
-        ctx.client.list("Opportunity", {
+        }, budget),
+        listAll(ctx.client, "Opportunity", {
           fields: ["name", "opportunity_amount"],
           filters: txnFilters,
-          limit: 500,
-        }),
-        ctx.client.list("Quotation", {
+        }, budget),
+        listAll(ctx.client, "Quotation", {
           fields: ["name", "grand_total"],
           filters: submittedTxnFilters,
-          limit: 500,
-        }),
-        ctx.client.list("Sales Order", {
+        }, budget),
+        listAll(ctx.client, "Sales Order", {
           fields: ["name", "grand_total"],
           filters: submittedTxnFilters,
-          limit: 500,
-        }),
+        }, budget),
       ]);
 
       const stages = [
@@ -1446,10 +1435,11 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const limit = (input.limit as number) ?? 10;
       const chartType = (input.type as string) ?? "stacked-bar";
 
-      const invoices = await ctx.client.list("Sales Invoice", {
+      const invoices = await listAll(ctx.client, "Sales Invoice", {
         fields: [
           "customer_name",
           "outstanding_amount",
@@ -1457,9 +1447,7 @@ export const analyticsTools: ErpNextTool[] = [
           "posting_date",
         ],
         filters: [["outstanding_amount", ">", 0], ["docstatus", "=", 1]],
-        limit: 500,
-        order_by: "outstanding_amount desc",
-      });
+      }, budget);
 
       const today = new Date();
       const BUCKETS = [
@@ -1575,36 +1563,31 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const limit = (input.limit as number) ?? 10;
       const groupBy = (input.group_by as string) ?? "item";
 
-      // Revenue, cost and (when grouping by customer) the invoice→customer map
-      // are three independent queries. They go out together; the third is only
-      // requested when the grouping actually needs it, so the cheap path stays
-      // two queries rather than three.
+      // Revenue and cost populations paginate concurrently. The invoice-to-customer
+      // map is read only when the requested grouping needs it.
       const needsCustomers = groupBy === "customer";
       const [siItems, bins, invoices] = await Promise.all([
         // Submitted Sales Invoice Items for revenue
-        ctx.client.list("Sales Invoice Item", {
+        listAll(ctx.client, "Sales Invoice Item", {
           parent: "Sales Invoice",
           fields: ["parent", "item_code", "item_name", "amount", "qty"],
           filters: [["docstatus", "=", 1]],
-          limit: 500,
-          order_by: "amount desc",
-        }),
+        }, budget),
         // Bin for valuation_rate (cost per unit)
-        ctx.client.list("Bin", {
+        listAll(ctx.client, "Bin", {
           fields: ["item_code", "valuation_rate"],
           filters: [["valuation_rate", ">", 0]],
-          limit: 500,
-        }),
+        }, budget),
         // Invoices, to map parent invoice name to customer
         needsCustomers
-          ? ctx.client.list("Sales Invoice", {
+          ? listAll(ctx.client, "Sales Invoice", {
             fields: ["name", "customer_name"],
             filters: [["docstatus", "=", 1]],
-            limit: 500,
-          })
+          }, budget)
           : Promise.resolve([]),
       ]);
 
@@ -1765,6 +1748,7 @@ export const analyticsTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
+      const budget = createReadBudget();
       const monthsBack = (input.months as number) ?? 6;
       const chartType = (input.type as string) ?? "composed";
 
@@ -1776,31 +1760,26 @@ export const analyticsTools: ErpNextTool[] = [
       );
       const startStr = localCalendarDate(startDate);
 
-      // Income and expenses are the same query against two doctypes, with no
-      // dependency between them — one round-trip instead of two.
+      // Income and expense populations paginate concurrently under one deadline.
       const [salesOrders, purchaseOrders] = await Promise.all([
         // Sales Orders (income) — submitted only
-        ctx.client.list("Sales Order", {
+        listAll(ctx.client, "Sales Order", {
           fields: ["grand_total", "transaction_date"],
           filters: [["transaction_date", ">=", startStr], [
             "docstatus",
             "=",
             1,
           ]],
-          limit: 1000,
-          order_by: "transaction_date asc",
-        }),
+        }, budget),
         // Purchase Orders (expenses) — submitted only
-        ctx.client.list("Purchase Order", {
+        listAll(ctx.client, "Purchase Order", {
           fields: ["grand_total", "transaction_date"],
           filters: [["transaction_date", ">=", startStr], [
             "docstatus",
             "=",
             1,
           ]],
-          limit: 1000,
-          order_by: "transaction_date asc",
-        }),
+        }, budget),
       ]);
 
       // Build month labels

@@ -11,7 +11,12 @@ import type { ErpNextTool } from "./types.ts";
 import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOC_META, DOCLIST_META, STOCK_META } from "./viewer-meta.ts";
 import { resolveItem } from "../api/resolve.ts";
-import { parsePagination, planListQuery } from "./doc-list-query.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  planListQuery,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 
 export const inventoryTools: ErpNextTool[] = [
   // ── Items ─────────────────────────────────────────────────────────────────
@@ -27,7 +32,12 @@ export const inventoryTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         item_group: { type: "string", description: "Filter by item group" },
         is_stock_item: {
           type: "boolean",
@@ -40,7 +50,7 @@ export const inventoryTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_item_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (!(input.include_disabled as boolean)) {
         filters.push(["disabled", "=", 0]);
@@ -67,8 +77,8 @@ export const inventoryTools: ErpNextTool[] = [
           "standard_rate",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -224,7 +234,12 @@ export const inventoryTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 50)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 50; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         item_code: {
           type: "string",
           description:
@@ -234,7 +249,7 @@ export const inventoryTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 50;
+      const pagination = listPageOptions("erpnext_stock_balance", input, 50);
       const filters: FrappeFilter[] = [];
       if (input.item_code) {
         filters.push([
@@ -261,8 +276,8 @@ export const inventoryTools: ErpNextTool[] = [
           "stock_value",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -286,7 +301,12 @@ export const inventoryTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         company: { type: "string", description: "Filter by company" },
         warehouse_type: {
           type: "string",
@@ -295,7 +315,7 @@ export const inventoryTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_warehouse_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.company) {
         filters.push(["company", "=", input.company as string]);
@@ -307,8 +327,8 @@ export const inventoryTools: ErpNextTool[] = [
       const docs = await ctx.client.list("Warehouse", {
         fields: ["name", "warehouse_name", "warehouse_type", "company"],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -333,7 +353,12 @@ export const inventoryTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         item_code: {
           type: "string",
           description: "Exact item code present in a Stock Entry line",
@@ -352,8 +377,9 @@ export const inventoryTools: ErpNextTool[] = [
     },
     handler: async (input, ctx) => {
       // Keep null's legacy default and limit 0's Frappe semantics.
-      const { limit } = parsePagination("erpnext_stock_entry_list", {
+      const pagination = listPageOptions("erpnext_stock_entry_list", {
         limit: input.limit ?? undefined,
+        offset: input.offset,
       });
       const filters: FrappeFilter[] = [];
       if (input.item_code) {
@@ -393,11 +419,12 @@ export const inventoryTools: ErpNextTool[] = [
       const { order_by, group_by } = planListQuery("Stock Entry", {
         filters,
         fields,
+        order_by: stablePageOrder("modified desc"),
       });
       const docs = await ctx.client.list("Stock Entry", {
         fields,
         filters,
-        limit,
+        ...pagination,
         ...(order_by !== undefined ? { order_by } : {}),
         ...(group_by !== undefined ? { group_by } : {}),
       });

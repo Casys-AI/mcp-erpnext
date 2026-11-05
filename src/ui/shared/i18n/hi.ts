@@ -179,7 +179,7 @@ export const hi: Record<string, string> = {
   "stock.col.projected": "अनुमानित",
   "stock.col.rate": "दर",
   "stock.col.value": "मूल्य",
-  "stock.footer.total_value": "कुल स्टॉक मूल्य",
+  "stock.footer.total_value": "दिखाई गई पंक्तियों का मूल्य",
   "stock.detail.loading": "आइटम लोड हो रहा है…",
   "stock.detail.label.name": "नाम",
   "stock.detail.label.group": "समूह",

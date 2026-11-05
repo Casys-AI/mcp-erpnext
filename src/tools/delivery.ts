@@ -8,6 +8,11 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveCustomer } from "../api/resolve.ts";
@@ -26,7 +31,12 @@ export const deliveryTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         customer: {
           type: "string",
           description:
@@ -45,7 +55,11 @@ export const deliveryTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_delivery_note_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.customer) {
         filters.push([
@@ -76,8 +90,8 @@ export const deliveryTools: ErpNextTool[] = [
           "grand_total",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -205,7 +219,12 @@ export const deliveryTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         status: {
           type: "string",
           description:
@@ -223,7 +242,7 @@ export const deliveryTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_shipment_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -247,8 +266,8 @@ export const deliveryTools: ErpNextTool[] = [
           "shipment_amount",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {

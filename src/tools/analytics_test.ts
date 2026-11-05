@@ -18,6 +18,7 @@ import {
 } from "./analytics.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
 import type { ErpNextToolContext } from "./types.ts";
+import { paginatedFixture } from "./analytics-fixture.test.ts";
 
 /** Generate an ISO date N months back from today, day 15 — keeps tests robust
  *  against the system clock (the analytics tools window-filter from `now`). */
@@ -51,6 +52,7 @@ function makeMockClient(overrides: Record<string, AnyFn> = {}): FrappeClient {
     callMethod: async () => null,
     ...overrides,
   };
+  mock.list = paginatedFixture(mock.list);
   return mock as unknown as FrappeClient;
 }
 
@@ -360,8 +362,8 @@ Deno.test("erpnext_revenue_trend - reads the complete fresh scoped period throug
         assertEquals(doctype, "Sales Order");
         assert(options.fields.includes("currency"));
         assert(options.fields.includes("company"));
-        assertEquals(options.limit, 0);
-        assertEquals(options.order_by, "transaction_date asc");
+        assertEquals(options.limit, 200);
+        assertEquals(options.order_by, "name asc");
         assertEquals(readOptions?.skipCache, true);
         assertEquals(options.filters, [
           ["transaction_date", ">=", expectedStart],
@@ -615,7 +617,7 @@ Deno.test("erpnext_price_vs_qty - falls back to Bin data when no Item Price", as
 
 // ── erpnext_kpi_revenue ─────────────────────────────────────────────────────
 
-Deno.test("erpnext_kpi_revenue - returns KPI with sparkline (single API call)", async () => {
+Deno.test("erpnext_kpi_revenue - returns KPI with sparkline from one paginated population", async () => {
   const now = new Date();
   const thisMonth = localCalendarDate(
     new Date(now.getFullYear(), now.getMonth(), 1),
@@ -723,33 +725,66 @@ Deno.test("erpnext_kpi_orders - counts orders this month", async () => {
 // ── erpnext_kpi_gross_margin ────────────────────────────────────────────────
 
 Deno.test("erpnext_kpi_gross_margin - computes margin from SO items and Bin", async () => {
-  let callIdx = 0;
+  const rows: Record<string, Record<string, unknown>[]> = {
+    "Sales Order": [{ name: "SO-1", company: "Acme" }],
+    "Sales Order Item": [
+      {
+        name: "ROW-A",
+        parent: "SO-1",
+        item_code: "ITEM-A",
+        warehouse: "Main",
+        stock_qty: 10,
+        stock_uom: "Nos",
+        base_net_amount: 5000,
+      },
+      {
+        name: "ROW-B",
+        parent: "SO-1",
+        item_code: "ITEM-B",
+        warehouse: "Main",
+        stock_qty: 5,
+        stock_uom: "Nos",
+        base_net_amount: 2500,
+      },
+    ],
+    "Company": [{ name: "Acme", default_currency: "EUR" }],
+    "Warehouse": [{ name: "Main", company: "Acme" }],
+    "Bin": [
+      {
+        name: "BIN-A",
+        item_code: "ITEM-A",
+        warehouse: "Main",
+        valuation_rate: 300,
+        stock_uom: "Nos",
+      },
+      {
+        name: "BIN-B",
+        item_code: "ITEM-B",
+        warehouse: "Main",
+        valuation_rate: 200,
+        stock_uom: "Nos",
+      },
+    ],
+  };
   const mockClient = makeMockClient({
-    list: async (doctype: string) => {
-      callIdx++;
-      if (doctype === "Sales Order Item") {
-        return [
-          { item_code: "ITEM-A", qty: 10, amount: 5000 },
-          { item_code: "ITEM-B", qty: 5, amount: 2500 },
-        ];
-      }
-      if (doctype === "Bin") {
-        return [
-          { item_code: "ITEM-A", valuation_rate: 300 },
-          { item_code: "ITEM-B", valuation_rate: 200 },
-        ];
-      }
-      return [];
+    list: async (doctype: string, options: { filters?: unknown[][] }) => {
+      const cursor = options.filters?.find((f) =>
+        f[0] === "name" && f[1] === ">"
+      );
+      return (rows[doctype] ?? []).filter((row) =>
+        !cursor || String(row.name) > String(cursor[2])
+      );
     },
   });
 
-  const tool = getTool("erpnext_kpi_gross_margin");
-  const result = await tool.handler({}, makeCtx(mockClient)) as any;
-
+  const result = await getTool("erpnext_kpi_gross_margin").handler(
+    {},
+    makeCtx(mockClient),
+  ) as any;
   assertEquals(result.label, "Gross Margin");
   assertEquals(result.unit, "%");
-  // Revenue 7500, cost = 10*300 + 5*200 = 4000, margin = (7500-4000)/7500*100 = 46.7%
-  assert(result.value > 40 && result.value < 50);
+  // Revenue 7500, cost = 10*300 + 5*200 = 4000, margin = 46.7%.
+  assertEquals(result.value, 46.7);
   assertChartMeta(result, "kpi-viewer");
 });
 
@@ -1123,7 +1158,7 @@ Deno.test("financial KPI - Revenue and Orders stop at today and compare complete
       options: { filters: unknown[][]; limit: number; fields: string[] },
       readOptions?: { skipCache?: boolean },
     ) => {
-      assertEquals(options.limit, 0);
+      assertEquals(options.limit, 200);
       assertEquals(readOptions?.skipCache, true);
       orderReads.push(options.filters);
       return [];
@@ -1160,8 +1195,7 @@ Deno.test("financial KPI - order counts remain complete beyond 1000 rows", async
   const result = await getTool("erpnext_kpi_orders").handler(
     {},
     makeCtx(makeMockClient({
-      list: async (_doctype: string, options: { limit: number }) =>
-        options.limit === 0 ? rows : rows.slice(0, options.limit),
+      list: async () => rows,
     })),
   ) as any;
   assertEquals(result.value, 1001);
@@ -1173,8 +1207,7 @@ Deno.test("financial KPI - a foreign currency beyond the former cap still preven
     party_account_currency: index === 1000 ? "CAD" : "USD",
   }));
   const client = makeMockClient({
-    list: async (_doctype: string, options: { limit: number }) =>
-      options.limit === 0 ? rows : rows.slice(0, options.limit),
+    list: async () => rows,
   });
   await assertRejects(
     () => getTool("erpnext_kpi_outstanding").handler({}, makeCtx(client)),
@@ -1204,11 +1237,11 @@ Deno.test("financial KPI - totals include populations beyond the former 1000 and
       makeCtx(makeMockClient({
         list: async (
           _doctype: string,
-          options: { limit: number },
+          _options: { limit: number },
           readOptions?: { skipCache?: boolean },
         ) => {
           assertEquals(readOptions?.skipCache, true);
-          return options.limit === 0 ? rows : rows.slice(0, options.limit);
+          return rows;
         },
       })),
     ) as any;

@@ -19,6 +19,7 @@ import { operationsTools } from "./operations.ts";
 import { FrappeAPIError } from "../api/frappe-client.ts";
 import { parseToolInputError, ToolInputError } from "./errors.ts";
 import type { FrappeClient } from "../api/frappe-client.ts";
+import type { FrappeListOptions } from "../api/types.ts";
 import type { ErpNextToolContext } from "./types.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -324,7 +325,7 @@ Deno.test("erpnext_file_list - queries File filtered on both attachment keys", a
     ["attached_to_name", "=", "TASK-001"],
   ]);
   assertEquals(captured.options?.limit, 50);
-  assertEquals(captured.options?.order_by, "creation desc");
+  assertEquals(captured.options?.order_by, "creation desc, name asc");
 
   assertEquals(result.count, 2);
   // is_private becomes a real boolean; a missing file_size becomes null, not undefined.
@@ -730,7 +731,7 @@ Deno.test("erpnext_doc_list - forwards a child parent DocType and document filte
     filters,
     limit: 5,
     limit_start: 10,
-    order_by: "modified desc",
+    order_by: "modified desc, name asc",
   }, { skipCache: true }]]);
   const validator = new SchemaValidator();
   validator.addSchema(tool.name, tool.inputSchema as Record<string, unknown>);
@@ -959,7 +960,7 @@ Deno.test("erpnext_doc_list - preserves defaults when pagination and cache optio
       fields: ["name", "modified"],
       filters: [],
       limit: 20,
-      order_by: "modified desc",
+      order_by: "modified desc, name asc",
     },
   ]);
 });
@@ -1013,13 +1014,16 @@ Deno.test("erpnext_doc_list - qualifies the default order_by and groups only whe
   const child = await listOptionsFor({
     filters: [["Sales Invoice Item", "sales_order", "=", "SO-1"]],
   });
-  assertEquals(child.order_by, "`tabSales Invoice`.modified desc");
+  assertEquals(
+    child.order_by,
+    "`tabSales Invoice`.modified desc, `tabSales Invoice`.name asc",
+  );
   assertEquals(child.group_by, "`tabSales Invoice`.name");
 
   const parentOnly = await listOptionsFor({
     filters: [["status", "=", "Paid"]],
   });
-  assertEquals(parentOnly.order_by, "modified desc");
+  assertEquals(parentOnly.order_by, "modified desc, name asc");
   assertEquals("group_by" in parentOnly, false);
 });
 
@@ -1027,9 +1031,17 @@ Deno.test("erpnext_doc_list - qualifies a simple order_by only when a child tabl
   const filters = [["Sales Invoice Item", "sales_order", "=", "SO-1"]];
   for (
     const [order_by, joined, plain] of [
-      ["modified desc", "`tabSales Invoice`.modified desc", "modified desc"],
+      [
+        "modified desc",
+        "`tabSales Invoice`.modified desc, `tabSales Invoice`.name asc",
+        "modified desc, name asc",
+      ],
       ["name asc", "`tabSales Invoice`.name asc", "name asc"],
-      ["posting_date", "`tabSales Invoice`.posting_date", "posting_date"],
+      [
+        "posting_date",
+        "`tabSales Invoice`.posting_date, `tabSales Invoice`.name asc",
+        "posting_date, name asc",
+      ],
     ]
   ) {
     assertEquals(
@@ -1045,7 +1057,10 @@ Deno.test("erpnext_doc_list - keeps joined rows when child columns are selected"
     fields: ["name", "`tabSales Invoice Item`.qty"],
     filters: [["Sales Invoice Item", "sales_order", "=", "SO-1"]],
   });
-  assertEquals(options.order_by, "`tabSales Invoice`.modified desc");
+  assertEquals(
+    options.order_by,
+    "`tabSales Invoice`.modified desc, `tabSales Invoice`.name asc",
+  );
   assertEquals("group_by" in options, false);
 });
 
@@ -1170,7 +1185,10 @@ Deno.test("erpnext_doc_assign - assigns through the native API and returns the f
       assignment_priority: "High",
     },
     makeCtx(makeMockClient({
-      list: async () => [{ name: "user@example.com", enabled: 1 }],
+      list: async (_doctype: string, options: FrappeListOptions) =>
+        options.filters?.length === 1
+          ? [{ name: "user@example.com", enabled: 1 }]
+          : [],
       get: async (_doctype: string, name: string) => ({
         name,
         status: "Open",

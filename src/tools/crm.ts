@@ -9,6 +9,11 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveDynamicLink } from "../api/resolve.ts";
 
@@ -25,7 +30,12 @@ export const crmTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         status: {
           type: "string",
           description:
@@ -38,7 +48,7 @@ export const crmTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_lead_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -58,8 +68,8 @@ export const crmTools: ErpNextTool[] = [
           "mobile_no",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -155,7 +165,12 @@ export const crmTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         status: {
           type: "string",
           description:
@@ -180,7 +195,7 @@ export const crmTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_opportunity_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.status) {
         filters.push(["status", "=", input.status as string]);
@@ -222,8 +237,8 @@ export const crmTools: ErpNextTool[] = [
           "opportunity_owner",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -270,7 +285,12 @@ export const crmTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         company_name: { type: "string", description: "Filter by company name" },
         status: {
           type: "string",
@@ -279,7 +299,7 @@ export const crmTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_contact_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.company_name) {
         filters.push(["company_name", "=", input.company_name as string]);
@@ -299,8 +319,8 @@ export const crmTools: ErpNextTool[] = [
           "status",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -346,7 +366,12 @@ export const crmTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         campaign_type: {
           type: "string",
           description: "Filter by campaign type",
@@ -359,7 +384,7 @@ export const crmTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_campaign_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.campaign_type) {
         filters.push(["campaign_type", "=", input.campaign_type as string]);
@@ -381,8 +406,8 @@ export const crmTools: ErpNextTool[] = [
           "description",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {

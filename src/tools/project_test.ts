@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import type { FrappeClient } from "../api/frappe-client.ts";
+import type { FrappeListOptions } from "../api/types.ts";
 import { projectTools } from "./project.ts";
 import type { ErpNextToolContext } from "./types.ts";
 
@@ -8,7 +9,10 @@ type AnyFn = (...args: any[]) => any;
 
 function makeMockClient(overrides: Record<string, AnyFn> = {}): FrappeClient {
   return {
-    list: async () => [{ name: "user@example.com", enabled: 1 }],
+    list: async (_doctype: string, options: FrappeListOptions) =>
+      options.filters?.length === 1
+        ? [{ name: "user@example.com", enabled: 1 }]
+        : [],
     get: async (_doctype: string, name: string) => ({ name }),
     create: async (_doctype: string, data: Record<string, unknown>) => ({
       name: "TASK-001",
@@ -139,7 +143,9 @@ Deno.test("erpnext_task_update deduplicates assignees and returns an existing na
     },
     makeCtx(makeMockClient({
       list: async (_doctype: string, options: { filters?: unknown[][] }) =>
-        (options.filters?.[0][2] as string[]).map((name) => ({
+        (options.filters?.[0][2] as string[]).filter((name) =>
+          name > String(options.filters?.[1]?.[2] ?? "")
+        ).map((name) => ({
           name,
           enabled: 1,
         })),
@@ -190,7 +196,10 @@ Deno.test("erpnext_task_create rejects nonexistent and disabled assignees before
   );
 
   const disabled = makeMockClient({
-    list: async () => [{ name: "disabled@example.com", enabled: 0 }],
+    list: async (_doctype: string, options: FrappeListOptions) =>
+      options.filters?.length === 1
+        ? [{ name: "disabled@example.com", enabled: 0 }]
+        : [],
     create: async () => {
       createCalls++;
       return { name: "TASK-001" };
@@ -329,13 +338,14 @@ Deno.test("erpnext_task_update reports updated fields when assignment fails", as
   assertEquals(updateCalls, 1);
 });
 
-Deno.test("assignee validation issues a single User query with an 'in' filter", async () => {
+Deno.test("assignee validation retains the User in-filter through the final empty page", async () => {
   const listCalls: { doctype: string; filters?: unknown[][] }[] = [];
   await getTool("erpnext_task_update").handler(
     { name: "TASK-001", assign_to: ["a@example.com", "b@example.com"] },
     makeCtx(makeMockClient({
       list: async (doctype: string, options: { filters?: unknown[][] }) => {
         listCalls.push({ doctype, filters: options.filters });
+        if (options.filters?.length !== 1) return [];
         return [
           { name: "a@example.com", enabled: 1 },
           { name: "b@example.com", enabled: 1 },
@@ -346,8 +356,9 @@ Deno.test("assignee validation issues a single User query with an 'in' filter", 
     })),
   );
 
-  assertEquals(listCalls.length, 1);
+  assertEquals(listCalls.length, 2);
   assertEquals(listCalls[0].doctype, "User");
+  assertEquals(listCalls[1].filters?.[1], ["name", ">", "b@example.com"]);
   assertEquals(listCalls[0].filters, [["name", "in", [
     "a@example.com",
     "b@example.com",

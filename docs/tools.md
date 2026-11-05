@@ -16,6 +16,19 @@ user and company tools). Any tool name in the tables can be passed to
 `erpnext_file_upload` and `erpnext_file_download` (category `operations`). Full
 rules: [environment variables](environment-variables.md#tool-selection).
 
+## Pagination
+
+Document list tools and `erpnext_stock_balance` accept `limit` and `offset`.
+Keep the filters and ordering unchanged between calls, advance `offset` by the
+number of rows actually returned, and continue until an empty page. ERPNext may
+return fewer rows than requested without reaching the end. Counts in list
+responses describe the returned page, not a global total.
+
+Analytics aggregates and leave allocations read all matching rows internally;
+chart display limits are applied after aggregation. See the
+[pagination contract](pagination.md) for ordering, completeness, limits and
+concurrent-write behavior.
+
 ## Setup
 
 | Tool                     | DocType | Operations                                     |
@@ -65,10 +78,10 @@ rules: [environment variables](environment-variables.md#tool-selection).
 Optional `item_code` keeps the Stock Entries that have a line with exactly that
 item. It filters on the `Stock Entry Detail` child table, so it follows the
 [child-table filter rules](#erpnext_doc_list) of `erpnext_doc_list`: the order
-is `` `tabStock Entry`.modified desc `` and the result is grouped by Stock
-Entry, so an entry holding the item on several lines is listed once and counts
-once against `limit`. (3.0.x accepted `item_code` but ignored it.) Without
-`item_code` the query is unchanged.
+is `` `tabStock Entry`.modified desc, `tabStock Entry`.name asc `` and the
+result is grouped by Stock Entry, so an entry holding the item on several lines
+is listed once and counts once against `limit`. (3.0.x accepted `item_code` but
+ignored it.) Without `item_code` the query is unchanged.
 
 ## Purchasing → doclist-viewer / doc-viewer
 
@@ -430,13 +443,50 @@ or missing currencies and perform no conversion. Their document-list links
 retain the selected scope. Monthly KPIs count dates through today in the local
 calendar. Delta values are percentage points: `2.8` displays as `2.8%`.
 
-Other monetary analytics retain legacy currency assumptions and record limits;
-the three corrected financial KPIs do not link to those charts.
+Other monetary analytics retain their existing currency assumptions, but now
+read complete paginated populations. The three financial KPIs do not link to
+charts that use a different monetary basis.
 
-The gross-margin KPI remains an estimate from non-cancelled Sales Order item
-`amount` and `qty`, using current Bin valuation rates. It refuses to return a
-percentage if there are more than 1,000 order rows or 500 Bin rows, a required
-numeric field or item cost is unavailable, or warehouses have different rates
-for the same item. Missing fields are not treated as zero; an explicitly zero
-valuation is accepted. Use an ERPNext report for a larger dataset or a cost
-basis specific to a warehouse, currency or accounting period.
+### Gross-margin KPI
+
+The gross-margin KPI accepts optional `company`, `date_from` and `date_to`
+arguments. Dates are inclusive and apply to the Sales Order's
+`transaction_date`; non-cancelled orders (including drafts) remain eligible.
+Without `company`, all matching orders must belong to one company. Select a
+company explicitly when several match.
+
+```json
+{
+  "company": "Acme",
+  "date_from": "2026-10-01",
+  "date_to": "2026-10-31"
+}
+```
+
+It reads matching parents, their line items and relevant Bins in fresh pages of
+200 rows, with bounded parent/item filter batches. There is no 1,000-line or
+500-Bin ceiling. Reads continue until an empty page, including when the server
+returns shorter pages. A shared 60-second budget, repeated rows, missing data or
+any request failure stop the calculation with an explicit error; no partial
+percentage is returned. An in-flight request retains the client's timeout. REST
+pagination is not a transactional snapshot: run the estimate outside large
+concurrent imports or changes when a consistent reporting cutoff is needed.
+
+Revenue is always `base_net_amount` in the selected company's
+`default_currency`. Cost is `stock_qty * valuation_rate`, matched by item and
+warehouse with the same `stock_uom`. Warehouse ownership is checked against the
+company, including on ERPNext v14/v15 where Bin has no company field. The
+`calculation` result contains `revenue`, `estimatedCost` and `currency`; the
+card value remains a percentage. This also supports instances where
+transaction-currency `amount` is hidden but `base_net_amount` is readable,
+without mixing different monetary bases.
+
+Missing fields or item/warehouse valuations are not treated as zero; an explicit
+zero rate is accepted. Different rates in different warehouses are valid when
+matched to each order line. Unassigned warehouses, service costs without a Bin,
+mismatched units and conflicting duplicate Bins need their source data repaired
+or a report with an appropriate cost basis.
+
+**This remains an estimate at current stock valuation**, even for historical
+order dates. It is not recognized accounting gross profit or historical cost of
+goods sold. Use the appropriate ERPNext accounting report for those figures.

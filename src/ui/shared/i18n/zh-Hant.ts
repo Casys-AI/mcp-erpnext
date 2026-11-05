@@ -169,7 +169,7 @@ export const zhHant: Record<string, string> = {
   "stock.col.projected": "預估",
   "stock.col.rate": "單價",
   "stock.col.value": "金額",
-  "stock.footer.total_value": "庫存總值",
+  "stock.footer.total_value": "已顯示列的庫存價值",
   "stock.detail.loading": "載入品項中…",
   "stock.detail.label.name": "名稱",
   "stock.detail.label.group": "群組",

@@ -9,6 +9,11 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveDynamicLink } from "../api/resolve.ts";
 
@@ -27,7 +32,12 @@ export const accountingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 50)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 50; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         root_type: {
           type: "string",
           description:
@@ -42,7 +52,7 @@ export const accountingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 50;
+      const pagination = listPageOptions("erpnext_account_list", input, 50);
       const filters: FrappeFilter[] = [];
       if (input.root_type) {
         filters.push(["root_type", "=", input.root_type as string]);
@@ -64,8 +74,8 @@ export const accountingTools: ErpNextTool[] = [
           "is_group",
         ],
         filters,
-        limit,
-        order_by: "name asc",
+        ...pagination,
+        order_by: stablePageOrder("name asc"),
       });
 
       return {
@@ -90,7 +100,12 @@ export const accountingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         voucher_type: {
           type: "string",
           description:
@@ -104,7 +119,11 @@ export const accountingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_journal_entry_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.voucher_type) {
         filters.push(["voucher_type", "=", input.voucher_type as string]);
@@ -126,8 +145,8 @@ export const accountingTools: ErpNextTool[] = [
           "remark",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -182,7 +201,12 @@ export const accountingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         payment_type: {
           type: "string",
           description:
@@ -207,7 +231,11 @@ export const accountingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions(
+        "erpnext_payment_entry_list",
+        input,
+        20,
+      );
       const filters: FrappeFilter[] = [];
       if (input.payment_type) {
         filters.push(["payment_type", "=", input.payment_type as string]);
@@ -249,8 +277,8 @@ export const accountingTools: ErpNextTool[] = [
           "paid_to_account_currency",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {

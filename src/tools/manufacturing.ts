@@ -9,6 +9,11 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 import { createWithDiagnostics } from "./create-diagnostics.ts";
 import { DOC_META, DOCLIST_META } from "./viewer-meta.ts";
 import { resolveItem } from "../api/resolve.ts";
@@ -27,7 +32,12 @@ export const manufacturingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         item: {
           type: "string",
           description:
@@ -44,7 +54,7 @@ export const manufacturingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_bom_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.item) {
         filters.push([
@@ -78,8 +88,8 @@ export const manufacturingTools: ErpNextTool[] = [
           "total_cost",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -127,7 +137,12 @@ export const manufacturingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         production_item: {
           type: "string",
           description:
@@ -149,7 +164,7 @@ export const manufacturingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_work_order_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.production_item) {
         filters.push([
@@ -181,8 +196,8 @@ export const manufacturingTools: ErpNextTool[] = [
           "planned_end_date",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {
@@ -295,7 +310,12 @@ export const manufacturingTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
         work_order: { type: "string", description: "Filter by Work Order" },
         status: {
           type: "string",
@@ -306,7 +326,7 @@ export const manufacturingTools: ErpNextTool[] = [
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_job_card_list", input, 20);
       const filters: FrappeFilter[] = [];
       if (input.work_order) {
         filters.push(["work_order", "=", input.work_order as string]);
@@ -329,8 +349,8 @@ export const manufacturingTools: ErpNextTool[] = [
           "workstation",
         ],
         filters,
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {

@@ -171,7 +171,7 @@ export const zh: Record<string, string> = {
   "stock.col.projected": "预计",
   "stock.col.rate": "单价",
   "stock.col.value": "金额",
-  "stock.footer.total_value": "库存总值",
+  "stock.footer.total_value": "已显示行的库存价值",
   "stock.detail.loading": "加载物料中…",
   "stock.detail.label.name": "名称",
   "stock.detail.label.group": "分组",

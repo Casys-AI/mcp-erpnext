@@ -9,6 +9,11 @@
 
 import type { FrappeFilter } from "../api/types.ts";
 import type { ErpNextTool } from "./types.ts";
+import {
+  listPageOptions,
+  OFFSET_INPUT_SCHEMA,
+  stablePageOrder,
+} from "./doc-list-query.ts";
 import { DOCLIST_META } from "./viewer-meta.ts";
 
 export const setupTools: ErpNextTool[] = [
@@ -35,11 +40,16 @@ export const setupTools: ErpNextTool[] = [
           type: "boolean",
           description: "Include disabled users (default false)",
         },
-        limit: { type: "number", description: "Max results (default 50)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 50; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 50;
+      const pagination = listPageOptions("erpnext_user_list", input, 50);
       const filters: FrappeFilter[] = [
         ["user_type", "=", "System User"],
         ["name", "not in", ["Administrator", "Guest"]],
@@ -59,8 +69,8 @@ export const setupTools: ErpNextTool[] = [
       const docs = await ctx.client.list("User", {
         fields: ["name", "full_name", "enabled"],
         filters,
-        limit,
-        order_by: "full_name asc",
+        ...pagination,
+        order_by: stablePageOrder("full_name asc"),
       });
 
       return {
@@ -84,16 +94,21 @@ export const setupTools: ErpNextTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        limit: { type: "number", description: "Max results (default 20)" },
+        limit: {
+          type: "integer",
+          minimum: 0,
+          description: "Max results (default 20; 0 = all rows)",
+        },
+        offset: OFFSET_INPUT_SCHEMA,
       },
     },
     handler: async (input, ctx) => {
-      const limit = (input.limit as number) ?? 20;
+      const pagination = listPageOptions("erpnext_company_list", input, 20);
 
       const docs = await ctx.client.list("Company", {
         fields: ["name", "abbr", "default_currency", "country", "domain"],
-        limit,
-        order_by: "modified desc",
+        ...pagination,
+        order_by: stablePageOrder("modified desc"),
       });
 
       return {

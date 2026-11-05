@@ -352,7 +352,6 @@ const KPI_DRILL_DOWN: Record<
   "erpnext_kpi_gross_margin": {
     _drillDown:
       "Show the non-cancelled Sales Order Items and Bin valuation rates used to estimate this gross margin",
-    _trendDrillDown: "Show profit and loss chart for the last 12 months",
   },
   "erpnext_kpi_overdue": {
     _drillDown: "Show all overdue sales invoices",
@@ -572,6 +571,21 @@ const FINANCIAL_KPI_CURRENCY_FIELDS: Record<string, string> = {
   erpnext_kpi_overdue: "party_account_currency",
 };
 
+function grossMarginDrillDown(
+  message: string,
+  args: Record<string, unknown>,
+  result: UiRefreshableResult,
+): string {
+  const scope: Record<string, string> = {};
+  for (const field of ["company", "date_from", "date_to"]) {
+    const value = result[field] ?? args[field];
+    if (typeof value === "string" && value.trim()) scope[field] = value.trim();
+  }
+  return Object.keys(scope).length > 0
+    ? `${message}. Scope: ${JSON.stringify(scope)}.`
+    : message;
+}
+
 function scopedKpiJumps(
   toolName: string,
   jumps: { number?: NavJump; trend?: NavJump },
@@ -599,7 +613,7 @@ function scopedKpiJumps(
 
 /**
  * Les sauts d'un KPI, par outil : le nombre ouvre les pièces qui le
- * composent (une liste, ou des barres pour la marge), la courbe ouvre le
+ * composent (une liste), la courbe ouvre le
  * graphique qui le prolonge. Les filtres sont ceux du calcul du KPI, pas
  * une approximation ; `range` est le mois courant au moment de la réponse.
  * Les KPI financiers n'ouvrent pas les anciens graphiques dont la population
@@ -682,15 +696,7 @@ export const KPI_JUMPS: Record<
       kind: "chart",
     },
   }),
-  "erpnext_kpi_gross_margin": () => ({
-    trend: {
-      key: "profit_loss",
-      label: "Profit and loss",
-      tool: "erpnext_profit_loss",
-      args: { months: 12 },
-      kind: "chart",
-    },
-  }),
+  "erpnext_kpi_gross_margin": () => ({}),
   "erpnext_kpi_overdue": (r) => ({
     number: {
       key: "overdue_invoices",
@@ -1492,7 +1498,9 @@ export function withUiRefreshRequest(
     const kpiHints = KPI_DRILL_DOWN[toolName];
     if (kpiHints) {
       if (kpiHints._drillDown && !enriched._drillDown) {
-        enriched._drillDown = kpiHints._drillDown;
+        enriched._drillDown = toolName === "erpnext_kpi_gross_margin"
+          ? grossMarginDrillDown(kpiHints._drillDown, args, enriched)
+          : kpiHints._drillDown;
       }
       if (
         kpiHints._trendDrillDown && !enriched._trendDrillDown &&

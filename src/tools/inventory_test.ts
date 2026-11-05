@@ -209,16 +209,20 @@ Deno.test("erpnext_stock_entry_list - item_code lists each entry once, with a qu
   });
 
   await getTool("erpnext_stock_entry_list").handler(
-    { item_code: "WIDGET-1", limit: 10 },
+    { item_code: "WIDGET-1", limit: 10, offset: 20 },
     makeCtx(client),
   );
 
-  assertEquals(capturedOptions.order_by, "`tabStock Entry`.modified desc");
+  assertEquals(
+    capturedOptions.order_by,
+    "`tabStock Entry`.modified desc, `tabStock Entry`.name asc",
+  );
   assertEquals(capturedOptions.group_by, "`tabStock Entry`.name");
   assertEquals(capturedOptions.limit, 10);
+  assertEquals(capturedOptions.limit_start, 20);
 });
 
-Deno.test("erpnext_stock_entry_list - without item_code the query is the 3.0.x one", async () => {
+Deno.test("erpnext_stock_entry_list - without item_code the query preserves the primary sort without grouping", async () => {
   let capturedOptions: Record<string, unknown> = {};
   const client = makeMockClient({
     list: async (_doctype: string, opts: Record<string, unknown>) => {
@@ -232,7 +236,7 @@ Deno.test("erpnext_stock_entry_list - without item_code the query is the 3.0.x o
     makeCtx(client),
   );
 
-  assertEquals(capturedOptions.order_by, "modified desc");
+  assertEquals(capturedOptions.order_by, "modified desc, name asc");
   assertEquals("group_by" in capturedOptions, false);
   assertEquals(capturedOptions.limit, 20);
 });
@@ -284,7 +288,7 @@ Deno.test("erpnext_stock_entry_list - keeps default, unbounded and positive limi
     await tool.handler(input, makeCtx(client));
   }
   assertEquals(limits, [20, 20, 0, 5]);
-  assertEquals(tool.inputSchema.properties?.limit?.type, "number");
+  assertEquals(tool.inputSchema.properties?.limit?.type, "integer");
 });
 
 // ── erpnext_stock_entry_create ───────────────────────────────────────────────

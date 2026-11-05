@@ -6,6 +6,7 @@ import {
   validateAssignees,
 } from "./assignment.ts";
 import type { ErpNextToolContext } from "./types.ts";
+import type { FrappeListOptions } from "../api/types.ts";
 
 // deno-lint-ignore no-explicit-any
 type AnyFn = (...args: any[]) => any;
@@ -62,7 +63,12 @@ Deno.test("validateAssignees reports the first missing user", async () => {
       validateAssignees(
         ["a@example.com", "b@example.com"],
         "tool",
-        makeCtx({ list: async () => [{ name: "b@example.com", enabled: 1 }] }),
+        makeCtx({
+          list: async (_doctype: string, options: FrappeListOptions) =>
+            options.filters?.length === 1
+              ? [{ name: "b@example.com", enabled: 1 }]
+              : [],
+        }),
       ),
     Error,
     "User 'a@example.com' does not exist",
@@ -83,4 +89,50 @@ Deno.test("fetchDocAfterAssignment marks re-fetch failures as post-assignment", 
     "Task TASK-001 assignment succeeded, but re-fetching the document failed: HTTP 502 Bad Gateway",
   );
   assertEquals((rejection as Error).cause, original);
+});
+
+Deno.test("validateAssignees reads every filtered user despite a clamped page", async () => {
+  const assignees = ["a@example.com", "b@example.com", "c@example.com"];
+  const calls: FrappeListOptions[] = [];
+  const ctx = makeCtx({
+    list: async (
+      doctype: string,
+      options: FrappeListOptions,
+      readOptions: unknown,
+    ) => {
+      assertEquals(doctype, "User");
+      assertEquals(readOptions, { skipCache: true });
+      assertEquals(options.order_by, "name asc");
+      assertEquals(options.filters?.[0], ["name", "in", assignees]);
+      calls.push(options);
+      const cursor = String(options.filters?.[1]?.[2] ?? "");
+      return assignees.filter((name) => name > cursor).slice(0, 1).map((
+        name,
+      ) => ({
+        name,
+        enabled: 1,
+      }));
+    },
+  });
+  await validateAssignees(assignees, "tool", ctx);
+  assertEquals(calls.length, 4);
+  assertEquals(calls.at(-1)?.filters?.[1], ["name", ">", "c@example.com"]);
+});
+
+Deno.test("validateAssignees detects a disabled user on a later page", async () => {
+  const ctx = makeCtx({
+    list: async (_doctype: string, options: FrappeListOptions) => {
+      const cursor = options.filters?.[1]?.[2];
+      if (cursor === undefined) return [{ name: "a@example.com", enabled: 1 }];
+      if (cursor === "a@example.com") {
+        return [{ name: "b@example.com", enabled: 0 }];
+      }
+      return [];
+    },
+  });
+  await assertRejects(
+    () => validateAssignees(["a@example.com", "b@example.com"], "tool", ctx),
+    Error,
+    "User 'b@example.com' is disabled",
+  );
 });

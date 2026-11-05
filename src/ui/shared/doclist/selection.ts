@@ -262,8 +262,8 @@ export function doclistRowEvents(
 }
 
 /**
- * Seul doc_list garantit ce contrat de pagination. Les autres outils ne peuvent
- * confirmer une absence, même avec limit : leur refresh ne retire aucun membre.
+ * Seule une première page générique vide prouve ici l'absence de documents.
+ * Une page courte, même avec limit: 0, peut être plafonnée côté serveur.
  * `count` désigne la fenêtre renvoyée, jamais le nombre total en base.
  */
 export function isDoclistResultComplete(data: DoclistData): boolean {
@@ -281,5 +281,5 @@ export function isDoclistResultComplete(data: DoclistData): boolean {
   if (
     typeof limit !== "number" || !Number.isSafeInteger(limit) || limit < 0
   ) return false;
-  return limit === 0 || data.count < limit;
+  return data.count === 0;
 }

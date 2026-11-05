@@ -115,8 +115,9 @@ export const kanbanTools: ErpNextTool[] = [
         filters: adapter.buildListFilters(input),
         limit: limit + 1,
         limit_start: offset,
-        order_by: "modified desc",
+        order_by: "modified desc, name asc",
       };
+      let queryOptions = options;
       let rows;
       try {
         rows = await ctx.client.list(doctype, options);
@@ -127,15 +128,25 @@ export const kanbanTools: ErpNextTool[] = [
           throw error;
         }
         // ERPNext 16 renamed source; older versions still require the legacy field.
-        rows = await ctx.client.list(doctype, {
+        queryOptions = {
           ...options,
           fields: options.fields.map((field) =>
             field === "source" ? "utm_source" : field
           ),
-        });
+        };
+        rows = await ctx.client.list(doctype, queryOptions);
       }
 
-      const hasMore = rows.length > limit;
+      let hasMore = rows.length > limit;
+      if (!hasMore && rows.length > 0) {
+        // A short response may be a server cap rather than the end of the list.
+        const next = await ctx.client.list(doctype, {
+          ...queryOptions,
+          limit: 1,
+          limit_start: offset + rows.length,
+        });
+        hasMore = next.length > 0;
+      }
       const visibleRows = rows.slice(0, limit) as Record<string, unknown>[];
       const cards = adapter.buildCards(visibleRows);
 

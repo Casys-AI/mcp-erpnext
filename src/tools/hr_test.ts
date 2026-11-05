@@ -55,7 +55,8 @@ function clientResolving(
       if (name === identifier) throw new FrappeAPIError("Not Found", 404, null);
       return { name };
     },
-    list: async (doctype: string) => (doctype === "Employee" ? matches : []),
+    list: async (doctype: string, options: { filters?: unknown[] }) =>
+      doctype === "Employee" && options.filters?.length === 1 ? matches : [],
     create: async (_doctype: string, data: unknown) => {
       onCreate?.(data as Record<string, unknown>);
       return { name: "NEW-001", ...(data as object) };

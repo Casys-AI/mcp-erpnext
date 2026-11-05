@@ -84,6 +84,7 @@ import type { CardDetailState } from "~/shared/kanban/state";
 import { sendTextMessage } from "~/shared/host-message";
 import { canCallViewerTool, hasAvailableTool } from "~/shared/viewer-tools";
 import { createSerialQueue } from "~/shared/single-flight";
+import { loadAssignableUsers } from "~/shared/kanban/assignable-users.ts";
 import { formatDate } from "~/shared/format";
 import { buildKanbanCardListHint, kanbanNavVars } from "./kanban-nav";
 import { kanbanViewerCapabilities } from "./capabilities";
@@ -2078,22 +2079,21 @@ export function KanbanViewer() {
     ) {
       throw new Error(t("common.error.no_proxy"));
     }
-    const result = await app.callServerTool({
-      name: "erpnext_user_list",
-      arguments: { limit: 100 },
-    }, { timeout: TOOL_CALL_TIMEOUT_MS });
-    if (result.isError) {
-      throw new Error(extractToolError(result));
-    }
-    const text = extractTextContent(result);
-    if (!text) return [];
-    let payload: { data?: Array<{ name: string; full_name?: string }> };
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      throw new Error(t("kanban.error.user_list"));
-    }
-    return payload.data ?? [];
+    const board = boardRef.current;
+    const generation = rootEventRef.current;
+    const cardId = detailFetchCardIdRef.current;
+    const isCurrent = () =>
+      rootEventRef.current === generation &&
+      detailFetchCardIdRef.current === cardId &&
+      boardRef.current?.doctype === board.doctype &&
+      boardRef.current?.boardId === board.boardId &&
+      kanbanViewerCapabilities(
+        boardRef.current,
+        app.getHostCapabilities()?.serverTools,
+        false,
+      ).canAssign;
+    const users = await loadAssignableUsers(app, isCurrent);
+    return users ?? [];
   }
 
   async function handleAssignDetail(

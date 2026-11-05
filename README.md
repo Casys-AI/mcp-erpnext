@@ -9,18 +9,6 @@ English | [繁體中文](README.zh-TW.md)
 [![M8ven Score](https://m8ven.ai/badge/mcp/casys-ai-mcp-erpnext-1kev4k)](https://m8ven.ai/mcp/casys-ai-mcp-erpnext-1kev4k)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> [!IMPORTANT]
-> **Installing 3.3:** for npm/Node use `npx -y @casys/mcp-erpnext@latest`; for
-> Deno use `deno run -A jsr:@casys/mcp-erpnext@3.5.0/server`. 3.5.0 is the
-> stable release and carries npm's `latest` tag; prereleases, when published,
-> use the `next` tag. 3.3 adds graduated selection to the active context: list
-> checkboxes, select-all over the filtered rows, Shift-click ranges and
-> Ctrl/Cmd-click toggles, compact records for one to three selections,
-> references up to eight and a single `erpnext_doc_list` query item beyond.
-> Chart clicks snap to the nearest point in their column. Test it with the MCP
-> host your users actually run before replacing an existing deployment. See the
-> [CHANGELOG](CHANGELOG.md) for release history.
-
 Let any MCP-compatible AI agent operate your [ERPNext](https://erpnext.com) /
 Frappe instance — documents, workflows, and interactive viewers inside the host
 (Claude Desktop, Claude Code, VS Code Copilot, or custom).
@@ -79,35 +67,12 @@ results.
   </tr>
 </table>
 
-## What's New
+## Releases
 
-**3.2.0 is the stable release.** All nine viewers navigate inside the view with
-back and breadcrumb navigation, and a confirmed document change marks the
-derived levels stale until they are read again. Active-context selection covers
-the interactive viewers, and chart, KPI and nested-chart details open from a
-visible button on touch screens. The generic document viewer, child tables and
-attachment workflows follow ERPNext's own DocType metadata. Tool-selection
-filters (`ERPNEXT_CATEGORIES`, `ERPNEXT_EXCLUDE_CATEGORIES`,
-`ERPNEXT_EXCLUDE_TOOLS`) limit what a deployment exposes, attachment downloads
-are refused to clients that do not announce MCP Apps, and errors are structured.
-Viewer enrichment (refresh requests, navigation jumps, tool manifests) travels
-in `_meta`, out of the model's context, instead of the result text.
-
-3.2.0 also carries the creation-error guidance, ERPNext 16 Opportunity
-compatibility, calendar-date, KPI percentage and funnel currency fixes of the
-stable 3.0.5 and 3.1.0 releases. Features remain capability-gated by the MCP
-host; Buy evidence does not purchase or qualify a live ERP.
-
-For stable npm installations use `@casys/mcp-erpnext@latest`; for Deno use
-`jsr:@casys/mcp-erpnext@3.5.0/server`.
-
-See the [CHANGELOG](CHANGELOG.md) for the full release history, or the
+See the
 [latest release](https://github.com/Casys-AI/mcp-erpnext/releases/latest) for
-the current version's highlights.
-
-See the [3.0 to 3.1 migration guide](docs/migration-3.0-to-3.1.md) for the
-source contracts, host requirements, and deployment limits carried into 3.2; it
-applies when upgrading from 3.0 or from stable 3.1.0.
+the current version's highlights and the [CHANGELOG](CHANGELOG.md) for the full
+release history.
 
 ## Documentation
 

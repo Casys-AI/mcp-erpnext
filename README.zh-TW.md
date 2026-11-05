@@ -9,16 +9,6 @@
 [![M8ven Score](https://m8ven.ai/badge/mcp/casys-ai-mcp-erpnext-1kev4k)](https://m8ven.ai/mcp/casys-ai-mcp-erpnext-1kev4k)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> [!IMPORTANT]
-> **安裝 3.3：** npm/Node 請執行 `npx -y @casys/mcp-erpnext@latest`；Deno 請執行
-> `deno run -A jsr:@casys/mcp-erpnext@3.5.0/server`。3.5.0 是穩定版，並使用 npm
-> 的 `latest` 標籤；預發布版本若有發布，則使用 `next` 標籤。3.3
-> 為作用中情境加入分級選取：清單核取方塊、對篩選後的列全選、Shift 點選範圍與
-> Ctrl/Cmd 點選切換；一至三筆選取提供精簡記錄，最多八筆提供參照，超過時改為單一
-> `erpnext_doc_list`
-> 查詢項目。圖表點選會吸附到所在欄最近的資料點。在取代既有部署前，請使用實際的
-> MCP 主機進行測試。發布歷程請見 [CHANGELOG](CHANGELOG.md)。
-
 讓任何相容 MCP 的 AI 智慧代理操作您的 [ERPNext](https://erpnext.com) / Frappe
 執行個體 — 文件、工作流程，以及主機內的互動式檢視器（Claude Desktop、 Claude
 Code、VS Code Copilot 或自訂代理）。
@@ -76,29 +66,10 @@ Code、VS Code Copilot 或自訂代理）。
   </tr>
 </table>
 
-## 最新異動
+## 發布版本
 
-**3.2.0 是目前的穩定版。** 九個檢視器皆可在檢視器內導覽，並提供返回與麵包屑
-導覽；已確認的文件異動會把衍生的層級標記為過期，直到重新讀取為止。作用中內容
-選取涵蓋各互動式檢視器，圖表、KPI 與巢狀圖表的詳細資料可透過可見按鈕開啟，
-方便觸控螢幕使用。通用文件檢視器、子表格與附件流程依循 ERPNext 自身的 DocType
-中繼資料。工具選取篩選器（`ERPNEXT_CATEGORIES`、`ERPNEXT_EXCLUDE_CATEGORIES`、
-`ERPNEXT_EXCLUDE_TOOLS`）可限制部署所公開的工具；未宣告支援 MCP Apps
-的用戶端無法下載附件；錯誤採結構化格式。檢視器專用的附加資料（重新整理請求、
-導覽跳轉、工具清單）改經 `_meta` 傳遞，不再進入模型的上下文。
-
-3.2.0 同時納入穩定版 3.0.5 與 3.1.0 的建立錯誤修復指引、ERPNext 16
-商機相容性、日期、KPI 百分比及銷售漏斗幣別修正。所有功能仍依 MCP 主機能力啟用；
-Buy 證據不會執行採購，也不代表即時 ERP 已通過驗證。
-
-npm 穩定版請使用 `@casys/mcp-erpnext@latest`；Deno 請使用
-`jsr:@casys/mcp-erpnext@3.5.0/server`。
-
-完整的發布歷程請參閱
-[CHANGELOG](CHANGELOG.md)，目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)。
-
-[3.0 至 3.1 遷移指南](docs/migration-3.0-to-3.1.md) 說明原始碼的契約、
-主機需求與部署限制，亦適用於從 3.0 或穩定版 3.1.0 升級至 3.2。
+目前版本的重點說明請參閱[最新發布](https://github.com/Casys-AI/mcp-erpnext/releases/latest)，
+完整的發布歷程請參閱 [CHANGELOG](CHANGELOG.md)。
 
 ## 文件
 

@@ -604,8 +604,8 @@ Deno.test("server.ts configures the stateless transport", async () => {
   );
   assert(
     /mrtr:\s*mrtrConfig/.test(source) &&
-      /enableLinkDisambiguation:\s*mrtrConfig\s*!==\s*undefined/.test(source),
-    "server.ts must enable Link-field MRTR only when signed MRTR config exists",
+      /enableLinkDisambiguation:\s*true/.test(source),
+    "server.ts must enable signed MRTR for confirmations and native Link-field forms",
   );
   assert(
     !source.includes("io.modelcontextprotocol/tasks"),

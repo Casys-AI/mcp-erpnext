@@ -4,6 +4,7 @@
  * Pile de navigation câblée : sauts « › » quand l'hôte relaie les outils,
  * comportement drillDown inchangé sinon.
  */
+import { useViewerApp } from "~/shared/viewer-app";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { App } from "@modelcontextprotocol/ext-apps";
@@ -82,7 +83,10 @@ import {
 } from "~/shared/active-context.ts";
 import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
 
-const app = new App({ name: "KPI Viewer", version: "1.0.0" });
+const standaloneApp = /* @__PURE__ */ new App({
+  name: "KPI Viewer",
+  version: "1.0.0",
+});
 const KPI_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
@@ -1253,6 +1257,7 @@ function KpiViewerContent({
   onMutationInvalidate: () => void;
   onMutationRefresh?: () => void;
 }) {
+  const app = useViewerApp(standaloneApp);
   const { ref: shellRef, layout, boundsStyle } = useViewerLayout<
     HTMLDivElement
   >();
@@ -1415,6 +1420,7 @@ function KpiViewerContent({
 /* ── Outer viewer — connexion et états vide/chargement ────────────── */
 
 export function KpiViewer() {
+  const app = useViewerApp(standaloneApp);
   const fixture = isFixtureMode();
 
   const [data, setData] = useState<KpiData | null>(

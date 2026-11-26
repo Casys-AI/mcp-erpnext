@@ -33,11 +33,7 @@ import {
   removeAssignment,
   validateAssignees,
 } from "./assignment.ts";
-import {
-  isMethodAllowed,
-  isValidMethodPath,
-  loadMethodAllowlist,
-} from "./method-allowlist.ts";
+import { allowedMethod } from "./method-allowlist.ts";
 import {
   DOC_LIST_DEFAULT_LIMIT,
   FRAPPE_FILTERS_INPUT_SCHEMA,
@@ -1031,26 +1027,7 @@ export const operationsTools: ErpNextTool[] = [
       required: ["method"],
     },
     handler: async (input, ctx) => {
-      if (typeof input.method !== "string" || !input.method.trim()) {
-        throw new Error(
-          "[erpnext_method_call] 'method' must be a non-empty dotted path",
-        );
-      }
-      const method = input.method.trim();
-      if (!isValidMethodPath(method)) {
-        throw new Error(
-          `[erpnext_method_call] 'method' is not a valid dotted path: '${method}'`,
-        );
-      }
-
-      const allowlist = loadMethodAllowlist();
-      if (!isMethodAllowed(method, allowlist)) {
-        throw new Error(
-          `[erpnext_method_call] '${method}' is not permitted. Add it (or a ` +
-            "'prefix.*' covering it) to ERPNEXT_METHOD_ALLOWLIST, or set " +
-            "ERPNEXT_METHOD_ALLOWLIST=* to allow any method.",
-        );
-      }
+      const method = allowedMethod(input.method);
 
       if (
         input.args !== undefined &&
@@ -1087,7 +1064,11 @@ export const operationsTools: ErpNextTool[] = [
         invalidate = { doctype: inv.doctype.trim(), name: inv.name.trim() };
       }
 
-      const result = await ctx.client.callMethod(method, args, httpMethod);
+      // An allowlisted custom method may have side effects even when Frappe
+      // accepts it via GET. One invocation must send at most one request.
+      const result = await ctx.client.callMethod(method, args, httpMethod, {
+        retry: false,
+      });
 
       if (invalidate) {
         ctx.client.invalidate(invalidate.doctype, invalidate.name);

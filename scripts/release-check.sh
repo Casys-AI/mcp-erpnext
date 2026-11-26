@@ -49,6 +49,9 @@ deno task test:buy-evidence-app
 echo "[release-check] scripts/build-node.sh"
 bash scripts/build-node.sh
 
+echo "[release-check] installed Code Mode package over stdio and HTTP"
+node --test scripts/code-mode-smoke.mjs
+
 echo "[release-check] THIRD_PARTY_NOTICES.txt matches the built bundles"
 # Reads src/ui/.build-meta (UI build above) and dist-node/esbuild-metafile.json
 # (build-node.sh above). Drift: node scripts/third-party-notices.mjs --write

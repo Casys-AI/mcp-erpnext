@@ -301,7 +301,20 @@ function normalizeMimeType(raw: string | null): string {
     : "application/octet-stream";
 }
 
-function decodeBase64File(contentBase64: string, maxBytes: number): Uint8Array {
+/** Byte ceiling shared by upload execution and its interactive preview. */
+export function configuredUploadLimit(): number {
+  const raw = env("ERPNEXT_MAX_UPLOAD_BYTES");
+  const max = raw?.trim() ? Number(raw) : DEFAULT_MAX_UPLOAD_BYTES;
+  if (!Number.isSafeInteger(max) || max <= 0) {
+    throw new Error("[FrappeClient] maxUploadBytes must be a positive integer");
+  }
+  return max;
+}
+
+export function decodeBase64File(
+  contentBase64: string,
+  maxBytes: number,
+): Uint8Array<ArrayBuffer> {
   if (contentBase64.length === 0) {
     throw new Error("[FrappeClient] File content must not be empty");
   }
@@ -1188,11 +1201,13 @@ export class FrappeClient {
     method: string,
     args: Record<string, unknown> = {},
     httpMethod: "GET" | "POST" = "POST",
+    options: FrappeCallOptions = {},
   ): Promise<T> {
     const res = await this.callMethodRaw<FrappeMethodResponse<T>>(
       method,
       args,
       httpMethod,
+      options,
     );
     return res.message;
   }
@@ -1258,7 +1273,6 @@ export function getFrappeClient(): FrappeClient {
   const url = env("ERPNEXT_URL");
   const apiKey = env("ERPNEXT_API_KEY");
   const apiSecret = env("ERPNEXT_API_SECRET");
-  const maxUploadBytesRaw = env("ERPNEXT_MAX_UPLOAD_BYTES");
   const maxDownloadBytesRaw = env("ERPNEXT_MAX_DOWNLOAD_BYTES");
 
   if (!url) {
@@ -1279,9 +1293,7 @@ export function getFrappeClient(): FrappeClient {
     apiKey,
     apiSecret,
     cache: getCache(),
-    maxUploadBytes: maxUploadBytesRaw?.trim()
-      ? Number(maxUploadBytesRaw)
-      : undefined,
+    maxUploadBytes: configuredUploadLimit(),
     maxDownloadBytes: maxDownloadBytesRaw?.trim()
       ? Number(maxDownloadBytesRaw)
       : undefined,

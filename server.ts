@@ -32,6 +32,8 @@
  */
 
 import { launchInspector, MCP_APP_MIME_TYPE, McpApp } from "@mcpview/server";
+import { registerCodeModeTools } from "./src/code-mode/register.ts";
+import { registerCodeModeView } from "./src/code-mode/view.ts";
 import { ErpNextToolsClient } from "./src/client.ts";
 import {
   assertNonEmptySelection,
@@ -134,7 +136,14 @@ async function main() {
   const authMetadataRoute = authProvider
     ? resourceMetadataRoute(authProvider)
     : undefined;
-  const mrtrConfig = loadMrtrConfig();
+  const mrtrConfig = loadMrtrConfig() ?? {
+    // Pending confirmations live in this process. An ephemeral signing key
+    // protects a single-instance installation without an additional flag.
+    signingKey: Array.from(
+      crypto.getRandomValues(new Uint8Array(32)),
+      (n) => n.toString(16).padStart(2, "0"),
+    ).join(""),
+  };
 
   // Initialize tools client
   const toolsClient = new ErpNextToolsClient(
@@ -148,7 +157,7 @@ async function main() {
       ...(selectionConfig.excludeTools
         ? { excludeTools: selectionConfig.excludeTools }
         : {}),
-      enableLinkDisambiguation: mrtrConfig !== undefined,
+      enableLinkDisambiguation: true,
     },
   );
   for (const warning of toolsClient.selection.warnings) {
@@ -159,9 +168,10 @@ async function main() {
   // Build MCP server
   const server = new McpApp({
     name: "mcp-erpnext",
-    version: "3.5.0",
+    version: "4.0.0-beta.1",
     instructions: ACTIVE_CONTEXT_INSTRUCTIONS,
     transport: "stateless",
+    advertiseAppOnlyTools: true,
     cache: {
       ttlMs: 3_600_000,
       scope: "public",
@@ -178,11 +188,6 @@ async function main() {
       return String(error);
     },
   });
-
-  // Register all tools with their handlers
-  const mcpTools = toolsClient.toMCPFormat();
-  const handlers = toolsClient.buildHandlersMap();
-  server.registerTools(mcpTools, handlers);
 
   registerBuyViewAppManifest(server);
 
@@ -243,6 +248,13 @@ async function main() {
     }
   }
 
+  const codeModeView = registerCodeModeView(server, import.meta.url);
+  const operationCount = registerCodeModeTools(
+    server,
+    toolsClient,
+    codeModeView,
+  );
+
   if (skippedRemoteViewers.length > 0) {
     console.error(
       `[mcp-erpnext] ${
@@ -275,7 +287,7 @@ async function main() {
     } [${sources.excludeTools}]`,
   ].filter(Boolean).join("; ");
   console.error(
-    `[mcp-erpnext] Initialized — ${toolsClient.count} tools${
+    `[mcp-erpnext] Initialized Code Mode — execute with ${operationCount} operations${
       filterSummary ? ` (${filterSummary})` : ""
     }`,
   );

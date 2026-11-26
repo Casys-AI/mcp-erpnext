@@ -8,6 +8,7 @@
  * commande distincte : double-clic / Entree ou chevron explicite. Sans saut
  * type, le panneau local conserve les actions conversationnelles de repli.
  */
+import { useViewerApp } from "~/shared/viewer-app";
 import {
   useEffect,
   useLayoutEffect,
@@ -77,7 +78,10 @@ import {
 } from "./stock-interactions.ts";
 import type { StockData, StockEntry } from "./types.ts";
 
-const app = new App({ name: "Stock Viewer", version: "2.0.0" });
+const standaloneApp = /* @__PURE__ */ new App({
+  name: "Stock Viewer",
+  version: "2.0.0",
+});
 const STOCK_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
@@ -127,6 +131,7 @@ const GRID_MOBILE = "1fr 52px 82px";
 /* ─── StockViewer state machine ──────────────────────────────────── */
 
 export function StockViewer() {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const fixture = isFixtureMode();
   const [data, setData] = useState<StockData | null>(
@@ -392,6 +397,7 @@ function StockContent(
     onError: (msg: string | null) => void;
   },
 ) {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const { ref, layout } = useViewerLayout<HTMLDivElement>();
   // Both mobile and panel get the 3-column layout.

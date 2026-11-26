@@ -7,9 +7,15 @@ export interface UiRefreshRequestData {
 
 export interface ToolResultPayload {
   content?: Array<{ type: string; text?: string }>;
-  structuredContent?: Record<string, unknown>;
+  structuredContent?: unknown;
   _meta?: Record<string, unknown>;
   isError?: boolean;
+}
+
+export function isResultRecord(
+  value: unknown,
+): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /** Même clé que `VIEWER_META_KEY` côté serveur (`src/tools/model-visible.ts`). */
@@ -172,7 +178,7 @@ export function normalizeUiRefreshFailureMessage(cause: unknown): string {
 export function extractToolResultText(
   result: ToolResultPayload,
 ): string | null {
-  if (result.structuredContent) {
+  if (isResultRecord(result.structuredContent)) {
     return JSON.stringify(
       mergeViewerEnrichment(result.structuredContent, result),
     );

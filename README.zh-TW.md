@@ -19,6 +19,16 @@ Code、VS Code Copilot 或自訂代理）。
 > 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。詳見
 > [mcpview.dev](https://mcpview.dev)。
 
+> **試用 Code Mode 測試版。** 下方快速入門使用 npm 預設的 `@latest`
+> 標籤安裝穩定版。若要試用測試版，請在 MCP 主機設定中將 `"command"` 設為
+> `"npx"`，並將 `"args"` 設為 `["-y", "@casys/mcp-erpnext@next"]`。保留現有的
+> ERPNext 連線設定。可執行 `npm view @casys/mcp-erpnext dist-tags`
+> 查詢已發布的版本。
+>
+> 測試版只向 LLM 提供一個工具 `execute`。npm 和 JSR 套件均附有
+> [ERPNext Code Mode 技能](skills/erpnext-code-mode/SKILL.md)。在主機安裝技能後，LLM
+> 即可依指引查找可用操作、開啟發票清單與明細。
+
 ## 截圖
 
 在 MCP 主機中渲染的互動式檢視器，完全由工具結果驅動。
@@ -317,20 +327,18 @@ doclist-viewer。通用與專用的文件讀取會使用 doc-viewer，但銷售�
 | `ERPNEXT_MAX_UPLOAD_BYTES`   | 否   | 解碼後檔案上傳大小上限（正整數位元組；預設 10 MiB）                                                       |
 | `ERPNEXT_MAX_DOWNLOAD_BYTES` | 否   | 附件下載大小上限（正整數位元組；預設 10 MiB）                                                             |
 | `ERPNEXT_METHOD_ALLOWLIST`   | 否   | 以逗號分隔的完整方法路徑或 `prefix.*`；未設定時 `erpnext_method_call` 會拒絕所有方法，`*` 則允許全部      |
-| `MCP_MRTR_SIGNING_KEY`       | 否   | 恰為 64 個小寫十六進位字元；啟用已簽章的模糊連結 elicitation。**僅限單一執行個體部署**，詳見下方說明      |
+| `MCP_MRTR_SIGNING_KEY`       | 否   | 多輪請求的簽章金鑰，須為 64 個小寫十六進位字元。測試版預設在啟動時產生暫時金鑰。                          |
 
-MRTR 為選用功能。未設定此金鑰，或用戶端未宣告 elicitation
-時，模糊連結會維持既有的 可操作歧義錯誤，而不會要求選擇。
+**測試版的變更確認流程。** 請以單一伺服器行程執行。支援 MCP
+多輪表單的主機可顯示原生確認視窗； 支援 MCP Apps
+的主機則可在工作區內顯示操作及其參數，由使用者決定是否繼續。
+缺少確認介面的純文字主機仍可讀取資料。透過 HTTP 寫入時，MCP 用戶端須完成驗證。
+ERPNext 使用已設定的 Frappe 憑證檢查權限。
 
-> **請勿在負載平衡器後方使用此設定執行 MRTR。** 簽章金鑰只證明重試權杖為真，
-> 並不使其只能使用一次；後者是 replay store 的職責，而預設的 replay store
-> 僅在單一行程內有效。若兩個執行個體共用金鑰，同一個已簽章的重試會在兩邊
-> 都通過驗證，導致採購單、請假單或費用報銷單被**建立兩次**，且一經提交即
-> 無法復原。
->
-> 多執行個體部署必須將共用且具原子性的 `mrtr.replayStore` 傳入 `McpApp` （Redis
-> 可用 `SET key 1 NX EXAT` 滿足此契約）。啟用 MRTR 而未提供時，
-> 框架會在啟動時記錄警告——該警告並非雜訊，正是本段所述的問題。
+每張確認憑證僅能使用一次，限原始身分和程式使用，五分鐘後失效。
+伺服器在記憶體中保存待處理的確認與執行紀錄，重新啟動後需再次取得同意。
+若後續步驟失敗或取消，之前已成功的步驟仍會生效。請先檢查受影響的 ERP
+記錄，再執行新程式。
 
 ## 架構
 

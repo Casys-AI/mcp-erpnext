@@ -71,6 +71,7 @@ function bundledModulesReport() {
 export default defineConfig({
   plugins: [tailwindcss(), preact(), viteSingleFile(), bundledModulesReport()],
   root: resolve(__dirname, uiName),
+  define: { __ERP_DECLARED_HOST__: JSON.stringify(uiName === "code-mode") },
   resolve: {
     alias: {
       "~": resolve(__dirname, "."),

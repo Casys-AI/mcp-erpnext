@@ -76,7 +76,9 @@ information in `_meta`, and the public one-hour cache hint.
 
 Some ERPNext links accept an ID or a human-readable identifier. Where a lookup
 has several safe candidates, the server can ask a capable client to choose
-through MCP request/retry (MRTR), rather than guessing. MRTR is opt-in.
+through MCP request/retry (MRTR), rather than guessing. The following opt-in
+instructions apply to the 3.x series. The 4.0 Code Mode beta generates an
+ephemeral signing key and enables confirmation on startup.
 
 - The client must advertise elicitation support in `clientCapabilities`.
 - Set `MCP_MRTR_SIGNING_KEY` to exactly 64 lowercase hexadecimal characters to

@@ -9,6 +9,7 @@
  * la vue (DoclistBody) plutôt que d'envoyer un message au chat.
  * Sans serverTools, le comportement reste strictement identique à avant.
  */
+import { useViewerApp } from "~/shared/viewer-app";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
@@ -58,7 +59,10 @@ import {
 import type { ClickIntentSingleResult } from "~/shared/click-intent.ts";
 import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
 
-const app = new App({ name: "Funnel Viewer", version: "1.0.0" });
+const standaloneApp = /* @__PURE__ */ new App({
+  name: "Funnel Viewer",
+  version: "1.0.0",
+});
 const FUNNEL_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
@@ -723,6 +727,7 @@ function FunnelContent(
     onError: (msg: string | null) => void;
   },
 ) {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const { ref: containerRef, layout } = useViewerLayout<HTMLDivElement>();
 
@@ -1085,6 +1090,7 @@ function FunnelContent(
 /* ── FunnelViewer ─────────────────────────────────────────────────────── */
 
 export function FunnelViewer() {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const fixture = isFixtureMode();
   const [data, setData] = useState<FunnelData | null>(

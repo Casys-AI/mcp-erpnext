@@ -1,4 +1,9 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertThrows,
+} from "@std/assert";
 import { StaticTokenAuthProvider } from "@mcpview/server";
 import { buildAuthProvider, loadAuthConfig } from "./config.ts";
 import { CompositeAuthProvider } from "./composite-provider.ts";
@@ -235,3 +240,20 @@ function withEnv(vars: Record<string, string>): Disposable {
     },
   };
 }
+
+Deno.test("separate static credentials have separate opaque confirmation principals", async () => {
+  const provider = buildAuthProvider({
+    tokens: new Set(["test-key-1", "test-key-2"]),
+    resource: "https://mcp.example.com",
+  });
+  const alice = await provider.verifyToken("test-key-1");
+  const bob = await provider.verifyToken("test-key-2");
+  assert(alice && bob);
+  assertNotEquals(alice.subject, bob.subject);
+  assertEquals(
+    alice.subject,
+    (await provider.verifyToken("test-key-1"))?.subject,
+  );
+  assertEquals(alice.scopes, []);
+  assert(!JSON.stringify([alice, bob]).includes("test-key"));
+});

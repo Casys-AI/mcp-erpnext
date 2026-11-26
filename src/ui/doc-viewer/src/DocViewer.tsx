@@ -1,5 +1,6 @@
 /** @jsxImportSource preact */
 
+import { useViewerApp } from "~/shared/viewer-app";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
@@ -73,7 +74,7 @@ import { hasAvailableTool } from "~/shared/viewer-tools.ts";
 import { canonicalReadbackSupersedesMutation } from "./canonical-readback.ts";
 import { DOC_FIXTURE, DOC_FIXTURE_FILES, isFixtureMode } from "./fixture.ts";
 
-const app = new App({
+const standaloneApp = /* @__PURE__ */ new App({
   name: "ERPNext Document Viewer",
   version: "1.0.0",
 });
@@ -97,6 +98,7 @@ interface DocumentContentProps {
 }
 
 export function DocViewer() {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const fixture = isFixtureMode();
   const fixtureEnvelope = fixture ? documentEnvelopeOf(DOC_FIXTURE) : null;
@@ -301,6 +303,7 @@ type DocumentContextBoundaryProps = Omit<
 >;
 
 function DocumentContextBoundary(props: DocumentContextBoundaryProps) {
+  const app = useViewerApp(standaloneApp);
   const rootKey = viewerRootKey(
     "document",
     props.envelope.refreshRequest,
@@ -332,6 +335,7 @@ function DocumentContent({
   onInvalidateRefresh,
   onRefresh,
 }: DocumentContentProps) {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const { ref, layout } = useViewerLayout<HTMLDivElement>();
   const confirm = useConfirm();

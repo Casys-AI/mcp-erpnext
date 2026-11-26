@@ -4,6 +4,7 @@
  * Handshake stays on ext-apps (refresh / callServerTool / sendMessage).
  */
 
+import { useViewerApp } from "~/shared/viewer-app";
 import {
   useCallback,
   useContext,
@@ -141,7 +142,10 @@ import {
   toggleHiddenChartSeries,
 } from "./chart-interactions.ts";
 
-const app = new App({ name: "Chart Viewer", version: "3.0.0" });
+const standaloneApp = /* @__PURE__ */ new App({
+  name: "Chart Viewer",
+  version: "3.0.0",
+});
 
 /**
  * Recharts pose ses polices en props SVG, pas en classes : il lui faut la
@@ -2542,6 +2546,7 @@ function ChartContent(
     onMutationRefresh: () => void;
   },
 ) {
+  const app = useViewerApp(standaloneApp);
   const [shared, setShared] = useState<DrillDownChannel | null>(null);
   const [hiddenSeries, setHiddenSeries] = useState<string[]>([]);
   // Dernier point ou segment activé : la barre de détail agit sur lui.
@@ -3125,6 +3130,7 @@ function ChartContent(
 }
 
 export function ChartViewer() {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const fixture = isFixtureMode();
   const [data, setData] = useState<ChartData | null>(

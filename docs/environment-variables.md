@@ -31,11 +31,11 @@ Always required, regardless of transport (stdio or HTTP).
 
 ---
 
-## MRTR — signed link disambiguation
+## Signed multi-round-trip requests
 
-| Variable               | Type                            | Default | Required | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ---------------------- | ------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MCP_MRTR_SIGNING_KEY` | string (64 lowercase hex chars) | —       | No       | Enables MRTR (Multi-Record Type Resolution). Without it, ambiguous link-field values abort with a list of candidates. With it, the server issues a signed retry token the client can replay to select a candidate; the client must declare `elicitation` support. In multi-instance deployments a shared atomic replay store must be configured — see `docs/concepts.md`. The value must match `/^[0-9a-f]{64}$/`; a key that fails validation causes the server to throw on startup. |
+| Variable               | Type                            | Default                  | Required | Notes                                                                                                                                                                |
+| ---------------------- | ------------------------------- | ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MCP_MRTR_SIGNING_KEY` | string (64 lowercase hex chars) | Ephemeral key on startup | No       | Signs MCP multi-round-trip requests. A configured key must match `/^[0-9a-f]{64}$/`. Beta confirmation tickets and replay state are process-local. Run one instance. |
 
 ---
 

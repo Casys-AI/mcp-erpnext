@@ -17,9 +17,8 @@ const uis = readdirSync(__dirname).filter((entry) => {
   const entryPath = resolve(__dirname, entry);
   if (!statSync(entryPath).isDirectory()) return false;
   if (entry.startsWith(".") || skip.includes(entry)) return false;
-  // Seuls les viewers sont des artefacts publiés : le banc d'essai
-  // (dev-host) et toute page de relecture restent des outils locaux.
-  if (!entry.endsWith("-viewer")) return false;
+  // Publish standalone viewers and the Code Mode shell. Keep development hosts local.
+  if (!entry.endsWith("-viewer") && entry !== "code-mode") return false;
 
   try {
     statSync(resolve(entryPath, "index.html"));

@@ -363,6 +363,7 @@ export const zh: Record<string, string> = {
     "单击或空格键将 {label} 加入或移出上下文 · 双击或回车键打开详情",
   "document.row.close_detail":
     "单击或空格键将 {label} 加入或移出上下文 · 双击或回车键关闭详情",
+  "document.row.open_follow": "打开 {label} 的详情",
   "document.row.open_detail_only": "双击或按回车打开 {label} 的详情",
   "document.row.close_detail_only": "双击或按回车关闭 {label} 的详情",
   "chart.tooltip.click_action_context": "单击：加入/移出上下文 · 双击详情",

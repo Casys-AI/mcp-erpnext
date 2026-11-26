@@ -379,6 +379,7 @@ export const ta: Record<string, string> = {
     "{label} ஐச் சூழலில் சேர்க்க அல்லது நீக்கக் கிளிக் அல்லது ஸ்பேஸ் · விவரத்தைத் திறக்க இரட்டைக் கிளிக் அல்லது என்டர்",
   "document.row.close_detail":
     "{label} ஐச் சூழலில் சேர்க்க அல்லது நீக்கக் கிளிக் அல்லது ஸ்பேஸ் · விவரத்தை மூட இரட்டைக் கிளிக் அல்லது என்டர்",
+  "document.row.open_follow": "{label} விவரங்களைத் திறக்கவும்",
   "document.row.open_detail_only":
     "{label} விவரத்தைத் திறக்க இரட்டைக் கிளிக் செய்க அல்லது என்டர் அழுத்துக",
   "document.row.close_detail_only":

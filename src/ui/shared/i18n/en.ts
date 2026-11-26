@@ -388,6 +388,7 @@ export const en: Record<string, string> = {
     "Click or Space to add or remove {label} from context · double-click or Enter to open its details",
   "document.row.close_detail":
     "Click or Space to add or remove {label} from context · double-click or Enter to close its details",
+  "document.row.open_follow": "Open details for {label}",
   "document.row.open_detail_only":
     "Double-click or press Enter to open details for {label}",
   "document.row.close_detail_only":

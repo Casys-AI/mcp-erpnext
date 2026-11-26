@@ -22,7 +22,8 @@ const ERP_VIEWER_META = "io.casys/viewer";
 const CONFIRM_META = "io.casys/erpnext-write-confirmation";
 const EXECUTION_REFERENCE_META = "io.casys/erpnext-execution-ref";
 const SNIPPET_EVENT_META = "io.casys/erpnext-snippet-event";
-const EXECUTE_VIEW = "ui://mcp-erpnext/code-mode";
+const EXECUTE_VIEW = "ui://mcp-erpnext/code-mode/v2";
+const LEGACY_EXECUTE_VIEW = "ui://mcp-erpnext/code-mode";
 const INVOICE_VIEW = "ui://mcp-erpnext/invoice-viewer";
 const LIST_VIEW = "ui://mcp-erpnext/doclist-viewer";
 const INVOICE_ID = "SINV-SMOKE-0001";
@@ -362,6 +363,16 @@ async function checkApp(client) {
   );
   assert.deepEqual(modelTools.map((tool) => tool.name), ["execute"]);
   assert.equal(modelTools[0]._meta.ui.resourceUri, EXECUTE_VIEW);
+  assert.equal(modelTools[0]._meta["openai/outputTemplate"], EXECUTE_VIEW);
+  const { resources } = result(await client("resources/list"));
+  assert.equal(
+    resources.find(({ uri }) => uri === EXECUTE_VIEW)?.name,
+    "ERPNext",
+  );
+  assert.match(
+    resources.find(({ uri }) => uri === LEGACY_EXECUTE_VIEW)?.name ?? "",
+    /compatibility/i,
+  );
   for (const name of [LIST, GET, UPDATE, CONFIRM]) {
     assert.deepEqual(
       tools.find((tool) => tool.name === name)?._meta?.ui?.visibility,
@@ -394,6 +405,12 @@ async function checkApp(client) {
     assert.equal(contents[0].mimeType, APP_MIME);
     assert.match(contents[0].text, /<html\b/i);
     if (uri === EXECUTE_VIEW) {
+      const { contents: legacy } = result(
+        await client("resources/read", { uri: LEGACY_EXECUTE_VIEW }),
+      );
+      assert.equal(legacy[0].uri, LEGACY_EXECUTE_VIEW);
+      assert.equal(legacy[0].mimeType, APP_MIME);
+      assert.equal(legacy[0].text, contents[0].text);
       // The dark overrides survive pruning even when the default palette disappears.
       const css = contents[0].text.match(/<style\b[^>]*>([\s\S]*?)<\/style>/i)
         ?.[1];

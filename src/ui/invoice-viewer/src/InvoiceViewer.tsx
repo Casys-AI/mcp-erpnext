@@ -11,13 +11,25 @@
  *  - InvoiceViewer : état, connexion, refresh, actions — sans hooks d'UI.
  *  - InvoiceContent : rendu, pile de navigation, boutons — data toujours dispo.
  */
-import { useViewerApp } from "~/shared/viewer-app";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useViewerApp, ViewerInteractionsContext } from "~/shared/viewer-app";
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { ActiveContextChip } from "~/shared/ActiveContextChip";
 import { canShareActiveContextResource } from "~/shared/active-context";
 import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { bindHostContext } from "~/shared/host-context-hook";
+import {
+  type InvoiceDocumentRef,
+  invoiceDocumentRef,
+  matchesInvoiceDocument,
+  SALES_INVOICE_GET,
+} from "~/shared/document-follow";
 import type { DocumentChangeEvent } from "~/shared/document-events";
 import { AttachmentsSection } from "~/shared/document/AttachmentsSection";
 import { documentCapabilities } from "~/shared/document/capabilities";
@@ -76,7 +88,10 @@ import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
 import { canSendTextMessage, sendTextMessage } from "~/shared/host-message";
-import { hasAvailableTool } from "~/shared/viewer-tools";
+import {
+  hasAvailableTool,
+  hasExplicitAvailableTool,
+} from "~/shared/viewer-tools";
 import { StatusBadge } from "./components/StatusBadge";
 import { ItemDetailPanel } from "./components/ItemDetailPanel";
 import {
@@ -86,6 +101,7 @@ import {
 } from "./fixture.ts";
 import {
   canOfferNavigation,
+  invoiceActionScope,
   invoiceMutationActions,
   invoiceRootDocumentChange,
   type InvoiceRootMutation,
@@ -130,6 +146,7 @@ interface InvoiceContentProps {
   actionIsError: boolean;
   rootFreshEvent: number;
   rootMutationEvent: number;
+  focusRevision: number;
   callAction: (
     mutation: InvoiceRootMutation,
     toolName: string,
@@ -150,6 +167,8 @@ interface InvoiceContentProps {
 
 export function InvoiceViewer() {
   const app = useViewerApp(standaloneApp);
+  const subscribeInvoiceFocus = useContext(ViewerInteractionsContext)
+    ?.subscribeInvoiceFocus;
   const t = useT();
   const fixture = isFixtureMode();
   const initialEnvelope = fixture
@@ -164,6 +183,7 @@ export function InvoiceViewer() {
   const [loading, setLoading] = useState(!fixture);
   const [connectFailed, setConnectFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [following, setFollowing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -171,12 +191,21 @@ export function InvoiceViewer() {
   const [mutationCommitted, setMutationCommitted] = useState(false);
   const [rootFreshEvent, setRootFreshEvent] = useState(0);
   const [rootMutationEvent, setRootMutationEvent] = useState(0);
+  const [focusRevision, setFocusRevision] = useState(0);
   const confirm = useConfirm();
 
   /* ── Refs ─────────────────────────────────────────────────────────────── */
 
   const loadingRef = useRef<HTMLDivElement>(null);
+  const followReadRef = useRef<
+    { name: string; request: AbortController } | null
+  >(
+    null,
+  );
   const envelopeRef = useRef<InvoiceDocumentEnvelope | null>(initialEnvelope);
+  const actionScope = useRef(
+    initialEnvelope ? invoiceActionScope(null, initialEnvelope) : null,
+  );
   const refreshRequestRef = useRef<UiRefreshRequestData | null>(
     initialEnvelope?.refreshRequest ?? null,
   );
@@ -201,6 +230,12 @@ export function InvoiceViewer() {
   /* ── Hydratation ──────────────────────────────────────────────────────── */
 
   function hydrateData(nextEnvelope: InvoiceDocumentEnvelope) {
+    const scope = invoiceActionScope(actionScope.current, nextEnvelope);
+    if (scope !== actionScope.current) {
+      actionScope.current = scope;
+      setActionMessage(null);
+      setActionIsError(false);
+    }
     envelopeRef.current = nextEnvelope;
     setEnvelope(nextEnvelope);
     canonicalRefreshBlockedRef.current = false;
@@ -211,7 +246,10 @@ export function InvoiceViewer() {
     setRootFreshEvent(++rootEventRef.current);
   }
 
-  function consumeToolResult(result: ToolResultPayload): boolean {
+  function consumeToolResult(
+    result: ToolResultPayload,
+    expected?: InvoiceDocumentRef,
+  ): boolean {
     if (result.isError) {
       const text = extractToolResultText(result);
       setError(text ?? t("invoice.error.tool_error"));
@@ -219,18 +257,21 @@ export function InvoiceViewer() {
       return false;
     }
     const text = extractToolResultText(result);
-    if (!text) return false;
+    if (!text && !expected) return false;
     try {
+      if (!text) throw new Error("Empty invoice response");
       const parsed = JSON.parse(text) as InvoicePayload;
       const parsedEnvelope = invoiceDocumentEnvelope(parsed);
-      if (!parsedEnvelope) {
+      if (
+        !parsedEnvelope ||
+        (expected && !matchesInvoiceDocument(parsed, expected))
+      ) {
         throw new Error("Missing explicit document identity");
       }
       availableToolsRef.current = parsedEnvelope.availableTools;
-      const refreshRequest = resolveUiRefreshRequest(
-        parsed,
-        refreshRequestRef.current,
-      );
+      const refreshRequest = expected
+        ? { toolName: SALES_INVOICE_GET, arguments: { name: expected.name } }
+        : resolveUiRefreshRequest(parsed, refreshRequestRef.current);
       refreshRequestRef.current = refreshRequest;
       hydrateData({
         ...parsedEnvelope,
@@ -251,7 +292,11 @@ export function InvoiceViewer() {
   async function requestRefresh(
     options: { ignoreInterval?: boolean; force?: boolean } = {},
   ): Promise<boolean> {
-    if (fixture || canonicalRefreshBlockedRef.current) return false;
+    if (
+      fixture || canonicalRefreshBlockedRef.current || followReadRef.current
+    ) {
+      return false;
+    }
 
     const current = refreshSequenceRef.current;
     if (options.force) {
@@ -282,7 +327,7 @@ export function InvoiceViewer() {
           const forced = sequence.pendingForced;
 
           if (
-            !request ||
+            !request || followReadRef.current ||
             !app.getHostCapabilities()?.serverTools ||
             !hasAvailableTool(availableToolsRef.current, request.toolName) ||
             !canRequestUiRefresh({
@@ -374,9 +419,12 @@ export function InvoiceViewer() {
     target: { doctype: string; name: string },
     onDocumentChanged: (event: DocumentChangeEvent) => void,
   ) {
+    const scope = actionScope.current;
     if (
+      !scope || scope.doctype !== target.doctype ||
+      scope.name !== target.name ||
       fixture ||
-      actionInFlightRef.current ||
+      actionInFlightRef.current || followReadRef.current ||
       mutationCommittedRef.current ||
       !mountedRef.current ||
       !app.getHostCapabilities()?.serverTools ||
@@ -386,11 +434,8 @@ export function InvoiceViewer() {
     setActionLoading(mutation);
     setActionMessage(null);
     setActionIsError(false);
-    const targetIsCurrent = () => {
-      const current = envelopeRef.current;
-      return mountedRef.current && current?.doctype === target.doctype &&
-        current.name === target.name;
-    };
+    const targetIsCurrent = () =>
+      mountedRef.current && actionScope.current === scope;
     try {
       let result: ToolResultPayload;
       try {
@@ -501,7 +546,16 @@ export function InvoiceViewer() {
       }
     } finally {
       actionInFlightRef.current = false;
-      if (mountedRef.current) setActionLoading(null);
+      if (mountedRef.current) {
+        setActionLoading(null);
+        const current = actionScope.current;
+        // Reopening the same invoice while a write was pending may have read
+        // it before the write completed. Refresh the reopened invoice only.
+        if (
+          current !== scope && current?.doctype === target.doctype &&
+          current.name === target.name && !followReadRef.current
+        ) void requestRefresh({ force: true });
+      }
     }
   }
 
@@ -511,11 +565,13 @@ export function InvoiceViewer() {
    */
   async function navigate(key: string, message: string) {
     if (fixture) return false;
+    const scope = actionScope.current;
     setActionLoading(key);
     setActionMessage(null);
     setActionIsError(false);
     const sent = await sendTextMessage(app, message);
-    if (!sent) {
+    if (!mountedRef.current) return sent;
+    if (!sent && actionScope.current === scope) {
       setActionIsError(true);
       setActionMessage(t("invoice.error.action_failed"));
     }
@@ -528,6 +584,11 @@ export function InvoiceViewer() {
   useEffect(() => {
     if (fixture) return;
     app.ontoolresult = (result: ToolResultPayload) => {
+      if (followReadRef.current) {
+        followReadRef.current.request.abort();
+        followReadRef.current = null;
+        setFollowing(false);
+      }
       invalidateRefresh();
       consumeToolResult(result);
     };
@@ -538,6 +599,60 @@ export function InvoiceViewer() {
       setConnectFailed(true)
     );
   }, [fixture]);
+
+  useEffect(() => {
+    if (fixture || !subscribeInvoiceFocus) return;
+    const unsubscribe = subscribeInvoiceFocus((requested) => {
+      const target = invoiceDocumentRef(requested.doctype, requested.name);
+      const current = envelopeRef.current;
+      if (
+        !target || current?.doctype !== target.doctype ||
+        !app.getHostCapabilities()?.serverTools ||
+        !hasExplicitAvailableTool(availableToolsRef.current, SALES_INVOICE_GET)
+      ) return;
+      const previous = followReadRef.current;
+      if (previous?.name === target.name) return;
+      previous?.request.abort();
+      followReadRef.current = null;
+      if (current.name === target.name) {
+        if (previous) setFollowing(false);
+        confirm.dismiss();
+        setFocusRevision((revision) => revision + 1);
+        return;
+      }
+
+      const request = new AbortController();
+      followReadRef.current = { name: target.name, request };
+      invalidateRefresh();
+      confirm.dismiss();
+      setActionMessage(null);
+      setActionIsError(false);
+      setFollowing(true);
+      void (async () => {
+        try {
+          const result = await app.callServerTool(
+            { name: SALES_INVOICE_GET, arguments: { name: target.name } },
+            { timeout: TOOL_CALL_TIMEOUT_MS, signal: request.signal },
+          );
+          if (!request.signal.aborted) consumeToolResult(result, target);
+        } catch (cause) {
+          if (!request.signal.aborted) {
+            setError(normalizeUiRefreshFailureMessage(cause));
+          }
+        } finally {
+          if (!request.signal.aborted) {
+            followReadRef.current = null;
+            setFollowing(false);
+          }
+        }
+      })();
+    });
+    return () => {
+      unsubscribe();
+      followReadRef.current?.request.abort();
+      followReadRef.current = null;
+    };
+  }, [app, fixture, subscribeInvoiceFocus, t]);
 
   useEffect(() => {
     if (fixture) return;
@@ -583,7 +698,7 @@ export function InvoiceViewer() {
       envelope={envelope}
       mutationCommitted={mutationCommitted}
       error={error}
-      refreshing={refreshing}
+      refreshing={refreshing || following}
       fixture={fixture}
       confirm={confirm}
       actionLoading={actionLoading}
@@ -591,6 +706,7 @@ export function InvoiceViewer() {
       actionIsError={actionIsError}
       rootFreshEvent={rootFreshEvent}
       rootMutationEvent={rootMutationEvent}
+      focusRevision={focusRevision}
       callAction={callAction}
       onBeginCanonicalReadback={beginCanonicalReadback}
       onCanonicalRefresh={requestCanonicalRefresh}
@@ -622,7 +738,11 @@ function InvoiceContextBoundary(props: InvoiceContextBoundaryProps) {
   return (
     <InvoiceContent
       {...props}
-      key={`${props.data.doctype}:${props.data.name}`}
+      key={JSON.stringify([
+        props.data.doctype,
+        props.data.name,
+        props.focusRevision,
+      ])}
       rootKey={rootKey}
       activeContext={activeContext}
     />

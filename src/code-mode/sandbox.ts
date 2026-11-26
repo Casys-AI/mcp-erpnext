@@ -18,10 +18,20 @@ export interface SelectedErpResult<T> {
   readonly name: string;
   readonly title: string;
 }
+export interface SelectedErpSync<T> {
+  readonly from: SelectedErpResult<T>;
+  readonly event: string;
+  readonly to: SelectedErpResult<T>;
+  readonly action: string;
+}
 type ProgramResult<T> =
   | { native: T }
   | { value: unknown }
-  | { panels: SelectedErpResult<T>[]; value: unknown };
+  | {
+    panels: SelectedErpResult<T>[];
+    sync: SelectedErpSync<T>[];
+    value: unknown;
+  };
 
 let engine: ReturnType<typeof newQuickJSWASMModuleFromVariant> | undefined;
 
@@ -108,6 +118,7 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
     let calls = 0;
     const captured = new Map<QuickJSHandle, { native: T; name: string }>();
     const selected = new Map<QuickJSHandle, SelectedErpResult<T>>();
+    const routes: SelectedErpSync<T>[] = [];
     function original(value: QuickJSHandle) {
       for (const entry of captured) {
         if (vm.eq(value, entry[0])) return entry;
@@ -227,11 +238,73 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
       selected.set(handle, { ...metadata, title });
       return vm.undefined;
     }));
+    const syncPorts = keep(vm.newFunction(
+      "syncPorts",
+      (source, eventName, target, actionName) => {
+        const sourceReceipt = original(source);
+        const targetReceipt = original(target);
+        const from = sourceReceipt && selected.get(sourceReceipt[0]);
+        const to = targetReceipt && selected.get(targetReceipt[0]);
+        if (!from || !to || from.native === to.native) {
+          throw new Error(
+            "Select two distinct original results with erp.panel before calling erp.sync.",
+          );
+        }
+        if (
+          vm.typeof(eventName) !== "string" ||
+          vm.typeof(actionName) !== "string"
+        ) {
+          throw new Error("Supply an event and action as strings.");
+        }
+        const event = vm.getString(eventName);
+        const action = vm.getString(actionName);
+        if (!event || !action || event.length > 120 || action.length > 120) {
+          throw new Error(
+            "Supply event and action names of 1 to 120 characters.",
+          );
+        }
+        if (
+          routes.some((route) =>
+            route.from.native === from.native && route.event === event &&
+            route.to.native === to.native && route.action === action
+          )
+        ) return vm.undefined;
+        if (routes.length >= MAX_CALLS * (MAX_CALLS - 1)) {
+          throw new Error("Too many ERP synchronization routes.");
+        }
+        routes.push({ from, event, to, action });
+        return vm.undefined;
+      },
+    ));
+    // Keep the bridge private and hand the server actual guest object handles.
+    const makeSync = keep(vm.unwrapResult(vm.evalCode(`(() => {
+      const keys = Reflect.ownKeys;
+      return link => function sync(options) {
+        if (arguments.length !== 1 || !options || typeof options !== "object") {
+          throw new Error("Use erp.sync({from, event, to, action}).");
+        }
+        const fields = keys(options);
+        if (fields.length !== 4) {
+          throw new Error("Use erp.sync({from, event, to, action}).");
+        }
+        for (let i = 0; i < fields.length; i++) {
+          const field = fields[i];
+          if (field !== "from" && field !== "event" && field !== "to" && field !== "action") {
+            throw new Error("Use erp.sync({from, event, to, action}).");
+          }
+        }
+        return link(options.from, options.event, options.to, options.action);
+      };
+    })()`)));
+    const sync = keep(
+      vm.unwrapResult(vm.callFunction(makeSync, vm.undefined, syncPorts)),
+    );
     const erp = keep(vm.newObject());
     vm.setProp(erp, "catalog", intoGuest(catalog));
     vm.setProp(erp, "params", intoGuest(params));
     vm.setProp(erp, "call", callFunction);
     vm.setProp(erp, "panel", panel);
+    vm.setProp(erp, "sync", sync);
     vm.setProp(erp, "callWithInput", withInput);
     vm.setProp(vm.global, "erp", erp);
 
@@ -248,6 +321,7 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
         if (selected.size) {
           return {
             panels: [...selected.values()],
+            sync: routes,
             value: vm.typeof(value) === "undefined" ? null : fromGuest(value),
           };
         }

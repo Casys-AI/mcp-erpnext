@@ -14,11 +14,19 @@ import {
   SnippetCatalogError,
   type SnippetParameterType,
 } from "@mcpview/server/snippets";
+import {
+  INVOICE_FOLLOW_PORTS,
+  invoiceDocumentRef,
+  invoiceSelectionRef,
+  SALES_INVOICE_DOCTYPE,
+  SALES_INVOICE_GET,
+} from "./document-follow.ts";
 import { runCodeProgram, SuspendCodeMode } from "./sandbox.ts";
 
 type Arguments = Record<string, unknown>;
 // Compose's public MCP App-only result envelope. The backend does not render panels.
 const SNIPPET_PANELS_META_KEY = "io.mcpview/snippet-panels";
+const SNIPPET_SYNC_META_KEY = "io.mcpview/snippet-sync";
 const MAX_PANEL_BYTES = 6 * 1024 * 1024;
 const EXECUTION_REFERENCE_META = "io.casys/erpnext-execution-ref";
 const SNIPPET_EVENT_META = "io.casys/erpnext-snippet-event";
@@ -109,6 +117,37 @@ function isNativeResult(
     "content" in value && Array.isArray(value.content);
 }
 
+function isRecord(value: unknown): value is Arguments {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const invoiceListTools = ["erpnext_sales_invoice_list", "erpnext_doc_list"];
+const { source: invoiceListPort, target: invoiceDetailPort } =
+  INVOICE_FOLLOW_PORTS;
+
+function invoicePorts(
+  name: string,
+  resourceUri: string | undefined,
+  content: unknown,
+): { emits?: string[]; accepts?: string[] } | undefined {
+  if (!isRecord(content)) return;
+  if (
+    resourceUri === invoiceListPort.resourceUri &&
+    invoiceListTools.includes(name) &&
+    content.doctype === SALES_INVOICE_DOCTYPE &&
+    Array.isArray(content.data) &&
+    content.data.every((row) =>
+      isRecord(row) && invoiceSelectionRef(content.doctype, row) !== null
+    )
+  ) return { emits: [invoiceListPort.event] };
+  if (
+    resourceUri === invoiceDetailPort.resourceUri &&
+    name === SALES_INVOICE_GET &&
+    isRecord(content.data) &&
+    invoiceDocumentRef(content.data.doctype, content.data.name)
+  ) return { accepts: [invoiceDetailPort.action] };
+}
+
 /** Wrap this server's selected operations in its single model-visible tool. */
 export function createCodeModeExecute(options: CodeModeExecuteOptions): {
   tool: MCPTool;
@@ -123,6 +162,18 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
   );
   const mountableResourceUris = [...options.mountableResourceUris];
   const sessionResources = [...options.sessionResources ?? []];
+  const declaresView = (name: string, uri: string) =>
+    mountableResourceUris.includes(uri) &&
+    operations.some((operation) =>
+      operation.name === name && operation._meta?.ui?.resourceUri === uri
+    );
+  const linkedLists = invoiceListTools.filter((name) =>
+    declaresView(name, invoiceListPort.resourceUri)
+  ).map((name) =>
+    name === "erpnext_doc_list"
+      ? `${name} with doctype "${SALES_INVOICE_DOCTYPE}" and the name field`
+      : name
+  );
   const tool: MCPTool = {
     name: "execute",
     description: [
@@ -132,6 +183,14 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       "For attachment bytes or large arguments, pass the complete operation argument object as execute.input and use await erp.callWithInput(name). The input stays on the server.",
       "Return an original response to display its declared view, or return any computed JSON value.",
       "To display several business views together, call erp.panel(originalResponse, optionalTitle) for each in the desired order, then return a short JSON summary. Only original responses with declared business views may be selected.",
+      ...(linkedLists.length &&
+          declaresView(SALES_INVOICE_GET, invoiceDetailPort.resourceUri)
+        ? [
+          `To make an invoice detail follow selections in a list of Sales Invoices, use ${
+            linkedLists.join(" or ")
+          } to obtain the list and ${SALES_INVOICE_GET} for the initial detail. Select both original results with erp.panel(rows) and erp.panel(invoice), then call erp.sync({from: rows, event: "${invoiceListPort.event}", to: invoice, action: "${invoiceDetailPort.action}"}). Use a real invoice name for the initial detail. Declare this route only when the user requests linked views.`,
+        ]
+        : []),
       "Use execute.params for JSON parameters readable as erp.params.",
       ...(options.snippets
         ? [
@@ -334,28 +393,31 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
         externalInput,
         parameters,
       );
-      function resolveResult(reference: string, requireView = false) {
+      function resolveResult(reference: string) {
         const selected = execution.resolve(reference);
         if (!selected) {
           throw new Error("Unknown result from this ERPNext execution.");
         }
-        if (requireView && !selected.resourceUri) {
-          throw new Error(
-            "The selected ERP operation has no compatible declared view.",
-          );
-        }
-        return selected.resourceUri
-          ? withDeclaredViewUri(
-            selected.result,
-            selected.resourceUri,
-            selected.session,
-          )
-          : selected.result;
+        return {
+          resourceUri: selected.resourceUri,
+          result: selected.resourceUri
+            ? withDeclaredViewUri(
+              selected.result,
+              selected.resourceUri,
+              selected.session,
+            )
+            : selected.result,
+        };
       }
       if ("panels" in output) {
         let nativeBytes = 0;
         const panels = output.panels.map(({ native, name, title }) => {
-          const result = resolveResult(native.reference, true);
+          const { result, resourceUri } = resolveResult(native.reference);
+          if (!resourceUri) {
+            throw new Error(
+              "The selected ERP operation has no compatible declared view.",
+            );
+          }
           const serialized = JSON.stringify(result);
           if (
             serialized.length > MAX_PANEL_BYTES ||
@@ -366,25 +428,55 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
               "Selected ERP results exceed the board size limit.",
             );
           }
+          const events = invoicePorts(
+            name,
+            resourceUri,
+            result.structuredContent,
+          );
           return {
             id: native.reference,
             provider: "erpnext",
             name,
             title,
             result,
+            ...(events && { events }),
           };
+        });
+        const panelsById = new Map(panels.map((panel) => [panel.id, panel]));
+        const routes = output.sync.map(({ from, event, to, action }) => {
+          const source = panelsById.get(from.native.reference);
+          const target = panelsById.get(to.native.reference);
+          if (
+            !source?.events?.emits?.includes(event) ||
+            !target?.events?.accepts?.includes(action)
+          ) {
+            throw new Error(
+              "Unsupported ERP synchronization. Link invoice.selected from a Sales Invoice list to invoice.focus on a Sales Invoice detail.",
+            );
+          }
+          return { from: source.id, event, to: target.id, action };
         });
         const visible = {
           value: output.value,
-          panels: panels.map(({ result: _result, ...panel }) => panel),
+          panels: panels.map(({ id, provider, name, title }) => ({
+            id,
+            provider,
+            name,
+            title,
+          })),
         };
         return {
           structuredContent: visible,
           content: [{ type: "text", text: JSON.stringify(visible) }],
-          _meta: { [SNIPPET_PANELS_META_KEY]: panels },
+          _meta: {
+            [SNIPPET_PANELS_META_KEY]: panels,
+            ...(routes.length && { [SNIPPET_SYNC_META_KEY]: routes }),
+          },
         };
       }
-      if ("native" in output) return resolveResult(output.native.reference);
+      if ("native" in output) {
+        return resolveResult(output.native.reference).result;
+      }
       return dataResult(output.value);
     }
 

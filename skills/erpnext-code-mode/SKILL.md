@@ -58,6 +58,25 @@ erp.panel(invoice, "Invoice details");
 return { invoice: erp.params.invoice };
 ```
 
+If the user wants the invoice detail to follow selections in the list, add this
+line after both `erp.panel` calls and before the return:
+
+```js
+erp.sync({
+  from: rows,
+  event: "invoice.selected",
+  to: invoice,
+  action: "invoice.focus",
+});
+```
+
+The source is a Sales Invoice list from `erpnext_sales_invoice_list` or
+`erpnext_doc_list` with `doctype: "Sales Invoice"` and the `name` field. The
+target is an original result from `erpnext_sales_invoice_get`. Use the exact
+requested invoice as the initial detail, or the first row when the user asks to
+start with the first invoice. The list's invoice selection updates that detail
+panel. Show just the list if there is no invoice to open.
+
 When reporting totals, prefer the corresponding ERP aggregate. A page of rows
 may be only part of the result. Check currencies before adding amounts and use
 the currency returned by the operation.

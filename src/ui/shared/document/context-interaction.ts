@@ -16,6 +16,8 @@ import type {
   ClickIntentSingleResult,
 } from "../click-intent.ts";
 
+import { detailOnClickIntent } from "../click-intent.ts";
+
 export interface DocumentContextController {
   supported: boolean;
   pending: boolean;
@@ -73,6 +75,7 @@ export interface ContextInteractionTarget {
   /** Action exclusive du double-clic / de la touche Entree. */
   onDoubleActivate?: () => void;
   doublePolicy?: ClickIntent["doublePolicy"];
+  clickAction?: "detail";
   onActivate: () => ClickIntentSingleResult;
 }
 
@@ -113,18 +116,23 @@ export function contextInteractionProps(
   intent?: ContextInteractionIntent,
 ): ContextInteractionProps | Record<string, never> {
   if (!target) return {};
-  const clickIntent = intent && target.onDoubleActivate
-    ? {
+  const detailOnly = target.clickAction === "detail";
+  let clickIntent: ClickIntent | null = null;
+  if (intent && detailOnly) {
+    clickIntent = detailOnClickIntent(intent.key, target.onActivate);
+  } else if (intent && target.onDoubleActivate) {
+    clickIntent = {
       key: intent.key,
       onSingle: target.onActivate,
       onDouble: target.onDoubleActivate,
       doublePolicy: target.doublePolicy,
-    }
-    : null;
+    };
+  }
+  const action = clickIntent;
   return {
     role: "button" as const,
     tabIndex: 0,
-    ...(target.selected !== undefined
+    ...(!detailOnly && target.selected !== undefined
       ? { "aria-pressed": target.selected }
       : {}),
     ...(target.expanded !== undefined
@@ -133,20 +141,20 @@ export function contextInteractionProps(
     ...(target.controls ? { "aria-controls": target.controls } : {}),
     // Espace reste l'activation primaire de la donnee. Seule Entree est une
     // voie clavier supplementaire vers le detail et merite d'etre annoncee.
-    ...(clickIntent ? { "aria-keyshortcuts": "Enter" } : {}),
+    ...(action && !detailOnly ? { "aria-keyshortcuts": "Enter" } : {}),
     "aria-label": target.label,
     title: target.label,
-    onClick: clickIntent
-      ? (event) => intent!.arbiter.click(clickIntent, event?.detail ?? 1)
+    onClick: action
+      ? (event) => intent!.arbiter.click(action, event?.detail ?? 1)
       : () => target.onActivate(),
-    ...(clickIntent && target.onDoubleActivate
+    ...(action && target.onDoubleActivate
       ? {
-        onDblClick: () => intent!.arbiter.doubleClick(clickIntent),
+        onDblClick: () => intent!.arbiter.doubleClick(action),
       }
       : {}),
     onKeyDown: (event: ClickIntentKeyEvent) => {
-      if (clickIntent) {
-        intent!.arbiter.keyDown(clickIntent, event);
+      if (action) {
+        intent!.arbiter.keyDown(action, event);
         return;
       }
       if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;

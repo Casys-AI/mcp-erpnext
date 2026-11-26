@@ -7,6 +7,7 @@ import { assertEquals, assertStringIncludes } from "@std/assert";
 import { setLangSource } from "../../shared/i18n.ts";
 import {
   canOfferNavigation,
+  invoiceActionScope,
   invoiceMutationActions,
   invoiceRootDocumentChange,
   invoiceRootNavigationActions,
@@ -604,10 +605,28 @@ Deno.test("invoice root : contexte persistant, contenu et gestes remountés", as
   );
   assertStringIncludes(
     source,
-    "key={`${props.data.doctype}:${props.data.name}`}",
+    "key={JSON.stringify([\n        props.data.doctype,\n        props.data.name,\n        props.focusRevision,",
   );
   assertEquals(
     [...source.matchAll(/useActiveContext\(app, rootKey\)/g)].length,
     1,
+  );
+});
+
+Deno.test("invoice action callbacks keep their scope across refresh and expire across a document change", () => {
+  const first = { doctype: "Sales Invoice", name: "SINV-1" };
+  const second = { doctype: "Sales Invoice", name: "SINV-2" };
+  const pendingActionScope = invoiceActionScope(null, first);
+
+  assertEquals(
+    invoiceActionScope(pendingActionScope, { ...first }) === pendingActionScope,
+    true,
+  );
+
+  const secondScope = invoiceActionScope(pendingActionScope, second);
+  assertEquals(secondScope === pendingActionScope, false);
+  assertEquals(
+    invoiceActionScope(secondScope, first) === pendingActionScope,
+    false,
   );
 });

@@ -3,7 +3,13 @@ import {
   readSnippetPanels,
   type SnippetPanel as SelectedPanel,
 } from "@mcpview/compose/code-mode/board";
+import {
+  createInvoicePanelInteractions,
+  invoiceViewPorts,
+} from "./invoice-panels.ts";
+import type { ViewerInteractions } from "../shared/document-follow.ts";
 import { readDeclaredViewSelection } from "@mcpview/contracts";
+import { CODE_MODE_RESOURCE_URI } from "../../code-mode/resource-uri.ts";
 import { createPanelContexts } from "./panel-hosts.ts";
 import { installMcpViewTheme } from "@mcpview/components";
 import {
@@ -34,6 +40,7 @@ const sessions = import.meta.glob<DeclaredSessionViewModule<App>>(
 );
 
 type View = DeclaredViewModule<App> | DeclaredSessionViewModule<App>;
+const viewerInteractions = new WeakMap<App, ViewerInteractions>();
 const loaders = new Map<string, () => Promise<View>>();
 for (const name of UI_VIEWERS) {
   const directory = `../${name}/src/`;
@@ -51,7 +58,13 @@ for (const name of UI_VIEWERS) {
     if (!exports[componentName]) {
       throw new Error(`Missing ${componentName} export in ${path}`);
     }
-    return Promise.resolve(mountComponent(exports[componentName], approval));
+    return Promise.resolve(
+      mountComponent(
+        exports[componentName],
+        approval,
+        (app) => viewerInteractions.get(app),
+      ),
+    );
   };
   loaders.set(`ui://mcp-erpnext/${name}`, load);
 }
@@ -116,13 +129,16 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
   if (signal.aborted) return;
   const board = composeSnippetBoard(result, {
     layout: "grid",
-    resolveView: (panel) => ({
-      resourceUri: readDeclaredViewSelection(panel.result)?.resourceUri ??
-        "ui://mcp-erpnext/code-mode",
-    }),
+    resolveView: (panel) => {
+      const resourceUri =
+        readDeclaredViewSelection(panel.result)?.resourceUri ??
+          CODE_MODE_RESOURCE_URI;
+      return { resourceUri, events: invoiceViewPorts(resourceUri) };
+    },
   });
   boardLifetime = new AbortController();
   const panelSignal = AbortSignal.any([signal, boardLifetime.signal]);
+  const interactions = createInvoicePanelInteractions(board, panelSignal);
   const grid = document.createElement("div");
   grid.className = "code-mode-board";
   viewRoot.hidden = false;
@@ -153,6 +169,8 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
         return typeof value === "function" ? value.bind(target) : value;
       },
     });
+    const interaction = interactions(child.slot, panel.id);
+    if (interaction) viewerInteractions.set(panelHost, interaction);
     const mounted = createDeclaredViewDispatcher({
       root: body,
       host: panelHost,

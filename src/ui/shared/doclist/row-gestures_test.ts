@@ -237,3 +237,26 @@ Deno.test("doclist row - Ctrl choisit une nouvelle ancre puis Shift suit le tri 
   assertEquals(anchor, "A");
   assertEquals(selected, [["A"], ["A", "C"]]);
 });
+
+Deno.test("a linked row opens its detail once and preserves modified selection", () => {
+  const { arbiter, effects } = setup();
+  const base = contextInteractionProps({
+    clickAction: "detail",
+    label: "Invoice A",
+    onActivate: () => {
+      effects.push("focus");
+    },
+  }, { arbiter, key: "A" });
+  const props = doclistRowEvents(base, {
+    onToggle: (shiftKey) => effects.push(shiftKey ? "range" : "toggle"),
+    arbiter,
+    platform: "Win32",
+  });
+  props.onClick(event());
+  props.onClick(event({ detail: 2 }));
+  props.onDblClick(event({ detail: 2 }));
+  props.onClick(event({ shiftKey: true }));
+  props.onClick(event({ ctrlKey: true }));
+  base.onKeyDown({ key: "Enter", preventDefault() {} });
+  assertEquals(effects, ["focus", "range", "toggle", "focus"]);
+});

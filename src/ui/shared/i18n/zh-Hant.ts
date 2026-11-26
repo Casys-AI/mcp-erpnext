@@ -362,6 +362,7 @@ export const zhHant: Record<string, string> = {
     "點選或按空白鍵將 {label} 加入上下文或自其中移除 · 連按兩下或按 Enter 鍵開啟其明細",
   "document.row.close_detail":
     "點選或按空白鍵將 {label} 加入上下文或自其中移除 · 連按兩下或按 Enter 鍵關閉其明細",
+  "document.row.open_follow": "開啟 {label} 的詳細資料",
   "document.row.open_detail_only": "連按兩下或按 Enter 鍵開啟 {label} 的明細",
   "document.row.close_detail_only": "連按兩下或按 Enter 鍵關閉 {label} 的明細",
   "chart.tooltip.click_action_context":

@@ -370,6 +370,7 @@ export const bn: Record<string, string> = {
     "{label} প্রসঙ্গে যোগ বা সরাতে ক্লিক বা স্পেস চাপুন · বিবরণ খুলতে ডাবল-ক্লিক বা এন্টার চাপুন",
   "document.row.close_detail":
     "{label} প্রসঙ্গে যোগ বা সরাতে ক্লিক বা স্পেস চাপুন · বিবরণ বন্ধ করতে ডাবল-ক্লিক বা এন্টার চাপুন",
+  "document.row.open_follow": "{label}-এর বিবরণ খুলুন",
   "document.row.open_detail_only":
     "{label}-এর বিবরণ খুলতে ডাবল-ক্লিক করুন বা এন্টার চাপুন",
   "document.row.close_detail_only":

@@ -6,6 +6,12 @@
 
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import {
+  type InvoiceDocumentRef,
+  invoiceSelectionRef,
+  SALES_INVOICE_DOCTYPE,
+  SALES_INVOICE_GET,
+} from "../document-follow.ts";
 import type { DocumentChangeEvent } from "../document-events.ts";
 import type { DocumentEnvelope } from "../document/types.ts";
 import type {
@@ -77,6 +83,7 @@ export function DoclistBody(
     context,
     contextView,
     contextKey,
+    onInvoiceSelected,
   }: {
     app: App;
     data: DoclistData;
@@ -105,6 +112,7 @@ export function DoclistBody(
     contextView?: string;
     /** Identité stable du niveau, distincte de son titre visible. */
     contextKey?: string;
+    onInvoiceSelected?: (document: InvoiceDocumentRef) => void;
   },
 ) {
   const t = useT();
@@ -145,7 +153,12 @@ export function DoclistBody(
     };
   }, []);
   const hasLocalDetail = fixture && rows.some((row) => row._detail != null);
-  const isInspectable = !!rowAction || hasLocalDetail;
+  const following = Boolean(
+    onInvoiceSelected && !fixture && serverTools &&
+      data.doctype === SALES_INVOICE_DOCTYPE &&
+      hasExplicitAvailableTool(data._availableTools, SALES_INVOICE_GET),
+  );
+  const isInspectable = !following && (!!rowAction || hasLocalDetail);
   const listContextView = contextView ?? data._title ?? data.doctype ??
     "Document";
   const listContextKey = contextKey ?? listContextView;
@@ -285,7 +298,7 @@ export function DoclistBody(
 
   // La ligne active vit dans la pile ; son détail chargé reste local.
   useEffect(() => {
-    if (expandedId === null) {
+    if (following || expandedId === null) {
       // Fermer coupe la réponse en vol : elle n'aura plus de ligne où aller.
       pendingRowIdRef.current = null;
       setExpanded({ id: null, data: null, loading: false });
@@ -380,6 +393,7 @@ export function DoclistBody(
     })();
   }, [
     expandedId,
+    following,
     // Pas `pageRows` : c'est un `.slice` neuf à chaque render, et
     // `setExpanded(null)` relancerait l'effet en boucle. `rows` change
     // au rafraîchissement, c'est le signal qui nous concerne.
@@ -418,6 +432,16 @@ export function DoclistBody(
   ): ContextInteractionTarget | undefined {
     const rowId = resolveRowId(row, rowAction, String(rowIndex));
     const item = contextItemForRow(row, rowIndex);
+    const invoice = following ? invoiceSelectionRef(data.doctype, row) : null;
+    if (invoice) {
+      const label = item?.label ?? invoice.name;
+      return {
+        label: t("document.row.open_follow", { label }),
+        clickAction: "detail",
+        selected: item ? context?.isSelected(item) ?? false : undefined,
+        onActivate: () => onInvoiceSelected?.(invoice),
+      };
+    }
     if (!item && !isInspectable) return undefined;
     const label = item?.label ?? rowId;
     const selected = item ? context?.isSelected(item) ?? false : undefined;
@@ -599,7 +623,7 @@ export function DoclistBody(
     }
   }
 
-  const inspecting = expandedId !== null;
+  const inspecting = !following && expandedId !== null;
   const inlineDetail = inspecting
     ? (
       <div id={doclistDetailPanelId(expandedId)}>
@@ -670,7 +694,7 @@ export function DoclistBody(
             columns={list.tableColumns}
             rows={list.pageRows}
             rowId={(row, index) => resolveRowId(row, rowAction, String(index))}
-            selectedId={expandedId}
+            selectedId={following ? null : expandedId}
             struckId={stale?.subject ?? null}
             sortKey={list.sortKey}
             sortDir={list.sortDir}

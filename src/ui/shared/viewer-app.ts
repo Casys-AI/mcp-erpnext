@@ -2,6 +2,12 @@ import type { App } from "@modelcontextprotocol/ext-apps";
 import { createContext } from "preact";
 import { useContext } from "preact/hooks";
 
+import type { ViewerInteractions } from "./document-follow.ts";
+
+export const ViewerInteractionsContext = createContext<
+  ViewerInteractions | undefined
+>(undefined);
+
 export const ViewerAppContext = createContext<App | undefined>(undefined);
 
 /** Standalone viewers connect themselves. A declared view shares its shell's connection. */

@@ -473,6 +473,142 @@ Deno.test("panel rejects computed lookalikes and results without a declared view
   );
 });
 
+function invoiceBoard({
+  listEnabled = true,
+  detailEnabled = true,
+  mountsDetail = true,
+} = {}) {
+  const listUri = "ui://mcp-erpnext/doclist-viewer";
+  const detailUri = "ui://mcp-erpnext/invoice-viewer";
+  const listTool = {
+    ...list,
+    name: "erpnext_doc_list",
+    _meta: { ui: { resourceUri: listUri } },
+  };
+  const invoiceTool = {
+    ...get,
+    name: "erpnext_sales_invoice_get",
+    _meta: { ui: { resourceUri: detailUri } },
+  };
+  return createCodeModeExecute({
+    tools: [
+      ...(listEnabled ? [listTool] : []),
+      ...(detailEnabled ? [invoiceTool] : []),
+    ],
+    mountableResourceUris: [listUri, ...(mountsDetail ? [detailUri] : [])],
+    call: async (name, args) => ({
+      content: [],
+      structuredContent: name === listTool.name
+        ? {
+          doctype: args.doctype,
+          data: args.includeName ? [{ name: "SINV-2" }] : [{ customer: "A" }],
+        }
+        : { data: { doctype: "Sales Invoice", name: "SINV-1" } },
+    }),
+  });
+}
+
+Deno.test("execute advertises synchronization only for enabled operations and mountable views", () => {
+  const description = invoiceBoard().tool.description;
+  assert(description.includes("erp.sync"));
+  assert(description.includes("erpnext_doc_list"));
+  assert(!description.includes("erpnext_sales_invoice_list"));
+  for (
+    const options of [
+      { listEnabled: false },
+      { detailEnabled: false },
+      { mountsDetail: false },
+    ]
+  ) {
+    assert(!invoiceBoard(options).tool.description.includes("erp.sync"));
+  }
+});
+
+const invoicePanels = `
+  const rows = await erp.call("erpnext_doc_list", {doctype: "Sales Invoice", includeName: true});
+  const invoice = await erp.call("erpnext_sales_invoice_get", {name: "SINV-1"});
+  erp.panel(rows); erp.panel(invoice);
+`;
+const invoiceSync =
+  'erp.sync({from: rows, event: "invoice.selected", to: invoice, action: "invoice.focus"});';
+
+Deno.test("explicit synchronization uses panel receipt IDs and exposes ports only to the App", async () => {
+  const { handler, tool } = invoiceBoard();
+  assert(tool.description?.includes(invoiceSync.slice(0, -1)));
+  const result = await handler({
+    code: invoicePanels + invoiceSync + invoiceSync +
+      'erp.panel(rows,"Invoices"); return {invoice: invoice.data.name}',
+  }) as {
+    structuredContent: unknown;
+    content: unknown;
+    _meta: {
+      "io.mcpview/snippet-panels": {
+        id: string;
+        title: string;
+        events: unknown;
+      }[];
+      "io.mcpview/snippet-sync": unknown;
+    };
+  };
+  const [source, target] = result._meta["io.mcpview/snippet-panels"];
+  assertEquals(source.title, "Invoices");
+  assertEquals(source.events, { emits: ["invoice.selected"] });
+  assertEquals(target.events, { accepts: ["invoice.focus"] });
+  assertEquals(result._meta["io.mcpview/snippet-sync"], [{
+    from: source.id,
+    event: "invoice.selected",
+    to: target.id,
+    action: "invoice.focus",
+  }]);
+  assert(
+    !JSON.stringify([result.structuredContent, result.content]).includes(
+      "invoice.selected",
+    ),
+  );
+
+  const independent = await handler({ code: invoicePanels }) as typeof result;
+  assert(!Object.hasOwn(independent._meta, "io.mcpview/snippet-sync"));
+});
+
+Deno.test("synchronization rejects forged, unselected and incompatible receipt endpoints", async () => {
+  const { handler } = invoiceBoard();
+  for (
+    const [code, error] of [
+      [
+        invoicePanels + invoiceSync.replace("from: rows", "from: {...rows}"),
+        "distinct original results",
+      ],
+      [
+        invoicePanels.replace("erp.panel(invoice);", "") + invoiceSync,
+        "distinct original results",
+      ],
+      [
+        invoicePanels + invoiceSync.replace("to: invoice", "to: rows"),
+        "distinct original results",
+      ],
+      [
+        invoicePanels.replace("includeName: true", "includeName: false") +
+        invoiceSync,
+        "Unsupported ERP synchronization",
+      ],
+      [
+        invoicePanels.replace(
+          'doctype: "Sales Invoice"',
+          'doctype: "Purchase Invoice"',
+        ) +
+        invoiceSync,
+        "Unsupported ERP synchronization",
+      ],
+      [
+        invoicePanels + invoiceSync.replace("invoice.focus", "*"),
+        "Unsupported ERP synchronization",
+      ],
+    ]
+  ) {
+    await assertRejects(async () => await handler({ code }), Error, error);
+  }
+});
+
 Deno.test("an invalid panel after an approved write preserves its completed status", async () => {
   let writes = 0;
   const write = {

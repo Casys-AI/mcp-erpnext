@@ -2,16 +2,22 @@ import type { DeclaredViewModule } from "@mcpview/view";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { type ComponentType, h, render } from "preact";
 import type { WriteApproval } from "./approval.ts";
-import { ViewerAppContext } from "../shared/viewer-app.ts";
+import type { ViewerInteractions } from "../shared/document-follow.ts";
+import {
+  ViewerAppContext,
+  ViewerInteractionsContext,
+} from "../shared/viewer-app.ts";
 
 /** Keep each component's lifecycle local while sharing the shell's MCP connection. */
 export function mountComponent(
   Component: ComponentType,
   approval: WriteApproval,
+  getInteractions?: (host: App) => ViewerInteractions | undefined,
 ): DeclaredViewModule<App> {
   return {
     mount(root, host, first, signal) {
       signal.throwIfAborted();
+      const interactions = getInteractions?.(host);
       let latest = first;
       let connected = false;
       let disposed = false;
@@ -74,7 +80,15 @@ export function mountComponent(
       signal.addEventListener("abort", dispose, { once: true });
       try {
         render(
-          h(ViewerAppContext.Provider, { value: app }, h(Component, {})),
+          h(
+            ViewerAppContext.Provider,
+            { value: app },
+            h(
+              ViewerInteractionsContext.Provider,
+              { value: interactions },
+              h(Component, {}),
+            ),
+          ),
           root,
         );
       } catch (error) {

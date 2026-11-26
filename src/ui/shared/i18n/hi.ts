@@ -375,6 +375,7 @@ export const hi: Record<string, string> = {
     "{label} को संदर्भ में जोड़ने या हटाने के लिए क्लिक या स्पेस दबाएँ · विवरण खोलने के लिए दोहरा क्लिक या एंटर दबाएँ",
   "document.row.close_detail":
     "{label} को संदर्भ में जोड़ने या हटाने के लिए क्लिक या स्पेस दबाएँ · विवरण बंद करने के लिए दोहरा क्लिक या एंटर दबाएँ",
+  "document.row.open_follow": "{label} का विवरण खोलें",
   "document.row.open_detail_only":
     "{label} का विवरण खोलने के लिए दोहरा क्लिक करें या एंटर दबाएँ",
   "document.row.close_detail_only":

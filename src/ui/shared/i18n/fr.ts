@@ -395,6 +395,7 @@ export const fr: Record<string, string> = {
     "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour ouvrir son détail",
   "document.row.close_detail":
     "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour fermer son détail",
+  "document.row.open_follow": "Ouvrir la fiche de {label}",
   "document.row.open_detail_only":
     "Double-clic ou Entrée pour ouvrir le détail de {label}",
   "document.row.close_detail_only":

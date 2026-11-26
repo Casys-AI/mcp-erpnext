@@ -173,3 +173,20 @@ export function invoiceRootNavigationActions(
     return [{ key, label: jump?.label ?? hintLabel(hint), jump, message }];
   });
 }
+
+interface InvoiceActionScope {
+  doctype: string;
+  name: string;
+}
+
+export function invoiceActionScope(
+  previous: InvoiceActionScope | null,
+  document: InvoiceActionScope,
+): InvoiceActionScope {
+  if (
+    previous?.doctype === document.doctype && previous.name === document.name
+  ) {
+    return previous;
+  }
+  return { doctype: document.doctype, name: document.name };
+}

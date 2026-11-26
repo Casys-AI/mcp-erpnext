@@ -8,29 +8,39 @@ import {
   resolveViewerDistPath,
 } from "../ui/viewer-resource-paths.ts";
 import { UI_VIEWERS, withViewerResourceMeta } from "../ui/viewers.ts";
+import {
+  CODE_MODE_COMPATIBILITY_URI,
+  CODE_MODE_RESOURCE_URI,
+} from "./resource-uri.ts";
 
-export const CODE_MODE_RESOURCE_URI = "ui://mcp-erpnext/code-mode";
-
-export function registerCodeModeView(server: McpApp, moduleUrl: string) {
+export function registerCodeModeView(
+  server: Pick<McpApp, "registerResource">,
+  moduleUrl: string,
+) {
   const dist = resolveViewerDistPath(moduleUrl, "code-mode", statSync);
   if (!dist) return undefined;
   const remote = remoteViewerNetTarget(dist);
   if (remote && !isViewerNetAllowed(netPermission(remote))) return undefined;
 
-  server.registerResource(
-    withViewerResourceMeta({
-      uri: CODE_MODE_RESOURCE_URI,
-      name: "ERPNext",
-      description: "Open the ERPNext view declared by the returned operation.",
-      mimeType: MCP_APP_MIME_TYPE,
-    }),
-    async () =>
+  const register = (uri: string, name: string) => {
+    server.registerResource(
       withViewerResourceMeta({
-        uri: CODE_MODE_RESOURCE_URI,
+        uri,
+        name,
+        description:
+          "Open the ERPNext view declared by the returned operation.",
         mimeType: MCP_APP_MIME_TYPE,
-        text: await readViewerDist(dist, readTextFile),
       }),
-  );
+      async () =>
+        withViewerResourceMeta({
+          uri,
+          mimeType: MCP_APP_MIME_TYPE,
+          text: await readViewerDist(dist, readTextFile),
+        }),
+    );
+  };
+  register(CODE_MODE_RESOURCE_URI, "ERPNext");
+  register(CODE_MODE_COMPATIBILITY_URI, "ERPNext (compatibility)");
 
   const sessionResources = BUY_VIEW_APP_MANIFEST.resources;
   const sessions = new Set<string>(

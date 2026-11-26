@@ -5,8 +5,14 @@
  * corps vit dans `shared/doclist` pour que toute vue puisse rendre une liste.
  */
 
-import { useViewerApp } from "~/shared/viewer-app";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useViewerApp, ViewerInteractionsContext } from "~/shared/viewer-app";
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
 import {
@@ -306,6 +312,7 @@ function DoclistContent({
   const { ref: shellRef, layout, boundsStyle } = useViewerLayout<
     HTMLDivElement
   >();
+  const interactions = useContext(ViewerInteractionsContext);
   const rootTitle = data._title ?? data.doctype ?? t("doclist.title.default");
   const rootKey = viewerRootKey("doclist", data.refreshRequest, {
     doctype: data.doctype ?? null,
@@ -471,6 +478,7 @@ function DoclistContent({
           context={context}
           contextView={rootTitle}
           contextKey={rootKey}
+          onInvoiceSelected={interactions?.onInvoiceSelected}
         />
       </LevelBody>
       <ViewerFooter layout={layout} />

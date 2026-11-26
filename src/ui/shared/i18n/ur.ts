@@ -383,6 +383,7 @@ export const ur: Record<string, string> = {
     "{label} سیاق میں شامل کرنے یا ہٹانے کے لیے کلک یا اسپیس دبائیں · تفصیل کھولنے کے لیے ڈبل کلک یا انٹر دبائیں",
   "document.row.close_detail":
     "{label} سیاق میں شامل کرنے یا ہٹانے کے لیے کلک یا اسپیس دبائیں · تفصیل بند کرنے کے لیے ڈبل کلک یا انٹر دبائیں",
+  "document.row.open_follow": "{label} کی تفصیلات کھولیں",
   "document.row.open_detail_only":
     "{label} کی تفصیل کھولنے کے لیے ڈبل کلک کریں یا انٹر دبائیں",
   "document.row.close_detail_only":

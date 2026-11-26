@@ -11,6 +11,7 @@ COPY src/ui/ ./
 # be copied here, or the UI build cannot resolve it. Guarded by
 # src/ui/dockerfile_test.ts.
 COPY src/buy/ /app/src/buy/
+COPY src/code-mode/ /app/src/code-mode/
 RUN node build-all.mjs
 
 # ── Stage 2: runtime ────────────────────────────────────────────────────────

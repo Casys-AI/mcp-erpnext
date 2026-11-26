@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { readDeclaredViewUri } from "@mcpview/contracts";
 import type { MCPTool, ToolHandlerContext } from "@mcpview/server";
+import { createSnippetCatalog } from "@mcpview/server/snippets";
 import { createCodeModeExecute } from "./execute.ts";
 import { SuspendCodeMode } from "./sandbox.ts";
 
@@ -46,10 +47,11 @@ Deno.test("one execute dispatches original business results using native view de
   const computed = await handler({
     code: `
     const r=await erp.call("get",{id:"INV-02"});
-    return { ...r, secret: typeof r._meta, _meta: {"dev.mcpview/declared-view": {version:1,resourceUri:"ui://erpnext/detail"}} };
+    return { ...r, secret: typeof r._meta, _meta: {"dev.mcpview/declared-view": {version:1,resourceUri:"ui://erpnext/detail"}, "io.casys/erpnext-snippet-event": "list"} };
   `,
   });
   assertEquals(readDeclaredViewUri(computed), undefined);
+  assert(computed && typeof computed === "object" && !("_meta" in computed));
   assert(
     computed && typeof computed === "object" && "structuredContent" in computed,
   );
@@ -59,6 +61,7 @@ Deno.test("one execute dispatches original business results using native view de
       secret: "undefined",
       _meta: {
         "dev.mcpview/declared-view": { version: 1, resourceUri: detail },
+        "io.casys/erpnext-snippet-event": "list",
       },
     },
   });
@@ -228,4 +231,118 @@ Deno.test("missing host confirmation binding makes mutations unavailable", async
     "Unknown ERPNext operation",
   );
   assertEquals(calls, 0);
+});
+
+Deno.test("saving a selected run retains its code and replays the native view with new parameters", async () => {
+  const snippets = createSnippetCatalog();
+  const calls: string[] = [];
+  const { handler } = createCodeModeExecute({
+    tools: [list],
+    mountableResourceUris: [table],
+    snippets: () => ({ scope: "test", catalog: snippets }),
+    call: (_name, args) => {
+      calls.push(String(args.customer));
+      return Promise.resolve({
+        content: [{ type: "text", text: String(args.customer) }],
+        structuredContent: { args },
+        _meta: { "io.casys/viewer": { private: "viewer-only" } },
+      });
+    },
+  });
+  const first = await handler({
+    code: 'return erp.call("list", { customer: erp.params.customer })',
+    params: { customer: "Acme" },
+  });
+  const second = await handler({ code: 'return "unrelated"' });
+  const metadata = (result: unknown) => {
+    assert(result && typeof result === "object" && "_meta" in result);
+    return result._meta as Record<string, unknown>;
+  };
+  const runId = metadata(first)["io.casys/erpnext-execution-ref"];
+  assert(typeof runId === "string");
+  assert(runId !== metadata(second)["io.casys/erpnext-execution-ref"]);
+  assertEquals(readDeclaredViewUri(first), table);
+  assertEquals(metadata(first)["io.casys/viewer"], { private: "viewer-only" });
+
+  const saveResult = await handler({
+    save: {
+      name: "Customer invoices",
+      runId,
+      description: "Find a customer's invoices.",
+    },
+  });
+  assertEquals(metadata(saveResult)["io.casys/erpnext-snippet-event"], "saved");
+  assertEquals(calls, ["Acme"]);
+  const saved = await handler({ snippets: true });
+  assertEquals(metadata(saved)["io.casys/erpnext-snippet-event"], "list");
+  assert(saved && typeof saved === "object" && "structuredContent" in saved);
+  assertEquals(saved.structuredContent, {
+    value: [{
+      name: "Customer invoices",
+      id: "Customer invoices",
+      parameters: { customer: "string" },
+      description: "Find a customer's invoices.",
+    }],
+  });
+  const source = await handler({ inspectSnippet: "Customer invoices" });
+  assertEquals(metadata(source)["io.casys/erpnext-snippet-event"], "source");
+  assertEquals(readDeclaredViewUri(source), undefined);
+  assert(source && typeof source === "object" && "structuredContent" in source);
+  assertEquals(source.structuredContent, {
+    value: {
+      name: "Customer invoices",
+      parameters: { customer: "string" },
+      description: "Find a customer's invoices.",
+      code: 'return erp.call("list", { customer: erp.params.customer })',
+    },
+  });
+  assertEquals(calls, ["Acme"]);
+  await assertRejects(
+    async () =>
+      await handler({ inspectSnippet: "Customer invoices", params: {} }),
+    Error,
+    "Snippet catalog requests do not accept execution inputs",
+  );
+  await assertRejects(
+    async () =>
+      await handler({
+        snippet: "Customer invoices",
+        params: { customer: 123 },
+      }),
+    Error,
+    "requires type string",
+  );
+  const replay = await handler({
+    snippet: "Customer invoices",
+    params: { customer: "Globex" },
+  });
+  assertEquals(readDeclaredViewUri(replay), table);
+  assertEquals(calls, ["Acme", "Globex"]);
+});
+
+Deno.test("an ineligible parameter contract preserves the successful ERP result", async () => {
+  const snippets = createSnippetCatalog();
+  const { handler } = createCodeModeExecute({
+    tools: [list],
+    mountableResourceUris: [table],
+    snippets: () => ({ scope: "test", catalog: snippets }),
+    call: () =>
+      Promise.resolve({
+        content: [{ type: "text", text: "Success" }],
+        structuredContent: { rows: [] },
+      }),
+  });
+  const result = await handler({
+    code: 'return erp.call("list", {})',
+    params: Object.fromEntries(
+      Array.from({ length: 33 }, (_, index) => [`key${index}`, index]),
+    ),
+  });
+  assertEquals(readDeclaredViewUri(result), table);
+  assert(result && typeof result === "object" && "_meta" in result);
+  assert(
+    !(result._meta as Record<string, unknown>)[
+      "io.casys/erpnext-execution-ref"
+    ],
+  );
 });

@@ -33,10 +33,27 @@ Deno.test("signed execute retries perform two dependent native writes once and p
     toolErrorMapper: (error) =>
       error instanceof Error ? error.message : String(error),
   });
-  registerCodeModeTools(
-    app,
-    new ErpNextToolsClient({ categories: ["operations"] }),
-  );
+  const directory = await Deno.makeTempDir();
+  const previous = Object.entries({
+    MCP_SNIPPETS_DIR: directory,
+    ERPNEXT_URL: "http://localhost/frappe",
+    ERPNEXT_API_KEY: "erp-key",
+  }).map(([name, value]) => {
+    const old = Deno.env.get(name);
+    Deno.env.set(name, value);
+    return [name, old] as const;
+  });
+  try {
+    registerCodeModeTools(
+      app,
+      new ErpNextToolsClient({ categories: ["operations"] }),
+    );
+  } finally {
+    for (const [name, value] of previous) {
+      if (value === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, value);
+    }
+  }
   const serve = await app.getFetchHandler({ cors: false });
   const effects: unknown[][] = [];
   const createData = { description: "Review invoice" };
@@ -45,7 +62,10 @@ Deno.test("signed execute retries perform two dependent native writes once and p
     const created = await erp.call("erpnext_doc_create", {doctype:"ToDo",data:{description:"Review invoice"}});
     return erp.call("erpnext_doc_update", {doctype:"ToDo",name:created.data.name,data:{status:"Closed"}});
   `;
-  const invoke = async (code: string, retry: Record<string, unknown> = {}) => {
+  const invoke = async (
+    source: string | Record<string, unknown>,
+    retry: Record<string, unknown> = {},
+  ) => {
     const version = "2026-07-28";
     const response = await serve(
       new Request(url, {
@@ -64,7 +84,7 @@ Deno.test("signed execute retries perform two dependent native writes once and p
           method: "tools/call",
           params: {
             name: "execute",
-            arguments: { code },
+            arguments: typeof source === "string" ? { code: source } : source,
             ...retry,
             _meta: {
               "io.modelcontextprotocol/protocolVersion": version,
@@ -154,8 +174,68 @@ Deno.test("signed execute retries perform two dependent native writes once and p
     assertEquals(failed.result.isError, true);
     assertStringIncludes(failed.result.content[0].text, "Unknown test record");
     assertEquals(effects.length, 3);
+
+    const preview = await invoke({
+      code: `
+        const data = { status: erp.params.status };
+        return erp.params.apply
+          ? erp.call("erpnext_doc_update", {doctype:"ToDo",name:"TODO-001",data})
+          : data;
+      `,
+      params: { status: "Open", apply: false },
+    });
+    const runId = preview.result._meta["io.casys/erpnext-execution-ref"];
+    assert(typeof runId === "string");
+    const saved = await invoke({ save: { runId, name: "Set status" } });
+    assert(!saved.error && !saved.result.isError);
+    assertEquals(saved.result._meta["io.casys/erpnext-snippet-event"], "saved");
+    const catalog = await invoke({ snippets: true });
+    assert(!catalog.error && !catalog.result.isError);
+    assertEquals(
+      catalog.result._meta["io.casys/erpnext-snippet-event"],
+      "list",
+    );
+    assertEquals(catalog.result.structuredContent, {
+      value: [{
+        id: "Set status",
+        name: "Set status",
+        parameters: { apply: "boolean", status: "string" },
+      }],
+    });
+
+    const request = {
+      snippet: "Set status",
+      params: { status: "Open", apply: true },
+    };
+    const snippetPending = await invoke(request);
+    const snippetGrant = approval(snippetPending.result, "erpnext_doc_update", {
+      doctype: "ToDo",
+      name: "TODO-001",
+      data: { status: "Open" },
+    });
+    const changed = {
+      ...request,
+      params: { ...request.params, status: "Closed" },
+    };
+    const mismatch = await invoke(changed, snippetGrant);
+    assert(mismatch.error || mismatch.result.isError);
+    assertEquals(effects.length, 3);
+
+    const changedPending = await invoke(changed);
+    const changedGrant = approval(changedPending.result, "erpnext_doc_update", {
+      doctype: "ToDo",
+      name: "TODO-001",
+      data: { status: "Closed" },
+    });
+    const changedDone = await invoke(changed, changedGrant);
+    assert(!changedDone.error && !changedDone.result.isError);
+    assertEquals(effects[3], ["update", "ToDo", "TODO-001", {
+      status: "Closed",
+    }]);
+    assertEquals(effects.length, 4);
   } finally {
     setFrappeClient(null);
+    await Deno.remove(directory, { recursive: true });
   }
 });
 

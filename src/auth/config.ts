@@ -16,6 +16,7 @@
  */
 
 import {
+  type AuthInfo,
   type AuthProvider,
   createOIDCAuthProvider,
   createStaticTokenAuthProvider,
@@ -89,6 +90,33 @@ export function loadAuthConfig(): AuthConfig | null {
   };
 }
 
+// Maps verified static subjects to catalog identities without changing the
+// short-lived subjects already used to bind confirmation tickets.
+const staticSnippetPrincipals = new Map<string, Promise<string>>();
+
+export async function staticSnippetPrincipal(
+  auth: AuthInfo,
+): Promise<string | undefined> {
+  if (auth.claims) return undefined;
+  return await staticSnippetPrincipals.get(auth.subject);
+}
+
+async function snippetPrincipal(
+  resource: string,
+  configuredToken: string,
+): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify([
+    "erpnext-static-snippet-principal-v1",
+    resource,
+    configuredToken.trim(),
+  ]));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(
+    new Uint8Array(digest),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
 // ── Provider construction ────────────────────────────────────────────────────
 
 /**
@@ -106,17 +134,15 @@ export function buildAuthProvider(config: AuthConfig): AuthProvider {
           "— set it to this server's public URL, e.g. https://mcp.example.com",
       );
     }
-    providers.push(
-      // A ticket has the lifetime of this process. Use one opaque principal per
-      // provisioned credential; token material is never used as an identity.
-      createStaticTokenAuthProvider(
-        [...config.tokens].map((token) => ({
-          token,
-          subject: `erpnext-static-${crypto.randomUUID()}`,
-        })),
-        { resource: config.resource },
-      ),
-    );
+    const resource = config.resource;
+    const credentials = [...config.tokens].map((token) => ({
+      token,
+      subject: `erpnext-static-${crypto.randomUUID()}`,
+    }));
+    providers.push(createStaticTokenAuthProvider(credentials, { resource }));
+    for (const { token, subject } of credentials) {
+      staticSnippetPrincipals.set(subject, snippetPrincipal(resource, token));
+    }
   }
 
   if (config.jwksUrl) {

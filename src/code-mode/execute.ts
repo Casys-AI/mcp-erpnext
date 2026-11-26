@@ -9,13 +9,76 @@ import {
   type ToolHandler,
   type ToolHandlerContext,
 } from "@mcpview/server";
+import {
+  type SnippetCatalog,
+  SnippetCatalogError,
+  type SnippetParameterType,
+} from "@mcpview/server/snippets";
 import { runCodeProgram } from "./sandbox.ts";
+
+type Arguments = Record<string, unknown>;
+const EXECUTION_REFERENCE_META = "io.casys/erpnext-execution-ref";
+const SNIPPET_EVENT_META = "io.casys/erpnext-snippet-event";
+
+interface SnippetAccess {
+  readonly scope: string;
+  readonly catalog: SnippetCatalog;
+}
+
+function objectArgument(value: unknown, field: string): Arguments | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`execute.${field} must be an object.`);
+  }
+  return value as Arguments;
+}
+
+function snippetParams(
+  input: unknown,
+  contract?: Readonly<Record<string, SnippetParameterType>>,
+): Arguments {
+  const params = objectArgument(input, "params") ?? {};
+  if (!contract) return params;
+  for (const [name, expected] of Object.entries(contract)) {
+    const value = params[name];
+    const actual = value === null
+      ? "null"
+      : Array.isArray(value)
+      ? "array"
+      : typeof value;
+    if (!Object.hasOwn(params, name) || actual !== expected) {
+      throw new Error(
+        `Snippet parameter ${JSON.stringify(name)} requires type ${expected}.`,
+      );
+    }
+  }
+  if (Object.keys(params).some((name) => !Object.hasOwn(contract, name))) {
+    throw new Error(
+      "Unexpected snippet parameter. List saved programs for accepted parameters.",
+    );
+  }
+  return params;
+}
+
+function dataResult(
+  value: unknown,
+  snippetEvent?: "saved" | "list" | "source",
+) {
+  return {
+    content: [{ type: "text", text: JSON.stringify(value) }],
+    structuredContent: { value },
+    ...(snippetEvent && { _meta: { [SNIPPET_EVENT_META]: snippetEvent } }),
+  };
+}
 
 interface CodeModeExecuteOptions {
   readonly tools: readonly MCPTool[];
   readonly mountableResourceUris: Iterable<string>;
   readonly sessionResources?: Iterable<ViewAppManifestResource>;
   readonly resourceUri?: string;
+  readonly snippets?: (
+    ctx?: ToolHandlerContext,
+  ) => SnippetAccess | undefined | Promise<SnippetAccess | undefined>;
   readonly call: (
     name: string,
     args: Record<string, unknown>,
@@ -25,7 +88,7 @@ interface CodeModeExecuteOptions {
   readonly run?: (
     context: ToolHandlerContext | undefined,
     run: (call: CodeModeExecuteOptions["call"]) => Promise<unknown>,
-    args: { code: string; input?: Record<string, unknown> },
+    args: Arguments,
   ) => Promise<unknown>;
 }
 
@@ -65,6 +128,15 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       "Use await erp.call(name, args) for business operations. The host asks for confirmation before each write.",
       "For attachment bytes or large arguments, pass the complete operation argument object as execute.input and use await erp.callWithInput(name). The input stays on the server.",
       "Return an original response to display its declared view, or return any computed JSON value.",
+      "Use execute.params for JSON parameters readable as erp.params.",
+      ...(options.snippets
+        ? [
+          "When asked to save a successful program, pass save: {runId, name, description?} using that run's execution reference.",
+          "Use snippets: true to list saved programs, or snippet: name with params to run a saved program.",
+          "When asked to view a saved program's source, pass inspectSnippet: name.",
+          "If the user asks to reuse an earlier procedure without its exact name, list saved programs first, even in a new conversation.",
+        ]
+        : []),
     ].join(" "),
     inputSchema: {
       type: "object",
@@ -76,14 +148,49 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
           description:
             "Complete ERPNext arguments for erp.callWithInput(name), including attachment data.",
         },
+        params: {
+          type: "object",
+          additionalProperties: true,
+          description: "JSON parameters available to JavaScript as erp.params.",
+        },
+        ...(options.snippets && {
+          save: {
+            type: "object",
+            additionalProperties: false,
+            required: ["runId", "name"],
+            properties: {
+              runId: { type: "string", minLength: 1 },
+              name: { type: "string", minLength: 1 },
+              description: {
+                type: "string",
+                maxLength: 512,
+                description:
+                  "Short purpose that helps find this program later.",
+              },
+            },
+          },
+          snippet: { type: "string", minLength: 1 },
+          snippets: { const: true },
+          inspectSnippet: { type: "string", minLength: 1 },
+        }),
       },
-      required: ["code"],
+      ...(options.snippets
+        ? {
+          oneOf: [
+            { required: ["code"] },
+            { required: ["save"] },
+            { required: ["snippet"] },
+            { required: ["snippets"] },
+            { required: ["inspectSnippet"] },
+          ],
+        }
+        : { required: ["code"] }),
       additionalProperties: false,
     },
     annotations: {
-      readOnlyHint: mutations.size === 0,
+      readOnlyHint: mutations.size === 0 && !options.snippets,
       destructiveHint: mutations.size > 0,
-      idempotentHint: mutations.size === 0,
+      idempotentHint: mutations.size === 0 && !options.snippets,
     },
     ...(options.resourceUri && {
       _meta: {
@@ -92,17 +199,74 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       },
     }),
   };
-  const handler: ToolHandler = async ({ code, input }, ctx) => {
-    if (typeof code !== "string") {
-      throw new Error("Expected a JavaScript function body.");
+  const handler: ToolHandler = async (args, ctx) => {
+    const { code, input, params, save, snippet, snippets, inspectSnippet } =
+      args;
+    const commands = [code, save, snippet, snippets, inspectSnippet].filter((
+      value,
+    ) => value !== undefined);
+    if (commands.length !== 1) {
+      throw new Error(
+        "Supply one of code, save, snippet, snippets or inspectSnippet.",
+      );
     }
+    const access = await options.snippets?.(ctx);
     if (
-      input !== undefined &&
-      (typeof input !== "object" || input === null || Array.isArray(input))
+      save !== undefined || snippets !== undefined ||
+      inspectSnippet !== undefined
     ) {
-      throw new Error("execute.input must be an argument object.");
+      if (!access) {
+        throw new Error(
+          "Saved programs require an authenticated ERPNext workspace.",
+        );
+      }
+      if (
+        input !== undefined || params !== undefined ||
+        ctx?.inputResponses !== undefined || ctx?.retryVerified !== undefined
+      ) {
+        throw new Error(
+          "Snippet catalog requests do not accept execution inputs or confirmations.",
+        );
+      }
+      if (snippets !== undefined) {
+        if (snippets !== true) {
+          throw new Error("execute.snippets must be true.");
+        }
+        return dataResult(await access.catalog.list(access.scope), "list");
+      }
+      if (inspectSnippet !== undefined) {
+        if (typeof inspectSnippet !== "string") {
+          throw new Error("execute.inspectSnippet must be a snippet name.");
+        }
+        return dataResult(
+          await access.catalog.inspect(access.scope, inspectSnippet),
+          "source",
+        );
+      }
+      const selection = objectArgument(save, "save");
+      if (
+        typeof selection?.runId !== "string" ||
+        typeof selection.name !== "string" ||
+        (selection.description !== undefined &&
+          typeof selection.description !== "string") ||
+        Object.keys(selection).some((key) =>
+          key !== "runId" && key !== "name" && key !== "description"
+        )
+      ) {
+        throw new Error("Supply save.runId and save.name.");
+      }
+      return dataResult(
+        await access.catalog.save(
+          access.scope,
+          selection.runId,
+          selection.name,
+          selection.description,
+        ),
+        "saved",
+      );
     }
-    const externalInput = input as Record<string, unknown> | undefined;
+
+    const externalInput = objectArgument(input, "input");
     // Follow mcpview's scope contract: stdio is trusted. Each HTTP operation
     // must be available both to the program's catalog and its dispatcher.
     const allowed = operations.filter(({ requiredScopes }) =>
@@ -116,7 +280,11 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       inputSchema: t.inputSchema,
       annotations: { ...t.annotations, readOnlyHint: isReadOnly(t) },
     }));
-    async function run(call: CodeModeExecuteOptions["call"]): Promise<unknown> {
+    async function executeProgram(
+      program: unknown,
+      parameters: Arguments,
+      call: CodeModeExecuteOptions["call"],
+    ): Promise<DeclaredViewNativeResult> {
       const execution = createDeclaredViewExecution({
         tools: allowed,
         mountableResourceUris,
@@ -124,7 +292,7 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       });
 
       const output = await runCodeProgram(
-        code,
+        program,
         catalog,
         async (name, args) => {
           if (!names.has(name)) {
@@ -160,6 +328,7 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
         },
         mutations,
         externalInput,
+        parameters,
       );
       if ("native" in output) {
         const selected = execution.resolve(output.native.reference);
@@ -174,17 +343,77 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
           )
           : selected.result;
       }
-      return {
-        content: [{ type: "text", text: JSON.stringify(output.value) }],
-        structuredContent: { value: output.value },
-      };
+      return dataResult(output.value);
     }
-    return options.run
-      ? await options.run(ctx, run, {
-        code,
-        ...(externalInput && { input: externalInput }),
-      })
-      : await run(options.call);
+
+    async function execute(
+      program: string,
+      parameters: Arguments | undefined,
+      recordReference: boolean,
+    ) {
+      let completed: DeclaredViewNativeResult | undefined;
+      const run = async (call: CodeModeExecuteOptions["call"]) => {
+        completed = await executeProgram(program, parameters ?? {}, call);
+        return completed;
+      };
+      const result = options.run
+        ? await options.run(ctx, run, args)
+        : await run(options.call);
+      if (access && recordReference && completed && completed === result) {
+        let runId: string;
+        try {
+          runId = access.catalog.recordSuccess(
+            access.scope,
+            program,
+            parameters,
+          );
+        } catch (error) {
+          // A non-recordable parameter contract must not turn completed ERP
+          // work into an apparent failure that the caller might retry.
+          if (
+            error instanceof SnippetCatalogError &&
+            error.code === "EXECUTION_NOT_ELIGIBLE"
+          ) return result;
+          throw error;
+        }
+        return {
+          ...completed,
+          content: [
+            ...(Array.isArray(completed.content) ? completed.content : []),
+            {
+              type: "text",
+              text: `Execution reference for saving this program: ${runId}`,
+            },
+          ],
+          _meta: { ...completed._meta, [EXECUTION_REFERENCE_META]: runId },
+        };
+      }
+      return result;
+    }
+
+    if (snippet !== undefined) {
+      if (!access) {
+        throw new Error(
+          "Saved programs require an authenticated ERPNext workspace.",
+        );
+      }
+      if (typeof snippet !== "string" || input !== undefined) {
+        throw new Error("Supply a saved program name and optional params.");
+      }
+      return await access.catalog.run(access.scope, snippet, params, {
+        validate: snippetParams,
+        execute: (program, parameters) => execute(program, parameters, false),
+      });
+    }
+    if (typeof code !== "string") {
+      throw new Error("Expected a JavaScript function body.");
+    }
+    // The opaque input may contain attachments. References retain code only.
+    return await execute(
+      code,
+      objectArgument(params, "params"),
+      externalInput === undefined,
+    );
   };
   return { tool, handler };
 }

@@ -1,6 +1,6 @@
 ---
 name: erpnext-code-mode
-description: Use ERPNext Code Mode to read and update records, find available operations, open sales invoices, and calculate answers from ERP data.
+description: Use ERPNext Code Mode to query or update records, open interactive invoices, and save, find, inspect or rerun ERPNext programs across chats.
 ---
 
 Use the ERPNext connection's `execute` tool. Its `code` argument is the body of
@@ -40,6 +40,45 @@ return await erp.call("erpnext_sales_invoice_get", { name: "SINV-00042" });
 When reporting totals, prefer the corresponding ERP aggregate. A page of rows
 may be only part of the result. Check currencies before adding amounts and use
 the currency returned by the operation.
+
+When a request includes a threshold, date, or other value the user may change,
+pass it in `execute.params` and read it from `erp.params` in the program. For
+example, to show overdue invoices with at least EUR 1000 outstanding, pass
+`{"minimum":1000}` as `params` and return the filtered ERP list directly:
+
+```js
+return await erp.call("erpnext_doc_list", {
+  doctype: "Sales Invoice",
+  fields: ["name", "customer", "due_date", "outstanding_amount", "currency"],
+  filters: [["status", "=", "Overdue"], ["currency", "=", "EUR"], [
+    "outstanding_amount",
+    ">=",
+    erp.params.minimum,
+  ]],
+  order_by: "outstanding_amount desc",
+  limit: 20,
+});
+```
+
+For an interactive list, send the filters in the ERP operation. Filtering the
+returned rows in JavaScript produces a new value without the list's actions.
+
+When the user asks to keep a program, such as “save this for Monday”, use the
+execution reference from that successful result. Call `execute` with
+`{"save":{"runId":"<execution reference>","name":"monday-invoices","description":"Overdue EUR invoices by minimum outstanding balance"}}`.
+This saves the program for later use. Scheduling is a separate request. To run
+it again at EUR 3000, call the same tool with
+`{"snippet":"monday-invoices","params":{"minimum":3000}}`. In a new
+conversation, when the user refers to a saved procedure, first call `execute`
+with `{"snippets":true}` to find its actual name, description, and parameter
+keys. If several match, ask which one to use. Call the selected snippet with the
+new values. Save only on request.
+
+When the user asks to browse their saved programs, call `execute` with
+`{"snippets":true}`. The library supports searching by name or description. When
+the user asks to see one script, use `{"inspectSnippet":"monday-invoices"}` with
+its actual name. This returns its saved JavaScript in a read-only view. Run a
+saved program only when the user asks to execute it.
 
 For changes, use the document’s exact ERPNext ID and the operation from the
 catalogue and the record and values the user requested. The server presents the

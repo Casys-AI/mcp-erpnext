@@ -5,6 +5,13 @@ import {
   type ToolHandler,
   type ToolHandlerContext,
 } from "@mcpview/server";
+import {
+  createFileSnippetStore,
+  createSnippetCatalog,
+  type SnippetStore,
+} from "@mcpview/server/snippets";
+import { staticSnippetPrincipal } from "../auth/config.ts";
+import { env } from "../runtime.ts";
 import type { ErpNextToolsClient } from "../client.ts";
 import { allowedMethod } from "../tools/method-allowlist.ts";
 import { assertNonEmptySelection } from "../tools/selection.ts";
@@ -20,6 +27,69 @@ type CodeModeView = Pick<
   "resourceUri" | "mountableResourceUris" | "sessionResources"
 >;
 type Write = Parameters<Parameters<WriteConfirmations["run"]>[3]>[0];
+
+function snippetDirectory(): string | undefined {
+  function optionalEnv(key: string): string | undefined {
+    try {
+      return env(key);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.name === "NotCapable" || error.name === "PermissionDenied")
+      ) return undefined;
+      throw error;
+    }
+  }
+  const override = optionalEnv("MCP_SNIPPETS_DIR");
+  if (override) return override;
+  const state = optionalEnv("XDG_STATE_HOME") || optionalEnv("LOCALAPPDATA");
+  if (state) return `${state}/mcp-erpnext/snippets`;
+  const home = optionalEnv("HOME");
+  if (home) return `${home}/.local/state/mcp-erpnext/snippets`;
+}
+
+function snippetStore(): SnippetStore {
+  const directory = snippetDirectory();
+  if (!directory) {
+    return {
+      putIfAbsent: () =>
+        Promise.reject(
+          new Error(
+            "No location for saved programs. Set MCP_SNIPPETS_DIR to a writable directory.",
+          ),
+        ),
+      get: () => Promise.resolve(undefined),
+      list: () => Promise.resolve([]),
+    };
+  }
+  const store = createFileSnippetStore(directory);
+  return {
+    ...store,
+    async putIfAbsent(scope, snippet) {
+      try {
+        return await store.putIfAbsent(scope, snippet);
+      } catch (cause) {
+        throw new Error(
+          "Unable to save this program. Configure MCP_SNIPPETS_DIR with a writable directory that supports hard links.",
+          { cause },
+        );
+      }
+    },
+  };
+}
+
+async function snippetWorkspace(url: string, apiKey: string): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify([
+    "erpnext-snippet-workspace-v1",
+    url,
+    apiKey,
+  ]));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(
+    new Uint8Array(digest),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
 
 /** Bind the selected business operations to programs and native viewer callbacks. */
 export function registerCodeModeTools(
@@ -130,7 +200,37 @@ export function registerCodeModeTools(
       write,
     );
   };
+  const snippets = createSnippetCatalog({ store: snippetStore() });
+  const url = env("ERPNEXT_URL");
+  const apiKey = env("ERPNEXT_API_KEY");
+  const workspace = url && apiKey ? snippetWorkspace(url, apiKey) : undefined;
   const execute = createCodeModeExecute({
+    snippets: async (ctx) => {
+      if (!workspace) return undefined;
+      if (!ctx?.request) {
+        return {
+          scope: JSON.stringify(["stdio", await workspace]),
+          catalog: snippets,
+        };
+      }
+      const auth = ctx.authInfo;
+      if (
+        !auth?.subject || auth.subject === "unknown" ||
+        auth.subject === "\u0000unauthenticated"
+      ) return undefined;
+      const staticPrincipal = await staticSnippetPrincipal(auth);
+      return {
+        scope: JSON.stringify([
+          staticPrincipal ? "http-static" : "http",
+          await workspace,
+          staticPrincipal ?? auth.subject,
+          auth.tenantId,
+          auth.clientId,
+          auth.claims?.iss,
+        ]),
+        catalog: snippets,
+      };
+    },
     tools: [...programTools.values()],
     mountableResourceUris: [],
     ...view,

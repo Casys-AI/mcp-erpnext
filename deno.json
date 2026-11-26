@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-erpnext",
-  "version": "4.0.0-beta.2",
+  "version": "4.0.0-beta.3",
   "nodeModulesDir": "auto",
   "minimumDependencyAge": {
     "age": "PT24H",
@@ -86,7 +86,8 @@
     ]
   },
   "imports": {
-    "@mcpview/server": "jsr:@mcpview/server@^0.30.1",
+    "@mcpview/server": "jsr:@mcpview/server@^0.30.2",
+    "@mcpview/server/snippets": "jsr:@mcpview/server@^0.30.2/snippets",
     "@mcpview/contracts": "jsr:@mcpview/contracts@^0.2.1",
     "quickjs-emscripten-core": "npm:quickjs-emscripten-core@0.32.0",
     "@jitl/quickjs-singlefile-browser-release-sync": "npm:@jitl/quickjs-singlefile-browser-release-sync@0.32.0",

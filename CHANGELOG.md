@@ -4,6 +4,15 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [4.0.0-beta.3] - 2026-11-26
+
+- Save a successful Code Mode program on request and recall it in a later chat
+  with new parameters. The same `execute` tool checks current ERP permissions
+  and requests approval for writes.
+- Open **My snippets** to search by name or description and read a saved
+  script’s exact JavaScript with syntax highlighting. Saving displays a
+  confirmation. Browsing and inspecting a script do not query ERPNext.
+
 ## [4.0.0-beta.2] - 2026-11-26
 
 ### Fixed

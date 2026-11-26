@@ -28,7 +28,13 @@ Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 > The beta exposes one tool to the LLM, `execute`. Both npm and JSR include the
 > [ERPNext Code Mode skill](skills/erpnext-code-mode/SKILL.md). Install the
 > skill in your host to teach the LLM how to discover operations and open views
-> such as the invoice list and invoice details.
+> such as the invoice list and invoice details. If your host imports skills as
+> ZIP files, download `erpnext-code-mode-skill.zip` from the matching
+> [Code Mode prerelease](https://github.com/Casys-AI/mcp-erpnext/releases).
+>
+> Ask “Save this for Monday” after a successful run. **My snippets** lets you
+> search saved programs and read their JavaScript. In a new chat on the same
+> connection, ask “Run my Monday invoice list at €3,000” to see updated results.
 
 ## Screenshots
 

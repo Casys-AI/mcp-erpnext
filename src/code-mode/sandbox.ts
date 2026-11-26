@@ -26,6 +26,7 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
   call: (name: string, args: Record<string, unknown>) => Promise<T>,
   mutations: ReadonlySet<string> = new Set(),
   input?: Record<string, unknown>,
+  params: Record<string, unknown> = {},
 ): Promise<{ native: T } | { value: unknown }> {
   if (typeof code !== "string" || !code.trim() || code.length > MAX_CODE) {
     throw new Error(
@@ -193,6 +194,7 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
     }));
     const erp = keep(vm.newObject());
     vm.setProp(erp, "catalog", intoGuest(catalog));
+    vm.setProp(erp, "params", intoGuest(params));
     vm.setProp(erp, "call", callFunction);
     vm.setProp(erp, "callWithInput", withInput);
     vm.setProp(vm.global, "erp", erp);

@@ -31,6 +31,22 @@ Always required, regardless of transport (stdio or HTTP).
 
 ---
 
+## Code Mode snippet storage
+
+Set `MCP_SNIPPETS_DIR` to choose the directory for saved scripts. The default is
+`mcp-erpnext/snippets` inside `XDG_STATE_HOME` or `LOCALAPPDATA`, falling back
+to `~/.local/state/mcp-erpnext/snippets`. The server needs read and write access
+to a filesystem that supports hard links. On a container, mount a persistent
+volume here to keep scripts across replacements.
+
+Each saved entry contains the JavaScript source, its name, its optional
+description and its parameter names and types. A query result is not stored.
+Each catalog is tied to the ERPNext URL and a fingerprint derived from the API
+key. Rotating only `ERPNEXT_API_SECRET` preserves access to existing snippets.
+Changing `ERPNEXT_API_KEY` opens a different catalog and leaves the previous
+catalog on disk. HTTP also separates catalogs by authenticated identity. Clients
+using the same static bearer token and ERPNext connection share a catalog.
+
 ## Signed multi-round-trip requests
 
 | Variable               | Type                            | Default                  | Required | Notes                                                                                                                                                                |

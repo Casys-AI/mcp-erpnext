@@ -27,7 +27,14 @@ Code、VS Code Copilot 或自訂代理）。
 >
 > 測試版只向 LLM 提供一個工具 `execute`。npm 和 JSR 套件均附有
 > [ERPNext Code Mode 技能](skills/erpnext-code-mode/SKILL.md)。在主機安裝技能後，LLM
-> 即可依指引查找可用操作、開啟發票清單與明細。
+> 即可依指引查找可用操作、開啟發票清單與明細。若主機支援匯入 ZIP
+> 技能檔，可到對應的
+> [Code Mode 測試版發行頁面](https://github.com/Casys-AI/mcp-erpnext/releases)下載
+> `erpnext-code-mode-skill.zip`。
+>
+> 查完發票後，跟助理說「把這份查詢存起來，星期一再用」。「我的程式片段」可以依名稱或說明搜尋，也能查看儲存的
+> JavaScript。下次用同一個連線開新對話，只要說「再查一次星期一那份發票清單，門檻改成
+> 3,000 歐元」，就能看到最新結果。
 
 ## 截圖
 

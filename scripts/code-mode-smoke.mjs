@@ -20,6 +20,8 @@ const APP_CAPABILITIES = {
 const VIEW_META = "dev.mcpview/declared-view";
 const ERP_VIEWER_META = "io.casys/viewer";
 const CONFIRM_META = "io.casys/erpnext-write-confirmation";
+const EXECUTION_REFERENCE_META = "io.casys/erpnext-execution-ref";
+const SNIPPET_EVENT_META = "io.casys/erpnext-snippet-event";
 const EXECUTE_VIEW = "ui://mcp-erpnext/code-mode";
 const INVOICE_VIEW = "ui://mcp-erpnext/invoice-viewer";
 const LIST_VIEW = "ui://mcp-erpnext/doclist-viewer";
@@ -416,6 +418,70 @@ async function checkApp(client) {
   assert.deepEqual(refreshed.structuredContent, invoice.structuredContent);
 }
 
+async function checkSnippets(client, fixture, otherIdentity) {
+  const code = '  // Vérification\r\nconst invoice = await erp.call("' +
+    GET + '", { name: erp.params.invoice });\r\n' +
+    "return invoice.data.outstanding_amount + erp.params.adjustment;\n";
+  const initialParams = { invoice: INVOICE_ID, adjustment: 0 };
+  const invoke = (args) => call(client, "execute", args);
+  const initial = result(await invoke({ code, params: initialParams }));
+  assert.equal(initial.structuredContent?.value, 84);
+  const runId = initial._meta?.[EXECUTION_REFERENCE_META];
+  assert.ok(typeof runId === "string" && runId.length > 0);
+  const before = fixture.requests.length;
+  const name = "invoice-balance";
+  const description = "Look up the outstanding invoice balance.";
+  const parameters = { invoice: "string", adjustment: "number" };
+  const summary = { id: name, name, description, parameters };
+  const save = { runId, name, description };
+  if (otherIdentity) {
+    failed(await call(otherIdentity, "execute", { save }));
+  }
+  const saved = result(await invoke({ save }));
+  assert.equal(saved._meta?.[SNIPPET_EVENT_META], "saved");
+  assert.deepEqual(saved.structuredContent?.value, summary);
+
+  const listed = result(await invoke({ snippets: true }));
+  assert.equal(listed._meta?.[SNIPPET_EVENT_META], "list");
+  assert.deepEqual(listed.structuredContent?.value, [summary]);
+  assert.deepEqual(JSON.parse(listed.content[0].text), [summary]);
+
+  const inspected = result(await invoke({ inspectSnippet: name }));
+  assert.equal(inspected._meta?.[SNIPPET_EVENT_META], "source");
+  assert.equal(inspected._meta?.[VIEW_META], undefined);
+  assert.deepEqual(inspected.structuredContent?.value, {
+    name,
+    description,
+    parameters,
+    code,
+  });
+  if (otherIdentity) {
+    const list = result(
+      await call(otherIdentity, "execute", { snippets: true }),
+    );
+    assert.deepEqual(list.structuredContent?.value, []);
+    failed(await call(otherIdentity, "execute", { inspectSnippet: name }));
+    failed(
+      await call(otherIdentity, "execute", {
+        snippet: name,
+        params: initialParams,
+      }),
+    );
+  }
+  assert.equal(fixture.requests.length, before);
+
+  const recalled = result(
+    await invoke({
+      snippet: name,
+      params: { ...initialParams, adjustment: 2 },
+    }),
+  );
+  assert.equal(recalled.structuredContent?.value, 86);
+  assert.deepEqual(fixture.requests.slice(before), [
+    "GET /api/resource/Sales%20Invoice/" + INVOICE_ID,
+  ]);
+}
+
 function updateArgs(status) {
   return { doctype: "Task", name: TASK_ID, data: { status } };
 }
@@ -485,6 +551,19 @@ async function checkMrtr(client, fixture, otherIdentity) {
   const completed = result(await execute(client, program, second));
   assert.equal(completed.isError, undefined, JSON.stringify(completed));
   assert.equal(completed.structuredContent.data.status, "Completed");
+  assert.deepEqual(fixture.updates.slice(start), ["Working", "Completed"]);
+
+  const runId = completed._meta?.[EXECUTION_REFERENCE_META];
+  assert.ok(typeof runId === "string" && runId.length > 0);
+  const name = "complete-task";
+  const saved = result(
+    await call(client, "execute", { save: { runId, name } }),
+  );
+  assert.equal(saved._meta?.[SNIPPET_EVENT_META], "saved");
+  const recalled = { snippet: name };
+  const decline = approval(await call(client, "execute", recalled), "decline");
+  assert.deepEqual(fixture.updates.slice(start), ["Working", "Completed"]);
+  failed(await call(client, "execute", recalled, decline));
   assert.deepEqual(fixture.updates.slice(start), ["Working", "Completed"]);
 }
 
@@ -570,11 +649,15 @@ test("installed Code Mode beta over stdio and Streamable HTTP", {
   };
   const elicitation = { elicitation: { form: {} } };
   await t.test("stdio", async (t) => {
-    const exchange = startStdio(t, bin, cwd, env);
+    const exchange = startStdio(t, bin, cwd, {
+      ...env,
+      MCP_SNIPPETS_DIR: join(cwd, "snippets-stdio"),
+    });
     const plain = makeClient(exchange);
     await checkModel(plain, frappe);
     const app = makeClient(exchange, APP_CAPABILITIES);
     await checkApp(app);
+    await checkSnippets(app, frappe);
     const mrtr = makeClient(exchange, elicitation);
     await checkMrtr(mrtr, frappe);
     await checkUpload(mrtr, frappe);
@@ -583,6 +666,7 @@ test("installed Code Mode beta over stdio and Streamable HTTP", {
   await t.test("authenticated Streamable HTTP", async (t) => {
     const url = await startHttp(t, bin, cwd, {
       ...env,
+      MCP_SNIPPETS_DIR: join(cwd, "snippets-http"),
       MCP_OAUTH_JWKS_URL: frappe.url + "/jwks",
       MCP_OAUTH_ISSUER: ISSUER,
       MCP_OAUTH_AUDIENCE: AUDIENCE,
@@ -603,12 +687,14 @@ test("installed Code Mode beta over stdio and Streamable HTTP", {
     await checkModel(plain, frappe);
     const app = makeClient(alice, APP_CAPABILITIES);
     await checkApp(app);
+    const otherApp = makeClient(bob, APP_CAPABILITIES);
+    await checkSnippets(app, frappe, otherApp);
     await checkMrtr(
       makeClient(alice, elicitation),
       frappe,
       makeClient(bob, elicitation),
     );
-    await checkAppWrite(app, frappe, makeClient(bob, APP_CAPABILITIES));
+    await checkAppWrite(app, frappe, otherApp);
   });
   assert.deepEqual(frappe.unexpected, []);
 });

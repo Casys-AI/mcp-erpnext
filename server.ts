@@ -168,7 +168,7 @@ async function main() {
   // Build MCP server
   const server = new McpApp({
     name: "mcp-erpnext",
-    version: "4.0.0-beta.1",
+    version: "4.0.0-beta.2",
     instructions: ACTIVE_CONTEXT_INSTRUCTIONS,
     transport: "stateless",
     advertiseAppOnlyTools: true,

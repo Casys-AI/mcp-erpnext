@@ -5,13 +5,12 @@ import {
 } from "@mcpview/view";
 import { App } from "@modelcontextprotocol/ext-apps";
 import type { ComponentType } from "preact";
-import "../global.css";
+import "./styles.css";
 import { applyCasysTheme, themeFromSearch } from "../shared/casys-theme.ts";
 import { applyDocumentLocale } from "../shared/document-locale.ts";
 import { mergeHostContext } from "../shared/host-context.ts";
 import { UI_VIEWERS } from "../viewers.ts";
 import { createWriteApproval } from "./approval.ts";
-import "./approval.css";
 import { mountComponent } from "./mount.ts";
 
 import.meta.glob("../*-viewer/src/*.css", { eager: true });

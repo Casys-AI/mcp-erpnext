@@ -391,6 +391,21 @@ async function checkApp(client) {
     assert.equal(contents[0].uri, uri);
     assert.equal(contents[0].mimeType, APP_MIME);
     assert.match(contents[0].text, /<html\b/i);
+    if (uri === EXECUTE_VIEW) {
+      // The dark overrides survive pruning even when the default palette disappears.
+      const css = contents[0].text.match(/<style\b[^>]*>([\s\S]*?)<\/style>/i)
+        ?.[1];
+      const lightTheme = css?.match(/:root,\s*:host\s*\{([^{}]*)\}/)?.[1];
+      assert.ok(lightTheme, "Code Mode must bundle the default viewer theme");
+      for (const color of ["chart-1", "chart-2", "chart-3", "brand"]) {
+        assert.match(lightTheme, new RegExp(`--color-${color}:\\s*[^;}\\s]+`));
+      }
+      assert.match(
+        css,
+        /\.bg-chart-4\s*\{/,
+        "include mounted KPI viewer utilities",
+      );
+    }
   }
 
   const refresh = invoice._meta[ERP_VIEWER_META].refreshRequest;

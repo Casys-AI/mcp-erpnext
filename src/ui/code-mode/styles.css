@@ -1,0 +1,5 @@
+@import "../global.css";
+@import "./approval.css";
+
+/* Code Mode mounts viewers outside its Vite root. Include their Tailwind utilities and theme variables. */
+@source "../*-viewer/src/**/*.{ts,tsx}";

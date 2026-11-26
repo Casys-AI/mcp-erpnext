@@ -4,6 +4,13 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [4.0.0-beta.2] - 2026-11-26
+
+### Fixed
+
+- Code Mode now includes the styles of the views it displays. All four sales
+  funnel bars are visible in the light theme.
+
 ## [4.0.0-beta.1] - 2026-11-26
 
 - Installing this prerelease selects Code Mode on stdio and HTTP. The LLM

@@ -14,9 +14,12 @@ import {
   SnippetCatalogError,
   type SnippetParameterType,
 } from "@mcpview/server/snippets";
-import { runCodeProgram } from "./sandbox.ts";
+import { runCodeProgram, SuspendCodeMode } from "./sandbox.ts";
 
 type Arguments = Record<string, unknown>;
+// Compose's public MCP App-only result envelope. The backend does not render panels.
+const SNIPPET_PANELS_META_KEY = "io.mcpview/snippet-panels";
+const MAX_PANEL_BYTES = 6 * 1024 * 1024;
 const EXECUTION_REFERENCE_META = "io.casys/erpnext-execution-ref";
 const SNIPPET_EVENT_META = "io.casys/erpnext-snippet-event";
 
@@ -128,6 +131,7 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       "Use await erp.call(name, args) for business operations. The host asks for confirmation before each write.",
       "For attachment bytes or large arguments, pass the complete operation argument object as execute.input and use await erp.callWithInput(name). The input stays on the server.",
       "Return an original response to display its declared view, or return any computed JSON value.",
+      "To display several business views together, call erp.panel(originalResponse, optionalTitle) for each in the desired order, then return a short JSON summary. Only original responses with declared business views may be selected.",
       "Use execute.params for JSON parameters readable as erp.params.",
       ...(options.snippets
         ? [
@@ -330,10 +334,15 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
         externalInput,
         parameters,
       );
-      if ("native" in output) {
-        const selected = execution.resolve(output.native.reference);
+      function resolveResult(reference: string, requireView = false) {
+        const selected = execution.resolve(reference);
         if (!selected) {
           throw new Error("Unknown result from this ERPNext execution.");
+        }
+        if (requireView && !selected.resourceUri) {
+          throw new Error(
+            "The selected ERP operation has no compatible declared view.",
+          );
         }
         return selected.resourceUri
           ? withDeclaredViewUri(
@@ -343,6 +352,39 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
           )
           : selected.result;
       }
+      if ("panels" in output) {
+        let nativeBytes = 0;
+        const panels = output.panels.map(({ native, name, title }) => {
+          const result = resolveResult(native.reference, true);
+          const serialized = JSON.stringify(result);
+          if (
+            serialized.length > MAX_PANEL_BYTES ||
+            (nativeBytes += new TextEncoder().encode(serialized).byteLength) >
+              MAX_PANEL_BYTES
+          ) {
+            throw new Error(
+              "Selected ERP results exceed the board size limit.",
+            );
+          }
+          return {
+            id: native.reference,
+            provider: "erpnext",
+            name,
+            title,
+            result,
+          };
+        });
+        const visible = {
+          value: output.value,
+          panels: panels.map(({ result: _result, ...panel }) => panel),
+        };
+        return {
+          structuredContent: visible,
+          content: [{ type: "text", text: JSON.stringify(visible) }],
+          _meta: { [SNIPPET_PANELS_META_KEY]: panels },
+        };
+      }
+      if ("native" in output) return resolveResult(output.native.reference);
       return dataResult(output.value);
     }
 
@@ -353,8 +395,33 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
     ) {
       let completed: DeclaredViewNativeResult | undefined;
       const run = async (call: CodeModeExecuteOptions["call"]) => {
-        completed = await executeProgram(program, parameters ?? {}, call);
-        return completed;
+        let completedWrite: string | undefined;
+        try {
+          completed = await executeProgram(
+            program,
+            parameters ?? {},
+            async (name, inputs, context) => {
+              const result = await call(name, inputs, context);
+              if (
+                mutations.has(name) &&
+                !(typeof result === "object" && result !== null &&
+                  (("isError" in result && result.isError) ||
+                    ("resultType" in result &&
+                      result.resultType !== "complete")))
+              ) {
+                completedWrite = name;
+              }
+              return result;
+            },
+          );
+          return completed;
+        } catch (error) {
+          // A request for the next approval must continue through the same journal.
+          if (!completedWrite || error instanceof SuspendCodeMode) throw error;
+          throw new SuspendCodeMode(
+            `ERPNext completed ${completedWrite}, but the program or its selected views could not finish. Check the changed record before retrying.`,
+          );
+        }
       };
       const result = options.run
         ? await options.run(ctx, run, args)

@@ -13,6 +13,16 @@ const MAX_JSON = 1024 * 1024;
 /** A trusted host suspension bypasses guest catch handlers and destroys this VM. */
 export class SuspendCodeMode extends Error {}
 
+export interface SelectedErpResult<T> {
+  readonly native: T;
+  readonly name: string;
+  readonly title: string;
+}
+type ProgramResult<T> =
+  | { native: T }
+  | { value: unknown }
+  | { panels: SelectedErpResult<T>[]; value: unknown };
+
 let engine: ReturnType<typeof newQuickJSWASMModuleFromVariant> | undefined;
 
 /**
@@ -27,7 +37,7 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
   mutations: ReadonlySet<string> = new Set(),
   input?: Record<string, unknown>,
   params: Record<string, unknown> = {},
-): Promise<{ native: T } | { value: unknown }> {
+): Promise<ProgramResult<T>> {
   if (typeof code !== "string" || !code.trim() || code.length > MAX_CODE) {
     throw new Error(
       "Supply a JavaScript function body of at most 16,384 characters.",
@@ -96,7 +106,13 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
     }
 
     let calls = 0;
-    const captured = new Map<QuickJSHandle, T>();
+    const captured = new Map<QuickJSHandle, { native: T; name: string }>();
+    const selected = new Map<QuickJSHandle, SelectedErpResult<T>>();
+    function original(value: QuickJSHandle) {
+      for (const entry of captured) {
+        if (vm.eq(value, entry[0])) return entry;
+      }
+    }
     const pending: Array<() => Promise<void>> = [];
     // Keep external inputs such as attachments in the host. Both bindings
     // enter the same queue, budget and authorization path.
@@ -176,7 +192,7 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
           );
         }
         if (vm.typeof(value) === "object" && !vm.eq(value, vm.null)) {
-          captured.set(value, receipt);
+          captured.set(value, { native: receipt, name });
         }
         deferred.resolve(value);
       });
@@ -192,10 +208,30 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
       }
       return enqueue(name);
     }));
+    const panel = keep(vm.newFunction("panel", (value, label, ...extra) => {
+      if (!value || extra.length) {
+        throw new Error("Use erp.panel(originalResult, optionalTitle).");
+      }
+      const receipt = original(value);
+      if (!receipt) {
+        throw new Error("Select an original result from this ERP execution.");
+      }
+      const [handle, metadata] = receipt;
+      if (label && vm.typeof(label) !== "string") {
+        throw new Error("Supply a text panel title.");
+      }
+      const title = label ? vm.getString(label) : metadata.name;
+      if (!title.trim() || title.length > 120) {
+        throw new Error("Supply a panel title of 1 to 120 characters.");
+      }
+      selected.set(handle, { ...metadata, title });
+      return vm.undefined;
+    }));
     const erp = keep(vm.newObject());
     vm.setProp(erp, "catalog", intoGuest(catalog));
     vm.setProp(erp, "params", intoGuest(params));
     vm.setProp(erp, "call", callFunction);
+    vm.setProp(erp, "panel", panel);
     vm.setProp(erp, "callWithInput", withInput);
     vm.setProp(vm.global, "erp", erp);
 
@@ -209,9 +245,14 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
       const state = vm.getPromiseState(program);
       if (state.type === "fulfilled") {
         const value = keep(state.value);
-        for (const [handle, native] of captured) {
-          if (vm.eq(value, handle)) return { native };
+        if (selected.size) {
+          return {
+            panels: [...selected.values()],
+            value: vm.typeof(value) === "undefined" ? null : fromGuest(value),
+          };
         }
+        const receipt = original(value);
+        if (receipt) return { native: receipt[1].native };
         return { value: fromGuest(value) };
       }
       if (state.type === "rejected") {

@@ -346,3 +346,159 @@ Deno.test("an ineligible parameter contract preserves the successful ERP result"
     ],
   );
 });
+
+Deno.test("selects declared ERP views in program order while keeping native metadata private", async () => {
+  const calls: string[] = [];
+  const { handler } = createCodeModeExecute({
+    tools: [list, get],
+    mountableResourceUris: [table, detail],
+    call: async (name) => {
+      calls.push(name);
+      return {
+        content: [{ type: "text", text: name }],
+        structuredContent: { name },
+        _meta: { private: "viewer only" },
+      };
+    },
+  });
+  const result = await handler({
+    code: `
+    const a=await erp.call("list",{}), b=await erp.call("get",{});
+    erp.panel(b,"Invoice"); erp.panel(a,"List"); erp.panel(b,"Invoice details");
+    return {invoice:b.name};
+  `,
+  });
+  type Board = {
+    content: unknown;
+    structuredContent: {
+      value: unknown;
+      panels: { id: string; name: string; title: string }[];
+    };
+    _meta: Record<
+      string,
+      {
+        id: string;
+        name: string;
+        title: string;
+        result: { _meta: { private: string } };
+      }[]
+    >;
+  };
+  const data = result as Board;
+  const panels = data._meta["io.mcpview/snippet-panels"];
+  assertEquals(calls, ["list", "get"]);
+  assertEquals(readDeclaredViewUri(result), undefined);
+  assertEquals(
+    panels.map((p) => [p.name, p.title, readDeclaredViewUri(p.result)]),
+    [
+      ["get", "Invoice details", detail],
+      ["list", "List", table],
+    ],
+  );
+  assertEquals(panels[0].id !== panels[1].id, true);
+  assertEquals(
+    data.structuredContent.panels.map((p) => p.id),
+    panels.map((p) => p.id),
+  );
+  assertEquals(data.structuredContent.value, { invoice: "get" });
+  assertEquals(panels.map((p) => p.result._meta.private), [
+    "viewer only",
+    "viewer only",
+  ]);
+  assertEquals(
+    JSON.stringify([data.structuredContent, data.content]).includes(
+      "viewer only",
+    ),
+    false,
+  );
+});
+
+Deno.test("records a panel program and replays fresh results without repeating an ERP call at selection", async () => {
+  const catalog = createSnippetCatalog();
+  const calls: unknown[] = [];
+  const { handler } = createCodeModeExecute({
+    tools: [get],
+    mountableResourceUris: [detail],
+    snippets: () => ({ scope: "workspace-user", catalog }),
+    call: async (_name, args) => {
+      calls.push(args);
+      return { content: [], structuredContent: { ...args } };
+    },
+  });
+  const program =
+    'const x=await erp.call("get",{id:erp.params.id}); erp.panel(x);';
+  const first = await handler({ code: program, params: { id: "INV-1" } });
+  const ref = (first as { _meta: Record<string, string> })
+    ._meta["io.casys/erpnext-execution-ref"];
+  await handler({ save: { runId: ref, name: "invoice-board" } });
+  const second = await handler({
+    snippet: "invoice-board",
+    params: { id: "INV-2" },
+  });
+  function panel(r: unknown) {
+    return (r as {
+      _meta: Record<
+        string,
+        { id: string; result: { structuredContent: { id: string } } }[]
+      >;
+    })._meta["io.mcpview/snippet-panels"][0];
+  }
+  assertEquals(calls, [{ id: "INV-1" }, { id: "INV-2" }]);
+  assertEquals(panel(first).id === panel(second).id, false);
+  assertEquals(panel(first).result.structuredContent.id, "INV-1");
+  assertEquals(panel(second).result.structuredContent.id, "INV-2");
+});
+
+Deno.test("panel rejects computed lookalikes and results without a declared viewer", async () => {
+  const { handler } = createCodeModeExecute({
+    tools: [get],
+    mountableResourceUris: [],
+    call: async () => ({ content: [], structuredContent: { id: "TEST" } }),
+  });
+  await assertRejects(
+    async () =>
+      await handler({
+        code: 'const a=await erp.call("get",{}); erp.panel({...a});',
+      }),
+    Error,
+    "original result",
+  );
+  await assertRejects(
+    async () =>
+      await handler({
+        code: 'const a=await erp.call("get",{}); erp.panel(a);',
+      }),
+    Error,
+    "no compatible declared view",
+  );
+});
+
+Deno.test("an invalid panel after an approved write preserves its completed status", async () => {
+  let writes = 0;
+  const write = {
+    ...get,
+    name: "submit",
+    annotations: { readOnlyHint: false },
+  };
+  const { handler } = createCodeModeExecute({
+    tools: [write],
+    mountableResourceUris: [],
+    call: async () => {
+      throw new Error("Use the approved journal.");
+    },
+    run: (_ctx, run) =>
+      run(async () => {
+        writes++;
+        return { content: [], structuredContent: { id: "INV-QA" } };
+      }),
+  });
+  await assertRejects(
+    async () =>
+      await handler({
+        code: 'const r=await erp.call("submit",{}); erp.panel(r);',
+      }),
+    SuspendCodeMode,
+    "completed submit",
+  );
+  assertEquals(writes, 1);
+});

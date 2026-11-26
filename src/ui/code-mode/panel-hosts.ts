@@ -1,0 +1,78 @@
+interface PanelUpdate<Block> {
+  content?: Block[];
+  structuredContent?: Record<string, unknown>;
+}
+
+type Selection<Block> = { title: string; value: PanelUpdate<Block> };
+
+/** One host snapshot contains the acknowledged selections of every mounted panel. */
+export function createPanelContexts<Block, Options, Response extends object>(
+  send: (update: PanelUpdate<Block>, options?: Options) => Promise<Response>,
+) {
+  type Update = PanelUpdate<Block>;
+  const active = new Map<string, Selection<Block>>();
+  let queued: Promise<unknown> = Promise.resolve();
+  function enqueue<T>(work: () => Promise<T>): Promise<T> {
+    const next = queued.then(work);
+    queued = next.catch(() => {});
+    return next;
+  }
+  function hasSelection(value: Update): boolean {
+    return Boolean(
+      value.content?.length ||
+        Object.keys(value.structuredContent ?? {}).length,
+    );
+  }
+  function merge(next: Map<string, Selection<Block>>, last: Update): Update {
+    const entries = [...next.values()];
+    if (entries.length === 0) return last;
+    if (entries.length === 1) return entries[0].value;
+    const content = entries.flatMap(({ value }) => value.content ?? []);
+    const panels = entries.flatMap(({ title, value }) =>
+      value.structuredContent
+        ? [{ title, context: value.structuredContent }]
+        : []
+    );
+    return {
+      ...(entries.some(({ value }) => value.content !== undefined)
+        ? { content }
+        : {}),
+      ...(panels.length ? { structuredContent: { panels } } : {}),
+    };
+  }
+  return {
+    forPanel(id: string, title: string, signal: AbortSignal) {
+      return (value: Update, options?: Options) =>
+        enqueue(async () => {
+          signal.throwIfAborted();
+          const next = new Map(active);
+          if (hasSelection(value)) next.set(id, { title, value });
+          else next.delete(id);
+          const response = await send(
+            merge(next, value),
+            options,
+          );
+          if (!("isError" in response && response.isError)) {
+            if (next.has(id)) active.set(id, { title, value });
+            else active.delete(id);
+          }
+          return response;
+        });
+    },
+    clear(): Promise<void> {
+      return enqueue(async () => {
+        if (!active.size) return;
+        const entries = [...active.values()];
+        active.clear();
+        await send({
+          ...(entries.some(({ value }) => value.structuredContent !== undefined)
+            ? { structuredContent: {} }
+            : {}),
+          ...(entries.some(({ value }) => value.content !== undefined)
+            ? { content: [] }
+            : {}),
+        });
+      });
+    },
+  };
+}

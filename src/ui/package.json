@@ -25,6 +25,8 @@
   },
   "dependencies": {
     "@mcpview/components": "^0.13.1",
+    "@mcpview/compose": "0.12.0",
+    "@mcpview/contracts": "^0.2.1",
     "@mcpview/view": "^0.11.1",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
     "preact": "^10.28.3",

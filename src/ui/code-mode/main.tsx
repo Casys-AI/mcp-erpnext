@@ -1,3 +1,10 @@
+import {
+  composeSnippetBoard,
+  readSnippetPanels,
+  type SnippetPanel as SelectedPanel,
+} from "@mcpview/compose/code-mode/board";
+import { readDeclaredViewSelection } from "@mcpview/contracts";
+import { createPanelContexts } from "./panel-hosts.ts";
 import { installMcpViewTheme } from "@mcpview/components";
 import {
   createDeclaredViewDispatcher,
@@ -79,14 +86,95 @@ function showText(text: string) {
   viewRoot.replaceChildren(message);
 }
 
+const panelContexts = createPanelContexts(host.updateModelContext.bind(host));
+let panels: ReturnType<typeof createDeclaredViewDispatcher<App>>[] = [];
+let boardLifetime: AbortController | undefined;
+let clearing = Promise.resolve();
+
+function clearPanels() {
+  if (!boardLifetime) return clearing;
+  boardLifetime.abort();
+  boardLifetime = undefined;
+  for (const panel of panels) panel.dispose();
+  panels = [];
+  clearing = panelContexts.clear().catch(console.error);
+  return clearing;
+}
+
 async function showExecution(result: HostResult, signal: AbortSignal) {
-  const rendered = await dispatcher.dispatch(result);
+  await clearPanels();
   if (signal.aborted) return;
+  if (!readSnippetPanels(result).length) {
+    const rendered = await dispatcher.dispatch(result);
+    if (signal.aborted) return;
+    viewRoot.hidden = false;
+    if (!rendered) showText(resultText(result));
+    return;
+  }
+
+  await dispatcher.dispatch({ content: [] });
+  if (signal.aborted) return;
+  const board = composeSnippetBoard(result, {
+    layout: "grid",
+    resolveView: (panel) => ({
+      resourceUri: readDeclaredViewSelection(panel.result)?.resourceUri ??
+        "ui://mcp-erpnext/code-mode",
+    }),
+  });
+  boardLifetime = new AbortController();
+  const panelSignal = AbortSignal.any([signal, boardLifetime.signal]);
+  const grid = document.createElement("div");
+  grid.className = "code-mode-board";
   viewRoot.hidden = false;
-  if (!rendered) showText(resultText(result));
+  viewRoot.replaceChildren(grid);
+  await Promise.all(board.children.map(async (child) => {
+    const panel = child.context!.panel as SelectedPanel;
+    const native = panel.result as HostResult;
+    const section = document.createElement("section");
+    section.className = "code-mode-panel";
+    const heading = document.createElement("h2");
+    heading.id = `erp-panel-${child.slot}`;
+    heading.textContent = panel.title || panel.name;
+    section.setAttribute("aria-labelledby", heading.id);
+    const body = document.createElement("div");
+    body.className = "code-mode-panel-body";
+    section.append(heading, body);
+    grid.append(section);
+
+    const updateContext = panelContexts.forPanel(
+      panel.id,
+      heading.textContent,
+      panelSignal,
+    );
+    const panelHost = new Proxy(host, {
+      get(target, key) {
+        if (key === "updateModelContext") return updateContext;
+        const value = Reflect.get(target, key, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const mounted = createDeclaredViewDispatcher({
+      root: body,
+      host: panelHost,
+      loaders,
+    });
+    panels.push(mounted);
+    try {
+      if (await mounted.dispatch(native) || panelSignal.aborted) return;
+      body.textContent = resultText(native);
+    } catch (error) {
+      if (!panelSignal.aborted) {
+        body.textContent = error instanceof Error
+          ? error.message
+          : String(error);
+      }
+    }
+  }));
 }
 
 async function clearExecution(signal: AbortSignal) {
+  await clearPanels();
+  if (signal.aborted) return;
   await dispatcher.dispatch({ content: [] });
   if (!signal.aborted) {
     viewRoot.replaceChildren();
@@ -174,11 +262,12 @@ host.ontoolresult = async (result) => {
     }
   }
 };
-host.onteardown = () => {
+host.onteardown = async () => {
   delivery.abort();
   approval.close();
   render(null, snippetRoot);
   dispatcher.dispose();
+  await clearPanels();
   return {};
 };
 const ready = host.connect().then(() => bindHostContext(host));

@@ -16,7 +16,8 @@ import {
   layoutFromSearch as kitLayoutFromSearch,
   useViewerLayout as useKitViewerLayout,
 } from "@mcpview/components/layout";
-import { useHostContext } from "./host-context-hook";
+import { useLayoutEffect, useState } from "preact/hooks";
+import { useHostContext } from "./host-context-hook.ts";
 
 export type { ViewerLayout } from "@mcpview/components/layout";
 
@@ -26,5 +27,14 @@ export function layoutFromSearch(search = location.search) {
 
 export function useViewerLayout<T extends HTMLElement>() {
   const host = useHostContext();
-  return useKitViewerLayout<T>(host);
+  const [inPanel, setInPanel] = useState(false);
+  // The host grants dimensions to the entire iframe. Each Compose panel has its
+  // own space; let the SDK measure the native viewer inside that panel.
+  const view = useKitViewerLayout<T>(
+    inPanel ? { ...host, containerDimensions: undefined } : host,
+  );
+  useLayoutEffect(() => {
+    setInPanel(Boolean(view.ref.current?.closest(".code-mode-panel-body")));
+  }, [view.ref]);
+  return view;
 }

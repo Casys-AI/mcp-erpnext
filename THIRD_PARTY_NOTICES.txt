@@ -15,12 +15,13 @@ viewers and of the Node bundle. Do not edit by hand; regenerate with:
 
 The embedded webfonts are maintained by hand (section 3).
 
-1. Package index (48 packages)
+1. Package index (49 packages)
 ------------------------------------------------------------------------------
 
 - @jitl/quickjs-ffi-types@0.32.0 (MIT) [node]
 - @jitl/quickjs-singlefile-browser-release-sync@0.32.0 (MIT) [node]
 - @mcpview/components@0.13.1 (MIT) [ui]
+- @mcpview/compose@0.12.0 (MIT) [ui]
 - @mcpview/contracts@0.2.1 (MIT) [node, ui]
 - @mcpview/server@0.30.2 (MIT) [node]
 - @mcpview/view@0.11.1 (MIT) [ui]
@@ -158,6 +159,7 @@ THE SOFTWARE.
 MIT
 Applies to:
   @mcpview/components@0.13.1
+  @mcpview/compose@0.12.0
   @mcpview/contracts@0.2.1
   @mcpview/server@0.30.2
   @mcpview/view@0.11.1

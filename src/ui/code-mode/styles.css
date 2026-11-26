@@ -150,3 +150,43 @@
     min-height: 2.75rem;
   }
 }
+
+.code-mode-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.5rem;
+}
+
+.code-mode-panel {
+  min-inline-size: 0;
+  overflow: clip;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.code-mode-panel > h2 {
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  border-block-end: 1px solid var(--color-line-soft);
+  color: var(--color-ink);
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.code-mode-panel-body {
+  min-inline-size: 0;
+  overflow-x: auto;
+}
+
+/* In a split view, fit the sortable list to its columns. Its native scroll
+ * container keeps the remaining fields reachable when the columns need more room. */
+.code-mode-panel table:has(th[aria-sort]) {
+  table-layout: auto;
+}
+
+.code-mode-panel table:has(th[aria-sort]) :is(th[aria-sort], td.truncate) {
+  padding-inline: 0.5rem;
+}

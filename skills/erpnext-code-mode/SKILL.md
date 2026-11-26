@@ -37,6 +37,27 @@ read:
 return await erp.call("erpnext_sales_invoice_get", { name: "SINV-00042" });
 ```
 
+To show several existing business views in one response, select each original
+result with `erp.panel(result, title)` in the requested display order. A
+programme can use the output of an operation without displaying it. Return a
+short summary after selecting the panels. For example, show a customer's overdue
+list alongside the invoice whose exact name the user supplied in
+`execute.params.invoice`:
+
+```js
+const rows = await erp.call("erpnext_sales_invoice_list", {
+  status: "Overdue",
+  customer: erp.params.customer,
+  limit: 20,
+});
+const invoice = await erp.call("erpnext_sales_invoice_get", {
+  name: erp.params.invoice,
+});
+erp.panel(rows, "Overdue invoices");
+erp.panel(invoice, "Invoice details");
+return { invoice: erp.params.invoice };
+```
+
 When reporting totals, prefer the corresponding ERP aggregate. A page of rows
 may be only part of the result. Check currencies before adding amounts and use
 the currency returned by the operation.

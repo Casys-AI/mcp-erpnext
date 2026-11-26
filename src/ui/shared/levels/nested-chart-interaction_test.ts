@@ -189,3 +189,14 @@ Deno.test("nested chart context - invalid coordinates do not invent a point", ()
     null,
   );
 });
+
+Deno.test("nested chart pins keep two equally named columns distinct", () => {
+  const chart = {
+    labels: ["Jan", "Jan"],
+    datasets: [{ label: "Revenue", values: [3, 9] }],
+  };
+  const items = nestedChartContextCandidates(chart, "id", "Sales");
+  assertEquals(items.length, 2);
+  assertEquals(items[0].id === items[1].id, false);
+  assertEquals(items.map((i) => i.value), ["3", "9"]);
+});

@@ -352,6 +352,16 @@ export const ur: Record<string, string> = {
   "drill.sent": "گفتگو میں بھیجا گیا",
   "message.sending": "بھیجا جا رہا ہے…",
   "message.send_error": "گفتگو میں نہیں بھیجا جا سکا",
+  "context.pin.label": "سیاق میں پن کریں",
+  "context.pin.add": "{label} کو سیاق میں پن کریں",
+  "context.pin.remove": "سیاق سے {label} کی پن ہٹائیں",
+  "doclist.pin.show": "سیاق کی پنیں دکھائیں",
+  "doclist.pin.hide": "سیاق کی پنیں چھپائیں",
+  "doclist.pin.all": "تمام {count} مماثل قطاروں کو سیاق میں پن کریں",
+  "doclist.pin.remove_all": "تمام {count} مماثل قطاروں کی پن سیاق سے ہٹائیں",
+  "doclist.pin.count": "پن شدہ: {count}",
+  "context.active.partly_shared":
+    "جزوی طور پر شیئر ہوا (کل {total} میں سے {shared})",
   "context.active.label": "سیاق",
   "context.active.items": "فعال سیاق کے انتخابات",
   "context.active.attachment":
@@ -415,6 +425,7 @@ export const ur: Record<string, string> = {
   "nav.stale_title":
     "اسٹیک میں گہری کسی کارروائی نے اس سطح کے مواد کو بدل دیا ہے۔",
   "nav.trail": "نیویگیشن پگڈنڈی",
+  "kanban.pin.loaded_cards": "{column} میں لوڈ شدہ کارڈز ({count})",
   "kanban.nav.edit_card": "{id} میں ترمیم کریں",
   "nav.bar_click": "کلک: ایک اور سطح",
   "nav.unexpected_body": "اس سطح کو غیر متوقع مواد ملا۔",

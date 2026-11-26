@@ -38,13 +38,18 @@ export function nestedChartContextItem(
   view: string,
   labelIndex: number,
   seriesIndex: number,
+  repeatedLabels?: ReadonlySet<string>,
 ): ContextSelectionItem | null {
   const label = chart.labels[labelIndex];
   const series = chart.datasets[seriesIndex];
   if (label === undefined || !series) return null;
   const seriesLabel = series.label || `#${seriesIndex + 1}`;
+  const repeated = repeatedLabels
+    ? repeatedLabels.has(label)
+    : chart.labels.indexOf(label) !== chart.labels.lastIndexOf(label);
   return {
-    id: `${chartId}:point:${encoded(label)}:${encoded(seriesLabel)}`,
+    id: `${chartId}:point:${encoded(label)}:${encoded(seriesLabel)}` +
+      (repeated ? `:index:${labelIndex}` : ""),
     view,
     reconcileKey: chartId,
     label: `${label} · ${seriesLabel}`,
@@ -57,6 +62,12 @@ export function nestedChartContextCandidates(
   chartId: string,
   view: string,
 ): ContextSelectionItem[] {
+  const seen = new Set<string>();
+  const repeatedLabels = new Set<string>();
+  for (const label of chart.labels) {
+    if (seen.has(label)) repeatedLabels.add(label);
+    seen.add(label);
+  }
   return chart.labels.flatMap((_, labelIndex) =>
     chart.datasets.flatMap((_, seriesIndex) => {
       const item = nestedChartContextItem(
@@ -65,6 +76,7 @@ export function nestedChartContextCandidates(
         view,
         labelIndex,
         seriesIndex,
+        repeatedLabels,
       );
       return item ? [item] : [];
     })

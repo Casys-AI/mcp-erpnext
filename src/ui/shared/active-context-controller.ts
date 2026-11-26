@@ -682,6 +682,13 @@ export function createActiveContextController(
     clearPreviousScope() {
       if (clearedScope === scope) return;
       clearedScope = scope;
+      // Changing a KPI period can change its scope without ever pinning a value.
+      // An outstanding write, failed ACK or reversible gesture can still own host context.
+      if (
+        !state.pending && !state.failed && !mutationLog.length &&
+        !state.selection.singles.length && !state.selection.groups.length &&
+        canReplaceActiveContext(app.getHostCapabilities())
+      ) return Promise.resolve("unchanged" as const);
       return clear();
     },
     dismissEviction: () => publish({ evictedLabel: null }),

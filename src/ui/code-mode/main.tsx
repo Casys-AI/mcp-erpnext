@@ -196,7 +196,10 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
       : undefined;
     const interaction = interactions.forPanel(child.slot, panel.id);
     if (periods) {
-      viewerInteractions.set(panelHost, { updateKpiPeriods: periods.update });
+      viewerInteractions.set(panelHost, {
+        updateKpiPeriods: periods.update,
+        kpiPeriodSelection: periods.selection,
+      });
     } else if (interaction) viewerInteractions.set(panelHost, interaction);
     const mounted = createDeclaredViewDispatcher({
       root: body,

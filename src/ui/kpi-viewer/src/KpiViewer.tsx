@@ -12,7 +12,6 @@ import {
   useRef,
   useState,
 } from "preact/hooks";
-import type { JSX } from "preact";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
 import {
@@ -62,18 +61,13 @@ import {
   type KpiSecondaryLine,
 } from "./kpi-format.ts";
 import {
-  kpiClickAction,
-  kpiClickIntent,
   kpiContextEnabled,
-  type KpiDetailButtonSpec,
-  kpiDetailButtonSpec,
-  kpiHintKey,
-  kpiInteractionPlan,
-  kpiKeyShortcuts,
   kpiNumberAction,
   kpiTrendAction,
 } from "./kpi-jumps.ts";
 import {
+  kpiBarPeriods,
+  kpiInspectedIndex,
   kpiSparklinePeriod,
   type KpiSparklinePoint,
   kpiSparklinePoints,
@@ -82,7 +76,9 @@ import {
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
 import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
-import { useClickIntent } from "~/shared/useClickIntent.ts";
+import { ContextPinButton } from "~/shared/ContextPinButton.tsx";
+import type { KpiPeriod } from "../../../code-mode/kpi-period.ts";
+import { acceptsDetailToggleClick } from "~/shared/detail-toggle.ts";
 import {
   canShareActiveContextResource,
   type ContextSelectionItem,
@@ -224,39 +220,21 @@ function SparklineBars({
   ariaLabels,
   height,
   gap,
-  contextEnabled,
-  isSelected,
-  ariaKeyShortcuts,
-  onClick,
-  onDoubleClick,
-  onKeyDown,
+  activeIndex,
+  onInspect,
+  onDetail,
 }: {
   values: number[];
   labels?: string[];
-  /** Month and exact value announced for each graphical bar. */
   ariaLabels?: string[];
-  /** Hauteur totale du conteneur en px. */
   height: number;
   gap: number;
-  contextEnabled?: boolean;
-  isSelected?: (index: number) => boolean;
-  ariaKeyShortcuts?: string;
-  onClick?: (
-    index: number,
-    event: JSX.TargetedMouseEvent<HTMLButtonElement>,
-  ) => void;
-  onDoubleClick?: (
-    index: number,
-    event: JSX.TargetedMouseEvent<HTMLButtonElement>,
-  ) => void;
-  onKeyDown?: (
-    index: number,
-    event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
-  ) => void;
+  activeIndex: number;
+  onInspect(index: number): void;
+  onDetail?: () => void;
 }) {
   const pcts = sparklineHeights(values);
-  const interactive = labels?.length === values.length &&
-    Boolean(onClick || onDoubleClick || onKeyDown);
+  const interactive = labels?.length === values.length;
   return (
     <div class="min-w-0">
       <div
@@ -264,7 +242,7 @@ function SparklineBars({
         style={{ height: `${height}px`, gap: `${gap}px` }}
       >
         {pcts.map((barHeight, index) => {
-          const selected = interactive && Boolean(isSelected?.(index));
+          const selected = interactive && activeIndex === index;
           const style = { height: `${Math.max(barHeight, 4)}%` };
           return interactive
             ? (
@@ -274,23 +252,16 @@ function SparklineBars({
                 class="group pointer-events-auto flex h-full min-w-0 flex-1 items-end border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
                 aria-label={ariaLabels?.[index] ?? labels![index]}
                 title={ariaLabels?.[index] ?? labels![index]}
-                aria-pressed={contextEnabled ? selected : undefined}
-                aria-keyshortcuts={ariaKeyShortcuts}
+                data-kpi-month={index}
+                aria-pressed={selected}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onClick?.(index, event);
+                  if (acceptsDetailToggleClick(event.detail)) onInspect(index);
                 }}
-                onDblClick={(event) => {
+                onDblClick={onDetail && ((event) => {
                   event.stopPropagation();
-                  onDoubleClick?.(index, event);
-                }}
-                onKeyDown={(event) => {
-                  event.stopPropagation();
-                  onKeyDown?.(index, event);
-                }}
-                onKeyUp={(event) => {
-                  if (event.key === " ") event.preventDefault();
-                }}
+                  onDetail();
+                })}
               >
                 <span
                   aria-hidden="true"
@@ -329,7 +300,7 @@ function SparklineBars({
               title={label}
               class={cx(
                 "min-w-0 flex-1 whitespace-nowrap text-center font-mono text-[8.5px]",
-                isSelected?.(index) ? "text-accent" : "text-ink-faint",
+                activeIndex === index ? "text-accent" : "text-ink-faint",
               )}
             >
               {label.replace(/\s+\d{2,4}$/, "")}
@@ -568,7 +539,19 @@ function KpiCard({
   onRefresh?: () => void;
 }) {
   const t = useT();
-  const clickIntent = useClickIntent();
+  const periodSelection = useContext(ViewerInteractionsContext)
+    ?.kpiPeriodSelection;
+  const [linkedPeriod, setLinkedPeriod] = useState<
+    KpiPeriod | null | undefined
+  >(
+    () => periodSelection?.selected(),
+  );
+  useLayoutEffect(() => {
+    const update = () => setLinkedPeriod(periodSelection?.selected());
+    update();
+    return periodSelection?.subscribe(update);
+  }, [periodSelection]);
+  const [inspectedLabel, setInspectedLabel] = useState<string | null>(null);
   const partial = hasValuationCoverage(data);
   const coverage = valuationCoverage(data);
   const displayLabel = kpiLabel(data, t);
@@ -615,202 +598,162 @@ function KpiCard({
     kpiTrendPointContext(data, point)
   );
 
-  function activateContext(
-    selection: ContextSelectionItem,
-  ) {
-    const plan = kpiInteractionPlan(
-      "context",
-      false,
-      contextEnabled,
-      false,
-    );
-    if (!plan.updateContext) return;
-    return activeContext.toggleReversible(selection);
-  }
-
-  function canOpenDetail(action: ReturnType<typeof kpiNumberAction>): boolean {
-    return action?.kind === "jump"
-      ? onOpenJump !== undefined
-      : action?.kind === "drill" && onAsk !== undefined;
-  }
-
-  function toggleDetail(
-    action: ReturnType<typeof kpiNumberAction>,
-  ) {
-    const hasJump = action?.kind === "jump" && onOpenJump !== undefined;
-    const hasMessage = action?.kind === "drill" && onAsk !== undefined;
-    const plan = kpiInteractionPlan(
-      "detail",
-      hasJump,
-      contextEnabled,
-      hasMessage,
-    );
-    if (plan.toggleLevel && action?.kind === "jump") {
-      onOpenJump?.(action.jump);
-    } else if (plan.sendMessage && action?.kind === "drill") {
-      void legacyDrillDown(action.message);
-    }
-  }
-
-  function detailAvailability(action: ReturnType<typeof kpiNumberAction>) {
-    return {
-      hasJump: action?.kind === "jump" && onOpenJump !== undefined,
-      hasMessage: action?.kind === "drill" && onAsk !== undefined,
-    };
-  }
-
-  function interactionIntent(
-    selection: ContextSelectionItem,
-    action: ReturnType<typeof kpiNumberAction>,
-  ) {
-    const { hasJump, hasMessage } = detailAvailability(action);
-    return kpiClickIntent({
-      key: selection.id,
-      click: kpiClickAction(contextEnabled, hasJump, hasMessage),
-      hasJump: action?.kind === "jump",
-      onSingle: () => activateContext(selection),
-      onDouble: () => toggleDetail(action),
-      runConversation: activeContext.runConversation,
-    });
-  }
-
-  function pointerClick(
-    selection: ContextSelectionItem,
-    action: ReturnType<typeof kpiNumberAction>,
-    clickCount: number,
-  ) {
-    if (!canOpenDetail(action) && !contextEnabled) return;
-    clickIntent.click(interactionIntent(selection, action), clickCount);
-  }
-
-  function pointerDoubleClick(
-    selection: ContextSelectionItem,
-    action: ReturnType<typeof kpiNumberAction>,
-  ) {
-    if (canOpenDetail(action)) {
-      clickIntent.doubleClick(interactionIntent(selection, action));
-    }
-  }
-
-  function keyDown(
-    selection: ContextSelectionItem,
-    action: ReturnType<typeof kpiNumberAction>,
-    event: JSX.TargetedKeyboardEvent<HTMLElement>,
-  ) {
-    if (canOpenDetail(action)) {
-      clickIntent.keyDown(interactionIntent(selection, action), event);
-      return;
-    }
-    if (
-      !contextEnabled || event.repeat ||
-      (event.key !== " " && event.key !== "Enter")
-    ) return;
-    event.preventDefault();
-    void activeContext.toggle(selection);
-  }
-
-  // Firefox émet un clic natif à Espace relâché malgré le preventDefault du
-  // keydown : sur un <button>, on l'absorbe pour ne pas activer deux fois.
-  function swallowSpaceKeyUp(event: JSX.TargetedKeyboardEvent<HTMLElement>) {
-    if (event.key === " ") event.preventDefault();
-  }
-
-  const numberDetail = detailAvailability(numberAction);
-  const trendDetail = detailAvailability(trendAction);
-  const numberHasDetail = canOpenDetail(numberAction);
-  const trendHasDetail = canOpenDetail(trendAction);
-  const numberInteractive = contextEnabled || numberHasDetail;
-  const trendInteractive = contextEnabled || trendHasDetail;
-  // En mode détail au clic, le double-clic natif n'est pas câblé : le clic a
-  // déjà ouvert le détail, un second geste le refermerait.
-  const numberClick = kpiClickAction(
-    contextEnabled,
-    numberDetail.hasJump,
-    numberDetail.hasMessage,
-  );
-  const trendClick = kpiClickAction(
-    contextEnabled,
-    trendDetail.hasJump,
-    trendDetail.hasMessage,
-  );
-  const numberDblClickEnabled = numberHasDetail && numberClick !== "detail";
-  const trendDblClickEnabled = trendHasDetail && trendClick !== "detail";
-  const numberSelected = contextEnabled &&
-    activeContext.isSelected(numberContext);
-  const trendSelected = activeContext.isSelected(trendContext);
-  const trendPointAriaLabels = trendPointContexts.map((selection) =>
-    [selection.label, selection.value].filter(Boolean).join(" · ")
-  );
-  const numberAriaLabel = numberInteractive
-    ? contextEnabled
-      ? t("context.active.toggle", { label: numberContext.label })
-      : t("kpi.drilldown.aria_detail", { label: data.label })
-    : undefined;
-  const trendAriaLabel = trendInteractive
-    ? contextEnabled
-      ? t("context.active.toggle", { label: trendContext.label })
-      : t("kpi.drilldown.aria_trend", { label: data.label })
-    : undefined;
-  const numberHintKey = kpiHintKey(
-    "number",
-    contextEnabled,
-    numberDetail.hasJump,
-    numberDetail.hasMessage,
-  );
-  const trendHintKey = kpiHintKey(
-    "trend",
-    contextEnabled,
-    trendDetail.hasJump,
-    trendDetail.hasMessage,
-  );
-  const numberTitle = numberHintKey ? t(numberHintKey) : undefined;
-  const trendTitle = trendHintKey ? t(trendHintKey) : undefined;
-  const numberKeyShortcuts = kpiKeyShortcuts(
-    contextEnabled,
-    numberDetail.hasJump,
-    numberDetail.hasMessage,
-  );
-  const trendKeyShortcuts = kpiKeyShortcuts(
-    contextEnabled,
-    trendDetail.hasJump,
-    trendDetail.hasMessage,
-  );
   const compact = layout !== "wide";
-  // Voie tactile du double-clic ou d'Entrée : un bouton visible, présent
-  // exactement quand ce double-clic est câblé. Il passe par l'arbitre comme
-  // Entrée, donc ne bascule jamais le contexte.
-  const numberDetailButton = kpiDetailButtonSpec(
-    "number",
-    numberClick,
-    numberDetail.hasJump,
-    numberDetail.hasMessage,
+  const alignedPeriods = kpiBarPeriods(
+    data.sparklinePeriods,
+    sparklinePoints.length,
   );
-  const trendDetailButton = kpiDetailButtonSpec(
-    "trend",
-    trendClick,
-    trendDetail.hasJump,
-    trendDetail.hasMessage,
+  const index = kpiInspectedIndex(
+    sparklineLabels ?? [],
+    alignedPeriods,
+    linkedPeriod,
+    inspectedLabel,
+  );
+  const inspected = trendPointContexts[index];
+  const pointLabels = trendPointContexts.map((point) =>
+    [point.label, point.value].filter(Boolean).join(" · ")
   );
 
-  function renderDetailButton(
-    spec: KpiDetailButtonSpec | null,
-    selection: ContextSelectionItem,
-    action: ReturnType<typeof kpiNumberAction>,
-    hintSide: "left" | "right",
-    klass?: string,
-  ) {
-    if (!spec) return null;
+  function inspectPoint(index: number) {
+    const point = trendPointContexts[index];
+    if (!point) return;
+    setInspectedLabel(sparklinePoints[index].label);
+    const period = alignedPeriods?.[index];
+    if (period) periodSelection?.inspect(period);
+  }
+
+  function renderPin(item: ContextSelectionItem) {
+    if (!contextEnabled) return null;
+    const pressed = activeContext.isSelected(item);
+    return (
+      <ContextPinButton
+        label={t(pressed ? "context.pin.remove" : "context.pin.add", {
+          label: item.label,
+        })}
+        pressed={pressed}
+        onToggle={() => void activeContext.toggle(item)}
+      />
+    );
+  }
+
+  function openDetail(action: ReturnType<typeof kpiNumberAction>) {
+    if (action?.kind === "jump") onOpenJump?.(action.jump);
+    else if (action?.kind === "drill" && onAsk) {
+      void activeContext.runConversation(
+        () => void legacyDrillDown(action.message),
+        Promise.resolve(true),
+      );
+    }
+  }
+
+  function renderDetailButton(forTrend: boolean) {
+    const action = forTrend ? trendAction : numberAction;
+    if (!action || (action.kind === "jump" ? !onOpenJump : !onAsk)) return null;
+    const label = t(
+      action.kind === "jump"
+        ? (forTrend ? "kpi.drilldown.aria_trend" : "interaction.detail.open")
+        : (forTrend
+          ? "kpi.drilldown.aria_trend_ask"
+          : "interaction.detail.ask"),
+      { label: data.label },
+    );
     return (
       <DetailToggleButton
         label={data.label}
-        actionLabel={t(spec.actionLabelKey, { label: data.label })}
-        hint={t(spec.hintKey)}
-        onToggle={() =>
-          clickIntent.activateDetail(interactionIntent(selection, action))}
+        actionLabel={label}
+        hint={action.kind === "jump"
+          ? t("interaction.detail.open_hint")
+          : t("nav.ask")}
+        onToggle={() => openDetail(action)}
         touch={compact}
-        hintSide={hintSide}
-        class={klass}
+        hintSide={compact ? "left" : "right"}
       />
+    );
+  }
+
+  function renderSparkline() {
+    if (!sparkline) return null;
+    return (
+      <div class="flex flex-col gap-1.5">
+        <div class="flex min-w-0 items-center justify-between gap-1">
+          <span class="min-w-0 truncate font-mono text-micro text-ink-muted">
+            {periodLabel ?? t("kpi.sparkline.trend_label")}
+          </span>
+          <span class="inline-flex shrink-0 items-center">
+            {renderDetailButton(true)}
+            {renderPin(trendContext)}
+          </span>
+        </div>
+        <SparklineBars
+          values={sparkline}
+          labels={sparklineLabels}
+          ariaLabels={pointLabels}
+          height={compact ? 44 : 56}
+          gap={compact ? 4 : 5}
+          activeIndex={index}
+          onInspect={inspectPoint}
+          onDetail={trendAction?.kind === "jump" && onOpenJump
+            ? () => openDetail(trendAction)
+            : undefined}
+        />
+        {inspected && (
+          <div class="flex items-center justify-between gap-1">
+            <span role="status" class="font-mono text-micro text-ink">
+              {sparklinePoints[index].label} · {inspected.value}
+            </span>
+            {renderPin(inspected)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderNumber() {
+    const local = numberAction?.kind === "jump" && onOpenJump;
+    const amountText = (
+      <>
+        {amount}{" "}
+        <span class="text-[length:var(--text-metric-unit)] text-ink-faint">
+          {unit}
+        </span>
+      </>
+    );
+    const numberClass = cx(
+      "min-w-0 rounded-[4px] font-display font-semibold leading-none tracking-metric text-ink tabular-nums",
+      compact
+        ? "text-[length:var(--text-metric-compact)]"
+        : "text-[length:var(--text-metric)]",
+    );
+    return (
+      <div class="flex min-w-0 items-center justify-between gap-2">
+        {local
+          ? (
+            <button
+              type="button"
+              class={cx(
+                numberClass,
+                "cursor-pointer border-0 bg-transparent p-0 text-start focus-visible:outline-2 focus-visible:outline-accent",
+              )}
+              aria-label={t("interaction.detail.open", {
+                label: numberContext.label,
+              })}
+              onClick={(event) => {
+                if (acceptsDetailToggleClick(event.detail)) {
+                  openDetail(
+                    numberAction,
+                  );
+                }
+              }}
+            >
+              {amountText}
+            </button>
+          )
+          : <span class={numberClass}>{amountText}</span>}
+        <span class="inline-flex shrink-0 items-center">
+          {renderDetailButton(false)}
+          {renderPin(numberContext)}
+        </span>
+      </div>
     );
   }
 
@@ -848,46 +791,7 @@ function KpiCard({
             />
           </ContextChipRow>
 
-          {/* Valeur principale — geste et title dictés par kpiClickAction. */}
-          <div class="flex min-w-0 items-center justify-between gap-2">
-            <span
-              class={cx(
-                "rounded-[4px] font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
-                "text-[length:var(--text-metric-compact)]",
-                numberInteractive &&
-                  "-mx-1 cursor-pointer px-1 transition-colors hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-                numberSelected &&
-                  "bg-sunken outline outline-1 outline-accent-edge",
-              )}
-              role={numberInteractive ? "button" : undefined}
-              tabIndex={numberInteractive ? 0 : undefined}
-              aria-label={numberAriaLabel}
-              title={numberTitle}
-              aria-pressed={contextEnabled ? numberSelected : undefined}
-              aria-keyshortcuts={numberKeyShortcuts}
-              onClick={numberInteractive
-                ? (event) =>
-                  pointerClick(numberContext, numberAction, event.detail)
-                : undefined}
-              onDblClick={numberDblClickEnabled
-                ? () => pointerDoubleClick(numberContext, numberAction)
-                : undefined}
-              onKeyDown={numberInteractive
-                ? (event) => keyDown(numberContext, numberAction, event)
-                : undefined}
-            >
-              {amount}{" "}
-              <span class="text-[length:var(--text-metric-unit)] text-ink-faint">
-                {unit}
-              </span>
-            </span>
-            {renderDetailButton(
-              numberDetailButton,
-              numberContext,
-              numberAction,
-              "left",
-            )}
-          </div>
+          {renderNumber()}
 
           {/* Ligne secondaire : compte de factures ou montant en retard. */}
           {secondaryLine && (
@@ -928,80 +832,9 @@ function KpiCard({
           {/* Confirmation drill-down */}
           {shared && <DrillDownConfirm channel={shared} />}
 
-          {/* Sparkline inline : surface de contexte et chevron independants. */}
           {sparkline && (
-            <div
-              class={cx(
-                "relative border-t border-line-soft pt-1.5",
-                trendSelected &&
-                  "bg-sunken outline outline-1 outline-accent-edge",
-              )}
-            >
-              {trendInteractive && (
-                <button
-                  type="button"
-                  class="absolute inset-x-0 bottom-0 top-1.5 z-0 rounded-[4px] border-0 bg-transparent p-0 hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
-                  aria-label={trendAriaLabel}
-                  title={trendTitle}
-                  aria-pressed={contextEnabled ? trendSelected : undefined}
-                  aria-keyshortcuts={trendKeyShortcuts}
-                  onKeyUp={swallowSpaceKeyUp}
-                  onClick={(event) =>
-                    pointerClick(trendContext, trendAction, event.detail)}
-                  onDblClick={trendDblClickEnabled
-                    ? () => pointerDoubleClick(trendContext, trendAction)
-                    : undefined}
-                  onKeyDown={(event) =>
-                    keyDown(trendContext, trendAction, event)}
-                />
-              )}
-              <div class="pointer-events-none relative z-10">
-                {trendDetailButton && (
-                  <div class="flex justify-end">
-                    {renderDetailButton(
-                      trendDetailButton,
-                      trendContext,
-                      trendAction,
-                      "left",
-                      "pointer-events-auto",
-                    )}
-                  </div>
-                )}
-                <SparklineBars
-                  values={sparkline}
-                  labels={sparklineLabels}
-                  ariaLabels={trendPointAriaLabels}
-                  height={44}
-                  gap={4}
-                  contextEnabled={contextEnabled}
-                  isSelected={(index) =>
-                    activeContext.isSelected(trendPointContexts[index])}
-                  ariaKeyShortcuts={trendKeyShortcuts}
-                  onClick={trendInteractive
-                    ? (index, event) =>
-                      pointerClick(
-                        trendPointContexts[index] ?? trendContext,
-                        trendAction,
-                        event.detail,
-                      )
-                    : undefined}
-                  onDoubleClick={trendDblClickEnabled
-                    ? (index) =>
-                      pointerDoubleClick(
-                        trendPointContexts[index] ?? trendContext,
-                        trendAction,
-                      )
-                    : undefined}
-                  onKeyDown={trendInteractive
-                    ? (index, event) =>
-                      keyDown(
-                        trendPointContexts[index] ?? trendContext,
-                        trendAction,
-                        event,
-                      )
-                    : undefined}
-                />
-              </div>
+            <div class="border-t border-line-soft pt-1.5">
+              {renderSparkline()}
             </div>
           )}
 
@@ -1055,43 +888,7 @@ function KpiCard({
             />
           </ContextChipRow>
 
-          {/* Valeur principale — geste et title dictés par kpiClickAction. */}
-          <div class="flex min-w-0 items-center gap-2">
-            <span
-              class={cx(
-                "rounded-[4px] font-display font-semibold text-ink tabular-nums leading-none tracking-metric",
-                "text-[length:var(--text-metric)]",
-                numberInteractive &&
-                  "-mx-1 cursor-pointer px-1 transition-colors hover:bg-sunken focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge",
-                numberSelected &&
-                  "bg-sunken outline outline-1 outline-accent-edge",
-              )}
-              role={numberInteractive ? "button" : undefined}
-              tabIndex={numberInteractive ? 0 : undefined}
-              aria-label={numberAriaLabel}
-              title={numberTitle}
-              aria-pressed={contextEnabled ? numberSelected : undefined}
-              aria-keyshortcuts={numberKeyShortcuts}
-              onClick={numberInteractive
-                ? (event) =>
-                  pointerClick(numberContext, numberAction, event.detail)
-                : undefined}
-              onDblClick={numberDblClickEnabled
-                ? () => pointerDoubleClick(numberContext, numberAction)
-                : undefined}
-              onKeyDown={numberInteractive
-                ? (event) => keyDown(numberContext, numberAction, event)
-                : undefined}
-            >
-              {amount} <span class="text-[26px] text-ink-faint">{unit}</span>
-            </span>
-            {renderDetailButton(
-              numberDetailButton,
-              numberContext,
-              numberAction,
-              "right",
-            )}
-          </div>
+          {renderNumber()}
 
           {/* Ligne secondaire : compte de factures ou montant en retard. */}
           {secondaryLine && (
@@ -1133,91 +930,9 @@ function KpiCard({
           {error && <InlineError message={error} onRetry={onRefresh} />}
         </div>
 
-        {/* Colonne droite — panneau sunken avec sparkline — H2 */}
         {sparkline && (
-          <div
-            class={cx(
-              "relative border-l border-line bg-sunken p-[18px_16px]",
-              trendSelected && "outline outline-1 outline-accent-edge",
-            )}
-            style={{ outlineOffset: "-1px" }}
-          >
-            <div class="relative h-full rounded-[4px]">
-              {trendInteractive && (
-                <button
-                  type="button"
-                  class="absolute inset-0 z-0 rounded-[4px] border-0 bg-transparent p-0 hover:outline hover:outline-1 hover:outline-accent-edge focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-edge"
-                  aria-label={trendAriaLabel}
-                  title={trendTitle}
-                  aria-pressed={contextEnabled ? trendSelected : undefined}
-                  aria-keyshortcuts={trendKeyShortcuts}
-                  onKeyUp={swallowSpaceKeyUp}
-                  onClick={(event) =>
-                    pointerClick(trendContext, trendAction, event.detail)}
-                  onDblClick={trendDblClickEnabled
-                    ? () => pointerDoubleClick(trendContext, trendAction)
-                    : undefined}
-                  onKeyDown={(event) =>
-                    keyDown(trendContext, trendAction, event)}
-                />
-              )}
-              <div class="pointer-events-none relative z-10 flex h-full flex-col justify-between gap-[10px]">
-                {/* Label periode + tendance → — H2 */}
-                <div class="flex items-center justify-between">
-                  {periodLabel && (
-                    <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
-                      {periodLabel}
-                    </span>
-                  )}
-                  <span class="flex items-center gap-1">
-                    <span class="font-mono text-micro text-accent">
-                      {t("kpi.sparkline.trend_label")}
-                    </span>
-                    {renderDetailButton(
-                      trendDetailButton,
-                      trendContext,
-                      trendAction,
-                      "left",
-                      "pointer-events-auto -my-2",
-                    )}
-                  </span>
-                </div>
-                <SparklineBars
-                  values={sparkline}
-                  labels={sparklineLabels}
-                  ariaLabels={trendPointAriaLabels}
-                  height={56}
-                  gap={5}
-                  contextEnabled={contextEnabled}
-                  isSelected={(index) =>
-                    activeContext.isSelected(trendPointContexts[index])}
-                  ariaKeyShortcuts={trendKeyShortcuts}
-                  onClick={trendInteractive
-                    ? (index, event) =>
-                      pointerClick(
-                        trendPointContexts[index] ?? trendContext,
-                        trendAction,
-                        event.detail,
-                      )
-                    : undefined}
-                  onDoubleClick={trendDblClickEnabled
-                    ? (index) =>
-                      pointerDoubleClick(
-                        trendPointContexts[index] ?? trendContext,
-                        trendAction,
-                      )
-                    : undefined}
-                  onKeyDown={trendInteractive
-                    ? (index, event) =>
-                      keyDown(
-                        trendPointContexts[index] ?? trendContext,
-                        trendAction,
-                        event,
-                      )
-                    : undefined}
-                />
-              </div>
-            </div>
+          <div class="border-l border-line bg-sunken p-[18px_16px]">
+            {renderSparkline()}
           </div>
         )}
       </div>
@@ -1403,6 +1118,7 @@ function KpiViewerContent({
               </div>
             )}
             <KpiCard
+              key={rootKey}
               data={data}
               error={error}
               layout={layout}

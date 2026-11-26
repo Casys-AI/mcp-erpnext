@@ -5,10 +5,8 @@ import { useT } from "../i18n-hook";
 import { TONE_BADGE, toneForStatus } from "../status";
 import type { ViewerLayout } from "../useViewerLayout";
 import { ContextChipRow, cx, Label, LiveDot } from "../ui";
-import {
-  contextInteractionProps,
-  type ContextInteractionTarget,
-} from "./context-interaction.ts";
+import type { ContextInteractionTarget } from "./context-interaction.ts";
+import { DocumentPin } from "./DocumentPin.tsx";
 
 export interface DocumentHeaderProps {
   doctype: string;
@@ -24,7 +22,7 @@ export interface DocumentHeaderProps {
   contextChip?: ComponentChildren;
   contextSupported?: boolean;
   live?: boolean;
-  /** La fiche elle-même rejoint le contexte au clic, comme un point de chart. */
+  /** Explicit pin for the displayed record. */
   contextTarget?: ContextInteractionTarget;
 }
 
@@ -41,25 +39,6 @@ function StatusBadge(
     >
       {status}
     </span>
-  );
-}
-
-function DocumentContextButton(
-  { target, class: klass }: {
-    target?: ContextInteractionTarget;
-    class?: string;
-  },
-) {
-  if (!target) return null;
-  return (
-    <button
-      type="button"
-      {...contextInteractionProps(target)}
-      class={cx(
-        "absolute inset-0 z-0 transition-colors hover:bg-row-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
-        klass,
-      )}
-    />
   );
 }
 
@@ -88,6 +67,7 @@ export function DocumentHeader({
           <Label class="max-w-[45%] truncate text-center">{doctype}</Label>
           <div class="flex min-w-0 flex-1 items-center justify-end gap-1.5">
             {trailing}
+            <DocumentPin target={contextTarget} />
             {live && (
               <span aria-hidden="true" class="size-1.5 rounded-full bg-ok" />
             )}
@@ -102,14 +82,8 @@ export function DocumentHeader({
           </div>
         )}
 
-        <div
-          class={cx(
-            "relative border-b border-line transition-colors",
-            contextTarget?.selected && "bg-row-selected",
-          )}
-        >
-          <DocumentContextButton target={contextTarget} />
-          <div class="pointer-events-none relative z-[1] flex flex-col gap-1.5 px-3 pb-3 pt-1">
+        <div class="border-b border-line">
+          <div class="flex flex-col gap-1.5 px-3 pb-3 pt-1">
             <span class="truncate font-mono text-nano uppercase tracking-label text-ink-faint">
               {name}
             </span>
@@ -140,18 +114,8 @@ export function DocumentHeader({
       <div class="flex min-w-0 items-start justify-between gap-4">
         <div class="flex min-w-0 items-start gap-3">
           {navigation && <div class="shrink-0 pt-0.5">{navigation}</div>}
-          <div
-            class={cx(
-              "relative min-w-0 rounded-[4px] transition-colors",
-              contextTarget && "px-1.5 py-1 -ml-1.5 -my-1",
-              contextTarget?.selected && "bg-row-selected",
-            )}
-          >
-            <DocumentContextButton
-              target={contextTarget}
-              class="rounded-[4px]"
-            />
-            <div class="pointer-events-none relative z-[1] flex min-w-0 flex-col gap-1">
+          <div class="min-w-0">
+            <div class="flex min-w-0 flex-col gap-1">
               <span class="truncate font-mono text-micro uppercase tracking-label text-ink-faint">
                 {doctype} · {name}
               </span>
@@ -172,9 +136,10 @@ export function DocumentHeader({
             </div>
           </div>
         </div>
-        {trailing && (
-          <div class="flex shrink-0 items-center gap-1.5">{trailing}</div>
-        )}
+        <div class="flex shrink-0 items-center gap-1.5">
+          {trailing}
+          <DocumentPin target={contextTarget} />
+        </div>
       </div>
       <ContextChipRow reserve={contextSupported}>{contextChip}</ContextChipRow>
     </header>

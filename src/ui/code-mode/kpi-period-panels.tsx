@@ -17,6 +17,7 @@ import {
   REVENUE_KPI,
 } from "../../code-mode/kpi-period.ts";
 import { parseToolInputError } from "../../tools/errors.ts";
+import type { KpiPeriodSelection } from "../shared/document-follow.ts";
 import { currentLocale } from "../shared/format.ts";
 import { useT } from "../shared/i18n-hook.ts";
 import { isResultRecord, mergeViewerEnrichment } from "../shared/refresh.ts";
@@ -31,11 +32,30 @@ export interface MountedKpiPanel {
   display(result: HostResult): Promise<boolean>;
 }
 
-/** The picker follows only the revenue result the mounted viewer actually accepts. */
+/** A mounted chart owns its dated bars. Compose owns the actual target filter. */
 export function createPeriodFeed(initial: unknown) {
   let current = initial;
   let listener: (() => void) | undefined;
+  let route: ((period: KpiPeriod) => void) | undefined;
+  let active: KpiPeriod | null | undefined;
+  const viewers = new Set<() => void>();
+  const selection: KpiPeriodSelection = {
+    selected: () => active,
+    subscribe(listener) {
+      viewers.add(listener);
+      return () => {
+        viewers.delete(listener);
+      };
+    },
+    inspect(period) {
+      if (
+        Array.isArray(current) &&
+        current.some((entry) => isKpiPeriod(entry) && samePeriod(entry, period))
+      ) route?.(period);
+    },
+  };
   return {
+    selection,
     read: () => current,
     update(periods: unknown) {
       current = periods;
@@ -47,21 +67,27 @@ export function createPeriodFeed(initial: unknown) {
         listener = undefined;
       };
     },
+    bind(next?: (period: KpiPeriod) => void) {
+      route = next;
+    },
+    report(period: KpiPeriod | null | undefined) {
+      if (
+        active === period || (active && period && samePeriod(active, period))
+      ) return;
+      active = period;
+      for (const notify of viewers) notify();
+    },
   };
+}
+
+function samePeriod(left: KpiPeriod, right: KpiPeriod) {
+  return left.date_from === right.date_from && left.date_to === right.date_to;
 }
 
 export function kpiViewPorts(uri: string, operation: string) {
   if (uri !== KPI_VIEW) return;
   if (operation === REVENUE_KPI) return { emits: [KPI_PERIOD_SELECTED] };
   if (operation === GROSS_MARGIN_KPI) return { accepts: [KPI_PERIOD_APPLY] };
-}
-
-function formatMonth(period: KpiPeriod, month: "short" | "long") {
-  return new Intl.DateTimeFormat(currentLocale(), {
-    month,
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(period.date_from + "T00:00:00Z"));
 }
 
 function formatRange(period: KpiPeriod) {
@@ -77,54 +103,26 @@ function formatRange(period: KpiPeriod) {
   );
 }
 
-function periodKey(period: KpiPeriod) {
-  return period.date_from + "/" + period.date_to;
-}
-
-type PeriodChoice = { period: KpiPeriod; combined?: boolean };
-
-function periodChoices(months: KpiPeriod[]): PeriodChoice[] {
-  const choices: PeriodChoice[] = months.map((period) => ({ period }));
-  if (months.length >= 2) {
-    choices.push({
-      period: {
-        date_from: months.at(-2)!.date_from,
-        date_to: months.at(-1)!.date_to,
-      },
-      combined: true,
-    });
-  }
-  return choices;
-}
-
-function MonthPicker({ periods, active, select }: {
-  periods: PeriodChoice[];
-  active?: string;
+function RangeButton({ period, active, select }: {
+  period: KpiPeriod;
+  active: boolean;
   select(period: KpiPeriod): void;
 }) {
   const t = useT();
-  const label = t("code_mode.margin_period");
   return (
-    <div class="erp-period-picker" role="group" aria-label={label}>
-      <span>{label}</span>
-      <div>
-        {periods.map(({ period, combined }) => (
-          <button
-            type="button"
-            key={periodKey(period)}
-            title={formatRange(period)}
-            aria-label={combined
-              ? t("code_mode.last_two_months")
-              : formatMonth(period, "long")}
-            aria-pressed={periodKey(period) === active}
-            onClick={() => select(period)}
-          >
-            {combined
-              ? t("code_mode.last_two_months")
-              : formatMonth(period, "short")}
-          </button>
-        ))}
-      </div>
+    <div
+      class="erp-period-picker"
+      role="group"
+      aria-label={t("code_mode.margin_period")}
+    >
+      <button
+        type="button"
+        title={formatRange(period)}
+        aria-pressed={active}
+        onClick={() => select(period)}
+      >
+        {t("code_mode.last_two_months")}
+      </button>
     </div>
   );
 }
@@ -285,30 +283,41 @@ export function connectKpiPeriods(
       );
     const update = () => {
       const dates = periods.read();
-      if (!Array.isArray(dates) || !dates.length || !dates.every(isKpiPeriod)) {
+      const first = selectedByTarget.get(targetIds[0]);
+      const common = first && targetIds.every((target) => {
+          const current = selectedByTarget.get(target);
+          return current && samePeriod(current, first);
+        })
+        ? first
+        : null;
+      periods.report(common);
+      if (
+        !Array.isArray(dates) || dates.length < 2 || !dates.every(isKpiPeriod)
+      ) {
         render(null, sourceOutlet);
         return;
       }
-      const choices = periodChoices(dates);
-      const selected = choices.find(({ period }) =>
-        targetIds.every((target) => {
-          const active = selectedByTarget.get(target);
-          return active && active.date_from === period.date_from &&
-            active.date_to === period.date_to;
-        })
-      );
+      const range = {
+        date_from: dates.at(-2)!.date_from,
+        date_to: dates.at(-1)!.date_to,
+      };
       render(
-        <MonthPicker
-          periods={choices}
-          active={selected && periodKey(selected.period)}
+        <RangeButton
+          period={range}
+          active={Boolean(common && samePeriod(range, common))}
           select={select}
         />,
         sourceOutlet,
       );
     };
+    periods.bind(select);
     pickers.add(update);
     const unsubscribe = periods.subscribe(update);
-    signal.addEventListener("abort", unsubscribe, { once: true });
+    signal.addEventListener("abort", () => {
+      unsubscribe();
+      periods.bind(undefined);
+      periods.report(undefined);
+    }, { once: true });
     update();
   }
 }

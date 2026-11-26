@@ -5,11 +5,10 @@
 
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
-import type { ClickIntentSingleResult } from "../click-intent.ts";
+import { ContextPinButton } from "../ContextPinButton.tsx";
 import { DetailToggleButton } from "../DetailToggleButton.tsx";
 import { formatCurrency, formatNumber, formatPercent } from "../format";
 import { useT } from "../i18n-hook";
-import { useClickIntent } from "../useClickIntent.ts";
 import { type BarsBody, type BarsSeries, chartSeriesFormat } from "./bodies";
 import { nestedChartModel, type NestedPoint } from "./nested-chart-model.ts";
 
@@ -46,7 +45,6 @@ export function BarsLevel(
     chart,
     activeIndex,
     contextEnabled,
-    pointKey,
     isPointSelected,
     isPointDetailEnabled,
     onPointContext,
@@ -57,7 +55,6 @@ export function BarsLevel(
     chart: BarsBody;
     activeIndex?: number;
     contextEnabled?: boolean;
-    pointKey?: (labelIndex: number, seriesIndex: number) => string;
     isPointSelected?: (labelIndex: number, seriesIndex: number) => boolean;
     isPointDetailEnabled?: (
       labelIndex: number,
@@ -66,14 +63,13 @@ export function BarsLevel(
     onPointContext?: (
       labelIndex: number,
       seriesIndex: number,
-    ) => ClickIntentSingleResult;
+    ) => void;
     onPointDetail?: (labelIndex: number, seriesIndex: number) => void;
     caption?: string;
     narrow?: boolean;
   },
 ) {
   const t = useT();
-  const clickIntent = useClickIntent();
   const { labels, datasets } = chart;
   const model = nestedChartModel(chart);
   const [preview, setPreview] = useState<
@@ -86,6 +82,8 @@ export function BarsLevel(
     {
       labelIndex: number;
       seriesIndex: number;
+      label: string;
+      series: string;
     } | null
   >(null);
   const totals = labels.map((_, index) =>
@@ -100,7 +98,16 @@ export function BarsLevel(
     Math.max(0, requestedActive),
     Math.max(0, labels.length - 1),
   );
-  const activePoint = preview ?? currentPoint ?? {
+  const inspected =
+    currentPoint && labels[currentPoint.labelIndex] === currentPoint.label &&
+      datasets[currentPoint.seriesIndex]?.label === currentPoint.series
+      ? currentPoint
+      : null;
+  const visiblePreview = preview && labels[preview.labelIndex] !== undefined &&
+      datasets[preview.seriesIndex]
+    ? preview
+    : null;
+  const activePoint = inspected ?? visiblePreview ?? {
     labelIndex: defaultActive,
     seriesIndex: 0,
   };
@@ -135,8 +142,7 @@ export function BarsLevel(
         isPointDetailEnabled?.(labelIndex, seriesIndex),
     );
   const canUsePoint = (labelIndex: number, seriesIndex: number) =>
-    canSharePoint(labelIndex, seriesIndex) ||
-    canOpenPoint(labelIndex, seriesIndex);
+    labels[labelIndex] !== undefined && datasets[seriesIndex] !== undefined;
 
   // Voie tactile du double-clic et d'Entrée : un bouton visible sous l'étiquette
   // de chaque barre qui a un détail. Chaque série garde son emplacement sous
@@ -156,79 +162,62 @@ export function BarsLevel(
     ),
   );
 
-  const pointIntent = (labelIndex: number, seriesIndex: number) => ({
-    key: pointKey?.(labelIndex, seriesIndex) ??
-      `nested-chart:${labelIndex}:${seriesIndex}`,
-    onSingle: () => onPointContext?.(labelIndex, seriesIndex),
-    onDouble: () => onPointDetail?.(labelIndex, seriesIndex),
-    doublePolicy: "local" as const,
-  });
-
-  const previewPoint = (labelIndex: number, seriesIndex: number) => {
-    const point = { labelIndex, seriesIndex };
-    // Le footer vit hors de la zone du graphe : il conserve la dernière cible
-    // explorée après que le pointeur ou le focus a quitté le point.
-    setCurrentPoint(point);
-    setPreview(point);
-  };
-
-  const focusPoint = (labelIndex: number, seriesIndex: number) => {
-    previewPoint(labelIndex, seriesIndex);
-  };
-
-  const clickPoint = (
-    labelIndex: number,
-    seriesIndex: number,
-    clickCount: number,
-  ) => {
+  const inspectPoint = (labelIndex: number, seriesIndex: number) => {
     if (!canUsePoint(labelIndex, seriesIndex)) return;
-    focusPoint(labelIndex, seriesIndex);
-    if (canSharePoint(labelIndex, seriesIndex)) {
-      clickIntent.click(pointIntent(labelIndex, seriesIndex), clickCount);
-      return;
-    }
+    setPreview(null);
+    setCurrentPoint({
+      labelIndex,
+      seriesIndex,
+      label: labels[labelIndex],
+      series: datasets[seriesIndex].label,
+    });
   };
-
-  const doubleClickPoint = (labelIndex: number, seriesIndex: number) => {
-    if (!canOpenPoint(labelIndex, seriesIndex)) return;
-    focusPoint(labelIndex, seriesIndex);
-    if (canSharePoint(labelIndex, seriesIndex)) {
-      clickIntent.doubleClick(pointIntent(labelIndex, seriesIndex));
-    } else {
+  const previewPoint = (labelIndex: number, seriesIndex: number) =>
+    setPreview({ labelIndex, seriesIndex });
+  const openPointDetail = (labelIndex: number, seriesIndex: number) => {
+    inspectPoint(labelIndex, seriesIndex);
+    if (canOpenPoint(labelIndex, seriesIndex)) {
       onPointDetail?.(labelIndex, seriesIndex);
     }
   };
-
   const keyDownPoint = (
     labelIndex: number,
     seriesIndex: number,
     event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
   ) => {
-    if (event.repeat) return;
-    focusPoint(labelIndex, seriesIndex);
-    if (
-      canSharePoint(labelIndex, seriesIndex) &&
-      canOpenPoint(labelIndex, seriesIndex)
-    ) {
-      clickIntent.keyDown(pointIntent(labelIndex, seriesIndex), event);
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      if (event.repeat) return;
+      if (event.key === "Enter" && canOpenPoint(labelIndex, seriesIndex)) {
+        openPointDetail(labelIndex, seriesIndex);
+      } else inspectPoint(labelIndex, seriesIndex);
       return;
     }
-    if (event.key === " " && canSharePoint(labelIndex, seriesIndex)) {
-      event.preventDefault();
-      void onPointContext?.(labelIndex, seriesIndex);
-      return;
+    let label = labelIndex;
+    let series = seriesIndex;
+    switch (event.key) {
+      case "ArrowLeft":
+        label--;
+        break;
+      case "ArrowRight":
+        label++;
+        break;
+      case "ArrowUp":
+        series--;
+        break;
+      case "ArrowDown":
+        series++;
+        break;
+      default:
+        return;
     }
-    if (event.key === "Enter" && canOpenPoint(labelIndex, seriesIndex)) {
-      event.preventDefault();
-      onPointDetail?.(labelIndex, seriesIndex);
-    }
-  };
-
-  // Même chemin qu'Entrée : jamais le contexte, jamais un second geste.
-  const openPointDetail = (labelIndex: number, seriesIndex: number) => {
-    setPreview(null);
-    setCurrentPoint({ labelIndex, seriesIndex });
-    clickIntent.activateDetail(pointIntent(labelIndex, seriesIndex));
+    event.preventDefault();
+    label = (label + labels.length) % labels.length;
+    series = (series + datasets.length) % datasets.length;
+    const graph = event.currentTarget.closest("[data-nested-chart]");
+    graph?.querySelector<HTMLButtonElement>(`[data-point="${label}:${series}"]`)
+      ?.focus();
+    inspectPoint(label, series);
   };
 
   const pointStyle = (point: NestedPoint) => ({
@@ -277,7 +266,7 @@ export function BarsLevel(
             })}
           </div>
         )}
-        <div class="overflow-x-auto pb-1">
+        <div class="overflow-x-auto pb-1" data-nested-chart>
           <div style={{ minWidth: `${chartWidth}px` }}>
             <div
               class="relative h-[132px]"
@@ -302,12 +291,9 @@ export function BarsLevel(
                       point.labelIndex,
                       point.seriesIndex,
                     );
-                    const selected = Boolean(
-                      isPointSelected?.(
-                        point.labelIndex,
-                        point.seriesIndex,
-                      ),
-                    );
+                    const selected =
+                      inspected?.labelIndex === point.labelIndex &&
+                      inspected.seriesIndex === point.seriesIndex;
                     const bottom = Math.min(point.y, point.baseY);
                     const height = Math.abs(point.y - point.baseY);
                     return (
@@ -315,41 +301,25 @@ export function BarsLevel(
                         key={`${point.seriesIndex}-${point.labelIndex}`}
                         type="button"
                         disabled={!interactive}
-                        aria-pressed={contextEnabled ? selected : undefined}
-                        aria-keyshortcuts={canSharePoint(
-                            point.labelIndex,
-                            point.seriesIndex,
-                          ) && canOpenPoint(
+                        aria-current={selected}
+                        data-point={`${point.labelIndex}:${point.seriesIndex}`}
+                        aria-keyshortcuts={canOpenPoint(
                             point.labelIndex,
                             point.seriesIndex,
                           )
-                          ? "Space Enter"
-                          : canSharePoint(
-                              point.labelIndex,
-                              point.seriesIndex,
-                            )
-                          ? "Space"
-                          : canOpenPoint(
-                              point.labelIndex,
-                              point.seriesIndex,
-                            )
-                          ? "Enter"
-                          : undefined}
+                          ? "ArrowLeft ArrowRight ArrowUp ArrowDown Space Enter"
+                          : "ArrowLeft ArrowRight ArrowUp ArrowDown Space"}
                         aria-label={pointLabel(
                           point.labelIndex,
                           point.seriesIndex,
                         )}
                         onClick={(event) => {
                           event.stopPropagation();
-                          clickPoint(
-                            point.labelIndex,
-                            point.seriesIndex,
-                            event.detail,
-                          );
+                          inspectPoint(point.labelIndex, point.seriesIndex);
                         }}
                         onDblClick={(event) => {
                           event.stopPropagation();
-                          doubleClickPoint(
+                          openPointDetail(
                             point.labelIndex,
                             point.seriesIndex,
                           );
@@ -363,7 +333,7 @@ export function BarsLevel(
                         onMouseEnter={() =>
                           previewPoint(point.labelIndex, point.seriesIndex)}
                         onFocus={() =>
-                          previewPoint(point.labelIndex, point.seriesIndex)}
+                          inspectPoint(point.labelIndex, point.seriesIndex)}
                         onBlur={() => setPreview(null)}
                         class={`absolute min-h-px rounded-[2px] border-0 p-0 transition-opacity focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
                           interactive ? "cursor-pointer" : "cursor-default"
@@ -408,11 +378,7 @@ export function BarsLevel(
                     rect.width,
                     labels.length,
                   );
-                  clickPoint(
-                    labelIndex,
-                    seriesModel.seriesIndex,
-                    event.detail,
-                  );
+                  inspectPoint(labelIndex, seriesModel.seriesIndex);
                 };
                 const doubleActivateFromPath = (
                   event: MouseEvent & { currentTarget: SVGPathElement },
@@ -427,7 +393,7 @@ export function BarsLevel(
                     rect.width,
                     labels.length,
                   );
-                  doubleClickPoint(labelIndex, seriesModel.seriesIndex);
+                  openPointDetail(labelIndex, seriesModel.seriesIndex);
                 };
                 return (
                   <svg
@@ -490,52 +456,32 @@ export function BarsLevel(
                     point.labelIndex,
                     point.seriesIndex,
                   );
-                  const selected = Boolean(
-                    isPointSelected?.(
-                      point.labelIndex,
-                      point.seriesIndex,
-                    ),
-                  );
+                  const selected = inspected?.labelIndex === point.labelIndex &&
+                    inspected.seriesIndex === point.seriesIndex;
                   return (
                     <button
                       key={`point-${point.seriesIndex}-${point.labelIndex}`}
                       type="button"
                       disabled={!interactive}
-                      aria-pressed={contextEnabled ? selected : undefined}
-                      aria-keyshortcuts={canSharePoint(
-                          point.labelIndex,
-                          point.seriesIndex,
-                        ) && canOpenPoint(
+                      aria-current={selected}
+                      data-point={`${point.labelIndex}:${point.seriesIndex}`}
+                      aria-keyshortcuts={canOpenPoint(
                           point.labelIndex,
                           point.seriesIndex,
                         )
-                        ? "Space Enter"
-                        : canSharePoint(
-                            point.labelIndex,
-                            point.seriesIndex,
-                          )
-                        ? "Space"
-                        : canOpenPoint(
-                            point.labelIndex,
-                            point.seriesIndex,
-                          )
-                        ? "Enter"
-                        : undefined}
+                        ? "ArrowLeft ArrowRight ArrowUp ArrowDown Space Enter"
+                        : "ArrowLeft ArrowRight ArrowUp ArrowDown Space"}
                       aria-label={pointLabel(
                         point.labelIndex,
                         point.seriesIndex,
                       )}
                       onClick={(event) => {
                         event.stopPropagation();
-                        clickPoint(
-                          point.labelIndex,
-                          point.seriesIndex,
-                          event.detail,
-                        );
+                        inspectPoint(point.labelIndex, point.seriesIndex);
                       }}
                       onDblClick={(event) => {
                         event.stopPropagation();
-                        doubleClickPoint(
+                        openPointDetail(
                           point.labelIndex,
                           point.seriesIndex,
                         );
@@ -549,7 +495,7 @@ export function BarsLevel(
                       onMouseEnter={() =>
                         previewPoint(point.labelIndex, point.seriesIndex)}
                       onFocus={() =>
-                        previewPoint(point.labelIndex, point.seriesIndex)}
+                        inspectPoint(point.labelIndex, point.seriesIndex)}
                       onBlur={() => setPreview(null)}
                       class={`absolute grid -translate-x-1/2 translate-y-1/2 place-items-center rounded-full border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-accent ${
                         narrow ? "size-10" : "size-6"
@@ -631,9 +577,7 @@ export function BarsLevel(
           </div>
         </div>
       </div>
-      {(caption || multiSeries ||
-        canOpenPoint(activePoint.labelIndex, activePoint.seriesIndex)) &&
-        labels.length > 0 && datasets.length > 0 && (
+      {labels.length > 0 && datasets.length > 0 && (
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line bg-sunken px-4 py-2.5">
           <span class="font-mono text-[11px] font-medium text-accent">
             {labels[active]}
@@ -653,6 +597,37 @@ export function BarsLevel(
           ))}
           {caption && (
             <span class="font-sans text-note text-ink-dim">{caption}</span>
+          )}
+          {inspected &&
+            canSharePoint(activePoint.labelIndex, activePoint.seriesIndex) && (
+            <ContextPinButton
+              class="ml-auto"
+              label={t(
+                isPointSelected?.(
+                    activePoint.labelIndex,
+                    activePoint.seriesIndex,
+                  )
+                  ? "context.pin.remove"
+                  : "context.pin.add",
+                {
+                  label: pointLabel(
+                    activePoint.labelIndex,
+                    activePoint.seriesIndex,
+                  ),
+                },
+              )}
+              pressed={Boolean(
+                isPointSelected?.(
+                  activePoint.labelIndex,
+                  activePoint.seriesIndex,
+                ),
+              )}
+              onToggle={() =>
+                onPointContext?.(
+                  activePoint.labelIndex,
+                  activePoint.seriesIndex,
+                )}
+            />
           )}
         </div>
       )}

@@ -1,7 +1,9 @@
 import type { BuyRecordedResult } from "../../../buy/result.ts";
 import { parseBuyViewerSession } from "../../../buy/session.ts";
 
-export type BuyEvidenceViewData = BuyRecordedResult;
+export type BuyEvidenceViewData = BuyRecordedResult & {
+  readonly sessionFingerprint: string;
+};
 
 export type DisplayState =
   | { readonly kind: "loading" }
@@ -37,5 +39,11 @@ export async function displayStateFromViewerSession(
       reason: session.projection.reason,
     };
   }
-  return { kind: "result", result: session.projection.result };
+  return {
+    kind: "result",
+    result: {
+      ...session.projection.result,
+      sessionFingerprint: session.basis.sessionFingerprint,
+    },
+  };
 }

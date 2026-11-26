@@ -2,6 +2,7 @@ import type {
   ActiveContextSelection,
   ContextSelectionItem,
 } from "./active-context.ts";
+import { t } from "./i18n.ts";
 import {
   type SelectionGroup,
   selectionGroupSummary,
@@ -72,6 +73,31 @@ export function activeContextChipItem(
   };
 }
 
+/** Record identities represented by acknowledged singles or the filters of a bounded query. */
+export function projectedRecordNames(
+  selections: readonly ActiveContextSelection[],
+  scope: string,
+  doctype: string,
+  reconcileKey?: string,
+): Set<string> {
+  const names = new Set<string>();
+  const prefix = `record:${doctype}:`;
+  for (const { scopeKey, item } of selections) {
+    if (
+      scopeKey !== scope ||
+      (reconcileKey !== undefined && item.reconcileKey !== reconcileKey)
+    ) continue;
+    if (item.id.startsWith(prefix)) names.add(item.id.slice(prefix.length));
+    if (item.query?.args.doctype !== doctype) continue;
+    for (const [field, operator, values] of item.query.args.filters) {
+      if (field === "name" && operator === "in") {
+        for (const name of values) names.add(name);
+      }
+    }
+  }
+  return names;
+}
+
 export function activeContextChipNotices(
   selections: readonly ActiveContextSelection[],
   selection?: SelectionState,
@@ -82,25 +108,20 @@ export function activeContextChipNotices(
   }
   for (const group of selection?.groups ?? []) {
     if (group.members.length === 0) continue;
-    const projectedIds = new Set<string>();
-    for (const { scopeKey, item } of selections) {
-      if (
-        scopeKey !== group.scopeKey || item.reconcileKey !== group.reconcileKey
-      ) continue;
-      projectedIds.add(item.id);
-      if (item.query?.args.doctype !== group.doctype) continue;
-      for (const [field, operator, names] of item.query.args.filters) {
-        if (field !== "name" || operator !== "in") continue;
-        for (const name of names) {
-          projectedIds.add(`record:${group.doctype}:${name}`);
-        }
-      }
-    }
+    const names = projectedRecordNames(
+      selections,
+      group.scopeKey,
+      group.doctype,
+      group.reconcileKey,
+    );
     const sharedCount = group.members.filter((member) =>
-      projectedIds.has(`record:${group.doctype}:${member.name}`)
+      names.has(member.name)
     ).length;
     if (sharedCount < group.members.length) {
-      notices.push(`partly shared (${sharedCount} of ${group.members.length})`);
+      notices.push(t("context.active.partly_shared", {
+        shared: sharedCount,
+        total: group.members.length,
+      }));
     }
   }
   return notices;

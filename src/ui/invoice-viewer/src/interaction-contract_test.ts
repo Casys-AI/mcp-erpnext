@@ -5,22 +5,23 @@ Deno.test("invoice lines expose one detail-only chevron in wide and narrow layou
     new URL("./InvoiceViewer.tsx", import.meta.url),
   );
 
-  assertStringIncludes(source, "detailLabel: label");
+  assertStringIncludes(source, 'clickAction: "detail"');
   assertStringIncludes(
     source,
-    "controls: canExpand ? lineDetailId(rowIndex) : undefined",
+    "controls: lineDetailId(rowIndex)",
   );
-  assertEquals([...source.matchAll(/<DetailToggleButton/g)].length, 2);
+  assertEquals([...source.matchAll(/<DisclosureChevron/g)].length, 2);
   assertEquals(
     [...source.matchAll(/<div id=\{lineDetailId\(rowIndex\)\}>/g)].length,
     2,
   );
-  assertEquals([...source.matchAll(/\btouch\s*\/>/g)].length, 1);
+  assertEquals(source.includes("<DetailToggleButton"), false);
   assertStringIncludes(source, "reconcileInvoiceDocument(");
   assertStringIncludes(source, "contextDocumentItem.id, contextCandidates");
   assertStringIncludes(source, "const rootContextTarget:");
+  assertEquals([...source.matchAll(/<DocumentPin target=\{pin\}/g)].length, 2);
   assertEquals(
-    [...source.matchAll(/contextInteractionProps\(rootContextTarget\)/g)]
+    [...source.matchAll(/<DocumentPin target=\{rootContextTarget\}/g)]
       .length,
     2,
   );

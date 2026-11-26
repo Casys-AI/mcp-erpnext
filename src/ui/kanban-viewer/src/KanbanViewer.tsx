@@ -45,6 +45,7 @@ import {
   getErrorPresentation,
   normalizeMoveFailureMessage,
 } from "~/shared/kanban/presentation";
+import { useKanbanPins } from "~/shared/kanban/useKanbanPins.tsx";
 import { useKanbanBoard } from "~/shared/kanban/useKanbanBoard";
 import { useTaskTimesheetAvailability } from "~/shared/kanban/useTaskTimesheetAvailability";
 import { taskTimesheetRevalidationKey } from "~/shared/kanban/task-timesheet-availability";
@@ -325,6 +326,7 @@ function KanbanCard({
   onDragStart,
   onDragEnd,
   onTitleClick,
+  pins,
   enableDrag = true,
 }: {
   card: KanbanCardData;
@@ -334,10 +336,12 @@ function KanbanCard({
   onDragStart: (card: KanbanCardData, event: KanbanDragEvent) => void;
   onDragEnd: () => void;
   onTitleClick?: (card: KanbanCardData) => void;
+  pins?: ReturnType<typeof useKanbanPins>;
   enableDrag?: boolean;
 }) {
   const t = useT();
   const isDraggable = enableDrag && !card.pending && !isMobile;
+  const pointerOnPin = useRef(false);
   const accentColor = card.accent ?? "var(--color-accent)";
   const isMilestone = isMilestoneBadge(card.badges);
   const { isOverdue, overdueDays, needsDueDateFallback } =
@@ -386,8 +390,17 @@ function KanbanCard({
   return (
     <div
       draggable={isDraggable}
+      onPointerDownCapture={(event) => {
+        const element = event.target;
+        pointerOnPin.current = element instanceof Element &&
+          !!element.closest("[data-context-pin]");
+      }}
       onDragStart={isDraggable
-        ? (event) => onDragStart(card, event as unknown as KanbanDragEvent)
+        ? (event) => {
+          // Native dragstart targets this draggable ancestor, even when grabbing a pin.
+          if (pointerOnPin.current) event.preventDefault();
+          else onDragStart(card, event as unknown as KanbanDragEvent);
+        }
         : undefined}
       onDragEnd={isDraggable ? onDragEnd : undefined}
       style={{ cursor: isDraggable ? "grab" : undefined }}
@@ -450,7 +463,7 @@ function KanbanCard({
                     ne distingue ce titre du texte qui l'entoure.
 
                     Il vit dans le bouton et non dans le coin de la carte, déjà
-                    occupé par le badge jalon ou le menu — et parce qu'une
+                    occupé par le badge jalon ou l’épingle — et parce qu'une
                     affordance doit toucher ce qu'elle désigne.
                   */
                   }
@@ -478,7 +491,7 @@ function KanbanCard({
               : card.title}
           </span>
 
-          {/* Top-right: milestone badge OR mobile kebab */}
+          {/* Keep the record pin and existing card actions independent. */}
           {isMilestone
             ? (
               <span
@@ -491,27 +504,8 @@ function KanbanCard({
                 {t("kanban.card.milestone")}
               </span>
             )
-            : isMobile
-            ? (
-              <button
-                type="button"
-                aria-label={t("interaction.detail.open", { label: card.title })}
-                aria-haspopup="dialog"
-                title={t("interaction.detail.open", { label: card.title })}
-                class="shrink-0 flex items-center justify-center text-ink-faint hover:text-ink rounded-chip transition-colors"
-                style={{
-                  width: 40,
-                  height: 40,
-                  margin: "-11px -11px 0 0",
-                  background: "transparent",
-                  border: 0,
-                }}
-                onClick={() => onTitleClick?.(card)}
-              >
-                ⋯
-              </button>
-            )
             : null}
+          {pins?.card(card)}
         </div>
 
         {/* Subtitle */}
@@ -709,6 +703,7 @@ function KanbanColumn({
   onDragEnd,
   onDragOverColumn,
   onTitleClick,
+  pins,
 }: {
   column: KanbanColumnData;
   cards: KanbanCardData[];
@@ -720,6 +715,7 @@ function KanbanColumn({
   onDragEnd: () => void;
   onDragOverColumn: (columnId: string, event: KanbanDragEvent) => void;
   onTitleClick?: (card: KanbanCardData) => void;
+  pins?: ReturnType<typeof useKanbanPins>;
 }) {
   const t = useT();
   const dropping = activeDropColumn === column.id;
@@ -747,7 +743,10 @@ function KanbanColumn({
             {kanbanStatusLabel(column.label, t)}
           </span>
         </div>
-        <span class="font-mono text-chip text-ink-faint">{column.count}</span>
+        <div class="flex items-center gap-1">
+          <span class="font-mono text-chip text-ink-faint">{column.count}</span>
+          {pins?.column(column, cards)}
+        </div>
       </div>
 
       {/* Cards */}
@@ -762,6 +761,7 @@ function KanbanColumn({
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             onTitleClick={onTitleClick}
+            pins={pins}
             enableDrag={board.capabilities.canMoveCards}
           />
         ))}
@@ -790,6 +790,7 @@ function MobileColumnNavWrapper({
   onDragStart,
   onDragEnd,
   onTitleClick,
+  pins,
 }: {
   board: KanbanBoardData;
   layout: ViewerLayout;
@@ -797,6 +798,7 @@ function MobileColumnNavWrapper({
   onDragStart: (card: KanbanCardData, event: KanbanDragEvent) => void;
   onDragEnd: () => void;
   onTitleClick?: (card: KanbanCardData) => void;
+  pins?: ReturnType<typeof useKanbanPins>;
 }) {
   const t = useT();
   const [focusIndex, setFocusIndex] = useState(0);
@@ -860,6 +862,7 @@ function MobileColumnNavWrapper({
         >
           ›
         </button>
+        {pins?.column(column, cards)}
       </div>
 
       {/* Dot progress indicator */}
@@ -894,6 +897,7 @@ function MobileColumnNavWrapper({
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             onTitleClick={onTitleClick}
+            pins={pins}
             enableDrag={false}
           />
         ))}
@@ -1048,6 +1052,7 @@ function KanbanBoardWithNav({
     canShareResource: (resource) =>
       canShareActiveContextResource(hostCapabilities, resource),
   };
+  const pins = useKanbanPins(board, context, rootKey, activeContext.selections);
   useLayoutEffect(() => {
     const root = nav.stack.levels[0];
     if (rootFreshEvent > rootMutationEvent && root?.stale) {
@@ -1289,6 +1294,7 @@ function KanbanBoardWithNav({
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 onTitleClick={onTitleClick}
+                pins={pins}
               />
             )
             : (
@@ -1319,6 +1325,7 @@ function KanbanBoardWithNav({
                       onDragEnd={onDragEnd}
                       onDragOverColumn={onDragOverColumn}
                       onTitleClick={onTitleClick}
+                      pins={pins}
                     />
                   ))}
                 </div>

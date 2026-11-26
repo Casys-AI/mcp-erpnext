@@ -36,6 +36,7 @@ export function createInvoicePanelInteractions(
   type Target = {
     mounted?: boolean;
     receive?: InvoiceFocusReceiver | null;
+    displayed?: InvoiceDocumentRef | null;
   };
   type Selection = {
     targets: Set<string>;
@@ -68,10 +69,15 @@ export function createInvoicePanelInteractions(
 
   function setTarget(id: string, update: Target) {
     if (signal.aborted) return;
+    const before = targets.get(id);
     const wasAvailable = targetState(id) !== false;
+    const previous = before?.mounted && before.receive
+      ? before.displayed?.name
+      : undefined;
     targets.set(id, { ...targets.get(id), ...update });
     const state = targetState(id);
-    if (wasAvailable !== (state !== false)) {
+    const displayed = state ? targets.get(id)?.displayed?.name : undefined;
+    if (wasAvailable !== (state !== false) || previous !== displayed) {
       for (const listener of listeners) listener();
     }
     if (state === undefined) return;
@@ -102,6 +108,15 @@ export function createInvoicePanelInteractions(
             canFollow: () =>
               !signal.aborted &&
               routeTargets.some((id) => targetState(id) !== false),
+            isOpen: (ref) =>
+              !signal.aborted && routeTargets.some((targetId) => {
+                const target = targets.get(targetId);
+                return Boolean(
+                  target?.mounted && target.receive &&
+                    target.displayed?.name === ref.name &&
+                    target.displayed?.doctype === ref.doctype,
+                );
+              }),
             subscribe(listener) {
               listeners.add(listener);
               return () => listeners.delete(listener);
@@ -148,7 +163,10 @@ export function createInvoicePanelInteractions(
           rule.to === slot && rule.action === target.action
         )
       ) {
-        return { setInvoiceFocus: (receive) => setTarget(id, { receive }) };
+        return {
+          setInvoiceFocus: (receive, displayed) =>
+            setTarget(id, { receive, displayed }),
+        };
       }
     },
   };

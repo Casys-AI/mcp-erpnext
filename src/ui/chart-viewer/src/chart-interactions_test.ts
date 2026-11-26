@@ -6,16 +6,16 @@ import {
   removeActiveContextSelection,
 } from "../../shared/active-context.ts";
 import {
-  chartClickOpensDetail,
   chartContextNamespace,
   chartContextSelection,
   chartCursorCounts,
+  chartCursorForFocus,
   chartDetailBarLabelKey,
   chartDrillDownMessage,
   chartFocusedDetailAction,
+  chartFocusExists,
   chartJumpHint,
   chartNavigationGroups,
-  chartPointActionPlan,
   chartPointContextItem,
   chartPointDetailMode,
   chartPointExpansionState,
@@ -23,6 +23,7 @@ import {
   chartPointTarget,
   chartScatterPointLabel,
   chartSelectionAt,
+  chartSeriesContextItem,
   chartSeriesFromTarget,
   chartSeriesNames,
   chartTooltipHintKey,
@@ -33,7 +34,6 @@ import {
   moveChartCursor,
   normalizeHiddenChartSeries,
   resolveChartStageHeight,
-  shouldHandleChartPointActivation,
   toggleHiddenChartSeries,
 } from "./chart-interactions.ts";
 import { en } from "../../shared/i18n/en.ts";
@@ -84,6 +84,16 @@ Deno.test("chart keyboard cursor - arrows move labels and series with wrapping",
       2,
     ),
     { labelIndex: 0, seriesIndex: 0 },
+  );
+});
+
+Deno.test("pointer inspection anchors keyboard navigation at the same mark and series", () => {
+  const focus = { label: "Aug 26", series: "Expenses", index: 1 };
+  const cursor = chartCursorForFocus(DATA, focus);
+  assertEquals(cursor, { labelIndex: 1, seriesIndex: 1 });
+  assertEquals(
+    chartCursorForFocus(filterVisibleChartSeries(DATA, ["Expenses"]), focus),
+    null,
   );
 });
 
@@ -254,46 +264,39 @@ Deno.test("chart mouse target - preserves point and exact marked series", () => 
   assertEquals(chartSeriesFromTarget(null, ["Expenses"]), undefined);
 });
 
-Deno.test("chart activation - single click updates context only", () => {
-  assertEquals(chartPointActionPlan("context", true, true, true), {
-    toggleLevel: false,
-    updateContext: true,
-    sendMessage: false,
-  });
-  assertEquals(chartPointActionPlan("context", true, false, true), {
-    toggleLevel: false,
-    updateContext: false,
-    sendMessage: false,
-  });
-});
-
-Deno.test("chart activation - double click toggles detail or uses its explicit fallback", () => {
-  assertEquals(chartPointActionPlan("drilldown", true, true, true), {
-    toggleLevel: true,
-    updateContext: false,
-    sendMessage: false,
-  });
-  assertEquals(chartPointActionPlan("drilldown", false, true, true), {
-    toggleLevel: false,
-    updateContext: false,
-    sendMessage: true,
-  });
-  assertEquals(chartPointActionPlan("drilldown", false, true, false), {
-    toggleLevel: false,
-    updateContext: false,
-    sendMessage: false,
-  });
+Deno.test("chart details retain independent expanded state", () => {
   assertEquals(chartPointExpansionState(true, false), false);
   assertEquals(chartPointExpansionState(true, true), true);
   assertEquals(chartPointExpansionState(false, false), undefined);
 });
 
-Deno.test("chart activation - a context-only second click reaches compensation", () => {
-  assertEquals(shouldHandleChartPointActivation("context", 1, false), true);
-  assertEquals(shouldHandleChartPointActivation("context", 2, false), true);
-  assertEquals(shouldHandleChartPointActivation("drilldown", 2, false), false);
-  assertEquals(shouldHandleChartPointActivation("context", 2, true), true);
-  assertEquals(shouldHandleChartPointActivation("drilldown", 2, true), true);
+Deno.test("a pinned series has its own stable identity, values and data resource", () => {
+  const graph: ChartData = {
+    title: "Orders",
+    type: "bar",
+    labels: ["Oct", "Nov"],
+    datasets: [
+      { label: "Net", values: [10, 12] },
+      { label: "Gross", values: [14, 18] },
+    ],
+  };
+  const series = chartSeriesContextItem(graph, "Gross", "orders");
+  const other = chartSeriesContextItem(graph, "Net", "orders");
+  assert(series.id !== other.id);
+  assert(series.resource?.uri !== other.resource?.uri);
+  assert(series.resource);
+  const json = JSON.parse(new TextDecoder().decode(series.resource.bytes));
+  assertEquals(json.datasets.map((item: { label: string }) => item.label), [
+    "Gross",
+  ]);
+  assertEquals(json.datasets[0].values, [14, 18]);
+  assertEquals(
+    chartFocusExists(filterVisibleChartSeries(graph, ["Net"]), {
+      label: "Nov",
+      series: "Net",
+    }),
+    false,
+  );
 });
 
 Deno.test("chart scatter target - accepts only an explicit point label", () => {
@@ -937,59 +940,12 @@ Deno.test("chart point toggle - exact targets preserve independent category and 
   }
 });
 
-Deno.test("chart click grammar - only pie, donut and treemap open detail on click, and only locally without context", () => {
-  for (const type of ["pie", "donut", "treemap"]) {
-    assertEquals(chartClickOpensDetail(type, false, "inline"), true, type);
-    // Contexte disponible : le clic lui est réservé.
-    assertEquals(chartClickOpensDetail(type, true, "inline"), false, type);
-    // Détail conversationnel : jamais au clic.
-    assertEquals(chartClickOpensDetail(type, false, "message"), false, type);
-    assertEquals(chartClickOpensDetail(type, false, null), false, type);
-  }
-  // Barres, lignes, points : indication déjà portée par leur tooltip.
-  for (
-    const type of [
-      "bar",
-      "stacked-bar",
-      "horizontal-bar",
-      "line",
-      "area",
-      "composed",
-      "radar",
-      "scatter",
-      undefined,
-    ]
-  ) {
-    assertEquals(
-      chartClickOpensDetail(type, false, "inline"),
-      false,
-      `${type}`,
-    );
-  }
-});
-
-Deno.test("chart tooltip hint - the key for the eight context x detail x click-opens combinations", () => {
-  const table: Array<[boolean, boolean, boolean, string | undefined]> = [
-    // contextEnabled, detailEnabled, clickOpensDetail → clé
-    [false, false, false, undefined],
-    [true, false, false, "chart.tooltip.click_action_context_only"],
-    [false, true, false, "chart.tooltip.click_action_fallback"],
-    [true, true, false, "chart.tooltip.click_action_context"],
-    [false, true, true, "chart.tooltip.click_action_detail"],
-    // Combinaisons illégales en pratique : le clic-détail l'emporte, sans exception.
-    [false, false, true, "chart.tooltip.click_action_detail"],
-    [true, false, true, "chart.tooltip.click_action_detail"],
-    [true, true, true, "chart.tooltip.click_action_detail"],
-  ];
-  for (
-    const [contextEnabled, detailEnabled, clickOpensDetail, expected] of table
-  ) {
-    assertEquals(
-      chartTooltipHintKey({ contextEnabled, detailEnabled, clickOpensDetail }),
-      expected,
-      `context=${contextEnabled} detail=${detailEnabled} click=${clickOpensDetail}`,
-    );
-  }
+Deno.test("tooltip only announces a detail when it is available", () => {
+  assertEquals(
+    chartTooltipHintKey(true),
+    "chart.tooltip.click_action_fallback",
+  );
+  assertEquals(chartTooltipHintKey(false), undefined);
 });
 
 // ── Barre d'action « Ouvrir le détail » (tactile, sans double-clic) ────────

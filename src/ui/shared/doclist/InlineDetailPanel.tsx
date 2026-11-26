@@ -488,7 +488,7 @@ function InlineDocument({
     : undefined;
   const contextTarget: ContextInteractionTarget | undefined = context?.supported
     ? {
-      label: t("context.active.toggle", { label: contextItem.label }),
+      label: contextItem.label,
       selected: context.isSelected(contextItem),
       onActivate: () => void context.toggle(contextItem),
     }
@@ -502,10 +502,10 @@ function InlineDocument({
       const { item } = childRowInteraction(table, row, rowIndex);
       return item && context?.supported
         ? {
-          label: t("context.active.toggle", { label: item.label }),
+          label: item.label,
           detailLabel: item.label,
           selected: context.isSelected(item),
-          onActivate: () => context.toggleReversible(item),
+          onActivate: () => void context.toggle(item),
         }
         : undefined;
     }

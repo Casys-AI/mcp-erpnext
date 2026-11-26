@@ -237,13 +237,7 @@ function ChartLevel({
     )
   );
   const contextEnabled = Boolean(context?.supported);
-  const caption = contextEnabled && detailEnabled
-    ? t("chart.tooltip.click_action_context")
-    : contextEnabled
-    ? t("chart.tooltip.click_action_context_only")
-    : detailEnabled
-    ? t("chart.tooltip.click_action_fallback")
-    : undefined;
+  const caption = detailEnabled ? t("interaction.detail.button_hint") : undefined;
 
   return (
     <BarsLevel
@@ -251,9 +245,6 @@ function ChartLevel({
       narrow={layout !== "wide"}
       caption={caption}
       contextEnabled={contextEnabled}
-      pointKey={(labelIndex, seriesIndex) =>
-        itemAt(labelIndex, seriesIndex)?.id ??
-          `${chartId}:point:${labelIndex}:${seriesIndex}`}
       isPointSelected={contextEnabled
         ? (labelIndex, seriesIndex) => {
           const item = itemAt(labelIndex, seriesIndex);
@@ -265,7 +256,7 @@ function ChartLevel({
       onPointContext={contextEnabled
         ? (labelIndex, seriesIndex) => {
           const item = itemAt(labelIndex, seriesIndex);
-          return item ? context!.toggleReversible(item) : undefined;
+          if (item) void context!.toggle(item);
         }
         : undefined}
       onPointDetail={detailEnabled
@@ -404,7 +395,7 @@ function RecordDocumentLevel({
     : undefined;
   const contextTarget: ContextInteractionTarget | undefined = context?.supported
     ? {
-      label: t("context.active.toggle", { label: contextItem.label }),
+      label: contextItem.label,
       selected: context.isSelected(contextItem),
       onActivate: () => void context.toggle(contextItem),
     }
@@ -472,10 +463,10 @@ function RecordDocumentLevel({
     );
     return item
       ? {
-        label: t("context.active.toggle", { label: item.label }),
+        label: item.label,
         detailLabel: item.label,
         selected: context.isSelected(item),
-        onActivate: () => context.toggleReversible(item),
+        onActivate: () => void context.toggle(item),
       }
       : undefined;
   };

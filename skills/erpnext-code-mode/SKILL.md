@@ -75,12 +75,14 @@ The source is a Sales Invoice list from `erpnext_sales_invoice_list` or
 target is an original result from `erpnext_sales_invoice_get`. Use the exact
 requested invoice as the initial detail, or the first row when the user asks to
 start with the first invoice. The list's invoice selection updates that detail
-panel. Show just the list if there is no invoice to open.
+panel. A pin beside a row attaches that invoice to the conversation independently.
+Show just the list if there is no invoice to open.
 
 To let the user recalculate gross margin for a month in the Sales Order revenue
-series, link the cards as shown below. The **Margin period** control selects the
-month for the calculation. The revenue bars still select values for the chat
-context. Start the margin at the current month to date and keep any requested
+series, link the cards as shown below. Clicking a monthly bar updates the margin
+for that month. The two-month control covers a longer period. The pin on the
+active point adds that month to the conversation independently.
+Start the margin at the current month to date and keep any requested
 company or valuation options in the original margin call.
 
 ```js

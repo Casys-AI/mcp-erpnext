@@ -357,6 +357,15 @@ export const en: Record<string, string> = {
   "drill.sent": "Sent to the conversation",
   "message.sending": "Sending…",
   "message.send_error": "Could not send to the conversation",
+  "context.pin.label": "Pin to context",
+  "context.pin.add": "Pin {label} to context",
+  "context.pin.remove": "Unpin {label} from context",
+  "doclist.pin.show": "Show context pins",
+  "doclist.pin.hide": "Hide context pins",
+  "doclist.pin.all": "Pin all {count} matching rows to context",
+  "doclist.pin.remove_all": "Unpin all {count} matching rows from context",
+  "doclist.pin.count": "Pinned: {count}",
+  "context.active.partly_shared": "partly shared ({shared} of {total})",
   "context.active.label": "Context",
   "context.active.items": "Active context selections",
   "context.active.attachment":
@@ -421,6 +430,7 @@ export const en: Record<string, string> = {
   "nav.stale_title":
     "An action deeper in the stack changed what this level shows.",
   "nav.trail": "Navigation trail",
+  "kanban.pin.loaded_cards": "Loaded cards in {column} ({count})",
   "kanban.nav.edit_card": "edit {id}",
   "nav.bar_click": "click: one more level",
   "nav.unexpected_body": "This level received an unexpected body.",

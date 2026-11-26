@@ -117,3 +117,29 @@ Deno.test("changing the list scope retires a pending focus and its native fallba
     assertEquals(actions, [mounted ? second.name : "current detail"]);
   }
 });
+
+Deno.test("invoice follow reports the document actually shown, independently of a click or failed read", () => {
+  const { interactions, list, detail, lifetime } = route();
+  const changes: boolean[] = [];
+  list.subscribe(() => changes.push(list.isOpen(first)));
+  const receive = () => true;
+  detail(receive, first);
+  assertEquals(list.isOpen(first), false); // mounting
+  interactions.setMounted("detail", true);
+  assertEquals(list.isOpen(first), true);
+  list.select(second, () => {
+    throw new Error("Unexpected fallback");
+  });
+  assertEquals(list.isOpen(first), true);
+  assertEquals(list.isOpen(second), false); // read pending or rejected
+  detail(receive, second);
+  assertEquals(list.isOpen(second), true);
+  detail(receive, second);
+  assertEquals(changes, [true, false]);
+  detail(null);
+  assertEquals(list.isOpen(second), false);
+  detail(receive, first);
+  assertEquals(list.isOpen(first), true);
+  lifetime.abort();
+  assertEquals(list.isOpen(first), false);
+});

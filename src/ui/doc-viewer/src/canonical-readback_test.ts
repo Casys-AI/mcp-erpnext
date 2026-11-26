@@ -130,7 +130,7 @@ Deno.test("DocViewer wires root, child rows, and nested records to one context",
   );
   assertStringIncludes(
     source,
-    "onActivate: () => context.toggleReversible(item)",
+    "onActivate: () => void context.toggle(item)",
   );
   assertStringIncludes(source, "context={context}");
   assertStringIncludes(source, "contextView={contextView}");
@@ -146,6 +146,6 @@ Deno.test("DocViewer wires root, child rows, and nested records to one context",
   );
   assertStringIncludes(
     nested,
-    "onActivate: () => context.toggleReversible(item)",
+    "onActivate: () => void context.toggle(item)",
   );
 });

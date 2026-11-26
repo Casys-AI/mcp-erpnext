@@ -2,6 +2,8 @@ import type { UiRefreshRequestData } from "../../shared/refresh.ts";
 import type { NavHint } from "../../shared/jumps.ts";
 
 export interface StockEntry {
+  /** Canonical Bin ID supplied by stock_balance; absent on legacy results. */
+  name?: string;
   item_code: string;
   warehouse: string;
   actual_qty: number;

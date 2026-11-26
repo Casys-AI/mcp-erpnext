@@ -11,6 +11,7 @@
  *  - InvoiceViewer : état, connexion, refresh, actions — sans hooks d'UI.
  *  - InvoiceContent : rendu, pile de navigation, boutons — data toujours dispo.
  */
+import { DocumentPin } from "~/shared/document/DocumentPin.tsx";
 import { useViewerApp, ViewerInteractionsContext } from "~/shared/viewer-app";
 import {
   useContext,
@@ -22,7 +23,7 @@ import {
 import { App } from "@modelcontextprotocol/ext-apps";
 import { ActiveContextChip } from "~/shared/ActiveContextChip";
 import { canShareActiveContextResource } from "~/shared/active-context";
-import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
+import { DisclosureChevron } from "~/shared/DisclosureChevron.tsx";
 import { bindHostContext } from "~/shared/host-context-hook";
 import {
   type InvoiceDocumentRef,
@@ -661,8 +662,9 @@ export function InvoiceViewer() {
   }
 
   useLayoutEffect(() => {
-    if (canReceiveInvoiceFocus()) setInvoiceFocus?.(receiveInvoiceFocus);
-    else if (fixture || connectFailed || !loading) setInvoiceFocus?.(null);
+    if (canReceiveInvoiceFocus()) {
+      setInvoiceFocus?.(receiveInvoiceFocus, followIdentityRef.current);
+    } else if (fixture || connectFailed || !loading) setInvoiceFocus?.(null);
   });
 
   useLayoutEffect(() => {
@@ -969,9 +971,7 @@ function InvoiceContent({
   const rootContextTarget: ContextInteractionTarget | undefined =
     nav.isRoot && context.supported
       ? {
-        label: t("context.active.toggle", {
-          label: contextDocumentItem.label,
-        }),
+        label: contextDocumentItem.label,
         selected: context.isSelected(contextDocumentItem),
         onActivate: async () => {
           await context.toggle(contextDocumentItem);
@@ -1000,50 +1000,35 @@ function InvoiceContent({
     void reconcileInvoiceDocument(contextDocumentItem.id, contextCandidates);
   }, [contextView, envelope, reconcileInvoiceDocument]);
   const lineDetailId = (rowIndex: number) => `invoice-line-${rowIndex}-detail`;
-  const lineInteractionTarget = (
-    row: LineRow,
-    rowIndex: number,
-  ): ContextInteractionTarget | undefined => {
+  function linePresentation(row: LineRow, rowIndex: number) {
     const contextRow = itemContextTable?.rows[rowIndex];
     const item = context.supported && itemContextTable && contextRow
-      ? childRowContextItem(
-        envelope,
-        itemContextTable,
-        contextRow,
-        rowIndex,
-      )
+      ? childRowContextItem(envelope, itemContextTable, contextRow, rowIndex)
       : null;
-    if (!item && !canExpand) return undefined;
     const label = item?.label ?? row.item_code;
-    const selected = item ? context.isSelected(item) : undefined;
-    return {
-      label: canExpand
-        ? t(
-          item
-            ? (expandedIdx === row.idx
-              ? "document.row.close_detail"
-              : "document.row.open_detail")
-            : (expandedIdx === row.idx
-              ? "document.row.close_detail_only"
-              : "document.row.open_detail_only"),
+    const isExpanded = canExpand && expandedIdx === row.idx;
+    const toggle = () => setExpandedIdx(isExpanded ? null : row.idx);
+    const detail: ContextInteractionTarget | undefined = canExpand
+      ? {
+        label: t(
+          isExpanded ? "interaction.detail.close" : "interaction.detail.open",
           { label },
-        )
-        : t("context.active.toggle", { label }),
-      selected,
-      expanded: canExpand ? expandedIdx === row.idx : undefined,
-      detailLabel: label,
-      controls: canExpand ? lineDetailId(rowIndex) : undefined,
-      onActivate: () => {
-        if (!item) return;
-        if (canExpand) return context.toggleReversible(item);
-        void context.toggle(item);
-      },
-      doublePolicy: "local",
-      onDoubleActivate: canExpand
-        ? () => setExpandedIdx(expandedIdx === row.idx ? null : row.idx)
-        : undefined,
-    };
-  };
+        ),
+        expanded: isExpanded,
+        controls: lineDetailId(rowIndex),
+        clickAction: "detail",
+        onActivate: toggle,
+      }
+      : undefined;
+    const pin: ContextInteractionTarget | undefined = item
+      ? {
+        label: item.label,
+        selected: context.isSelected(item),
+        onActivate: () => void context.toggle(item),
+      }
+      : undefined;
+    return { detail, pin, isExpanded };
+  }
   const previewTitle = fixture ? t("invoice.preview.title") : undefined;
   const isWide = layout === "wide";
   const isMobile = layout === "mobile";
@@ -1353,20 +1338,7 @@ function InvoiceContent({
                 class="m-0 font-display font-semibold text-doc text-ink"
                 style={{ letterSpacing: "-0.015em" }}
               >
-                {nav.isRoot
-                  ? (
-                    <button
-                      type="button"
-                      {...contextInteractionProps(rootContextTarget)}
-                      class={cx(
-                        "rounded-[4px] transition-colors hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-accent",
-                        rootContextTarget?.selected && "bg-row-selected",
-                      )}
-                    >
-                      {data.name}
-                    </button>
-                  )
-                  : nav.current.title}
+                {nav.isRoot ? data.name : nav.current.title}
               </h2>
               <div class="flex items-center gap-2">
                 {nav.isRoot && <StatusBadge status={data.status} />}
@@ -1387,9 +1359,12 @@ function InvoiceContent({
 
             {nav.isRoot && (
               <div class="flex flex-col items-end gap-1 border-l border-line pl-6">
-                <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
-                  {t("invoice.header.outstanding")}
-                </span>
+                <div class="flex items-center gap-1">
+                  <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
+                    {t("invoice.header.outstanding")}
+                  </span>
+                  <DocumentPin target={rootContextTarget} />
+                </div>
                 <span
                   class={cx(
                     "font-display font-semibold tabular-nums leading-[1.05]",
@@ -1472,51 +1447,52 @@ function InvoiceContent({
                     {t("invoice.table.col.amount")}
                   </span>
                 </div>
-                {canExpand && <span aria-hidden="true" class="w-10" />}
+                {context.supported && itemContextTable && (
+                  <span
+                    aria-hidden="true"
+                    class="w-9 shrink-0 [@media(pointer:coarse)]:w-11"
+                  />
+                )}
               </div>
 
               {/* Lignes article */}
               {rows.map((row, rowIndex) => {
-                const interactionTarget = lineInteractionTarget(row, rowIndex);
-                const isExpanded = canExpand && expandedIdx === row.idx;
-                const isContextSelected = Boolean(interactionTarget?.selected);
+                const { detail, pin, isExpanded } = linePresentation(
+                  row,
+                  rowIndex,
+                );
                 return (
                   <div key={`${row.idx}-${row.item_code}`}>
                     <div
                       class={cx(
                         "flex min-w-0 items-stretch border-b border-line-soft transition-colors",
-                        isExpanded || isContextSelected
-                          ? "bg-row-selected"
-                          : "hover:bg-row-hover",
+                        isExpanded ? "bg-row-selected" : "hover:bg-row-hover",
                       )}
                       style={{
                         borderLeft: `2px solid ${
                           isExpanded ? "var(--color-accent)" : "transparent"
-                        }`,
-                        borderRight: `2px solid ${
-                          isContextSelected
-                            ? "var(--color-accent)"
-                            : "transparent"
                         }`,
                       }}
                     >
                       <div
                         class={cx(
                           "grid min-w-0 flex-1 items-center focus-visible:outline-2 focus-visible:outline-accent",
-                          interactionTarget && "cursor-pointer",
+                          detail && "cursor-pointer",
                         )}
                         style={{
                           gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
                           padding: "10px 16px",
                         }}
-                        {...contextInteractionProps(interactionTarget, {
+                        {...contextInteractionProps(detail, {
                           arbiter: clickIntent,
                           key: `invoice-line:${data.name}:${rowIndex}`,
                         })}
                       >
                         <div class="flex flex-col gap-0.5">
                           <span class="text-body text-ink">
-                            {row.item_name ?? row.item_code}
+                            {detail && (
+                              <DisclosureChevron expanded={isExpanded} />
+                            )} {row.item_name ?? row.item_code}
                           </span>
                           <span class="font-mono text-chip text-ink-faint">
                             {row.item_code}
@@ -1532,16 +1508,7 @@ function InvoiceContent({
                           {formatNumber(row.amount)}
                         </span>
                       </div>
-                      {canExpand && (
-                        <DetailToggleButton
-                          expanded={isExpanded}
-                          label={interactionTarget?.detailLabel ??
-                            row.item_code}
-                          controls={lineDetailId(rowIndex)}
-                          onToggle={() =>
-                            interactionTarget?.onDoubleActivate?.()}
-                        />
-                      )}
+                      <DocumentPin target={pin} />
                     </div>
 
                     {isExpanded && (
@@ -1606,24 +1573,14 @@ function InvoiceContent({
       {/* Header flex-col — toujours visible */}
       <div class="flex flex-col gap-[10px] border-b border-line px-3 py-[13px]">
         <div class="flex flex-col gap-[3px]">
-          <span class="font-mono text-nano uppercase tracking-eyebrow text-ink-faint">
-            {doctype}
-          </span>
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-nano uppercase tracking-eyebrow text-ink-faint">
+              {doctype}
+            </span>
+            <DocumentPin target={rootContextTarget} />
+          </div>
           <h3 class="m-0 font-display font-semibold text-title text-ink tracking-title">
-            {nav.isRoot
-              ? (
-                <button
-                  type="button"
-                  {...contextInteractionProps(rootContextTarget)}
-                  class={cx(
-                    "rounded-[4px] transition-colors hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-accent",
-                    rootContextTarget?.selected && "bg-row-selected",
-                  )}
-                >
-                  {data.name}
-                </button>
-              )
-              : nav.current.title}
+            {nav.isRoot ? data.name : nav.current.title}
           </h3>
           {nav.isRoot && (
             <span class="text-data text-ink-muted">{partyName}</span>
@@ -1700,33 +1657,29 @@ function InvoiceContent({
             })}
           </span>
           {rows.map((row, rowIndex) => {
-            const interactionTarget = lineInteractionTarget(row, rowIndex);
-            const isExpanded = canExpand && expandedIdx === row.idx;
-            const isContextSelected = Boolean(interactionTarget?.selected);
+            const { detail, pin, isExpanded } = linePresentation(
+              row,
+              rowIndex,
+            );
             return (
               <div key={`${row.idx}-${row.item_code}`}>
                 <div
                   class={cx(
                     "flex min-h-11 items-stretch rounded-chip border border-line transition-colors",
-                    isExpanded || isContextSelected
-                      ? "bg-row-selected"
-                      : "bg-row-hover",
+                    isExpanded ? "bg-row-selected" : "bg-row-hover",
                   )}
                   style={{
                     borderLeft: `2px solid ${
                       isExpanded ? "var(--color-accent)" : "transparent"
-                    }`,
-                    borderRight: `2px solid ${
-                      isContextSelected ? "var(--color-accent)" : "transparent"
                     }`,
                   }}
                 >
                   <div
                     class={cx(
                       "flex min-w-0 flex-1 flex-col gap-[5px] px-[11px] py-[10px] focus-visible:outline-2 focus-visible:outline-accent",
-                      interactionTarget && "cursor-pointer",
+                      detail && "cursor-pointer",
                     )}
-                    {...contextInteractionProps(interactionTarget, {
+                    {...contextInteractionProps(detail, {
                       arbiter: clickIntent,
                       key: `invoice-line:${data.name}:${rowIndex}`,
                     })}
@@ -1734,11 +1687,11 @@ function InvoiceContent({
                     <span
                       class={cx(
                         "text-cell",
-                        isExpanded || isContextSelected
-                          ? "text-ink"
-                          : "text-ink-2",
+                        isExpanded ? "text-ink" : "text-ink-2",
                       )}
                     >
+                      {detail && <DisclosureChevron expanded={isExpanded} />}
+                      {" "}
                       {row.item_name ?? row.item_code}
                     </span>
                     <div class="flex items-baseline justify-between gap-[10px]">
@@ -1748,22 +1701,14 @@ function InvoiceContent({
                       <span
                         class={cx(
                           "font-mono text-cell tabular-nums text-ink",
-                          isExpanded || isContextSelected ? "font-medium" : "",
+                          isExpanded ? "font-medium" : "",
                         )}
                       >
                         {formatNumber(row.amount)}
                       </span>
                     </div>
                   </div>
-                  {canExpand && (
-                    <DetailToggleButton
-                      expanded={isExpanded}
-                      label={interactionTarget?.detailLabel ?? row.item_code}
-                      controls={lineDetailId(rowIndex)}
-                      onToggle={() => interactionTarget?.onDoubleActivate?.()}
-                      touch
-                    />
-                  )}
+                  <DocumentPin target={pin} />
                 </div>
                 {isExpanded && (
                   <div id={lineDetailId(rowIndex)}>

@@ -4,9 +4,8 @@
  * Handshake stays on ext-apps (refresh / callServerTool / sendMessage).
  * Presentation: Tailwind classes only, no @mcpview/view dependency.
  *
- * Une ligne partage son contexte au clic simple / Espace. Son detail reste une
- * commande distincte : double-clic / Entree ou chevron explicite. Sans saut
- * type, le panneau local conserve les actions conversationnelles de repli.
+ * Un chevron dans le nom signale les lignes qui ouvrent un détail. L’épingle partage la paire
+ * article–entrepôt. Le panneau local propose les actions conversationnelles.
  */
 import { useViewerApp } from "~/shared/viewer-app";
 import {
@@ -23,7 +22,6 @@ import {
   canShareActiveContextResource,
   type ContextSelectionItem,
 } from "~/shared/active-context.ts";
-import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
 import {
   CasysCredit,
@@ -34,8 +32,10 @@ import {
   ViewerShell,
 } from "~/shared/ui";
 import { useViewerLayout } from "~/shared/useViewerLayout";
+import { DisclosureChevron } from "~/shared/DisclosureChevron.tsx";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
-import { useClickIntent } from "~/shared/useClickIntent.ts";
+import { ContextPinButton } from "~/shared/ContextPinButton.tsx";
+import { acceptsDetailToggleClick } from "~/shared/detail-toggle.ts";
 import { type Tone, TONE_RULE } from "~/shared/status";
 import {
   currentLocale,
@@ -58,7 +58,11 @@ import {
 import { useT } from "~/shared/i18n-hook";
 import { useViewerNav } from "~/shared/useViewerNav";
 import { viewerRootKey } from "~/shared/nav-stack";
-import { canCallViewerTool, hasAvailableTool } from "~/shared/viewer-tools";
+import {
+  canCallViewerTool,
+  hasAvailableTool,
+  hasExplicitAvailableTool,
+} from "~/shared/viewer-tools";
 import { PathBar } from "~/shared/PathBar";
 import { type Jump } from "~/shared/jumps";
 import { LevelBody } from "~/shared/levels/LevelBody";
@@ -73,6 +77,8 @@ import { isFixtureMode, STOCK_FIXTURE } from "./fixture.ts";
 import { buildStockRowJump } from "./stockJumps.ts";
 import {
   STOCK_CONTEXT_RECONCILE_KEY,
+  stockBinMember,
+  stockBulkPinState,
   stockRowContextItem,
   stockRowDetailId,
 } from "./stock-interactions.ts";
@@ -418,10 +424,8 @@ function StockContent(
     key: rootKey,
   }, { fixture });
   const activeContext = useActiveContext(app, rootKey);
-  const clickIntent = useClickIntent();
   const nav = viewerNav.nav;
   const { isRoot, current } = nav;
-  useLayoutEffect(() => () => clickIntent.cancelAll(), [clickIntent, rootKey]);
   useLayoutEffect(() => {
     const root = nav.stack.levels[0];
     if (rootFreshEvent > rootMutationEvent && root?.stale) {
@@ -481,12 +485,17 @@ function StockContent(
   const hasJumpHints = jumpsEnabled && Boolean(jumpHints[0]?.tool);
   const canInspect = detailCapabilities.canLoadItem ||
     detailCapabilities.canLoadMovements;
-  const canDrill = canInteractWithStockRow({
+  const hasDrillChannel = canInteractWithStockRow({
     fixture,
     hasJump: hasJumpHints,
     canInspect,
     messagesEnabled,
   });
+
+  const canDrillRow = (row: StockEntry) =>
+    hasDrillChannel || (isMobile &&
+      (row.reserved_qty != null || row.projected_qty != null ||
+        row.valuation_rate != null));
 
   const contextView = t("stock.title");
   const locale = currentLocale();
@@ -498,11 +507,47 @@ function StockContent(
       formatInteger(row.actual_qty),
     );
 
+  const binGroup = {
+    scopeKey: rootKey,
+    reconcileKey: STOCK_CONTEXT_RECONCILE_KEY,
+    doctype: "Bin",
+    view: contextView,
+    fields: [
+      "name",
+      "item_code",
+      "warehouse",
+      "actual_qty",
+      "reserved_qty",
+      "projected_qty",
+      "valuation_rate",
+      "stock_value",
+    ],
+    queryAvailable: hasExplicitAvailableTool(
+      data._availableTools,
+      "erpnext_doc_list",
+    ),
+  };
+  const membersByRow = useMemo(
+    () =>
+      new Map(
+        data.data.map((row) => [row, stockBinMember(row, contextItemFor(row))]),
+      ),
+    [data.data, rootKey, locale, contextView],
+  );
   useEffect(() => {
     if (!context.supported) return;
     void activeContext.reconcileView(
       STOCK_CONTEXT_RECONCILE_KEY,
       data.data.map(contextItemFor),
+    );
+    void activeContext.reconcileGroup(
+      STOCK_CONTEXT_RECONCILE_KEY,
+      [...membersByRow.values()].flatMap((member) => member ? [member] : []),
+      {
+        complete: data.refreshRequest?.toolName === "erpnext_stock_balance" &&
+          !data.refreshRequest.arguments.offset && !data.data.length &&
+          data.count === 0,
+      },
     );
   }, [
     data,
@@ -511,6 +556,8 @@ function StockContent(
     contextView,
     context.supported,
     activeContext.reconcileView,
+    activeContext.reconcileGroup,
+    membersByRow,
   ]);
 
   const filtered = useMemo(() => {
@@ -537,6 +584,11 @@ function StockContent(
     });
   }, [filtered, sortKey, sortDir]);
 
+  const visibleMembers = sorted.flatMap((row) => membersByRow.get(row) ?? []);
+  const bulkState = context.supported && visibleMembers.length === sorted.length
+    ? stockBulkPinState(activeContext.selection, binGroup, visibleMembers)
+    : undefined;
+
   const totalValue = useMemo(
     () => sorted.reduce((sum, entry) => sum + (entry.stock_value ?? 0), 0),
     [sorted],
@@ -549,15 +601,6 @@ function StockContent(
       setSortKey(col);
       setSortDir("asc");
     }
-  }
-
-  function selectionEdge(selected: boolean, interactive: boolean): string {
-    return [
-      "border-r-2",
-      selected ? "border-r-accent" : "border-r-transparent",
-      // État pressé : accent sourd, distinct de la sélection posée.
-      interactive && !selected && "active:border-r-accent-edge",
-    ].filter(Boolean).join(" ");
   }
 
   function rowJump(row: StockEntry): Jump | null {
@@ -581,10 +624,9 @@ function StockContent(
 
   const warehouse = deriveWarehouse(data);
   const grid = isMobile ? GRID_MOBILE : GRID_WIDE;
-  const detailColumn = hasTouchTargets ? "40px" : "32px";
-  const rowGrid = canDrill
-    ? `minmax(0, 1fr) ${detailColumn}`
-    : "minmax(0, 1fr)";
+  const rowGrid = context.supported
+    ? "grid-cols-[minmax(0,1fr)_36px] [@media(pointer:coarse)]:grid-cols-[minmax(0,1fr)_44px]"
+    : "grid-cols-[minmax(0,1fr)]";
 
   return (
     <ViewerShell containerRef={ref}>
@@ -713,15 +755,17 @@ function StockContent(
       <div class="min-h-0 flex-1 overflow-y-auto scroll-slim">
         {/* Column headers */}
         <div
-          class="grid shrink-0 bg-sunken border-b border-line"
-          style={{
-            gridTemplateColumns: rowGrid,
-            padding: isMobile ? "6px 0 6px 12px" : "7px 0 7px 16px",
-          }}
+          class={cx(
+            "grid shrink-0 items-center border-b border-l-2 border-line border-l-transparent bg-sunken",
+            rowGrid,
+          )}
         >
           <div
             class="grid min-w-0"
-            style={{ gridTemplateColumns: grid, paddingRight: "4px" }}
+            style={{
+              gridTemplateColumns: grid,
+              padding: isMobile ? "6px 4px 6px 12px" : "7px 4px 7px 16px",
+            }}
           >
             {isMobile
               ? (
@@ -777,7 +821,26 @@ function StockContent(
                 </>
               )}
           </div>
-          {canDrill && <span aria-hidden="true" />}
+          {bulkState !== undefined && (
+            <ContextPinButton
+              label={t(
+                bulkState === true
+                  ? "doclist.pin.remove_all"
+                  : "doclist.pin.all",
+                { count: visibleMembers.length },
+              )}
+              pressed={bulkState}
+              disabled={activeContext.pending}
+              onToggle={() => {
+                if (bulkState === true) {
+                  void context.removeGroupMembers(
+                    binGroup,
+                    visibleMembers.map((member) => member.name),
+                  );
+                } else void context.addGroupMembers(binGroup, visibleMembers);
+              }}
+            />
+          )}
         </div>
 
         {/* Data rows */}
@@ -787,40 +850,30 @@ function StockContent(
             const tone = qtyTone(row.actual_qty);
             const key = rowKey(row);
             const jump = rowJump(row);
+            const canDrill = canDrillRow(row);
+            const RowControl = canDrill ? "button" : "div";
             const canInlineExpand = canDrill && jump === null;
             const contextItem = contextItemFor(row);
             const detailId = stockRowDetailId(row);
-            const isContextSelected = context.supported &&
-              context.isSelected(contextItem);
+            const member = membersByRow.get(row);
+            const isContextSelected = context.supported && (member
+              ? context.isGroupMemberSelected(
+                STOCK_CONTEXT_RECONCILE_KEY,
+                member.name,
+              )
+              : context.isSelected(contextItem));
             const isJumpExpanded = !isRoot &&
               nav.stack.levels[1]?.rootTriggerKey === contextItem.id;
             const isInlineExpanded = canInlineExpand && expandedKey === key;
             const isExpanded = isJumpExpanded || isInlineExpanded;
             const isDanger = tone === "bad";
-            const interactionEnabled = context.supported || canDrill;
-            const interactionLabel = canDrill
-              ? t(
-                context.supported
-                  ? (isExpanded
-                    ? "document.row.close_detail"
-                    : "document.row.open_detail")
-                  : (isExpanded
-                    ? "document.row.close_detail_only"
-                    : "document.row.open_detail_only"),
-                { label: row.item_code },
-              )
-              : t("context.active.toggle", { label: row.item_code });
-            const intent = {
-              key: contextItem.id,
-              doublePolicy: "local" as const,
-              onSingle: () =>
-                context.supported
-                  ? context.toggleReversible(contextItem)
-                  : undefined,
-              onDouble: () => {
-                if (canDrill) toggleRowDetail(row, jump);
-              },
-            };
+            const rowLabel = `${row.item_code} · ${row.warehouse}`;
+            const detailLabel = t(
+              isExpanded
+                ? "interaction.detail.close"
+                : "interaction.detail.open",
+              { label: rowLabel },
+            );
 
             return (
               <div key={key}>
@@ -828,68 +881,49 @@ function StockContent(
                 <div
                   class={cx(
                     "grid items-center border-l-2 border-b border-b-line-soft transition-colors",
+                    rowGrid,
                     TONE_RULE[tone],
-                    isDanger || isExpanded || isContextSelected
+                    isDanger || isExpanded
                       ? "bg-row-selected"
                       : "hover:bg-row-hover",
-                    selectionEdge(isContextSelected, interactionEnabled),
+                    isExpanded && "shadow-[inset_-2px_0_var(--color-accent)]",
                   )}
                   style={{
-                    gridTemplateColumns: rowGrid,
                     minHeight: hasTouchTargets ? "40px" : undefined,
                   }}
                 >
-                  <div
+                  <RowControl
                     class={cx(
-                      "grid min-w-0 items-center focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
-                      interactionEnabled && "cursor-pointer",
-                      interactionEnabled && !isExpanded &&
-                        !isContextSelected && "active:bg-row-selected",
+                      "grid min-w-0 items-center text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
+                      canDrill &&
+                        "min-h-9 cursor-pointer self-stretch active:bg-row-selected [@media(pointer:coarse)]:min-h-11",
                     )}
                     style={{
                       gridTemplateColumns: grid,
                       padding: isMobile ? "0 4px 0 12px" : "8px 4px 8px 16px",
-                      minHeight: hasTouchTargets ? "40px" : undefined,
                     }}
-                    {...(interactionEnabled
-                      ? {
-                        role: "button",
-                        tabIndex: 0,
-                        "aria-label": interactionLabel,
-                        "aria-pressed": context.supported
-                          ? isContextSelected
-                          : undefined,
-                        "aria-expanded": canDrill ? isExpanded : undefined,
-                        "aria-controls": canDrill ? detailId : undefined,
-                        "aria-keyshortcuts": context.supported && canDrill
-                          ? "Space Enter"
-                          : (context.supported ? "Space" : "Enter"),
-                        onClick: (event: MouseEvent) => {
-                          clickIntent.click(intent, event.detail);
-                        },
-                        onDblClick: canDrill
-                          ? () => clickIntent.doubleClick(intent)
-                          : undefined,
-                        onKeyDown: (event: KeyboardEvent) => {
-                          if (
-                            (event.key === " " && context.supported) ||
-                            (event.key === "Enter" && canDrill)
-                          ) {
-                            clickIntent.keyDown(intent, event);
-                          }
-                        },
-                      }
-                      : {})}
+                    {...(canDrill && {
+                      type: "button" as const,
+                      "aria-label": detailLabel,
+                      title: detailLabel,
+                      "aria-expanded": isExpanded,
+                      "aria-controls": isExpanded ? detailId : undefined,
+                      onClick: (event: MouseEvent) => {
+                        if (acceptsDetailToggleClick(event.detail)) {
+                          toggleRowDetail(row, jump);
+                        }
+                      },
+                    })}
                   >
                     {/* item_code */}
                     <span
                       class={cx(
-                        "font-mono truncate",
+                        "flex min-w-0 items-center gap-1 font-mono text-data",
                         ITEM_TONE[tone],
-                        "text-data",
                       )}
                     >
-                      {row.item_code}
+                      {canDrill && <DisclosureChevron expanded={isExpanded} />}
+                      <span class="truncate">{row.item_code}</span>
                     </span>
 
                     {/* actual_qty */}
@@ -936,16 +970,21 @@ function StockContent(
                     >
                       {formatCurrency(row.stock_value, data.currency)}
                     </span>
-                  </div>
+                  </RowControl>
 
-                  {canDrill && (
-                    <DetailToggleButton
-                      expanded={isExpanded}
-                      label={row.item_code}
-                      controls={detailId}
-                      touch={hasTouchTargets}
+                  {context.supported && (
+                    <ContextPinButton
+                      label={t(
+                        isContextSelected
+                          ? "context.pin.remove"
+                          : "context.pin.add",
+                        { label: rowLabel },
+                      )}
+                      pressed={isContextSelected}
                       onToggle={() => {
-                        toggleRowDetail(row, jump);
+                        if (member) {
+                          void context.toggleGroupMember(binGroup, member);
+                        } else void context.toggle(contextItem);
                       }}
                     />
                   )}

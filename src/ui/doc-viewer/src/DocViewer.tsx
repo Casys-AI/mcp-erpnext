@@ -561,9 +561,7 @@ function DocumentContent({
   const rootContextTarget: ContextInteractionTarget | undefined =
     context.supported && contextDocumentItem
       ? {
-        label: t("context.active.toggle", {
-          label: contextDocumentItem.label,
-        }),
+        label: contextDocumentItem.label,
         selected: context.isSelected(contextDocumentItem),
         onActivate: () => void context.toggle(contextDocumentItem),
       }
@@ -577,10 +575,10 @@ function DocumentContent({
     const item = childRowContextItem(envelope, table, row, rowIndex);
     return item
       ? {
-        label: t("context.active.toggle", { label: item.label }),
+        label: item.label,
         detailLabel: item.label,
         selected: context.isSelected(item),
-        onActivate: () => context.toggleReversible(item),
+        onActivate: () => void context.toggle(item),
       }
       : undefined;
   };

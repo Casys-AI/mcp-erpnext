@@ -4,6 +4,8 @@ import {
   activeContextSnapshot,
 } from "../../shared/active-context.ts";
 import {
+  kpiBarPeriods,
+  kpiInspectedIndex,
   kpiSparklinePeriod,
   kpiSparklinePoints,
   kpiTrendContextResource,
@@ -113,4 +115,34 @@ Deno.test("kpi sparkline - unit-only series keeps the declared unit, never a cur
     unit: "%",
   });
   assertEquals("currency" in payload.datasets[0], false);
+});
+
+Deno.test("inspecting a KPI point follows identity across refresh and never treats a combined or expired period as a month", () => {
+  const labels = ["Oct 26", "Nov 26"];
+  const october = { date_from: "2026-10-01", date_to: "2026-10-31" };
+  const november = { date_from: "2026-11-01", date_to: "2026-11-26" };
+  const range = { date_from: october.date_from, date_to: november.date_to };
+  const months = kpiBarPeriods([october, november], 2);
+  assertEquals(kpiInspectedIndex(labels, months, undefined, labels[1]), 1);
+  assertEquals(
+    kpiInspectedIndex(labels.slice(1), undefined, undefined, labels[1]),
+    0,
+  );
+  assertEquals(kpiInspectedIndex(labels, months, october, labels[1]), 0);
+  assertEquals(kpiInspectedIndex(labels, months, null, labels[1]), -1);
+  assertEquals(kpiInspectedIndex(labels, months, range, labels[1]), -1);
+  assertEquals(
+    kpiInspectedIndex(
+      labels,
+      months,
+      { ...november, date_to: "2026-11-27" },
+      labels[1],
+    ),
+    -1,
+  );
+  assertEquals(kpiBarPeriods([october], 2), undefined);
+  assertEquals(
+    kpiBarPeriods([october, { ...november, date_to: "2026-11-31" }], 2),
+    undefined,
+  );
 });

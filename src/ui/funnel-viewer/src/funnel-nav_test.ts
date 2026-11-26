@@ -9,7 +9,6 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { setLocaleSource } from "../../shared/format.ts";
 import {
-  funnelStageInteractionPlan,
   funnelStageValueText,
   stageIsJumpable,
   stageNavHint,
@@ -114,30 +113,14 @@ Deno.test("stageIsJumpable : true quand jumpsEnabled, étape connue, tool prése
   assertEquals(stageIsJumpable(jumps, "Opportunities", true), true);
 });
 
-Deno.test("funnel interactions : clic simple ou Espace n'active que le contexte", () => {
-  assertEquals(funnelStageInteractionPlan("context", true, true, true), {
-    updateContext: true,
-    toggleLevel: false,
-    sendMessage: false,
-  });
-  assertEquals(funnelStageInteractionPlan("context", true, false, true), {
-    updateContext: false,
-    toggleLevel: false,
-    sendMessage: false,
-  });
-});
-
-Deno.test("funnel interactions : double-clic, Entree ou chevron n'active que le detail", () => {
-  assertEquals(funnelStageInteractionPlan("detail", true, true, true), {
-    updateContext: false,
-    toggleLevel: true,
-    sendMessage: false,
-  });
-  assertEquals(funnelStageInteractionPlan("detail", false, true, true), {
-    updateContext: false,
-    toggleLevel: false,
-    sendMessage: true,
-  });
+Deno.test("stage double-click opens only a tool exposed to this viewer", () => {
+  const jumps = { Leads: { label: "Leads", tool: "erpnext_lead_list" } };
+  assertEquals(stageIsJumpable(jumps, "Leads", true, []), false);
+  assertEquals(
+    stageIsJumpable(jumps, "Leads", true, ["erpnext_lead_list"]),
+    true,
+  );
+  assertEquals(stageIsJumpable(jumps, "constructor", true), false);
 });
 
 Deno.test("funnel detail navigation is an action, not a mounted disclosure", async () => {
@@ -151,16 +134,19 @@ Deno.test("funnel detail navigation is an action, not a mounted disclosure", asy
   assertStringIncludes(source, "await nav.jump(jump)");
 });
 
-Deno.test("funnel context-only stages forward a fast second click", async () => {
+Deno.test("funnel charts inspect locally and give pinning a sibling button", async () => {
   const source = await Deno.readTextFile(
     new URL("./FunnelViewer.tsx", import.meta.url),
   );
-
-  assertEquals(source.includes("detailAvailable || event.detail < 2"), false);
   assertEquals(
-    source.match(/clickIntent\.click\(intent, event\.detail\)/g)?.length,
+    source.match(/onClick=\{\(\) => onInspect\(stage.label\)\}/g)?.length,
     2,
   );
+  assertStringIncludes(source, "aria-pressed={isSelected}");
+  assertStringIncludes(source, "<ContextPinButton");
+  assertStringIncludes(source, "onToggle={() => chart.onTogglePin(stage)}");
+  assertStringIncludes(source, '"interaction.detail.ask"');
+  assertEquals(source.includes("toggleReversible(funnelStageContext"), false);
 });
 
 Deno.test("funnel stage value - carries the payload currency symbol, never a bare number", () => {
@@ -192,5 +178,5 @@ Deno.test("funnel wide layout - stage values are formatted with the payload curr
   );
 
   assertStringIncludes(source, "funnelStageValueText(stage.value, currency)");
-  assertStringIncludes(source, "currency={data.currency}");
+  assertStringIncludes(source, "currency: data.currency");
 });

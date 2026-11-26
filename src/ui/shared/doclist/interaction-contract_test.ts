@@ -58,7 +58,7 @@ Deno.test("doclist closes detail when the expanded row leaves the current page",
   assertStringIncludes(body, "list.setExpandedId(null)");
 });
 
-Deno.test("doclist wires every layout chevron to the real inline panel", async () => {
+Deno.test("doclist wires the shared disclosure to the real inline panel", async () => {
   const body = await Deno.readTextFile(
     new URL("./DoclistBody.tsx", import.meta.url),
   );
@@ -71,7 +71,7 @@ Deno.test("doclist wires every layout chevron to the real inline panel", async (
 
   assertStringIncludes(
     body,
-    "controls: isInspectable ? doclistDetailPanelId(rowId) : undefined",
+    "controls: doclistDetailPanelId(rowId)",
   );
   assertStringIncludes(body, "<div id={doclistDetailPanelId(expandedId)}>");
   assertStringIncludes(body, "reconcileView(listContextKey, candidates)");
@@ -81,11 +81,8 @@ Deno.test("doclist wires every layout chevron to the real inline panel", async (
     "const childRowsContextKey = documentChildRowsReconcileKey(envelope)",
   );
   assertStringIncludes(detail, "rowIndex,\n            childRowsContextKey,");
-  assertEquals(
-    [...table.matchAll(/<RowDetailToggle target=\{interactionTarget\}/g)]
-      .length,
-    3,
-  );
+  assertStringIncludes(table, "controls={target.controls}");
+  assertStringIncludes(table, "onToggle={() => target.onActivate()}");
 });
 
 Deno.test("generic doclist detail only exposes explicit relation asks", async () => {
@@ -137,7 +134,7 @@ Deno.test("non-financial narrow lists use real columns without a fake due field"
   assertStringIncludes(table, "{trailingKey && (");
 });
 
-Deno.test("doclist checkbox selection uses the filtered sort before pagination and the group controller", async () => {
+Deno.test("doclist pin selection uses the filtered sort before pagination and the group controller", async () => {
   const body = await Deno.readTextFile(
     new URL("./DoclistBody.tsx", import.meta.url),
   );
@@ -151,49 +148,54 @@ Deno.test("doclist checkbox selection uses the filtered sort before pagination a
   assertStringIncludes(body, "doclistFilteredSelectionOperation(");
   assertEquals(body.includes("if (context.pending) return"), false);
   assertStringIncludes(body, "context.isSelected(item)");
-  assertEquals(body.includes("context.isGroupMemberSelected("), false);
+  assertStringIncludes(
+    body,
+    "context.isGroupMemberSelected(listContextKey, name)",
+  );
+  assertStringIncludes(body, "pinnedCount: pinnedNames.size");
   assertStringIncludes(body, "hasExplicitAvailableTool(");
   assertStringIncludes(body, "complete: isDoclistResultComplete(data)");
-  // Les gestes de ligne restent ceux de la sélection unitaire et du détail.
-  assertStringIncludes(body, "context?.toggleReversible(item)");
-  assertStringIncludes(body, "context?.toggle(item)");
+  const row = body.slice(
+    body.indexOf("function rowInteractionTarget("),
+    body.indexOf("function notifyDocumentChanged("),
+  );
+  assertStringIncludes(row, 'clickAction: "detail"');
+  assertEquals(row.includes("context?.toggle"), false);
 });
 
-Deno.test("doclist exposes isolated native checkboxes in every layout", async () => {
+Deno.test("the dock exposes a separate pin action at the end of every row layout", async () => {
   const table = await Deno.readTextFile(
     new URL("./DoclistTable.tsx", import.meta.url),
   );
-  assertStringIncludes(table, 'type="checkbox"');
+  assertEquals(table.includes('type="checkbox"'), false);
   assertStringIncludes(
     table,
-    'aria-checked={indeterminate ? "mixed" : checked}',
+    "const [railOpen, setRailOpen] = useState(false)",
   );
-  assertStringIncludes(table, "input.indeterminate = indeterminate");
-  assertStringIncludes(table, "doclistCheckboxEvents(");
-  assertStringIncludes(table, "`Select ${name}`");
+  assertStringIncludes(table, "aria-expanded={showPins}");
   assertStringIncludes(
     table,
-    "`Select all ${selection.totalCount} filtered rows`",
+    'pressed={selection.indeterminate ? "mixed" : selection.checked}',
   );
-  assertEquals([...table.matchAll(/<RowSelectionCheckbox\s/g)].length, 3);
-  assertEquals([...table.matchAll(/<HeaderSelectionCheckbox\s/g)].length, 3);
+  const rowAction = table.slice(
+    table.indexOf("function RowAction("),
+    table.indexOf("function dueValue("),
+  );
+  assertStringIncludes(rowAction, "if (selection)");
+  assertStringIncludes(rowAction, "<ContextPinButton");
+  assertStringIncludes(rowAction, "<DetailToggleButton");
   assertStringIncludes(
-    table.replace(/\s+/g, " "),
-    "columns.length + (hasDetailControls ? 1 : 0) + (selection ? 1 : 0)",
+    table,
+    "colSpan={columns.length + (hasRowAction ? 1 : 0)}",
   );
-});
-
-Deno.test("doclist checkbox hit areas cover the cell and remain active during ACK", async () => {
-  const table = await Deno.readTextFile(
-    new URL("./DoclistTable.tsx", import.meta.url),
-  );
-  assertStringIncludes(table, "<label");
-  assertStringIncludes(table, "min-h-10 min-w-10");
-  assertStringIncludes(table, "[&>label]:absolute [&>label]:inset-0");
-  assertEquals(table.includes("disabled={selection.pending"), false);
-  assertEquals(table.includes("selection.pending ||"), false);
-  assertStringIncludes(table, "doclistCheckboxEvents(() => {})");
-  assertStringIncludes(table, "checked={selection.isSelected(row, index)}");
+  for (const mode of ["CompactTable", "WideTable", "StackedList"]) {
+    const source = table.split(`function ${mode}(`)[1].split("function ")[0];
+    assertEquals([...source.matchAll(/<RowAction\s/g)].length, 1, mode);
+    assertStringIncludes(
+      source,
+      "selection={showPins ? selection : undefined}",
+    );
+  }
 });
 
 Deno.test("all viewer context adapters expose relative group actions", async () => {

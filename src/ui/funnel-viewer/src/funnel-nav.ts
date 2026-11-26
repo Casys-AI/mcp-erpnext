@@ -9,6 +9,7 @@
  */
 
 import { formatCurrency } from "../../shared/format.ts";
+import { hasAvailableTool } from "../../shared/viewer-tools.ts";
 import type { NavHint } from "../../shared/jumps.ts";
 
 /**
@@ -20,35 +21,6 @@ export function funnelStageValueText(
   currency: string | undefined,
 ): string {
   return value != null && value > 0 ? formatCurrency(value, currency) : "—";
-}
-
-export type FunnelStageActivation = "context" | "detail";
-
-export interface FunnelStageInteractionPlan {
-  updateContext: boolean;
-  toggleLevel: boolean;
-  sendMessage: boolean;
-}
-
-/** Un geste ne produit jamais a la fois du contexte et un niveau de detail. */
-export function funnelStageInteractionPlan(
-  activation: FunnelStageActivation,
-  hasJump: boolean,
-  contextSupported: boolean,
-  messageSupported: boolean,
-): FunnelStageInteractionPlan {
-  if (activation === "context") {
-    return {
-      updateContext: contextSupported,
-      toggleLevel: false,
-      sendMessage: false,
-    };
-  }
-  return {
-    updateContext: false,
-    toggleLevel: hasJump,
-    sendMessage: !hasJump && messageSupported,
-  };
 }
 
 /**
@@ -72,14 +44,16 @@ export function stageNavHint(
 
 /**
  * Indique si une étape possède un saut serveur utilisable.
- * Raccourci : `jumpsEnabled && stageNavHint(stageJumps, label) !== null`.
+ * Respecte la capacité hôte et les outils annoncés dans le résultat.
  */
 export function stageIsJumpable(
   stageJumps: Record<string, NavHint> | undefined,
   label: string,
   jumpsEnabled: boolean,
+  availableTools?: readonly string[],
 ): boolean {
   if (!jumpsEnabled) return false;
   const hint = stageNavHint(stageJumps, label);
-  return hint !== null && typeof hint.tool === "string";
+  return hint !== null && typeof hint.tool === "string" &&
+    hasAvailableTool(availableTools, hint.tool);
 }

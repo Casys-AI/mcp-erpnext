@@ -1,4 +1,7 @@
 import { act } from "preact/test-utils";
+import { App } from "@modelcontextprotocol/ext-apps";
+import { createPanelContexts } from "../../code-mode/panel-hosts.ts";
+import { mountSession } from "./session-view.ts";
 import { mergeHostContext } from "../../shared/host-context.ts";
 import { assert, assertEquals } from "@std/assert";
 import { createElement } from "preact";
@@ -16,7 +19,6 @@ import {
   TOOL_RESULT_REJECTED_CODE,
   toSurfaceState,
 } from "./app.ts";
-import { BUY_COMPONENT_REGISTRY } from "./components.tsx";
 import type { BuyEvidenceViewData } from "./model.ts";
 import { sealBuySourceCapture } from "../../../buy/capture.ts";
 import {
@@ -147,7 +149,7 @@ Deno.test({
       };
       try {
         const fake = fakeApp(root);
-        await startBuyEvidenceApp(root, BUY_COMPONENT_REGISTRY, fake.runtime);
+        await startBuyEvidenceApp(root, undefined, fake.runtime);
         const capture = await sealBuySourceCapture(await syntheticCapture());
         const result = await syntheticCompleteResult(
           capture.fingerprint,
@@ -254,7 +256,7 @@ Deno.test({
       const fake = fakeApp(root, { hostContext: { locale: "fr-FR" } });
       const handle = await startBuyEvidenceApp(
         root,
-        BUY_COMPONENT_REGISTRY,
+        undefined,
         fake.runtime,
       );
       try {
@@ -281,6 +283,205 @@ Deno.test({
       } finally {
         await handle.dispose();
         mergeHostContext({ locale: "en-US" });
+      }
+    }),
+});
+
+Deno.test({
+  name:
+    "Buy pins share verified references, survive locale remounts and retire on replacement or rejection",
+  permissions: PERMISSIONS,
+  fn: () =>
+    withDocument(async (root) => {
+      const fake = fakeApp(root);
+      const handle = await startBuyEvidenceApp(root, undefined, fake.runtime);
+      const snapshots: Array<
+        {
+          items?: Array<
+            {
+              id: string;
+              value: string;
+              fields: Array<{ label: string; value: string }>;
+            }
+          >;
+        }
+      > = [];
+      Object.assign(fake.handle().ctx.app, {
+        getHostCapabilities: () => ({
+          updateModelContext: { structuredContent: {} },
+        }),
+        updateModelContext: (
+          request: { structuredContent: typeof snapshots[number] },
+        ) => {
+          snapshots.push(request.structuredContent);
+          return Promise.resolve({});
+        },
+      });
+      const capture = await sealBuySourceCapture(await syntheticCapture());
+      const complete = await syntheticAvailableSession(
+        await syntheticCompleteResult(
+          capture.fingerprint,
+          capture.capture.sourceInstance.siteId,
+        ),
+      );
+      const partial = await syntheticAvailableSession(
+        await syntheticPartialResult(
+          capture.fingerprint,
+          capture.capture.sourceInstance.siteId,
+        ),
+      );
+      const pin = () =>
+        root.querySelector<HTMLButtonElement>("[data-context-pin]");
+      try {
+        await act(() => fake.session(complete));
+        assert(pin());
+        assertEquals(snapshots.length, 0);
+        await act(async () => {
+          clickPin(pin()!);
+          await until(() => snapshots.length === 1, "first pin");
+        });
+        assertEquals(
+          snapshots[0].items?.[0].id,
+          `buy-evidence:${complete.basis.sessionFingerprint}`,
+        );
+        assertEquals(snapshots[0].items?.[0].value, "complete");
+        await act(async () => {
+          fake.hostContextChanged({ locale: "fr-FR" });
+          await fake.idle();
+        });
+        await until(() => !!pin(), "localized pin");
+        assertEquals(pin()?.getAttribute("aria-pressed"), "true");
+        assertEquals(snapshots.length, 1);
+        await act(() => fake.session(partial));
+        await until(() => snapshots.length === 2, "old evidence removed");
+        assertEquals(snapshots[1], {});
+        assertEquals(pin()?.getAttribute("aria-pressed"), "false");
+        await act(async () => {
+          clickPin(pin()!);
+          await until(() => snapshots.length === 3, "new pin");
+        });
+        assertEquals(
+          snapshots[2].items?.[0].id,
+          `buy-evidence:${partial.basis.sessionFingerprint}`,
+        );
+        assertEquals(snapshots[2].items?.[0].value, "partial");
+        assert(
+          snapshots[2].items![0].fields.some((f) => f.value.includes("EUR")),
+        );
+        assert(!JSON.stringify(snapshots[2]).includes("sourceCaptures"));
+        await act(() =>
+          fake.session({
+            ...partial,
+            basis: { ...partial.basis, projectId: "different" },
+          })
+        );
+        await until(() => snapshots.length === 4, "rejected evidence removed");
+        assertEquals(snapshots[3], {});
+        assertEquals(pin(), null);
+        assertEquals(fake.reads, []);
+      } finally {
+        await handle.dispose();
+        mergeHostContext({ locale: "en", theme: "light" });
+      }
+    }),
+});
+
+function clickPin(button: HTMLButtonElement) {
+  const event = button.ownerDocument.createEvent("CustomEvent");
+  event.initCustomEvent("click", true, true, 1);
+  button.dispatchEvent(event);
+}
+
+Deno.test({
+  name:
+    "declared Buy session uses its Compose panel context and honors the connected host capability",
+  permissions: PERMISSIONS,
+  fn: () =>
+    withDocument(async (root) => {
+      const captured = await sealBuySourceCapture(await syntheticCapture());
+      const session = await syntheticAvailableSession(
+        await syntheticPartialResult(
+          captured.fingerprint,
+          captured.capture.sourceInstance.siteId,
+        ),
+      );
+      const lifetime = new AbortController();
+      const updates: Array<{ structuredContent?: Record<string, unknown> }> =
+        [];
+      const context = createPanelContexts(async (value) => {
+        updates.push(value);
+        return {};
+      });
+      const sibling = { structuredContent: { invoice: "INV-FIXTURE" } };
+      await context.forPanel("invoice", "Invoice", lifetime.signal)(sibling);
+      const app = new App({ name: "Panel", version: "1" }, {});
+      Object.assign(app, {
+        getHostContext: () => ({}),
+        getHostCapabilities: () => ({
+          updateModelContext: { structuredContent: {} },
+        }),
+        updateModelContext: context.forPanel(
+          "buy",
+          "Evidence",
+          lifetime.signal,
+        ),
+      });
+      const mount = await mountSession(
+        root,
+        app,
+        { ...session },
+        lifetime.signal,
+      );
+      try {
+        await until(
+          () => !!root.querySelector("[data-context-pin]"),
+          "mounted panel pin",
+        );
+        const pin = root.querySelector<HTMLButtonElement>(
+          "[data-context-pin]",
+        )!;
+        await act(async () => {
+          clickPin(pin);
+          await until(() => updates.length === 2, "panel aggregation");
+        });
+        const both = updates[1].structuredContent?.panels as Array<
+          { title: string; context: Record<string, unknown> }
+        >;
+        assertEquals(both[0], {
+          title: "Invoice",
+          context: sibling.structuredContent,
+        });
+        assertEquals(both[1].title, "Evidence");
+        assert(
+          JSON.stringify(both[1].context).includes(
+            session.basis.sessionFingerprint,
+          ),
+        );
+        await act(async () => {
+          clickPin(pin);
+          await until(() => updates.length === 3, "remove only evidence");
+        });
+        assertEquals(updates[2], sibling);
+      } finally {
+        mount.dispose();
+      }
+
+      Object.assign(app, { getHostCapabilities: () => ({}) });
+      const readonly = await mountSession(
+        root,
+        app,
+        { ...session },
+        lifetime.signal,
+      );
+      try {
+        await until(
+          () => !!root.querySelector(".buy-evidence-shell"),
+          "read-only evidence",
+        );
+        assertEquals(root.querySelector("[data-context-pin]"), null);
+        assertEquals(updates.length, 3);
+      } finally {
+        readonly.dispose();
       }
     }),
 });

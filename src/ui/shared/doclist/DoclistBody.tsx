@@ -152,7 +152,6 @@ export function DoclistBody(
       pendingRowIdRef.current = null;
     };
   }, []);
-  const hasLocalDetail = fixture && rows.some((row) => row._detail != null);
   const [, setRouteRevision] = useState(0);
   useLayoutEffect(() => {
     if (!invoiceSelection) return;
@@ -179,7 +178,6 @@ export function DoclistBody(
       data.doctype === SALES_INVOICE_DOCTYPE &&
       hasExplicitAvailableTool(data._availableTools, SALES_INVOICE_GET),
   );
-  const isInspectable = !!rowAction || hasLocalDetail;
   const listContextView = contextView ?? data._title ?? data.doctype ??
     "Document";
   const listContextKey = contextKey ?? listContextView;
@@ -220,13 +218,31 @@ export function DoclistBody(
       return member ? [member] : [];
     })
     : [];
-  const selectedMembers = groupConfig && context
-    ? list.sorted.flatMap((row, index) => {
+  const pinnedNames = new Set<string>();
+  if (groupConfig && context) {
+    // A partial server refresh can move pinned rows outside the loaded window.
+    for (const group of context.selection.groups) {
+      if (
+        group.doctype !== groupConfig.doctype ||
+        group.reconcileKey !== listContextKey
+      ) continue;
+      for (const { name } of group.members) {
+        if (context.isGroupMemberSelected(listContextKey, name)) {
+          pinnedNames.add(name);
+        }
+      }
+    }
+    // A document can also be pinned from its detail or another list.
+    for (const [index, row] of rows.entries()) {
+      const name = resolveRowId(row, rowAction, String(index));
+      if (pinnedNames.has(name)) continue;
       const item = contextItemForRow(row, index);
-      const member = groupMemberForRow(row, index);
-      return item && member && context.isSelected(item) ? [member] : [];
-    })
-    : [];
+      if (item && context.isSelected(item)) pinnedNames.add(name);
+    }
+  }
+  const selectedMembers = filteredMembers.filter((member) =>
+    pinnedNames.has(member.name)
+  );
   const headerSelection = doclistHeaderSelection(
     filteredMembers,
     selectedMembers,
@@ -234,10 +250,9 @@ export function DoclistBody(
   const selection = groupConfig && context
     ? {
       ...headerSelection,
-      isSelected: (row: Row, index: number) => {
-        const item = contextItemForRow(row, index);
-        return item ? context.isSelected(item) : false;
-      },
+      pinnedCount: pinnedNames.size,
+      isSelected: (row: Row, index: number) =>
+        pinnedNames.has(resolveRowId(row, rowAction, String(index))),
       onToggle: (row: Row, index: number, shiftKey: boolean) => {
         const member = groupMemberForRow(row, index);
         if (!member) return;
@@ -451,55 +466,34 @@ export function DoclistBody(
     rowIndex: number,
   ): ContextInteractionTarget | undefined {
     const rowId = resolveRowId(row, rowAction, String(rowIndex));
-    const item = contextItemForRow(row, rowIndex);
+    const isInspectable = Boolean(rowAction || row._detail != null);
     const invoice = following ? invoiceSelectionRef(data.doctype, row) : null;
-    if (invoice) {
-      const label = item?.label ?? invoice.name;
+    if (invoice && invoiceSelection) {
       return {
-        label: t("document.row.open_follow", { label }),
+        label: t("document.row.open_follow", { label: invoice.name }),
         clickAction: "detail",
-        selected: item ? context?.isSelected(item) ?? false : undefined,
         onActivate: () =>
-          invoiceSelection?.select(invoice, () => {
-            if (!mountedRef.current) return;
-            if (isInspectable) list.setExpandedId(rowId);
-            else if (item) void context?.toggle(item);
+          invoiceSelection.select(invoice, () => {
+            if (mountedRef.current && isInspectable) list.setExpandedId(rowId);
           }),
       };
     }
-    if (!item && !isInspectable) return undefined;
-    const label = item?.label ?? rowId;
-    const selected = item ? context?.isSelected(item) ?? false : undefined;
+    if (!isInspectable) return;
+    const expanded = expandedId === rowId;
+    const toggle = () => {
+      cancelFollow?.();
+      list.setExpandedId(expanded ? null : rowId);
+    };
     return {
-      label: isInspectable
-        ? t(
-          item
-            ? (expandedId === rowId
-              ? "document.row.close_detail"
-              : "document.row.open_detail")
-            : (expandedId === rowId
-              ? "document.row.close_detail_only"
-              : "document.row.open_detail_only"),
-          { label },
-        )
-        : t("context.active.toggle", { label }),
-      selected,
-      expanded: isInspectable ? expandedId === rowId : undefined,
-      detailLabel: label,
-      controls: isInspectable ? doclistDetailPanelId(rowId) : undefined,
-      onActivate: () => {
-        cancelFollow?.();
-        if (!item) return;
-        if (isInspectable) return context?.toggleReversible(item);
-        void context?.toggle(item);
-      },
-      doublePolicy: "local",
-      onDoubleActivate: isInspectable
-        ? () => {
-          cancelFollow?.();
-          list.setExpandedId(expandedId === rowId ? null : rowId);
-        }
-        : undefined,
+      label: t(
+        expanded ? "interaction.detail.close" : "interaction.detail.open",
+        { label: rowId },
+      ),
+      clickAction: "detail",
+      detailLabel: rowId,
+      expanded,
+      controls: doclistDetailPanelId(rowId),
+      onActivate: toggle,
     };
   }
 
@@ -733,6 +727,12 @@ export function DoclistBody(
             rows={list.pageRows}
             rowId={(row, index) => resolveRowId(row, rowAction, String(index))}
             selectedId={expandedId}
+            isFollowed={following && invoiceSelection
+              ? (row) => {
+                const invoice = invoiceSelectionRef(data.doctype, row);
+                return invoice !== null && invoiceSelection.isOpen(invoice);
+              }
+              : undefined}
             struckId={stale?.subject ?? null}
             sortKey={list.sortKey}
             sortDir={list.sortDir}

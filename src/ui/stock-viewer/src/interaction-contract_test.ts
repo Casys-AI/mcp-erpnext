@@ -9,21 +9,18 @@ Deno.test("stock viewer - contexte et detail gardent des commandes exclusives", 
     source,
     "const activeContext = useActiveContext(app, rootKey)",
   );
+  assertStringIncludes(source, "<ContextPinButton");
   assertStringIncludes(
     source,
-    "? context.toggleReversible(contextItem)",
+    "context.toggleGroupMember(binGroup, member)",
   );
-  assertStringIncludes(
-    source,
-    'event.key === " " && context.supported',
-  );
-  assertStringIncludes(source, 'event.key === "Enter" && canDrill');
+  assertStringIncludes(source, "pressed={isContextSelected}");
+  assertStringIncludes(source, "acceptsDetailToggleClick(event.detail)");
   assertStringIncludes(
     source,
     "nav.toggleRootChild(jump, contextItemFor(row).id)",
   );
-  assertStringIncludes(source, "clickIntent.click(intent, event.detail)");
-  assertEquals(source.includes("canDrill || event.detail < 2"), false);
+  assertEquals(source.includes("context.toggleReversible(contextItem)"), false);
   assertEquals(source.includes("nav.jump(jump)"), false);
 });
 
@@ -36,8 +33,18 @@ Deno.test("stock viewer - detail explicite, aria et niveaux imbriques restent ca
   );
 
   assertStringIncludes(source, "<ActiveContextChip");
-  assertStringIncludes(source, "<DetailToggleButton");
-  assertStringIncludes(source, '"aria-controls": canDrill ? detailId');
+  assertEquals(source.includes("<DetailToggleButton"), false);
+  assertEquals(source.includes("showDetailColumn"), false);
+  assertStringIncludes(
+    source,
+    'const RowControl = canDrill ? "button" : "div"',
+  );
+  assertStringIncludes(source, "title: detailLabel");
+  assertStringIncludes(
+    source,
+    "{canDrill && <DisclosureChevron expanded={isExpanded} />}",
+  );
+  assertStringIncludes(source, '"aria-controls": isExpanded ? detailId');
   assertMatch(source, /<section\s+id=\{detailId\}/s);
   assertMatch(source, /<div id=\{detailId\}>/s);
   assertStringIncludes(source, "touch={hasTouchTargets}");

@@ -169,12 +169,12 @@ Deno.test("kanban counts only canonical board payloads as fresh", async () => {
   assertEquals(source.includes("updateBoard(parseBoard(text))"), false);
 });
 
-Deno.test("chart cancels stale gestures before the next root can paint", async () => {
+Deno.test("chart clears inspection before the next root can paint", async () => {
   const source = await Deno.readTextFile(
     new URL("./ChartViewer.tsx", import.meta.url),
   );
   assertStringIncludes(
     source,
-    "useLayoutEffect(() => () => clickIntent.cancelAll(), [clickIntent, rootKey])",
+    "useLayoutEffect(() => setDetailFocus(null), [rootKey])",
   );
 });

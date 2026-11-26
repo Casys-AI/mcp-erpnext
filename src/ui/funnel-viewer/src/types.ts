@@ -7,7 +7,7 @@ export interface FunnelStage {
   value?: number;
   color: string;
   conversionRate?: number;
-  /** sendMessage text when clicking this stage (auto-injected by server) */
+  /** Message for the explicit conversational detail action. */
   _drillDown?: string;
 }
 

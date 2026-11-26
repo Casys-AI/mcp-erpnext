@@ -18,22 +18,19 @@ Deno.test("KPI layout - host bounds replace viewport locking and the level body 
   assertEquals(content.includes("h-screen"), false);
 });
 
-Deno.test("KPI interaction - context-only values forward a fast second click", () => {
-  assertEquals(source.includes("clickCount < 2"), false);
-  assertStringIncludes(
-    source,
-    "clickIntent.click(interactionIntent(selection, action), clickCount)",
-  );
-});
-
 Deno.test("KPI formatting - the viewer renders through kpi-format.ts and never reads formattedValue itself", () => {
   assertStringIncludes(source, 'from "./kpi-format.ts"');
   assertEquals(source.includes("function formatKpiParts"), false);
   assertEquals(source.includes("data.formattedValue"), false);
 });
 
-Deno.test("KPI hints - the drill-down titles are wired to the interactive elements", () => {
-  assertStringIncludes(source, "kpiHintKey(");
-  assertStringIncludes(source, "title={numberTitle}");
-  assertStringIncludes(source, "title={trendTitle}");
+Deno.test("KPI inspection and pinning use independent controls in both layouts", () => {
+  assertStringIncludes(source, "data-kpi-month={index}");
+  assertStringIncludes(source, "onInspect={inspectPoint}");
+  assertStringIncludes(
+    source,
+    "onToggle={() => void activeContext.toggle(item)}",
+  );
+  assertEquals(source.includes("toggleReversible("), false);
+  assertEquals(source.split("{renderSparkline()}").length - 1, 2);
 });

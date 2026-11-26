@@ -22,13 +22,18 @@ Deno.test("child rows keep context and detail as sibling controls", async () => 
     new URL("./ChildTableSection.tsx", import.meta.url),
   );
 
-  assertStringIncludes(section, "onActivate: () => {}");
-  assertStringIncludes(section, "onDoubleActivate: toggle");
-  assertStringIncludes(section, "<DetailToggleButton");
+  assertStringIncludes(section, 'clickAction: "detail"');
+  assertStringIncludes(section, "onActivate: toggle");
+  assertEquals(
+    [...section.matchAll(/<DocumentPin target=\{presentation.contextTarget\}/g)]
+      .length,
+    2,
+  );
+  assertEquals(section.includes("<DetailToggleButton"), false);
   assertStringIncludes(section, "<RowDisclosurePanel");
   assertStringIncludes(section, "id={presentation.rowPanelId}");
   assertEquals(
-    [...section.matchAll(/<DetailToggleButton/g)].length,
+    [...section.matchAll(/<DisclosureChevron/g)].length,
     2,
   );
 });

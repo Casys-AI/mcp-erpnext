@@ -6,6 +6,7 @@ import {
   activeContextRemovalFocus,
 } from "./active-context-chip.ts";
 import type { ContextSelectionItem } from "./active-context.ts";
+import { setLangSource } from "./i18n.ts";
 import {
   addSelectionSingle,
   DEFAULT_SELECTION_POLICY,
@@ -239,6 +240,30 @@ Deno.test("puce : le repli sans outil de liste annonce la part projetée", () =>
     ["partly shared (8 of 30)"],
   );
   assertEquals(selection.groups[0].members.length, 30);
+});
+
+Deno.test("puce : annonce dans la langue de l’hôte les références jointes et le total épinglé", () => {
+  setLangSource(() => "fr-FR");
+  try {
+    const local = invoiceSelection(30, false);
+    const boundedQuery = invoiceSelection(130);
+    for (
+      const [selection, expected] of [
+        [local, "partagé en partie (8 sur 30)"],
+        [boundedQuery, "partagé en partie (100 sur 130)"],
+      ] as const
+    ) {
+      assertEquals(
+        activeContextChipNotices(
+          projectedSelectionEntries(selection),
+          selection,
+        ),
+        [expected],
+      );
+    }
+  } finally {
+    setLangSource(() => undefined);
+  }
 });
 
 Deno.test("puce : les autres entrées réduisent la part partagée du groupe", () => {

@@ -161,26 +161,6 @@ export function extendDoclistRange(
   );
 }
 
-interface CheckboxClickEvent {
-  shiftKey: boolean;
-  stopPropagation(): void;
-}
-
-export function doclistCheckboxEvents(
-  onClick: (event: CheckboxClickEvent) => void,
-) {
-  const stop = (event: { stopPropagation(): void }) => event.stopPropagation();
-  return {
-    onClick: (event: CheckboxClickEvent) => {
-      stop(event);
-      onClick(event);
-    },
-    onDblClick: stop,
-    // Ne pas annuler l'action native : Espace doit encore cocher la case.
-    onKeyDown: stop,
-  };
-}
-
 interface RowPointerEvent {
   detail?: number;
   shiftKey?: boolean;

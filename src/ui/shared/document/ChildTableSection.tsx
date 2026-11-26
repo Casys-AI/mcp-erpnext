@@ -1,7 +1,8 @@
 /** @jsxImportSource preact */
 
 import type { ComponentChildren } from "preact";
-import { DetailToggleButton } from "../DetailToggleButton.tsx";
+import { DocumentPin } from "./DocumentPin.tsx";
+import { DisclosureChevron } from "../DisclosureChevron.tsx";
 import { formatNumber } from "../format";
 import { type TFunction, useT } from "../i18n-hook";
 import { useClickIntent } from "../useClickIntent.ts";
@@ -37,7 +38,7 @@ export interface ChildTableSectionProps {
   ) => ComponentChildren;
   /** Dans un détail déjà ouvert, les actions restent visibles sans disclosure. */
   rowActionsPlacement?: "disclosure" | "visible";
-  /** La ligne elle-même rejoint le contexte ; ses boutons restent de la navigation. */
+  /** A pin next to the row operates independently of its disclosure. */
   renderRowContextTarget?: (
     table: ChildTableModel,
     row: ChildTableRow,
@@ -88,8 +89,9 @@ function cells(
   row: ChildTableRow,
   columns: readonly ChildTableColumn[],
   t: TFunction,
+  expanded?: boolean,
 ): ComponentChildren {
-  return columns.map((column) => (
+  return columns.map((column, index) => (
     <span
       key={column.key}
       class={cx(
@@ -98,7 +100,9 @@ function cells(
       )}
       title={String(row[column.key] ?? "")}
     >
-      {valueText(row[column.key], t)}
+      {expanded !== undefined && index === 0 && (
+        <DisclosureChevron expanded={expanded} />
+      )} {valueText(row[column.key], t)}
     </span>
   ));
 }
@@ -184,8 +188,13 @@ export function ChildTableSection({
   const columns = childTableColumnsForLayout(table, layout);
   const tableId = `${idPrefix}-${table.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
   const panel = layout === "panel";
-  const hasDisclosureColumn = childRowsExpandable ||
-    (rowActionsPlacement === "disclosure" && Boolean(renderRowActions));
+
+  const pinTargets = table.rows.map((row, index) =>
+    renderRowContextTarget?.(table, row, index)
+  );
+  const hasPinColumn = pinTargets.some((target) =>
+    target?.selected !== undefined
+  );
 
   function rowPresentation(row: ChildTableRow, rowIndex: number) {
     const hidden = childRowsExpandable
@@ -203,7 +212,7 @@ export function ChildTableSection({
       activeDisclosure?.tableKey === table.key &&
       activeDisclosure.rowIndex === rowIndex;
     const rowPanelId = `${tableId}-row-${rowIndex}-details`;
-    const contextTarget = renderRowContextTarget?.(table, row, rowIndex);
+    const contextTarget = pinTargets[rowIndex];
     const fallbackLabel = String(
       row[columns[0]?.key ?? ""] ?? `${table.label} ${rowIndex + 1}`,
     );
@@ -214,24 +223,18 @@ export function ChildTableSection({
       );
     const interactionTarget: ContextInteractionTarget | undefined = canDisclose
       ? {
-        ...(contextTarget ?? { onActivate: () => {} }),
         label: t(
-          contextTarget?.selected !== undefined
-            ? (expanded
-              ? "document.row.close_detail"
-              : "document.row.open_detail")
-            : (expanded
-              ? "document.row.close_detail_only"
-              : "document.row.open_detail_only"),
-          { label: detailLabel },
+          expanded ? "interaction.detail.close" : "interaction.detail.open",
+          {
+            label: detailLabel,
+          },
         ),
-        detailLabel,
         expanded,
         controls: rowPanelId,
-        onDoubleActivate: toggle,
-        doublePolicy: "local" as const,
+        clickAction: "detail",
+        onActivate: toggle,
       }
-      : contextTarget;
+      : undefined;
     return {
       hidden,
       rowActions: disclosedActions,
@@ -240,8 +243,7 @@ export function ChildTableSection({
       expanded,
       rowPanelId,
       interactionTarget,
-      detailLabel,
-      toggle,
+      contextTarget,
     };
   }
 
@@ -266,18 +268,18 @@ export function ChildTableSection({
           <div class="flex flex-col border-t border-line-soft">
             {table.rows.map((row, rowIndex) => {
               const presentation = rowPresentation(row, rowIndex);
-              const active = Boolean(
-                presentation.interactionTarget?.selected ||
-                  presentation.expanded,
-              );
+              const active = presentation.expanded;
               const content = (
                 <span class="flex flex-col gap-1.5 px-3.5 py-2.5">
-                  {columns.map((column) => (
+                  {columns.map((column, index) => (
                     <span
                       key={column.key}
                       class="flex min-w-0 items-baseline justify-between gap-3"
                     >
-                      <span class="shrink-0 font-mono text-chip text-ink-faint">
+                      <span class="inline-flex shrink-0 items-center gap-1 font-mono text-chip text-ink-faint">
+                        {index === 0 && presentation.canDisclose && (
+                          <DisclosureChevron expanded={presentation.expanded} />
+                        )}
                         {column.label}
                       </span>
                       <span
@@ -318,15 +320,7 @@ export function ChildTableSection({
                     >
                       {content}
                     </div>
-                    {presentation.canDisclose && (
-                      <DetailToggleButton
-                        expanded={presentation.expanded}
-                        label={presentation.detailLabel}
-                        controls={presentation.rowPanelId}
-                        onToggle={presentation.toggle}
-                        touch
-                      />
-                    )}
+                    <DocumentPin target={presentation.contextTarget} />
                   </div>
                   {hasContent(presentation.visibleActions) && (
                     <div class="flex flex-wrap justify-end gap-1.5 border-b border-line-soft bg-sunken px-3.5 py-1.5">
@@ -370,14 +364,16 @@ export function ChildTableSection({
                   </span>
                 ))}
               </div>
-              {hasDisclosureColumn && <span aria-hidden="true" class="w-10" />}
+              {hasPinColumn && (
+                <span
+                  aria-hidden="true"
+                  class="w-9 shrink-0 [@media(pointer:coarse)]:w-11"
+                />
+              )}
             </div>
             {table.rows.map((row, rowIndex) => {
               const presentation = rowPresentation(row, rowIndex);
-              const active = Boolean(
-                presentation.interactionTarget?.selected ||
-                  presentation.expanded,
-              );
+              const active = presentation.expanded;
               const rowClass = cx(
                 "grid items-center gap-3 border-l-2 border-l-transparent px-4",
                 layout === "mobile" ? "min-h-10 py-1" : "min-h-9 py-2",
@@ -408,17 +404,23 @@ export function ChildTableSection({
                           "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
                       )}
                     >
-                      {cells(row, columns, t)}
+                      {cells(
+                        row,
+                        columns,
+                        t,
+                        presentation.canDisclose
+                          ? presentation.expanded
+                          : undefined,
+                      )}
                     </div>
-                    {presentation.canDisclose && (
-                      <DetailToggleButton
-                        expanded={presentation.expanded}
-                        label={presentation.detailLabel}
-                        controls={presentation.rowPanelId}
-                        onToggle={presentation.toggle}
-                        touch={layout === "mobile"}
-                      />
-                    )}
+                    {presentation.contextTarget?.selected !== undefined
+                      ? <DocumentPin target={presentation.contextTarget} />
+                      : hasPinColumn && (
+                        <span
+                          aria-hidden="true"
+                          class="w-9 shrink-0 [@media(pointer:coarse)]:w-11"
+                        />
+                      )}
                   </div>
                   {hasContent(presentation.visibleActions) && (
                     <div class="flex flex-wrap justify-end gap-1.5 border-b border-line-soft bg-sunken px-4 py-1.5">

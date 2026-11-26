@@ -11,7 +11,7 @@ Deno.test("buy evidence app composes DocumentSurface without live DocViewer hook
     new URL("./src/main.tsx", import.meta.url),
   );
   assertStringIncludes(components, "DocumentSurface");
-  assertStringIncludes(components, "live={false}");
+  assertStringIncludes(components, "live: false");
   assertEquals(components.includes("DocViewer"), false);
   assertEquals(components.includes("callServerTool"), false);
   assertEquals(components.includes("erpnext_file_"), false);

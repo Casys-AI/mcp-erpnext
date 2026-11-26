@@ -8,11 +8,11 @@ const levelBody = await Deno.readTextFile(
 );
 
 Deno.test("nested chart interaction - pointer and keyboard intents stay exclusive", () => {
-  assertStringIncludes(bars, "useClickIntent()");
-  assertStringIncludes(bars, "clickIntent.click(");
-  assertStringIncludes(bars, "event.detail");
-  assertStringIncludes(bars, "clickIntent.doubleClick(");
-  assertStringIncludes(bars, "clickIntent.keyDown(");
+  assertStringIncludes(bars, "inspectPoint(");
+  assertStringIncludes(bars, "<ContextPinButton");
+  assertStringIncludes(bars, 'case "ArrowLeft"');
+  assertStringIncludes(bars, "openPointDetail(");
+  assertStringIncludes(bars, "keyDownPoint(");
   assertStringIncludes(bars, 'event.key === " "');
   assertStringIncludes(bars, 'event.key === "Enter"');
   assertEquals(bars.includes("clickCount < 2"), false);
@@ -21,7 +21,7 @@ Deno.test("nested chart interaction - pointer and keyboard intents stay exclusiv
 Deno.test("nested chart interaction - detail opens on double-click, Enter or the visible per-bar button", () => {
   // Voie tactile : un bouton par barre qui a un détail, sans pied de graphe.
   assertStringIncludes(bars, "DetailToggleButton");
-  assertStringIncludes(bars, "clickIntent.activateDetail(");
+  assertStringIncludes(bars, "onPointDetail?.(");
   assertStringIncludes(bars, "canOpenPoint(labelIndex, seriesIndex)");
   // Chaque série garde son emplacement : le bouton reste sous sa barre.
   assertStringIncludes(bars, "detailSlotCount");
@@ -32,7 +32,7 @@ Deno.test("nested chart interaction - detail opens on double-click, Enter or the
   assertStringIncludes(bars, "onDblClick=");
   assertStringIncludes(bars, 'event.key === "Enter"');
   assertStringIncludes(bars, "onPointDetail?.(");
-  assertStringIncludes(bars, "setCurrentPoint(point);");
+  assertStringIncludes(bars, "setCurrentPoint({");
   assertStringIncludes(bars, "isPointSelected");
   if (bars.includes("aria-expanded")) {
     throw new Error("A nested chart jump must not expose disclosure state");
@@ -46,6 +46,6 @@ Deno.test("nested chart interaction - context is scoped and reconciled by level 
   assertStringIncludes(levelBody, "context.reconcileView");
   assertStringIncludes(levelBody, "level.key ?? level.id");
   assertStringIncludes(levelBody, "nestedChartContextCandidates(");
-  assertStringIncludes(levelBody, "toggleReversible(item)");
+  assertStringIncludes(levelBody, "context!.toggle(item)");
   assertStringIncludes(levelBody, "pointJump(labelIndex, seriesIndex)");
 });

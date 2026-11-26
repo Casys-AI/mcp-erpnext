@@ -6,10 +6,14 @@ import { createActiveContextController } from "./active-context-controller.ts";
 export type { ActiveContextReconcileResult } from "./active-context-controller.ts";
 
 /** The root viewer owns acknowledged context across all its nested surfaces. */
-export function useActiveContext(app: App, scopeKey: string) {
+export function useActiveContext(
+  app: App,
+  scopeKey: string,
+  sharedController?: ReturnType<typeof createActiveContextController>,
+) {
   const controller = useMemo(
-    () => createActiveContextController(app, scopeKey),
-    [app],
+    () => sharedController ?? createActiveContextController(app, scopeKey),
+    [app, sharedController],
   );
   const [state, setState] = useState(controller.getSnapshot);
   // Invalidate old event handlers during render, before the layout effects.

@@ -13,7 +13,6 @@ import {
   setSelectionGroupMembers,
 } from "../selection-projection.ts";
 import {
-  doclistCheckboxEvents,
   doclistFilteredSelectionOperation,
   doclistGroupMember,
   doclistHeaderSelection,
@@ -304,32 +303,6 @@ Deno.test("doclist Shift - retrouve l'ancre par identité après changement de t
   assertEquals(names(extendDoclistRange(selected, newOrder, "B", "gone")), [
     "B",
   ]);
-});
-
-Deno.test("doclist checkbox - isole clic, double-clic et touches sans annuler Espace natif", () => {
-  let toggles = 0;
-  let rowActions = 0;
-  let prevented = false;
-  let shift = false;
-  const props = doclistCheckboxEvents((event) => {
-    toggles++;
-    shift = event.shiftKey;
-  });
-  for (const handler of [props.onClick, props.onDblClick, props.onKeyDown]) {
-    let stopped = false;
-    const event = {
-      shiftKey: true,
-      stopPropagation: () => stopped = true,
-      preventDefault: () => prevented = true,
-      key: " ",
-    };
-    handler(event);
-    if (!stopped) rowActions++;
-  }
-  assertEquals(toggles, 1);
-  assertEquals(shift, true);
-  assertEquals(rowActions, 0);
-  assertEquals(prevented, false);
 });
 
 function result(

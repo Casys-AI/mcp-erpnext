@@ -654,16 +654,46 @@ Deno.test("context controller - explicit clear on an unsupported host is neutral
   assertEquals(h.controller.getSnapshot().pending, false);
 });
 
-Deno.test("context controller - capable host rejecting the root clear still reports failed", async () => {
+Deno.test("context controller - changing an empty KPI period does not send or announce a context update", async () => {
   const h = harness();
+  let notifications = 0;
+  h.controller.subscribe(() => notifications++);
+  for (const month of ["October", "November"]) {
+    h.controller.setScope(month);
+    assertEquals(await h.controller.clearPreviousScope(), "unchanged");
+  }
+  assertEquals(h.requests.length, 0);
+  assertEquals(notifications, 0);
+});
+
+Deno.test("context controller - changing scope clears uncertain host state after an unsuccessful first pin", async () => {
+  const h = harness();
+  const add = h.actions.activate(item("October"));
+  await flush();
+  await h.ack(0, false);
+  await add;
+  assertEquals(h.ids(), []);
+  h.controller.setScope("November");
+  const clear = h.controller.clearPreviousScope();
+  await flush();
+  assertEquals(h.requests[1].ids, []);
+  await h.ack(1);
+  assertEquals(await clear, "cleared");
+  assertEquals(h.controller.getSnapshot().failed, false);
+});
+
+Deno.test("context controller - capable host rejecting a pinned root clear still reports failed", async () => {
+  const h = harness();
+  await h.seed("A");
   h.controller.setScope("root-2");
   const clear = h.controller.clearPreviousScope();
   assertEquals(h.controller.getSnapshot().pending, true);
   await flush();
-  assertEquals(h.requests.length, 1);
-  assertEquals(h.requests[0].ids, []);
-  await h.ack(0, false);
+  assertEquals(h.requests.length, 2);
+  assertEquals(h.requests[1].ids, []);
+  await h.ack(1, false);
   assertEquals(await clear, "error");
+  assertEquals(h.ids(), ["A"]);
   assertEquals(h.controller.getSnapshot().failed, true);
   assertEquals(h.controller.getSnapshot().pending, false);
 });

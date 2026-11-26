@@ -228,7 +228,7 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       ...(declaresView(REVENUE_KPI, KPI_VIEW) &&
           declaresView(GROSS_MARGIN_KPI, KPI_VIEW)
         ? [
-          `To recalculate gross margin when the user chooses a month in the Margin period control, select the original results of ${REVENUE_KPI} and ${GROSS_MARGIN_KPI} with erp.panel(revenue) and erp.panel(margin), then call erp.sync({from: revenue, event: "${KPI_PERIOD_SELECTED}", to: margin, action: "${KPI_PERIOD_APPLY}"}). For an initial matching period, pass revenue.sparklinePeriods.at(-1) as the margin date range. Link the cards only when the user requests it.`,
+          `To recalculate gross margin when the user clicks a monthly bar in the Sales Order revenue chart, select the original results of ${REVENUE_KPI} and ${GROSS_MARGIN_KPI} with erp.panel(revenue) and erp.panel(margin), then call erp.sync({from: revenue, event: "${KPI_PERIOD_SELECTED}", to: margin, action: "${KPI_PERIOD_APPLY}"}). For an initial matching period, pass revenue.sparklinePeriods.at(-1) as the margin date range. Link the cards only when the user requests it.`,
         ]
         : []),
       "Use execute.params for JSON parameters readable as erp.params.",

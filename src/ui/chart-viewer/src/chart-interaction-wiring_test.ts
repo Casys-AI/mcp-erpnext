@@ -88,11 +88,7 @@ Deno.test("chart wiring - Mac control-click echoes stop before point and whole-c
     handlers,
     /onClick:[\s\S]*?isMacControlClickEcho\(event, getBrowserPlatform\(\)\)[\s\S]*?event.stopPropagation\(\);[\s\S]*?return;/,
   );
-  const whole = between("const onWholeChartClick", "const chartSelected");
-  assertStringIncludes(
-    whole,
-    "isMacControlClickEcho(event, getBrowserPlatform())",
-  );
+  assertEquals(source.includes("onWholeChartClick"), false);
 });
 
 Deno.test("chart wiring - radar, named scatter points and treemap leaves expose both pointer intents", () => {
@@ -102,7 +98,7 @@ Deno.test("chart wiring - radar, named scatter points and treemap leaves expose 
     "interface ScatterShapeProps",
   );
   assertStringIncludes(radar, "activateCategoricalPoint(");
-  assertStringIncludes(radar, '"context"');
+  assertStringIncludes(radar, '"inspect"');
   assertStringIncludes(radar, '"drilldown"');
 
   const scatter = between(
@@ -114,11 +110,11 @@ Deno.test("chart wiring - radar, named scatter points and treemap leaves expose 
   assertStringIncludes(scatter, "onDoubleClick={interactive");
 
   const treemap = between("function TreemapContent", "function flattenTree");
-  assertStringIncludes(treemap, 'onDataClick(name, undefined, "context"');
+  assertStringIncludes(treemap, 'onDataClick(name, undefined, "inspect"');
   assertStringIncludes(treemap, 'onDataClick(name, undefined, "drilldown"');
   assertStringIncludes(pie, "<button");
   assertStringIncludes(pie, "event.stopPropagation();");
-  assertStringIncludes(pie, '"context"');
+  assertStringIncludes(pie, '"inspect"');
   assertStringIncludes(pie, '"drilldown"');
 });
 
@@ -126,8 +122,7 @@ Deno.test("chart wiring - pie legend keeps keyboard detail and context exclusive
   const pie = between("function PieLegend", "function PieDonutChart");
 
   assertStringIncludes(pie, "onDataKeyDown?.(entry.name, series, event)");
-  assertStringIncludes(pie, '(event.key === " " && contextEnabled)');
-  assertStringIncludes(pie, '(event.key === "Enter" && detailEnabled)');
+  assertStringIncludes(pie, 'event.key === " " || event.key === "Enter"');
   assertStringIncludes(pie, "if (event.detail === 0) return;");
   assertStringIncludes(
     pie,
@@ -147,10 +142,6 @@ Deno.test("chart wiring - full chart and legend expose the visible subset", () =
     "function ChartContent",
     "export function ChartViewer",
   );
-  const treemap = between(
-    "function TreemapView",
-    "const KEYBOARD_CURSOR_MOVES",
-  );
 
   assertStringIncludes(legend, "<button");
   assertStringIncludes(legend, "aria-pressed={item.visible}");
@@ -161,16 +152,11 @@ Deno.test("chart wiring - full chart and legend expose the visible subset", () =
   assertStringIncludes(content, "createChartPointContextIndex(data, rootKey)");
   assertStringIncludes(content, "[data, rootKey, contextLocale]");
   assertStringIncludes(content, "pointIndex.get(label, series, index)");
-  assertStringIncludes(content, "[chartContext, ...pointIndex.values()]");
-  assertStringIncludes(content, "activeContext.toggle(chartContext)");
-  assertStringIncludes(
-    content,
-    "data-chart-context-control",
-  );
-  assertStringIncludes(
-    content,
-    "aria-pressed={chartSelected}",
-  );
+  assertStringIncludes(content, "...namedSeries.values()");
+  assertStringIncludes(content, "pin(chartContext,");
+  assertStringIncludes(content, "pin(focusedItem)");
+  assertStringIncludes(content, "pinSeries=");
+  assertEquals(content.includes("activeContext.toggleReversible("), false);
   assertStringIncludes(content, "data-chart-pointer-surface");
   assertEquals(
     content.includes('role={activeContext.supported ? "button" : undefined}'),
@@ -187,7 +173,6 @@ Deno.test("chart wiring - full chart and legend expose the visible subset", () =
   assertStringIncludes(content, "visibleData.yAxisLabel");
   assertStringIncludes(categorical, "if (!series) return;");
   assertStringIncludes(categorical, "event.stopPropagation();");
-  assertStringIncludes(treemap, "data-chart-whole-gutter");
 });
 
 Deno.test("chart wiring - detail stays on double-click or Enter, with no floating button on the chart", () => {
@@ -200,16 +185,19 @@ Deno.test("chart wiring - detail stays on double-click or Enter, with no floatin
   assertEquals(source.includes("DetailToggleButton"), false);
   assertEquals(source.includes("ChartDetailAffordance"), false);
   // Les clés vivent dans chartTooltipHintKey (testé dans chart-interactions_test).
-  assertStringIncludes(tooltip, "chartTooltipHintKey({");
+  assertStringIncludes(tooltip, "chartTooltipHintKey(");
   assertStringIncludes(keyboard, "if (event.detail === 0) return;");
   assertStringIncludes(keyboard, "aria-expanded={expandedState}");
-  assertStringIncludes(keyboard, 'if (event.key === "Enter")');
-  assertStringIncludes(source, "shouldHandleChartPointActivation(");
+  assertStringIncludes(keyboard, 'event.key === "Enter"');
+  assertStringIncludes(
+    source,
+    'if (activation === "drilldown") openPointDetail(',
+  );
 });
 
 Deno.test("chart wiring - the tooltip hint comes from chartTooltipHintKey and the pie tooltip targets the slice", () => {
   const tooltip = between("function ChartTooltip", "function SharedXAxis");
-  assertStringIncludes(tooltip, "chartTooltipHintKey({");
+  assertStringIncludes(tooltip, "chartTooltipHintKey(");
   assertEquals(
     tooltip.includes('"chart.tooltip.click_action_fallback"'),
     false,
@@ -218,29 +206,38 @@ Deno.test("chart wiring - the tooltip hint comes from chartTooltipHintKey and th
   const pie = between("function PieDonutChart", "function RadarChartView");
   assertStringIncludes(pie, "series={ds.label || undefined}");
   assertStringIncludes(pie, "hintByName");
-  assertStringIncludes(pie, "clickOpensDetail={clickOpensDetail}");
+  assertStringIncludes(pie, "hintByName");
 });
 
 Deno.test("chart wiring - treemap tiles and pie legend rows announce their gesture natively", () => {
   const treemap = between("function TreemapContent", "function flattenTree");
   assertStringIncludes(treemap, "<title>{tileTitle}</title>");
-  assertStringIncludes(treemap, "chartTooltipHintKey({");
+  assertStringIncludes(treemap, "chartTooltipHintKey(");
 
   const legend = between("function PieLegend", "function PieDonutChart");
   assertStringIncludes(legend, "title={hintKey ? t(hintKey) : undefined}");
-  assertStringIncludes(legend, '(event.key === " " && opensDetail)');
+  assertStringIncludes(legend, 'event.key === " " || event.key === "Enter"');
 });
 
-Deno.test("chart wiring - click opens detail through a detail intent only for pie, donut and treemap without context", () => {
-  const intent = between("function pointIntent", "const onDataClick");
-  assertStringIncludes(intent, "clickOpensDetailPoint(label, series)");
-  assertStringIncludes(intent, "detailOnClickIntent(");
-  const helper = between(
-    "function clickOpensDetailPoint",
-    "function activatePoint",
+Deno.test("chart wiring - inspecting at a pointer or keyboard never pins or asks", () => {
+  const gestures = between(
+    "const onDataClick: ChartDataClick",
+    "const chartHandlers",
   );
-  assertStringIncludes(helper, "chartClickOpensDetail(");
-  assertStringIncludes(helper, "data.type");
+  assertStringIncludes(gestures, "focusDetailPoint(label, series, index)");
+  assertEquals(gestures.includes("activeContext"), false);
+  assertStringIncludes(
+    gestures,
+    'if (activation === "drilldown") openPointDetail',
+  );
+  const navigator = between(
+    "function ChartKeyboardNavigator",
+    "function ChartDetailBar",
+  );
+  assertMatch(
+    navigator,
+    /onActivate\(\s*point\.label,\s*point\.series,\s*"inspect",\s*1,\s*point\.index/,
+  );
 });
 
 Deno.test("chart wiring - le dernier point activé alimente une barre d'action sous le graphe", () => {
@@ -257,7 +254,8 @@ Deno.test("chart wiring - le dernier point activé alimente une barre d'action s
   assertStringIncludes(content, "setDetailFocus((current)");
   assertStringIncludes(content, "<ChartDetailBar");
   // Le bouton passe par l'arbitre : même chemin qu'Entrée, jamais le contexte.
-  assertStringIncludes(content, "clickIntent.activateDetail(");
+  assertStringIncludes(content, "onToggle={() =>");
+  assertStringIncludes(content, "openPointDetail(");
   // Hors de la scène du graphe (hauteur fixe) : elle ne redimensionne rien.
   const stage = content.indexOf("resolveChartStageHeight(data.height, narrow)");
   assertEquals(stage > 0 && content.indexOf("<ChartDetailBar") > stage, true);
@@ -321,17 +319,14 @@ Deno.test("chart wiring - Cartesian column clicks share snapping and keep exact 
   assertStringIncludes(activate, "event.detail");
 });
 
-Deno.test("chart wiring - title, axis labels and frame use the whole-chart gesture", () => {
+Deno.test("chart wiring - only explicit actions pin the chart, point and legend series", () => {
   const content = between(
     "function ChartContent",
     "export function ChartViewer",
   );
-  assertEquals(
-    (content.match(/onClick=\{onWholeChartClick\}/g) ?? []).length,
-    2,
-  );
-  assertStringIncludes(
-    content,
-    "const onWholeChartClick = activeContext.supported",
-  );
+  assertEquals(content.includes("onWholeChartClick"), false);
+  assertStringIncludes(content, "<ContextPinButton");
+  assertStringIncludes(content, "pin(chartContext,");
+  assertStringIncludes(content, "pin(focusedItem)");
+  assertStringIncludes(content, "pinSeries=");
 });

@@ -22,7 +22,8 @@ import {
   toneForStatus,
 } from "~/shared/status";
 import { type ComponentChildren, Fragment } from "preact";
-import { useRef } from "preact/hooks";
+import { useId, useState } from "preact/hooks";
+import { ContextPinButton } from "~/shared/ContextPinButton.tsx";
 import type { ClickIntentArbiter } from "~/shared/click-intent";
 import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import {
@@ -35,7 +36,7 @@ import { useT } from "~/shared/i18n-hook";
 import { formatCell, isStatusField } from "./helpers";
 import { pickNarrowColumns, shortenId } from "./columns";
 import { StatusCell } from "./StatusCell";
-import { doclistCheckboxEvents, doclistRowEvents } from "./selection.ts";
+import { doclistRowEvents } from "./selection.ts";
 import { getBrowserPlatform } from "~/shared/platform.ts";
 import type { SortDir } from "./types";
 
@@ -49,6 +50,7 @@ interface RowShape {
   id: string;
   row: Record<string, unknown>;
   selected: boolean;
+  open: boolean;
   interactionTarget?: ContextInteractionTarget;
   tone: Tone;
   struck: boolean;
@@ -59,6 +61,7 @@ interface CommonProps {
   rows: Record<string, unknown>[];
   rowId: (row: Record<string, unknown>, index: number) => string;
   selectedId: string | null;
+  isFollowed?: (row: Record<string, unknown>) => boolean;
   /** La ligne qu'une action vient de changer : barrée sur place, pas rechargée. */
   struckId?: string | null;
   interactionTarget?: (
@@ -74,6 +77,7 @@ interface DoclistSelectionControls {
   checked: boolean;
   indeterminate: boolean;
   totalCount: number;
+  pinnedCount: number;
   isSelected: (row: Record<string, unknown>, index: number) => boolean;
   onToggle: (
     row: Record<string, unknown>,
@@ -87,7 +91,8 @@ type ModeProps = CommonProps & {
   shape: (row: Record<string, unknown>, index: number) => RowShape;
   amountKey?: string;
   clickIntent: ClickIntentArbiter;
-  hasDetailControls: boolean;
+  hasRowAction: boolean;
+  showPins: boolean;
 };
 
 export function DoclistTable(
@@ -103,19 +108,17 @@ export function DoclistTable(
 ) {
   const t = useT();
   const clickIntent = useClickIntent();
-  if (common.rows.length === 0) {
-    return (
-      <p class="px-4 py-10 text-center text-data text-ink-muted">
-        {t("doclist.table.no_match")}
-      </p>
-    );
-  }
+  const [railOpen, setRailOpen] = useState(false);
+  const listId = useId();
+  const selection = common.selection;
+  const showPins = Boolean(railOpen && selection);
 
   /** Le statut ne s'affiche qu'en large, mais il colore la ligne partout. */
   const statusKey = common.columns.find((c) => isStatusField(c.id))?.id;
-  const hasDetailControls = common.rows.some((row, index) =>
-    Boolean(common.interactionTarget?.(row, index)?.onDoubleActivate)
-  );
+  const hasRowAction = showPins ||
+    common.rows.some((row, index) =>
+      Boolean(common.interactionTarget?.(row, index)?.controls)
+    );
 
   const shape = (row: Record<string, unknown>, index: number): RowShape => {
     const id = common.rowId(row, index);
@@ -123,45 +126,89 @@ export function DoclistTable(
       id,
       row,
       selected: common.selectedId === id,
+      open: common.selectedId === id || Boolean(common.isFollowed?.(row)),
       interactionTarget: common.interactionTarget?.(row, index),
       struck: common.struckId === id,
       tone: statusKey ? toneForStatus(String(row[statusKey] ?? "")) : "neutral",
     };
   };
 
-  if (layout === "mobile") {
-    return (
-      <CompactTable
-        {...common}
-        shape={shape}
-        amountKey={amountKey}
-        clickIntent={clickIntent}
-        hasDetailControls={hasDetailControls}
-      />
-    );
-  }
-  if (layout === "panel") {
-    return (
-      <StackedList
-        {...common}
-        shape={shape}
-        amountKey={amountKey}
-        clickIntent={clickIntent}
-        hasDetailControls={hasDetailControls}
-      />
-    );
-  }
+  const props = {
+    ...common,
+    shape,
+    amountKey,
+    clickIntent,
+    hasRowAction,
+    showPins,
+  };
+  const railLabel = t(showPins ? "doclist.pin.hide" : "doclist.pin.show");
+  const countLabel = selection?.pinnedCount
+    ? t("doclist.pin.count", { count: selection.pinnedCount })
+    : undefined;
   return (
-    <WideTable
-      {...common}
-      shape={shape}
-      statusKey={statusKey}
-      sortKey={sortKey}
-      sortDir={sortDir}
-      onSort={onSort}
-      clickIntent={clickIntent}
-      hasDetailControls={hasDetailControls}
-    />
+    <>
+      {selection && (
+        <div class="flex items-center justify-end border-b border-line-soft text-ink-muted">
+          {showPins && (
+            <span class="min-w-0 flex-1 truncate px-3 text-note">
+              {t("context.pin.label")}
+            </span>
+          )}
+          <button
+            type="button"
+            aria-expanded={showPins}
+            aria-controls={listId}
+            aria-label={countLabel ? `${railLabel} · ${countLabel}` : railLabel}
+            title={railLabel}
+            class="inline-flex min-h-9 min-w-9 items-center justify-center gap-1 rounded-chip px-1 text-note hover:bg-control focus-visible:outline-2 focus-visible:outline-accent [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+            onClick={() => setRailOpen(!railOpen)}
+          >
+            {countLabel && (
+              <span class="font-mono tabular-nums">
+                {selection.pinnedCount}
+              </span>
+            )}
+            <span aria-hidden="true" class="font-mono text-[16px]">
+              {showPins ? "›" : "‹"}
+            </span>
+          </button>
+          {showPins && (
+            <ContextPinButton
+              label={t(
+                selection.checked
+                  ? "doclist.pin.remove_all"
+                  : "doclist.pin.all",
+                { count: selection.totalCount },
+              )}
+              pressed={selection.indeterminate ? "mixed" : selection.checked}
+              disabled={selection.totalCount === 0}
+              onToggle={selection.onToggleAll}
+            />
+          )}
+        </div>
+      )}
+      <div id={listId}>
+        {common.rows.length === 0
+          ? (
+            <p class="px-4 py-10 text-center text-data text-ink-muted">
+              {t("doclist.table.no_match")}
+            </p>
+          )
+          : layout === "mobile"
+          ? <CompactTable {...props} />
+          : layout === "panel"
+          ? <StackedList {...props} />
+          : (
+            <WideTable
+              {...props}
+              statusKey={statusKey}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSort}
+            />
+          )}
+      </div>
+    </>
   );
 }
 
@@ -189,91 +236,42 @@ function rowInteractionProps(
   };
 }
 
-function RowDetailToggle({
-  target,
-  touch = false,
-}: {
+// One column for either disclosure or pinning. Both controls have the same
+// footprint, so switching the rail does not move a readable row’s content.
+const ROW_ACTION_WIDTH = "w-9 shrink-0 [@media(pointer:coarse)]:w-11";
+
+function RowAction({ target, selection, name, row, index }: {
   target?: ContextInteractionTarget;
-  touch?: boolean;
+  selection?: DoclistSelectionControls;
+  name: string;
+  row: Record<string, unknown>;
+  index: number;
 }) {
-  const onToggle = target?.onDoubleActivate;
-  if (!onToggle) return null;
+  const t = useT();
+  if (selection) {
+    const pinned = selection.isSelected(row, index);
+    return (
+      <ContextPinButton
+        label={t(pinned ? "context.pin.remove" : "context.pin.add", {
+          label: name,
+        })}
+        pressed={pinned}
+        onToggle={(shift) => selection.onToggle(row, index, shift)}
+        class="self-start"
+      />
+    );
+  }
+  if (!target?.controls) {
+    return <span aria-hidden="true" class={ROW_ACTION_WIDTH} />;
+  }
   return (
     <DetailToggleButton
       expanded={Boolean(target.expanded)}
       label={target.detailLabel ?? target.label}
       controls={target.controls}
-      onToggle={onToggle}
-      touch={touch}
-    />
-  );
-}
-
-function SelectionCheckbox(
-  { checked, indeterminate = false, label, disabled, onClick }: {
-    checked: boolean;
-    indeterminate?: boolean;
-    label: string;
-    disabled: boolean;
-    onClick: (shiftKey: boolean) => void;
-  },
-) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    <label
-      class="flex h-full min-h-10 min-w-10 w-full cursor-pointer items-center justify-center"
-      {...doclistCheckboxEvents(() => {})}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        aria-label={label}
-        aria-checked={indeterminate ? "mixed" : checked}
-        ref={(input) => {
-          inputRef.current = input;
-          if (input) input.indeterminate = indeterminate;
-        }}
-        {...doclistCheckboxEvents((event) => {
-          // Le navigateur coche avant le clic ; seul l'ACK confirme la sélection.
-          if (inputRef.current) {
-            inputRef.current.checked = checked;
-            inputRef.current.indeterminate = indeterminate;
-          }
-          onClick(event.shiftKey);
-        })}
-        class="size-4 cursor-pointer accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      />
-    </label>
-  );
-}
-
-function HeaderSelectionCheckbox(
-  { selection }: { selection: DoclistSelectionControls },
-) {
-  return (
-    <SelectionCheckbox
-      checked={selection.checked}
-      indeterminate={selection.indeterminate}
-      disabled={selection.totalCount === 0}
-      label={`Select all ${selection.totalCount} filtered rows`}
-      onClick={selection.onToggleAll}
-    />
-  );
-}
-
-function RowSelectionCheckbox({ selection, name, row, index }: {
-  selection: DoclistSelectionControls;
-  name: string;
-  row: Record<string, unknown>;
-  index: number;
-}) {
-  return (
-    <SelectionCheckbox
-      checked={selection.isSelected(row, index)}
-      disabled={false}
-      label={`Select ${name}`}
-      onClick={(shiftKey) => selection.onToggle(row, index, shiftKey)}
+      onToggle={() => target.onActivate()}
+      hint={target.label}
+      class={`${ROW_ACTION_WIDTH} h-9 self-start [@media(pointer:coarse)]:h-11`}
     />
   );
 }
@@ -352,8 +350,9 @@ function WideTable(
     onSort,
     detail,
     clickIntent,
-    hasDetailControls,
+    hasRowAction,
     selection,
+    showPins,
   }:
     & ModeProps
     & {
@@ -368,14 +367,6 @@ function WideTable(
     <table class="w-full table-fixed border-collapse">
       <thead>
         <tr class="bg-sunken">
-          {selection && (
-            <th
-              scope="col"
-              class="relative h-10 w-10 border-b border-line p-0 text-center [&>label]:absolute [&>label]:inset-0"
-            >
-              <HeaderSelectionCheckbox selection={selection} />
-            </th>
-          )}
           {columns.map((column, index) => (
             <th
               key={column.id}
@@ -430,10 +421,14 @@ function WideTable(
               </button>
             </th>
           ))}
-          {hasDetailControls && (
-            <th scope="col" class="w-10 border-b border-line bg-sunken">
+          {hasRowAction && (
+            <th scope="col" class={`${ROW_ACTION_WIDTH} border-b border-line`}>
               <span class="sr-only">
-                {t("doclist.detail.inspector_label")}
+                {t(
+                  showPins
+                    ? "context.pin.label"
+                    : "doclist.detail.inspector_label",
+                )}
               </span>
             </th>
           )}
@@ -441,17 +436,17 @@ function WideTable(
       </thead>
       <tbody>
         {rows.map((raw, index) => {
-          const { id, row, selected, interactionTarget, tone, struck } = shape(
-            raw,
-            index,
-          );
-          const active = selected || Boolean(interactionTarget?.selected);
+          const { id, row, selected, open, interactionTarget, tone, struck } =
+            shape(
+              raw,
+              index,
+            );
           const interactive = Boolean(interactionTarget);
           return (
             <Fragment key={id}>
               <tr
                 class={`border-b border-line-soft ${
-                  rowClasses(active, interactive, struck)
+                  rowClasses(open, interactive, struck)
                 }`}
                 {...rowInteractionProps(
                   interactionTarget,
@@ -463,22 +458,8 @@ function WideTable(
                 )}
                 role="row"
                 aria-pressed={undefined}
-                aria-selected={interactionTarget?.selected}
+                aria-current={open || undefined}
               >
-                {selection && (
-                  <td
-                    class={`relative h-10 w-10 border-l-2 ${
-                      TONE_RULE[tone]
-                    } p-0 text-center [&>label]:absolute [&>label]:inset-0`}
-                  >
-                    <RowSelectionCheckbox
-                      selection={selection}
-                      name={id}
-                      row={raw}
-                      index={index}
-                    />
-                  </td>
-                )}
                 {columns.map((column, columnIndex) => {
                   const value = row[column.id];
                   const isFirst = columnIndex === 0;
@@ -489,14 +470,14 @@ function WideTable(
                       class={[
                         "truncate py-2",
                         // Le liseré occupe 2 px du padding gauche de la 1re cellule.
-                        isFirst && !selection
+                        isFirst
                           ? `border-l-2 ${TONE_RULE[tone]} pl-[14px] pr-3.5`
                           : "px-3.5",
                         // Et le bord de sélection 2 px de la dernière : sur <tr>
                         // il ne se peindrait pas en border-collapse.
-                        isLast && !hasDetailControls &&
+                        isLast && !hasRowAction &&
                         selectionEdge(
-                          Boolean(interactionTarget?.selected),
+                          open,
                           interactive,
                         ),
                         column.numeric
@@ -507,9 +488,9 @@ function WideTable(
                         // La première cellule (ID) est en accent-text quand la ligne
                         // est sélectionnée : elle sert d'ancre visuelle. Les autres
                         // cellules restent en text-ink (légèrement plus clair).
-                        isFirst && active
+                        isFirst && open
                           ? "text-accent-text"
-                          : active
+                          : open
                           ? "text-ink"
                           : "text-ink-2",
                       ].filter(Boolean).join(" ")}
@@ -526,16 +507,19 @@ function WideTable(
                     </td>
                   );
                 })}
-                {hasDetailControls && (
+                {hasRowAction && (
                   <td
-                    class={`w-10 p-0 text-center ${
-                      selectionEdge(
-                        Boolean(interactionTarget?.selected),
-                        interactive,
-                      )
+                    class={`p-0 text-center align-top ${
+                      open ? "shadow-[inset_-2px_0_var(--color-accent)]" : ""
                     }`}
                   >
-                    <RowDetailToggle target={interactionTarget} />
+                    <RowAction
+                      target={interactionTarget}
+                      selection={showPins ? selection : undefined}
+                      name={id}
+                      row={raw}
+                      index={index}
+                    />
                   </td>
                 )}
               </tr>
@@ -543,8 +527,7 @@ function WideTable(
                 <tr>
                   <td
                     class="p-0"
-                    colSpan={columns.length + (hasDetailControls ? 1 : 0) +
-                      (selection ? 1 : 0)}
+                    colSpan={columns.length + (hasRowAction ? 1 : 0)}
                   >
                     {detail}
                   </td>
@@ -587,8 +570,9 @@ function CompactTable(
     amountKey,
     detail,
     clickIntent,
-    hasDetailControls,
+    hasRowAction,
     selection,
+    showPins,
   }: ModeProps,
 ) {
   const t = useT();
@@ -604,11 +588,6 @@ function CompactTable(
   return (
     <div>
       <div class="flex border-y border-line bg-sunken">
-        {selection && (
-          <span class="flex w-10 shrink-0 items-stretch">
-            <HeaderSelectionCheckbox selection={selection} />
-          </span>
-        )}
         <div class={`grid ${mobileGrid} min-w-0 flex-1 px-3 py-1.5`}>
           <span class={MOBILE_HEAD}>
             {amountKey
@@ -628,16 +607,16 @@ function CompactTable(
             </span>
           )}
         </div>
-        {hasDetailControls && <span aria-hidden="true" class="w-10" />}
+        {hasRowAction && <span aria-hidden="true" class={ROW_ACTION_WIDTH} />}
       </div>
 
       <ul>
         {rows.map((raw, index) => {
-          const { id, row, selected, interactionTarget, tone, struck } = shape(
-            raw,
-            index,
-          );
-          const active = selected || Boolean(interactionTarget?.selected);
+          const { id, row, selected, open, interactionTarget, tone, struck } =
+            shape(
+              raw,
+              index,
+            );
           const interactive = Boolean(interactionTarget);
           const trailingValue = trailingIsAmount
             ? dueValue(row, amountKey)
@@ -653,25 +632,15 @@ function CompactTable(
                   `border-b border-line-soft border-l-2 ${TONE_RULE[tone]}`,
                   // Ici la ligne est une div : le bord droit tient dessus.
                   selectionEdge(
-                    Boolean(interactionTarget?.selected),
+                    open,
                     interactive,
                   ),
-                  active ? "bg-row-selected" : "hover:bg-row-hover",
+                  open ? "bg-row-selected" : "hover:bg-row-hover",
                 ].join(" ")}
               >
-                {selection && (
-                  <span class="flex w-10 shrink-0 items-stretch">
-                    <RowSelectionCheckbox
-                      selection={selection}
-                      name={id}
-                      row={raw}
-                      index={index}
-                    />
-                  </span>
-                )}
                 <div
                   class={`grid ${mobileGrid} min-w-0 flex-1 items-center px-3 ${
-                    rowClasses(active, interactive, struck)
+                    rowClasses(open, interactive, struck)
                   }`}
                   {...rowInteractionProps(
                     interactionTarget,
@@ -681,10 +650,11 @@ function CompactTable(
                     selection,
                     clickIntent,
                   )}
+                  aria-current={open || undefined}
                 >
                   <span
                     class={`min-w-0 truncate font-mono text-data ${
-                      active ? "text-accent-text" : "text-ink-2"
+                      open ? "text-accent-text" : "text-ink-2"
                     }`}
                   >
                     {idKey ? shortenId(formatCell(row[idKey]), 10, 1) : ""}
@@ -708,8 +678,14 @@ function CompactTable(
                     </span>
                   )}
                 </div>
-                {hasDetailControls && (
-                  <RowDetailToggle target={interactionTarget} touch />
+                {hasRowAction && (
+                  <RowAction
+                    target={interactionTarget}
+                    selection={showPins ? selection : undefined}
+                    name={id}
+                    row={raw}
+                    index={index}
+                  />
                 )}
               </div>
               {selected && detail}
@@ -738,8 +714,9 @@ function StackedList(
     amountKey,
     detail,
     clickIntent,
-    hasDetailControls,
+    hasRowAction,
     selection,
+    showPins,
   }: ModeProps,
 ) {
   const { idKey, labelKey, trailingKey } = pickNarrowColumns(
@@ -752,22 +729,12 @@ function StackedList(
 
   return (
     <ul class="flex flex-col">
-      {selection && (
-        <li class="flex min-h-10 items-center border-b border-line bg-sunken">
-          <span class="flex w-10 shrink-0 items-stretch">
-            <HeaderSelectionCheckbox selection={selection} />
-          </span>
-          <span class={MOBILE_HEAD}>
-            Select all {selection.totalCount} filtered rows
-          </span>
-        </li>
-      )}
       {rows.map((raw, index) => {
-        const { id, row, selected, interactionTarget, tone, struck } = shape(
-          raw,
-          index,
-        );
-        const active = selected || Boolean(interactionTarget?.selected);
+        const { id, row, selected, open, interactionTarget, tone, struck } =
+          shape(
+            raw,
+            index,
+          );
         const interactive = Boolean(interactionTarget);
         const trailingValue = trailingIsAmount
           ? dueValue(row, amountKey)
@@ -782,25 +749,15 @@ function StackedList(
                 "flex min-h-10 items-stretch",
                 `border-b border-line-soft border-l-2 ${TONE_RULE[tone]}`,
                 selectionEdge(
-                  Boolean(interactionTarget?.selected),
+                  open,
                   interactive,
                 ),
-                active ? "bg-row-selected" : "hover:bg-row-hover",
+                open ? "bg-row-selected" : "hover:bg-row-hover",
               ].join(" ")}
             >
-              {selection && (
-                <span class="flex w-10 shrink-0 items-stretch">
-                  <RowSelectionCheckbox
-                    selection={selection}
-                    name={id}
-                    row={raw}
-                    index={index}
-                  />
-                </span>
-              )}
               <div
                 class={`flex min-w-0 flex-1 items-center justify-between gap-2.5 px-3 py-[9px] ${
-                  rowClasses(active, interactive, struck)
+                  rowClasses(open, interactive, struck)
                 }`}
                 {...rowInteractionProps(
                   interactionTarget,
@@ -810,11 +767,12 @@ function StackedList(
                   selection,
                   clickIntent,
                 )}
+                aria-current={open || undefined}
               >
                 <div class="flex min-w-0 flex-col gap-px">
                   <span
                     class={`truncate font-mono text-note ${
-                      active ? "text-accent-text" : "text-ink-2"
+                      open ? "text-accent-text" : "text-ink-2"
                     }`}
                   >
                     {idKey ? shortenId(formatCell(row[idKey])) : ""}
@@ -841,8 +799,14 @@ function StackedList(
                   </span>
                 )}
               </div>
-              {hasDetailControls && (
-                <RowDetailToggle target={interactionTarget} touch />
+              {hasRowAction && (
+                <RowAction
+                  target={interactionTarget}
+                  selection={showPins ? selection : undefined}
+                  name={id}
+                  row={raw}
+                  index={index}
+                />
               )}
             </div>
             {selected && detail}

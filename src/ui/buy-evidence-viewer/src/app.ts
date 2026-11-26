@@ -14,7 +14,8 @@ import {
   BUY_VIEW_APP_VERSION,
   BUY_VIEWER_SESSION_KIND,
 } from "../../../buy/identities.ts";
-import type { BuyRecordedResult } from "../../../buy/result.ts";
+import { buyComponentRegistry } from "./components.tsx";
+import { createEvidencePinLifetime } from "./context.ts";
 import {
   type BuyEvidenceViewData,
   type DisplayState,
@@ -34,7 +35,7 @@ export type BuySurfaceState = SurfaceDisplayState<BuyEvidenceViewData>;
 
 export function startBuyEvidenceApp(
   root: HTMLElement,
-  registry: ViewComponentRegistry<BuyEvidenceViewData>,
+  registry?: ViewComponentRegistry<BuyEvidenceViewData>,
   runtime?: SurfaceAppRuntime,
 ): Promise<SurfaceAppHandle<BuyEvidenceViewData>> {
   installMcpViewFonts(root.ownerDocument);
@@ -45,12 +46,23 @@ export function startBuyEvidenceApp(
 // fallback English explicit; result components own host-aware localization.
 export function buySurfaceAppOptions(
   root: HTMLElement,
-  registry: ViewComponentRegistry<BuyEvidenceViewData>,
+  registry?: ViewComponentRegistry<BuyEvidenceViewData>,
 ): PreactSurfaceAppOptions<BuyEvidenceViewData, unknown> {
+  const pins = createEvidencePinLifetime();
   return {
     root,
     info: BUY_APP_INFO,
-    registry,
+    registry: registry ?? buyComponentRegistry(pins),
+    renderStatus(status) {
+      void pins.clear();
+      return renderStatusMessage(status.message, {
+        title: status.title,
+        tone: status.tone,
+        busy: status.busy,
+        className: BUY_STATUS_CLASS,
+      });
+    },
+    onTeardown: pins.clear,
     strict: true,
     surfaceClassName: "buy-evidence-surface",
     statusClassName: BUY_STATUS_CLASS,
@@ -84,7 +96,7 @@ export function buySurfaceAppOptions(
         }
       },
     },
-    surfaceFor: (_data: BuyRecordedResult) => ({
+    surfaceFor: (_data: BuyEvidenceViewData) => ({
       layout: { type: "stack", gap: "sm" },
       components: [{ id: "evidence", component: "buy.configuration-cost" }],
     }),

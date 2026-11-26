@@ -1,3 +1,4 @@
+import { isKpiPeriod, type KpiPeriod } from "../../../code-mode/kpi-period.ts";
 import {
   activeContextJsonResource,
   type ActiveContextLocalResource,
@@ -27,6 +28,34 @@ export function kpiSparklinePoints(
     value,
   }));
   return points.every((point) => point.label.length > 0) ? points : [];
+}
+
+/** Legacy results without aligned dates can still be read locally. */
+export function kpiBarPeriods(
+  periods: unknown,
+  count: number,
+): KpiPeriod[] | undefined {
+  return Array.isArray(periods) && periods.length === count &&
+      periods.every(isKpiPeriod)
+    ? periods
+    : undefined;
+}
+
+/** Linked charts reflect their target period; a range has no single active bar. */
+export function kpiInspectedIndex(
+  labels: readonly string[],
+  periods: readonly KpiPeriod[] | undefined,
+  linkedPeriod: KpiPeriod | null | undefined,
+  localLabel: string | null,
+): number {
+  if (linkedPeriod === undefined) {
+    return localLabel === null ? -1 : labels.indexOf(localLabel);
+  }
+  if (!linkedPeriod) return -1;
+  return periods?.findIndex((period) =>
+    period.date_from === linkedPeriod.date_from &&
+    period.date_to === linkedPeriod.date_to
+  ) ?? -1;
 }
 
 export function kpiSparklinePeriod(

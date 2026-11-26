@@ -37,13 +37,7 @@ export interface ChartSelection {
   y?: number;
 }
 
-export type ChartPointActivation = "context" | "drilldown";
-
-export interface ChartPointActionPlan {
-  toggleLevel: boolean;
-  updateContext: boolean;
-  sendMessage: boolean;
-}
+export type ChartPointActivation = "inspect" | "drilldown";
 
 export type ChartPointExpansionState = boolean | undefined;
 
@@ -626,10 +620,24 @@ export function chartContextSelection(
   };
 }
 
-/**
- * Résout d'abord le segment exact, puis le saut générique de sa catégorie.
- * L'absence de l'un et de l'autre signifie « contexte seulement ».
- */
+export function chartSeriesContextItem(
+  data: ChartData,
+  name: string,
+  identity: string,
+): ContextSelectionItem {
+  const others = chartSeriesNames(data).filter((other) => other !== name);
+  const item = chartContextSelection(data, others, name, identity);
+  return {
+    ...item,
+    id: `${chartContextNamespace(identity)}:series:${encodeURIComponent(name)}`,
+    resource: item.resource && {
+      ...item.resource,
+      uri: `${item.resource.uri}/series/${encodeURIComponent(name)}`,
+    },
+  };
+}
+
+/** Le segment exact prime sur le saut générique de sa catégorie. */
 export function chartJumpHint(
   data: Pick<ChartData, "_pointJumps" | "_seriesPointJumps">,
   label: string,
@@ -704,14 +712,24 @@ export function chartPointDetailMode(
 }
 
 /** Le point existe encore dans la grille réelle (série masquée, refresh). */
-function chartFocusExists(data: ChartData, focus: ChartFocus): boolean {
-  return chartNavigationGroups(data).some((group) =>
-    group.some((selection) =>
-      selection.label === focus.label &&
-      (focus.index === undefined || selection.index === focus.index) &&
-      (!focus.series || selection.series === focus.series)
-    )
-  );
+export function chartCursorForFocus(
+  data: ChartData,
+  focus: ChartFocus | null,
+): ChartCursor | null {
+  if (!focus) return null;
+  for (const [seriesIndex, group] of chartNavigationGroups(data).entries()) {
+    const labelIndex = group.findIndex((point) =>
+      point.label === focus.label &&
+      (focus.index === undefined || point.index === focus.index) &&
+      (!focus.series || point.series === focus.series)
+    );
+    if (labelIndex >= 0) return { labelIndex, seriesIndex };
+  }
+  return null;
+}
+
+export function chartFocusExists(data: ChartData, focus: ChartFocus): boolean {
+  return chartCursorForFocus(data, focus) !== null;
 }
 
 /**
@@ -753,77 +771,10 @@ export function chartDetailBarLabelKey(
   return expanded ? "chart.detail_bar.close" : "chart.detail_bar.open";
 }
 
-/**
- * Les deux gestes restent exclusifs. Le contexte ne parle jamais à la place de
- * l'utilisateur ; le message n'est qu'un repli explicite du drill-down.
- */
-export function chartPointActionPlan(
-  activation: ChartPointActivation,
-  hasJump: boolean,
-  contextSupported: boolean,
-  messageSupported: boolean,
-): ChartPointActionPlan {
-  if (activation === "context") {
-    return {
-      toggleLevel: false,
-      updateContext: contextSupported,
-      sendMessage: false,
-    };
-  }
-  return {
-    toggleLevel: hasJump,
-    updateContext: false,
-    sendMessage: !hasJump && messageSupported,
-  };
-}
-
-/**
- * Chaque clic de contexte atteint l'arbitre, y compris le second clic natif :
- * il peut ainsi compenser la premiere bascule. Le geste de detail reste borne
- * aux points qui exposent reellement une navigation.
- */
-export function shouldHandleChartPointActivation(
-  activation: ChartPointActivation,
-  _clickCount: number,
-  detailEnabled: boolean,
-): boolean {
-  return activation === "context" || detailEnabled;
-}
-
-/**
- * Pie, donut et treemap n'ont ni infobulle de détail ni chevron : sans
- * contexte disponible, le clic n'aurait aucun effet ni indice. Sur ces
- * surfaces, quand le contexte est absent et que le détail est local (un saut),
- * le clic ouvre le détail. Un détail conversationnel (message) ne s'ouvre
- * jamais au clic. Les barres et points gardent leur tooltip « 2× détail ».
- */
-export function chartClickOpensDetail(
-  chartType: string | undefined,
-  contextSupported: boolean,
-  detailMode: "inline" | "message" | null,
-): boolean {
-  return (chartType === "pie" || chartType === "donut" ||
-    chartType === "treemap") &&
-    !contextSupported && detailMode === "inline";
-}
-
-/**
- * Clé i18n de l'indication de geste (tooltip, title de tuile ou de légende),
- * ou undefined quand la cible n'a aucun geste utile.
- */
+/** A mark can be inspected without sending context. Details additionally have a visible action. */
 export function chartTooltipHintKey(
-  options: {
-    contextEnabled: boolean;
-    detailEnabled: boolean;
-    clickOpensDetail: boolean;
-  },
+  detailEnabled: boolean,
 ): string | undefined {
-  const { contextEnabled, detailEnabled, clickOpensDetail } = options;
-  if (clickOpensDetail) return "chart.tooltip.click_action_detail";
-  if (contextEnabled && detailEnabled) {
-    return "chart.tooltip.click_action_context";
-  }
-  if (contextEnabled) return "chart.tooltip.click_action_context_only";
   return detailEnabled ? "chart.tooltip.click_action_fallback" : undefined;
 }
 

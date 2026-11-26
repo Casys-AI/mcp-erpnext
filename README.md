@@ -25,10 +25,10 @@ Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 > configuration. Keep your existing ERPNext connection settings. Run
 > `npm view @casys/mcp-erpnext dist-tags` to see the published versions.
 >
-> The beta exposes one tool to the LLM, `execute`. Both npm and JSR include the
-> ERPNext Code Mode skill at `skills/erpnext-code-mode/SKILL.md`. Install the
-> skill in your host to teach the LLM how to discover operations and open views
-> such as the invoice list and invoice details.
+> The beta's `execute` tool describes `erp.catalog` for operation discovery. The
+> optional ERPNext Code Mode skill comes with the beta and shows how to open
+> interactive views such as the invoice list and invoice details. See
+> [how to install the skill](#install-the-code-mode-skill).
 
 ## Screenshots
 
@@ -172,6 +172,30 @@ Add to `.vscode/mcp.json`:
 For a shared, always-on server rather than one process per client:
 [how to run the HTTP server](docs/http-deployment.md). Note it is breaking for
 pre-2026 HTTP clients in 3.0.0.
+
+### Install the Code Mode skill
+
+The beta packages include the optional skill at
+`skills/erpnext-code-mode/SKILL.md`.
+
+**ChatGPT web.** In Plugins, choose **Add custom MCP server**, enter your own
+beta server's HTTPS `/mcp` URL, then create and install the plugin. See
+[ChatGPT MCP connection setup](https://developers.openai.com/api/docs/guides/custom-mcp-server).
+
+In the **Skills** tab, choose **Create → Upload from your computer** and import
+the packaged `SKILL.md` or `erpnext-code-mode-skill.zip` from the
+[GitHub prerelease](https://github.com/Casys-AI/mcp-erpnext/releases). See
+[Skills in ChatGPT](https://help.openai.com/en/articles/20001066-skills-in-chatgpt).
+
+**Local clients that support Agent Skills.** In your project directory, use the
+Vercel Skills CLI. The example installs the skill for Codex. Set `-a` to your
+client's ID for other supported clients. See the
+[Skills CLI reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md).
+
+```sh
+npm install -D @casys/mcp-erpnext@next
+npx --yes skills add ./node_modules/@casys/mcp-erpnext/skills/erpnext-code-mode -a codex -y
+```
 
 ### Category filtering
 

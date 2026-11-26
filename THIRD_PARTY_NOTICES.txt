@@ -15,7 +15,7 @@ viewers and of the Node bundle. Do not edit by hand; regenerate with:
 
 The embedded webfonts are maintained by hand (section 3).
 
-1. Package index (45 packages)
+1. Package index (47 packages)
 ------------------------------------------------------------------------------
 
 - @jitl/quickjs-ffi-types@0.32.0 (MIT) [node]
@@ -29,39 +29,41 @@ The embedded webfonts are maintained by hand (section 3).
 - @modelcontextprotocol/ext-apps@2.0.4 (MIT) [ui]
 - @modelcontextprotocol/server@2.4.0 (Apache-2.0) [node]
 - @opentelemetry/api@1.10.0 (Apache-2.0) [node]
-- @reduxjs/toolkit@2.15.0 (MIT) [ui]
-- @std/yaml@1.2.0 (MIT) [node]
+- @reduxjs/toolkit@2.11.2 (MIT) [ui]
+- @std/yaml@1.3.0 (MIT) [node]
 - ajv@8.20.0 (MIT) [node]
 - clsx@2.1.1 (MIT) [ui]
-- d3-array@3.2.5 (ISC) [ui]
-- d3-color@3.1.1 (ISC) [ui]
-- d3-format@3.1.3 (ISC) [ui]
-- d3-interpolate@3.0.2 (ISC) [ui]
-- d3-path@3.1.1 (ISC) [ui]
-- d3-scale@4.0.3 (ISC) [ui]
-- d3-shape@3.2.1 (ISC) [ui]
-- d3-time@3.1.1 (ISC) [ui]
-- d3-time-format@4.1.1 (ISC) [ui]
+- d3-array@3.2.4 (ISC) [ui]
+- d3-color@3.1.0 (ISC) [ui]
+- d3-format@3.1.2 (ISC) [ui]
+- d3-interpolate@3.0.1 (ISC) [ui]
+- d3-path@3.1.0 (ISC) [ui]
+- d3-scale@4.0.2 (ISC) [ui]
+- d3-shape@3.2.0 (ISC) [ui]
+- d3-time@3.1.0 (ISC) [ui]
+- d3-time-format@4.1.0 (ISC) [ui]
 - decimal.js-light@2.5.1 (MIT) [ui]
-- es-toolkit@1.53.2 (MIT) [ui]
+- es-toolkit@1.44.0 (MIT) [ui]
 - eventemitter3@5.0.4 (MIT) [ui]
 - fast-deep-equal@3.1.3 (MIT) [node]
 - fast-uri@3.1.9 (BSD-3-Clause) [node]
 - hono@4.13.22 (MIT) [node]
-- immer@11.2.10 (MIT) [ui]
+- immer@10.2.0 (MIT) [ui]
+- immer@11.1.4 (MIT) [ui]
+- internmap@2.0.3 (ISC) [ui]
 - jose@6.2.18 (MIT) [node]
-- js-yaml@3.13.1 (MIT) [node] (ported into @std/yaml@1.2.0)
+- js-yaml@3.13.1 (MIT) [node] (ported into @std/yaml@1.3.0)
 - json-schema-traverse@1.0.0 (MIT) [node]
 - preact@10.29.8 (MIT) [ui]
 - quickjs-emscripten-core@0.32.0 (MIT) [node]
-- react-is@19.3.1 (MIT) [ui]
-- react-redux@9.3.1 (MIT) [ui]
-- recharts@3.11.1 (MIT) [ui]
+- react-is@19.2.4 (MIT) [ui]
+- react-redux@9.2.0 (MIT) [ui]
+- recharts@3.8.1 (MIT) [ui]
 - redux@5.0.1 (MIT) [ui]
 - redux-thunk@3.1.0 (MIT) [ui]
-- reselect@5.2.0 (MIT) [ui]
+- reselect@5.1.1 (MIT) [ui]
 - tiny-invariant@1.3.3 (MIT) [ui]
-- use-sync-external-store@1.7.0 (MIT) [ui]
+- use-sync-external-store@1.6.0 (MIT) [ui]
 - zod@4.6.7 (MIT) [node, ui]
 
 
@@ -619,7 +621,7 @@ Apache License
 ==============================================================================
 MIT
 Applies to:
-  @reduxjs/toolkit@2.15.0
+  @reduxjs/toolkit@2.11.2
 
 MIT License
 
@@ -647,7 +649,7 @@ SOFTWARE.
 ==============================================================================
 MIT
 Applies to:
-  @std/yaml@1.2.0
+  @std/yaml@1.3.0
 
 MIT License
 
@@ -718,14 +720,49 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ==============================================================================
 ISC
 Applies to:
-  d3-array@3.2.5
-  d3-color@3.1.1
-  d3-format@3.1.3
-  d3-interpolate@3.0.2
-  d3-scale@4.0.3
-  d3-shape@3.2.1
-  d3-time@3.1.1
-  d3-time-format@4.1.1
+  d3-array@3.2.4
+
+Copyright 2010-2023 Mike Bostock
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+
+
+==============================================================================
+ISC
+Applies to:
+  d3-color@3.1.0
+  d3-shape@3.2.0
+  d3-time@3.1.0
+
+Copyright 2010-2022 Mike Bostock
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+
+
+==============================================================================
+ISC
+Applies to:
+  d3-format@3.1.2
 
 Copyright 2010-2026 Mike Bostock
 
@@ -745,9 +782,31 @@ THIS SOFTWARE.
 ==============================================================================
 ISC
 Applies to:
-  d3-path@3.1.1
+  d3-interpolate@3.0.1
+  d3-scale@4.0.2
+  d3-time-format@4.1.0
 
-Copyright 2015-2026 Mike Bostock
+Copyright 2010-2021 Mike Bostock
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+
+
+==============================================================================
+ISC
+Applies to:
+  d3-path@3.1.0
+
+Copyright 2015-2022 Mike Bostock
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice
@@ -794,13 +853,15 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ==============================================================================
 MIT
 Applies to:
-  es-toolkit@1.53.2
-
-[LICENSE]
+  es-toolkit@1.44.0
 
 MIT License
 
-Copyright (c) 2024 Viva Republica, Inc.
+Copyright (c) 2024 Viva Republica, Inc
+
+Copyright OpenJS Foundation and other contributors
+
+Parts of the test suite and compatibility layer in `es-toolkit/compat` are derived from Lodash (https://github.com/lodash/lodash) by the OpenJS Foundation (https://openjsf.org/) and Underscore.js by Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors (http://underscorejs.org/)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -819,48 +880,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-[NOTICE]
-
-es-toolkit
-
-Parts of the test suite and compatibility layer in es-toolkit/compat are
-derived from Lodash (https://github.com/lodash/lodash).
-
-Lodash copyright notice and MIT permission notice:
-
-Copyright OpenJS Foundation and other contributors <https://openjsf.org/>
-
-Based on Underscore.js, copyright Jeremy Ashkenas,
-DocumentCloud and Investigative Reporters & Editors <http://underscorejs.org/>
-
-This software consists of voluntary contributions made by many
-individuals. For exact contribution history, see the revision history
-available at https://github.com/lodash/lodash
-
-The following license applies to all parts of this software except as
-documented below:
-
-====
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 ==============================================================================
@@ -988,7 +1007,8 @@ SOFTWARE.
 ==============================================================================
 MIT
 Applies to:
-  immer@11.2.10
+  immer@10.2.0
+  immer@11.1.4
 
 MIT License
 
@@ -1011,6 +1031,26 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+==============================================================================
+ISC
+Applies to:
+  internmap@2.0.3
+
+Copyright 2021 Mike Bostock
+
+Permission to use, copy, modify, and/or distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
 
 
 ==============================================================================
@@ -1100,8 +1140,8 @@ SOFTWARE.
 ==============================================================================
 MIT
 Applies to:
-  react-is@19.3.1
-  use-sync-external-store@1.7.0
+  react-is@19.2.4
+  use-sync-external-store@1.6.0
 
 MIT License
 
@@ -1129,7 +1169,7 @@ SOFTWARE.
 ==============================================================================
 MIT
 Applies to:
-  react-redux@9.3.1
+  react-redux@9.2.0
   redux@5.0.1
   redux-thunk@3.1.0
 
@@ -1159,7 +1199,7 @@ SOFTWARE.
 ==============================================================================
 MIT
 Applies to:
-  recharts@3.11.1
+  recharts@3.8.1
 
 The MIT License (MIT)
 
@@ -1187,7 +1227,7 @@ SOFTWARE.
 ==============================================================================
 MIT
 Applies to:
-  reselect@5.2.0
+  reselect@5.1.1
 
 The MIT License (MIT)
 

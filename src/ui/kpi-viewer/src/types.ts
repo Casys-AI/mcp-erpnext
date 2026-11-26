@@ -33,6 +33,7 @@ export interface KpiData {
   sparkline?: number[];
   /** Labels aligned with sparkline values, from oldest to newest. */
   sparklineLabels?: string[];
+  sparklinePeriods?: import("../../../code-mode/kpi-period.ts").KpiPeriod[];
   color?: string;
   icon?: string;
   refreshRequest?: UiRefreshRequestData;

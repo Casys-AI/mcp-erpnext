@@ -9,6 +9,8 @@
 
 export const ta: Record<string, string> = {
   // ── பொது ──────────────────────────────────────────────────────────────
+  "code_mode.last_two_months": "கடந்த 2 மாதங்கள்",
+  "code_mode.margin_period": "லாப விகிதக் காலம்",
   "common.loading": "ஏற்றுகிறது…",
   "common.refreshing": "புதுப்பிக்கிறது…",
   "common.refresh": "புதுப்பி",

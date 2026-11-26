@@ -11,6 +11,8 @@
 
 export const en: Record<string, string> = {
   // ── Commun ──────────────────────────────────────────────────────────────
+  "code_mode.last_two_months": "Last 2 months",
+  "code_mode.margin_period": "Margin period",
   "common.loading": "Loading…",
   "common.refreshing": "Refreshing…",
   "common.refresh": "Refresh",

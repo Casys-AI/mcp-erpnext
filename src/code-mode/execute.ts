@@ -21,6 +21,15 @@ import {
   SALES_INVOICE_DOCTYPE,
   SALES_INVOICE_GET,
 } from "./document-follow.ts";
+import {
+  GROSS_MARGIN_KPI,
+  isKpiPeriod,
+  KPI_PERIOD_APPLY,
+  KPI_PERIOD_SELECTED,
+  KPI_VIEW,
+  REVENUE_KPI,
+} from "./kpi-period.ts";
+import { VIEWER_META_KEY } from "../tools/model-visible.ts";
 import { runCodeProgram, SuspendCodeMode } from "./sandbox.ts";
 
 type Arguments = Record<string, unknown>;
@@ -125,12 +134,37 @@ const invoiceListTools = ["erpnext_sales_invoice_list", "erpnext_doc_list"];
 const { source: invoiceListPort, target: invoiceDetailPort } =
   INVOICE_FOLLOW_PORTS;
 
-function invoicePorts(
+function panelPorts(
   name: string,
   resourceUri: string | undefined,
-  content: unknown,
+  result: DeclaredViewNativeResult,
 ): { emits?: string[]; accepts?: string[] } | undefined {
+  const content = result.structuredContent;
   if (!isRecord(content)) return;
+  if (resourceUri === KPI_VIEW) {
+    if (
+      name === REVENUE_KPI &&
+      Array.isArray(content.sparkline) && content.sparkline.length > 0 &&
+      content.sparkline.every(Number.isFinite) &&
+      Array.isArray(content.sparklineLabels) &&
+      content.sparklineLabels.length === content.sparkline.length &&
+      content.sparklineLabels.every((label) => typeof label === "string") &&
+      Array.isArray(content.sparklinePeriods) &&
+      content.sparklinePeriods.length === content.sparkline.length &&
+      content.sparklinePeriods.every(isKpiPeriod)
+    ) return { emits: [KPI_PERIOD_SELECTED] };
+    const viewer = result._meta?.[VIEWER_META_KEY];
+    if (
+      name === GROSS_MARGIN_KPI &&
+      Number.isFinite(content.value) && content.unit === "%" &&
+      isRecord(viewer) && isRecord(viewer.refreshRequest) &&
+      viewer.refreshRequest.toolName === GROSS_MARGIN_KPI &&
+      isRecord(viewer.refreshRequest.arguments) &&
+      Array.isArray(viewer._availableTools) &&
+      viewer._availableTools.includes(GROSS_MARGIN_KPI)
+    ) return { accepts: [KPI_PERIOD_APPLY] };
+    return;
+  }
   if (
     resourceUri === invoiceListPort.resourceUri &&
     invoiceListTools.includes(name) &&
@@ -189,6 +223,12 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
           `To make an invoice detail follow selections in a list of Sales Invoices, use ${
             linkedLists.join(" or ")
           } to obtain the list and ${SALES_INVOICE_GET} for the initial detail. Select both original results with erp.panel(rows) and erp.panel(invoice), then call erp.sync({from: rows, event: "${invoiceListPort.event}", to: invoice, action: "${invoiceDetailPort.action}"}). Use a real invoice name for the initial detail. Declare this route only when the user requests linked views.`,
+        ]
+        : []),
+      ...(declaresView(REVENUE_KPI, KPI_VIEW) &&
+          declaresView(GROSS_MARGIN_KPI, KPI_VIEW)
+        ? [
+          `To recalculate gross margin when the user chooses a month in the Margin period control, select the original results of ${REVENUE_KPI} and ${GROSS_MARGIN_KPI} with erp.panel(revenue) and erp.panel(margin), then call erp.sync({from: revenue, event: "${KPI_PERIOD_SELECTED}", to: margin, action: "${KPI_PERIOD_APPLY}"}). For an initial matching period, pass revenue.sparklinePeriods.at(-1) as the margin date range. Link the cards only when the user requests it.`,
         ]
         : []),
       "Use execute.params for JSON parameters readable as erp.params.",
@@ -428,11 +468,7 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
               "Selected ERP results exceed the board size limit.",
             );
           }
-          const events = invoicePorts(
-            name,
-            resourceUri,
-            result.structuredContent,
-          );
+          const events = panelPorts(name, resourceUri, result);
           return {
             id: native.reference,
             provider: "erpnext",
@@ -448,10 +484,13 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
           const target = panelsById.get(to.native.reference);
           if (
             !source?.events?.emits?.includes(event) ||
-            !target?.events?.accepts?.includes(action)
+            !target?.events?.accepts?.includes(action) ||
+            !(event === invoiceListPort.event &&
+                action === invoiceDetailPort.action ||
+              event === KPI_PERIOD_SELECTED && action === KPI_PERIOD_APPLY)
           ) {
             throw new Error(
-              "Unsupported ERP synchronization. Link invoice.selected from a Sales Invoice list to invoice.focus on a Sales Invoice detail.",
+              "Unsupported ERP synchronization. Use a matching event and action advertised for the selected ERP panels.",
             );
           }
           return { from: source.id, event, to: target.id, action };

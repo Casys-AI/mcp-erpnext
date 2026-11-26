@@ -1023,6 +1023,18 @@ export const analyticsTools: ErpNextTool[] = [
       // Bucket into 6 monthly bins
       const monthlyAmounts: number[][] = [[], [], [], [], [], []];
       const sparklineLabels = monthlyLabels(now, monthlyAmounts.length);
+      const sparklinePeriods = monthlyAmounts.map((_, index) => {
+        const month = sixMonthsAgo.getMonth() + index;
+        const year = sixMonthsAgo.getFullYear();
+        return {
+          date_from: localCalendarDate(new Date(year, month, 1)),
+          date_to: localCalendarDate(
+            index === monthlyAmounts.length - 1
+              ? now
+              : new Date(year, month + 1, 0),
+          ),
+        };
+      });
       for (const [index, o] of allOrders.entries()) {
         const calendarMonth = frappeCalendarMonth(o.transaction_date);
         if (!calendarMonth) {
@@ -1061,6 +1073,7 @@ export const analyticsTools: ErpNextTool[] = [
         trendIsGood: true,
         sparkline,
         sparklineLabels,
+        sparklinePeriods,
         color: "#60a5fa",
         _meta: KPI_META,
       };

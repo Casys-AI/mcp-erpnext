@@ -8,6 +8,8 @@
 
 export const zhHant: Record<string, string> = {
   // ── 通用 ──────────────────────────────────────────────────────────────
+  "code_mode.last_two_months": "最近兩個月",
+  "code_mode.margin_period": "毛利率期間",
   "common.loading": "載入中…",
   "common.refreshing": "重新整理中…",
   "common.refresh": "重新整理",

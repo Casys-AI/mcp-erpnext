@@ -4,8 +4,14 @@
  * Pile de navigation câblée : sauts « › » quand l'hôte relaie les outils,
  * comportement drillDown inchangé sinon.
  */
-import { useViewerApp } from "~/shared/viewer-app";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useViewerApp, ViewerInteractionsContext } from "~/shared/viewer-app";
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "preact/hooks";
 import type { JSX } from "preact";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
@@ -1421,6 +1427,7 @@ function KpiViewerContent({
 
 export function KpiViewer() {
   const app = useViewerApp(standaloneApp);
+  const periodInteractions = useContext(ViewerInteractionsContext);
   const fixture = isFixtureMode();
 
   const [data, setData] = useState<KpiData | null>(
@@ -1442,6 +1449,7 @@ export function KpiViewer() {
 
   function hydrateData(nextData: KpiData) {
     dataRef.current = nextData;
+    periodInteractions?.updateKpiPeriods?.(nextData.sparklinePeriods);
     refreshRequestRef.current = resolveUiRefreshRequest(
       nextData,
       refreshRequestRef.current,

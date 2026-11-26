@@ -3,6 +3,14 @@ import { readDeclaredViewUri } from "@mcpview/contracts";
 import type { MCPTool, ToolHandlerContext } from "@mcpview/server";
 import { createSnippetCatalog } from "@mcpview/server/snippets";
 import { createCodeModeExecute } from "./execute.ts";
+import {
+  GROSS_MARGIN_KPI,
+  isKpiPeriod,
+  KPI_PERIOD_APPLY,
+  KPI_PERIOD_SELECTED,
+  KPI_VIEW,
+  REVENUE_KPI,
+} from "./kpi-period.ts";
 import { SuspendCodeMode } from "./sandbox.ts";
 
 const table = "ui://erpnext/table";
@@ -531,6 +539,102 @@ const invoicePanels = `
 `;
 const invoiceSync =
   'erp.sync({from: rows, event: "invoice.selected", to: invoice, action: "invoice.focus"});';
+
+Deno.test("KPI periods require exact, ordered calendar dates", () => {
+  assert(isKpiPeriod({ date_from: "2024-02-29", date_to: "2024-02-29" }));
+  for (
+    const value of [
+      { date_from: "2025-02-29", date_to: "2025-03-01" },
+      { date_from: "2025-01-02", date_to: "2025-01-01" },
+      { date_from: "2025-04-01", date_to: "2025-04-31" },
+      { date_from: "2025-1-01", date_to: "2025-01-31" },
+      { date_from: "2025-01-01", date_to: "2025-01-31", company: "Other" },
+      null,
+    ]
+  ) assert(!isKpiPeriod(value));
+});
+
+Deno.test("revenue periods dispatch only to the refreshable gross margin card, despite one shared viewer URI", async () => {
+  const period = { date_from: "2025-10-01", date_to: "2025-10-31" };
+  const tools = [REVENUE_KPI, GROSS_MARGIN_KPI, "other_kpi"].map((name) => ({
+    ...list,
+    name,
+    _meta: { ui: { resourceUri: KPI_VIEW } },
+  }));
+  const options = {
+    tools,
+    mountableResourceUris: [KPI_VIEW],
+    call: (name: string, args: Record<string, unknown>) =>
+      Promise.resolve(
+        name === GROSS_MARGIN_KPI
+          ? {
+            content: [],
+            structuredContent: { value: 25, unit: "%" },
+            _meta: {
+              "io.casys/viewer": {
+                _availableTools: args.denied ? [] : [GROSS_MARGIN_KPI],
+                refreshRequest: { toolName: name, arguments: args },
+              },
+            },
+          }
+          : {
+            content: [],
+            structuredContent: {
+              sparkline: [9600],
+              sparklineLabels: ["Oct 25"],
+              sparklinePeriods: args.legacy ? undefined : [period],
+            },
+          },
+      ),
+  };
+  const { tool, handler } = createCodeModeExecute(options);
+  assert(tool.description.includes(KPI_PERIOD_SELECTED));
+  assert(
+    !createCodeModeExecute({ ...options, tools: tools.slice(1) }).tool
+      .description.includes(KPI_PERIOD_SELECTED),
+  );
+  assert(
+    !createCodeModeExecute({ ...options, mountableResourceUris: [] }).tool
+      .description.includes(KPI_PERIOD_SELECTED),
+  );
+  const program = `
+    const revenue = await erp.call("${REVENUE_KPI}", {});
+    const margin = await erp.call("${GROSS_MARGIN_KPI}", {...revenue.sparklinePeriods.at(-1)});
+    erp.panel(revenue); erp.panel(margin);
+    erp.sync({from: revenue, event: "${KPI_PERIOD_SELECTED}", to: margin, action: "${KPI_PERIOD_APPLY}"});
+    return {shown: 2};
+  `;
+  const result = await handler({ code: program }) as {
+    _meta: {
+      "io.mcpview/snippet-panels": { id: string; events: unknown }[];
+      "io.mcpview/snippet-sync": unknown;
+    };
+  };
+  const [source, target] = result._meta["io.mcpview/snippet-panels"];
+  assertEquals(source.events, { emits: [KPI_PERIOD_SELECTED] });
+  assertEquals(target.events, { accepts: [KPI_PERIOD_APPLY] });
+  assertEquals(result._meta["io.mcpview/snippet-sync"], [{
+    from: source.id,
+    event: KPI_PERIOD_SELECTED,
+    to: target.id,
+    action: KPI_PERIOD_APPLY,
+  }]);
+  for (
+    const invalid of [
+      program.replace(REVENUE_KPI, "other_kpi"),
+      program.replace(`"${REVENUE_KPI}", {}`, `"${REVENUE_KPI}", {legacy:true}`)
+        .replace("...revenue.sparklinePeriods.at(-1)", ""),
+      program.replace("...revenue.sparklinePeriods.at(-1)", "denied:true"),
+      program.replace(KPI_PERIOD_APPLY, "invoice.focus"),
+    ]
+  ) {
+    await assertRejects(
+      () => Promise.resolve(handler({ code: invalid })),
+      Error,
+      "Unsupported ERP synchronization",
+    );
+  }
+});
 
 Deno.test("explicit synchronization uses panel receipt IDs and exposes ports only to the App", async () => {
   const { handler, tool } = invoiceBoard();

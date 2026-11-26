@@ -12,6 +12,7 @@ export interface InvoiceSelection {
 }
 
 export interface ViewerInteractions {
+  updateKpiPeriods?(periods: unknown): void;
   invoiceSelection?: InvoiceSelection;
   setInvoiceFocus?(receiver: InvoiceFocusReceiver | null): void;
 }

@@ -77,6 +77,28 @@ requested invoice as the initial detail, or the first row when the user asks to
 start with the first invoice. The list's invoice selection updates that detail
 panel. Show just the list if there is no invoice to open.
 
+To let the user recalculate gross margin for a month in the Sales Order revenue
+series, link the cards as shown below. The **Margin period** control selects the
+month for the calculation. The revenue bars still select values for the chat
+context. Start the margin at the current month to date and keep any requested
+company or valuation options in the original margin call.
+
+```js
+const revenue = await erp.call("erpnext_kpi_revenue", {});
+const margin = await erp.call("erpnext_kpi_gross_margin", {
+  ...revenue.sparklinePeriods.at(-1),
+});
+erp.panel(revenue, "Sales Order revenue");
+erp.panel(margin, "Estimated gross margin");
+erp.sync({
+  from: revenue,
+  event: "kpi.period.selected",
+  to: margin,
+  action: "kpi.period.apply",
+});
+return { shown: 2 };
+```
+
 When reporting totals, prefer the corresponding ERP aggregate. A page of rows
 may be only part of the result. Check currencies before adding amounts and use
 the currency returned by the operation.

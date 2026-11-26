@@ -9,6 +9,8 @@
 
 export const hi: Record<string, string> = {
   // ── सामान्य ──────────────────────────────────────────────────────────────
+  "code_mode.last_two_months": "पिछले 2 महीने",
+  "code_mode.margin_period": "मार्जिन की अवधि",
   "common.loading": "लोड हो रहा है…",
   "common.refreshing": "रीफ़्रेश हो रहा है…",
   "common.refresh": "रीफ़्रेश करें",

@@ -9,6 +9,8 @@
 
 export const bn: Record<string, string> = {
   // ── সাধারণ ──────────────────────────────────────────────────────────────
+  "code_mode.last_two_months": "শেষ ২ মাস",
+  "code_mode.margin_period": "মুনাফার হারের সময়কাল",
   "common.loading": "লোড হচ্ছে…",
   "common.refreshing": "রিফ্রেশ হচ্ছে…",
   "common.refresh": "রিফ্রেশ করুন",

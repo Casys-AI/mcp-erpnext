@@ -7,6 +7,8 @@
 
 export const fr: Record<string, string> = {
   // ── Commun ──────────────────────────────────────────────────────────────
+  "code_mode.last_two_months": "2 derniers mois",
+  "code_mode.margin_period": "Période de la marge",
   "common.loading": "Chargement…",
   "common.refreshing": "Rafraîchissement…",
   "common.refresh": "Rafraîchir",

@@ -10,6 +10,8 @@
 
 export const zh: Record<string, string> = {
   // ── 通用 ──────────────────────────────────────────────────────────────
+  "code_mode.last_two_months": "最近两个月",
+  "code_mode.margin_period": "毛利率期间",
   "common.loading": "加载中…",
   "common.refreshing": "刷新中…",
   "common.refresh": "刷新",

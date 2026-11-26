@@ -8,6 +8,12 @@ import {
   createInvoicePanelInteractions,
   invoiceViewPorts,
 } from "./invoice-panels.ts";
+import {
+  connectKpiPeriods,
+  createPeriodFeed,
+  kpiViewPorts,
+  type MountedKpiPanel,
+} from "./kpi-period-panels.tsx";
 import type { ViewerInteractions } from "../shared/document-follow.ts";
 import { readDeclaredViewSelection } from "@mcpview/contracts";
 import { CODE_MODE_RESOURCE_URI } from "../../code-mode/resource-uri.ts";
@@ -29,6 +35,7 @@ import { mountComponent } from "./mount.ts";
 import { SnippetPanel } from "./SnippetPanel.tsx";
 import { executionReference, snippetEvent } from "./snippet-contract.ts";
 import { t } from "../shared/i18n.ts";
+import { isResultRecord } from "../shared/refresh.ts";
 
 import.meta.glob("../*-viewer/src/*.css", { eager: true });
 const components = import.meta.glob<Record<string, ComponentType>>(
@@ -134,7 +141,11 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
       const resourceUri =
         readDeclaredViewSelection(panel.result)?.resourceUri ??
           CODE_MODE_RESOURCE_URI;
-      return { resourceUri, events: invoiceViewPorts(resourceUri) };
+      return {
+        resourceUri,
+        events: invoiceViewPorts(resourceUri) ??
+          kpiViewPorts(resourceUri, panel.name),
+      };
     },
   });
   boardLifetime = new AbortController();
@@ -149,6 +160,7 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
   grid.className = "code-mode-board";
   viewRoot.hidden = false;
   viewRoot.replaceChildren(grid);
+  const mountedKpis = new Map<string, MountedKpiPanel>();
   await Promise.all(board.children.map(async (child) => {
     const panel = child.context!.panel as SelectedPanel;
     const native = panel.result as HostResult;
@@ -175,8 +187,17 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
         return typeof value === "function" ? value.bind(target) : value;
       },
     });
+    const kpiPorts = kpiViewPorts(
+      readDeclaredViewSelection(native)?.resourceUri ?? "",
+      panel.name,
+    );
+    const periods = kpiPorts?.emits && isResultRecord(native.structuredContent)
+      ? createPeriodFeed(native.structuredContent.sparklinePeriods)
+      : undefined;
     const interaction = interactions.forPanel(child.slot, panel.id);
-    if (interaction) viewerInteractions.set(panelHost, interaction);
+    if (periods) {
+      viewerInteractions.set(panelHost, { updateKpiPeriods: periods.update });
+    } else if (interaction) viewerInteractions.set(panelHost, interaction);
     const mounted = createDeclaredViewDispatcher({
       root: body,
       host: panelHost,
@@ -186,6 +207,14 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
     try {
       const displayed = await mounted.dispatch(native);
       interactions.setMounted(panel.id, displayed);
+      if (displayed && kpiPorts) {
+        mountedKpis.set(panel.id, {
+          panel,
+          periods,
+          body,
+          display: (value) => mounted.dispatch(value),
+        });
+      }
       if (displayed || panelSignal.aborted) return;
       body.textContent = resultText(native);
     } catch (error) {
@@ -197,6 +226,7 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
       }
     }
   }));
+  connectKpiPeriods(board, mountedKpis, host, panelSignal);
 }
 
 async function clearExecution(signal: AbortSignal) {

@@ -12,6 +12,7 @@ COPY src/ui/ ./
 # src/ui/dockerfile_test.ts.
 COPY src/buy/ /app/src/buy/
 COPY src/code-mode/ /app/src/code-mode/
+COPY src/tools/ /app/src/tools/
 RUN node build-all.mjs
 
 # ── Stage 2: runtime ────────────────────────────────────────────────────────

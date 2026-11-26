@@ -190,3 +190,29 @@
 .code-mode-panel table:has(th[aria-sort]) :is(th[aria-sort], td.truncate) {
   padding-inline: 0.5rem;
 }
+
+.erp-period-picker, .erp-period-status {
+  padding: 0.65rem 0.875rem;
+  border-block-end: 1px solid var(--color-line-soft);
+  font: 0.75rem/1.45 var(--font-sans);
+  color: var(--color-ink-muted);
+}
+.erp-period-picker > span { font-weight: 650; }
+.erp-period-picker > div, .erp-period-status {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem;
+}
+.erp-period-picker > div { margin-block-start: 0.35rem; }
+.erp-period-picker button, .erp-period-status button {
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+.erp-period-picker button[aria-pressed="true"] {
+  border-color: var(--color-accent-edge);
+  background: var(--color-sunken);
+  color: var(--color-accent-text);
+  font-weight: 650;
+}

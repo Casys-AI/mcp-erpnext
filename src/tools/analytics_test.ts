@@ -643,6 +643,18 @@ Deno.test("erpnext_kpi_revenue - returns KPI with sparkline from one paginated p
   assertEquals(result.sparkline.length, 6);
   assertEquals(result.sparklineLabels.length, result.sparkline.length);
   assertEquals(
+    result.sparklinePeriods,
+    Array.from({ length: 6 }, (_, i) => {
+      const month = now.getMonth() - 5 + i;
+      return {
+        date_from: localCalendarDate(new Date(now.getFullYear(), month, 1)),
+        date_to: localCalendarDate(
+          i === 5 ? now : new Date(now.getFullYear(), month + 1, 0),
+        ),
+      };
+    }),
+  );
+  assertEquals(
     result.sparklineLabels.at(-1),
     `${now.toLocaleString("en", { month: "short" })} ${
       now.getFullYear().toString().slice(2)

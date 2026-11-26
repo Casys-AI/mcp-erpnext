@@ -9,6 +9,8 @@
 
 export const ur: Record<string, string> = {
   // ── عام ──────────────────────────────────────────────────────────────
+  "code_mode.last_two_months": "گزشتہ 2 ماہ",
+  "code_mode.margin_period": "مارجن کی مدت",
   "common.loading": "لوڈ ہو رہا ہے…",
   "common.refreshing": "ریفریش ہو رہا ہے…",
   "common.refresh": "ریفریش کریں",

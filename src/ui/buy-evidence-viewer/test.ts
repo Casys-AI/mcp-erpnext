@@ -13,6 +13,7 @@ await withViewerTestDenoConfig(async (configPath) => {
       "--unstable-sloppy-imports",
       "--allow-all",
       join(here, "src", "app_test.ts"),
+      join(here, "..", "code-mode", "approval_test.ts"),
     ],
     stdin: "inherit",
     stdout: "inherit",

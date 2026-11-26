@@ -23,8 +23,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist-node"
-VERSION="$(grep '"version"' "$ROOT_DIR/deno.json" | sed 's/.*"version": *"\([^"]*\)".*/\1/')"
-MCP_SERVER_VERSION="$(grep '"@mcpview/server"' "$ROOT_DIR/deno.json" | sed 's/.*"@mcpview\/server": *"jsr:@mcpview\/server@\([^"]*\)".*/\1/')"
+VERSION="$(node -p 'require(process.argv[1]).version' "$ROOT_DIR/deno.json")"
+npm_spec() {
+  node -e 'const imports = require(process.argv[1]).imports; console.log(imports[process.argv[2]].replace(/^(jsr|npm):/, ""))' "$ROOT_DIR/deno.json" "$1"
+}
 
 echo "[build-node] Building Node.js distribution for @casys/mcp-erpnext..."
 
@@ -85,25 +87,11 @@ npm install --no-fund --no-audit
 # selector as the JSR source, so the bundle stays Node-clean (no Deno.*).
 # MCP_SERVER_OVERRIDE lets CI/local builds point at a tarball for pre-release
 # end-to-end validation.
-npm install --no-fund --no-audit "${MCP_SERVER_OVERRIDE:-@mcpview/server@$MCP_SERVER_VERSION}"
-# Fail fast if npm resolved a version older than 0.21.1 — the first release
-# whose npm build is fully Node-clean (runtime selector + launcher). An older
-# resolution would silently re-embed Deno.* calls in the published bundle.
-# The version is read from disk: the package "exports" map does not expose
-# ./package.json, so require("@mcpview/server/package.json") is rejected.
-node -e '
-  const v = JSON.parse(
-    require("node:fs").readFileSync("node_modules/@mcpview/server/package.json", "utf8"),
-  ).version;
-  const [ma, mi, pa] = v.split(".").map(Number);
-  if (ma === 0 && (mi < 24 || (mi === 24 && pa < 1))) {
-    console.error(`[build-node] @mcpview/server ${v} lacks MRTR nonce consumption (need >=0.24.1)`);
-    console.error(`[build-node] 0.24.0 verifies a requestState token but never consumes its nonce,`);
-    console.error(`[build-node] so a signed retry can be replayed into a duplicate write.`);
-    process.exit(1);
-  }
-  console.log(`[build-node] @mcpview/server ${v} OK (>=0.21.1)`);
-'
+npm install --no-fund --no-audit \
+  "${MCP_SERVER_OVERRIDE:-$(npm_spec @mcpview/server)}" \
+  "${MCP_CONTRACTS_OVERRIDE:-$(npm_spec @mcpview/contracts)}" \
+  "$(npm_spec quickjs-emscripten-core)" \
+  "$(npm_spec @jitl/quickjs-singlefile-browser-release-sync)"
 ./node_modules/.bin/esbuild server.ts \
   --bundle \
   --platform=node \
@@ -119,6 +107,7 @@ cat bin/mcp-erpnext.mjs >> "$tmp_shebang"
 mv "$tmp_shebang" bin/mcp-erpnext.mjs
 chmod +x bin/mcp-erpnext.mjs
 cp -r src/ui/dist bin/ui-dist
+cp -r "$ROOT_DIR/skills" bin/skills
 cp "$ROOT_DIR/LICENSE" "$ROOT_DIR/THIRD_PARTY_NOTICES.txt" bin/
 cp README.md bin/README.md 2>/dev/null || cp ../README.md bin/README.md 2>/dev/null || true
 
@@ -136,6 +125,7 @@ cat > bin/package.json <<PKGJSON
     "THIRD_PARTY_NOTICES.txt",
     "mcp-erpnext.mjs",
     "ui-dist/**/*",
+    "skills/**/*",
     "README.md"
   ],
   "keywords": [

@@ -537,9 +537,8 @@ const DOWNLOAD_INPUT = {
 
 Deno.test("erpnext_file_download - refuses clients that do not announce MCP Apps, before any Frappe call", async () => {
   const tool = getTool("erpnext_file_download");
-  const capabilitiesCases: Array<
-    [string, ErpNextToolContext["clientCapabilities"]]
-  > = [
+  // Test malformed capability values received from an untyped wire peer.
+  const capabilitiesCases: Array<[string, unknown]> = [
     ["undefined", undefined],
     ["empty object", {}],
     ["other extension only", { extensions: { "io.example/other": {} } }],
@@ -581,7 +580,8 @@ Deno.test("erpnext_file_download - refuses clients that do not announce MCP Apps
       () =>
         tool.handler(DOWNLOAD_INPUT, {
           client,
-          ...(clientCapabilities !== undefined ? { clientCapabilities } : {}),
+          clientCapabilities:
+            clientCapabilities as ErpNextToolContext["clientCapabilities"],
         }),
       FileDownloadError,
       "APP_CONTEXT_REQUIRED",

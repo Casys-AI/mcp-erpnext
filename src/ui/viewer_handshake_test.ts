@@ -180,11 +180,31 @@ Deno.test("ERPNext viewer bundles preserve handler-before-connect ordering", asy
       ),
     );
     assert(declaration, `${viewer.directory}: MCP App declaration is missing`);
+    const afterDeclaration = bundle.slice(declaration.index);
     const appIdentifier = declaration[1];
+    // The standalone hook can be folded to a local alias. Trace the identifier
+    // that actually receives the result back to the App constructed above.
+    const resultHandler = /([A-Za-z_$][\w$]*)\.ontoolresult\s*=/.exec(
+      afterDeclaration,
+    );
+    assert(resultHandler, `${viewer.directory}: MCP result handler is missing`);
+    const receiver = resultHandler[1];
+    const prefix = afterDeclaration.slice(0, resultHandler.index);
+    const aliases = prefix.matchAll(
+      new RegExp(
+        `\\b${escapeRegExp(receiver)}=${escapeRegExp(appIdentifier)}(?=[,;])`,
+        "g",
+      ),
+    );
+    const alias = Array.from(aliases).at(-1);
+    assert(
+      receiver === appIdentifier || alias,
+      `${viewer.directory}: result handler uses another App`,
+    );
     assertBeforeConnect(
-      bundle.slice(declaration.index),
+      afterDeclaration.slice(alias?.index ?? 0),
       viewer.directory,
-      appIdentifier,
+      receiver,
       viewer.handlers,
     );
   }

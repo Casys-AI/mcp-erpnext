@@ -5,6 +5,7 @@
  * corps vit dans `shared/doclist` pour que toute vue puisse rendre une liste.
  */
 
+import { useViewerApp } from "~/shared/viewer-app";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { bindHostContext } from "~/shared/host-context-hook";
@@ -46,11 +47,15 @@ import { canShareActiveContextResource } from "~/shared/active-context.ts";
 import type { DocumentContextController } from "~/shared/document/context-interaction.ts";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
 
-const app = new App({ name: "Doclist Viewer", version: "2.0.0" });
+const standaloneApp = /* @__PURE__ */ new App({
+  name: "Doclist Viewer",
+  version: "2.0.0",
+});
 const DOCLIST_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
 export function DoclistViewer() {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const fixture = isFixtureMode();
   const fixtureData = fixture ? doclistFixtureFromSearch() : null;
@@ -296,6 +301,7 @@ function DoclistContent({
   onMutationRefresh: () => void;
   onError: (msg: string | null) => void;
 }) {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const { ref: shellRef, layout, boundsStyle } = useViewerLayout<
     HTMLDivElement

@@ -7,6 +7,7 @@
  *
  * Aucun import de @mcpview/view.
  */
+import { useViewerApp } from "~/shared/viewer-app";
 import type { ComponentChildren, JSX, Ref } from "preact";
 import {
   useCallback,
@@ -102,7 +103,10 @@ import {
   KANBAN_FIXTURE_USERS,
 } from "./fixture.ts";
 
-const app = new App({ name: "Kanban Viewer", version: "1.0.0" });
+const standaloneApp = /* @__PURE__ */ new App({
+  name: "Kanban Viewer",
+  version: "1.0.0",
+});
 const AUTO_REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 
@@ -1007,6 +1011,7 @@ function KanbanBoardWithNav({
   onLoadUsers: () => Promise<Array<{ name: string; full_name?: string }>>;
   onError: (msg: string) => void;
 }) {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   // La pile : racine = le tableau, niveaux empilés = résultats d'outils (listes, fiches, graphiques).
   const rootKey = viewerRootKey(
@@ -1373,6 +1378,7 @@ type ToolResultPayload = {
 /* ────────────────────────────── KanbanViewer ────────────────────────────── */
 
 export function KanbanViewer() {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const fixture = isFixtureMode();
   const { ref: containerRef, layout } = useViewerLayout<HTMLDivElement>();

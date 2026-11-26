@@ -71,6 +71,8 @@ export interface ErpNextTool {
   inputSchema: JSONSchema;
   /** Behavioural hints for model clients */
   annotations?: ToolAnnotations;
+  /** OAuth scopes enforced by mcpview on HTTP calls to this operation. */
+  requiredScopes?: string[];
   /** MCP Apps UI metadata — uses MCPToolMeta from @mcpview/server */
   _meta?: MCPToolMeta;
   /** Execute the tool and return a JSON-serializable result */
@@ -86,5 +88,7 @@ export interface MCPToolWireFormat {
   description: string;
   inputSchema: JSONSchema;
   annotations?: ToolAnnotations;
+  /** OAuth scopes enforced by mcpview on HTTP calls to this operation. */
+  requiredScopes?: string[];
   _meta?: MCPToolMeta;
 }

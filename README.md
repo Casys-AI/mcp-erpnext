@@ -19,6 +19,31 @@ Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 > server framework (concurrency, auth, MCP Apps, observability) that powers this
 > project. See [mcpview.dev](https://mcpview.dev).
 
+## Code Mode beta (4.0.0-beta.1)
+
+Installing the beta selects Code Mode for both stdio and HTTP. Use the packaged
+`mcp-erpnext` command with your existing connection settings. The 3.5.0 stable
+release and the quick-start examples below use the classic tool catalogue.
+
+The beta exposes one tool to the LLM, `execute`. Its JavaScript can inspect
+`erp.catalog`, call available ERPNext operations and return a result. In an MCP
+Apps host, returning an original ERP result opens its declared interactive view.
+For example, `erpnext_sales_invoice_list` opens the invoice list and
+`erpnext_sales_invoice_get` opens an invoice. Returning a calculated value
+produces ordinary tool output. View callbacks follow the configured operation
+filters and ERP permissions. Before a write, the server shows the operation and
+its arguments for the user to approve. The skill is included in both
+distributions and can be installed in hosts that load Agent Skills.
+
+To run a locally packed beta, point the host at the installed binary:
+
+```sh
+npm install --prefix ./erpnext-beta ./casys-mcp-erpnext-4.0.0-beta.1.tgz
+./erpnext-beta/node_modules/.bin/mcp-erpnext
+```
+
+[ERPNext Code Mode skill and examples](skills/erpnext-code-mode/SKILL.md)
+
 ## Screenshots
 
 Interactive viewers rendered inside an MCP host, driven entirely by tool
@@ -344,31 +369,30 @@ Full per-tool reference with parameters: [`docs/tools.md`](docs/tools.md).
 
 ## Environment Variables
 
-| Variable                     | Required | Description                                                                                                                      |
-| ---------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `ERPNEXT_URL`                | Yes      | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`)                    |
-| `ERPNEXT_API_KEY`            | Yes      | API Key from User Settings                                                                                                       |
-| `ERPNEXT_API_SECRET`         | Yes      | API Secret from User Settings                                                                                                    |
-| `ERPNEXT_MAX_UPLOAD_BYTES`   | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                                    |
-| `ERPNEXT_MAX_DOWNLOAD_BYTES` | No       | Maximum attachment-download size in bytes (positive integer; default: 10 MiB)                                                    |
-| `ERPNEXT_METHOD_ALLOWLIST`   | No       | Comma-separated exact method paths or `prefix.*`; unset means `erpnext_method_call` denies every method, while `*` allows all    |
-| `MCP_MRTR_SIGNING_KEY`       | No       | Exactly 64 lowercase hex characters; enables signed ambiguous-link elicitation. **Single-instance deployments only** — see below |
+| Variable                     | Required | Description                                                                                                                       |
+| ---------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `ERPNEXT_URL`                | Yes      | ERPNext base URL — self-hosted (e.g. `http://localhost:8000`) or cloud (e.g. `https://mycompany.erpnext.com`)                     |
+| `ERPNEXT_API_KEY`            | Yes      | API Key from User Settings                                                                                                        |
+| `ERPNEXT_API_SECRET`         | Yes      | API Secret from User Settings                                                                                                     |
+| `ERPNEXT_MAX_UPLOAD_BYTES`   | No       | Maximum decoded file-upload size in bytes (positive integer; default: 10 MiB)                                                     |
+| `ERPNEXT_MAX_DOWNLOAD_BYTES` | No       | Maximum attachment-download size in bytes (positive integer; default: 10 MiB)                                                     |
+| `ERPNEXT_METHOD_ALLOWLIST`   | No       | Comma-separated exact method paths or `prefix.*`; unset means `erpnext_method_call` denies every method, while `*` allows all     |
+| `MCP_MRTR_SIGNING_KEY`       | No       | Optional signing key for multi-round-trip requests (64 lowercase hex characters). The beta generates an ephemeral key by default. |
 
-MRTR is opt-in. Without this key, or when the client does not advertise
-elicitation, ambiguous links keep returning the existing actionable ambiguity
-error instead of prompting for a selection.
+**Confirming changes in the beta.** Run one server process. A host that supports
+MCP request/retry with form elicitation can present a native confirmation. An
+MCP Apps host can present the proposal in the workspace. The user sees the
+operation and arguments and chooses whether to continue. A text-only host
+without a supported confirmation flow can read ERP records. HTTP writes require
+an authenticated MCP identity. ERPNext checks permissions using the configured
+Frappe credentials.
 
-> **Do not run MRTR behind a load balancer with this configuration.** The
-> signing key proves a retry token is authentic; it does not make it single-use.
-> That is the job of a replay store, and the default one is process-local. Share
-> the key across two instances and the same signed retry validates on both —
-> creating the purchase order, leave application or expense claim **twice**,
-> irreversibly once submitted.
->
-> A multi-instance deployment must pass a shared atomic `mrtr.replayStore` to
-> `McpApp` (Redis satisfies the contract with `SET key 1 NX EXAT`). The
-> framework logs a warning at startup whenever MRTR is enabled without one —
-> that warning is not noise, it is this paragraph.
+An approval is single-use, expires after five minutes and belongs to the
+initiating identity and program. Starting a new program or restarting the server
+requires a fresh approval. Earlier steps may have succeeded if a subsequent step
+is cancelled or fails. Check the affected ERP record before retrying a new
+program after an interruption. The current journal and approval tickets live in
+server memory.
 
 ## Architecture
 

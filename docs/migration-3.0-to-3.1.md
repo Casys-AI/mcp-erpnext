@@ -1,10 +1,10 @@
 # Migrate from 3.0 to 3.1 (and 3.2)
 
-The package in this checkout reports **`3.5.0`**, the stable release. The 3.1
-changes described here were developed as 3.1 prereleases and reach the stable
-channel in 3.2.0; stable 3.1.0 carried only a subset (KPI and funnel context
-selection and creation-error guidance). This guide therefore applies when you
-move from 3.0 to 3.2, and also when you move from stable 3.1.0 to 3.2. See the
+The stable 3.x release covered by this guide is **`3.5.0`**. The 3.1 changes
+described here were developed as 3.1 prereleases and reach the stable channel in
+3.2.0; stable 3.1.0 carried only a subset (KPI and funnel context selection and
+creation-error guidance). This guide therefore applies when you move from 3.0 to
+3.2, and also when you move from stable 3.1.0 to 3.2. See the
 [CHANGELOG](../CHANGELOG.md) for the details of each change. This guide
 describes the current source.
 

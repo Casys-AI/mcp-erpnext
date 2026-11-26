@@ -107,9 +107,15 @@ export function buildAuthProvider(config: AuthConfig): AuthProvider {
       );
     }
     providers.push(
-      createStaticTokenAuthProvider([...config.tokens], {
-        resource: config.resource,
-      }),
+      // A ticket has the lifetime of this process. Use one opaque principal per
+      // provisioned credential; token material is never used as an identity.
+      createStaticTokenAuthProvider(
+        [...config.tokens].map((token) => ({
+          token,
+          subject: `erpnext-static-${crypto.randomUUID()}`,
+        })),
+        { resource: config.resource },
+      ),
     );
   }
 

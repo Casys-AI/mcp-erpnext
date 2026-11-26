@@ -4,6 +4,17 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [4.0.0-beta.1] - 2026-11-26
+
+- Installing this prerelease selects Code Mode on stdio and HTTP. The LLM
+  discovers one tool, `execute`, with a sandboxed JavaScript environment and a
+  catalogue of ERPNext operations. Each write requires approval of the exact
+  operation and arguments. Existing connection settings and operation filters
+  apply.
+- Returning an original operation result opens the interactive view from its
+  existing declaration. Lists, invoice details and computed answers can share
+  the same tool. The ERPNext Agent Skill ships with the package.
+
 ## [3.5.0] - 2026-11-05
 
 ### Added

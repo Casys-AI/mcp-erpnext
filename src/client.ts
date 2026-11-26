@@ -208,6 +208,8 @@ export interface MCPToolWireFormat {
   inputSchema: JSONSchema;
   /** Behavioural hints for model clients */
   annotations?: ToolAnnotations;
+  /** OAuth scopes enforced by mcpview on HTTP calls to this operation. */
+  requiredScopes?: string[];
   /** Optional MCP metadata for UI rendering (e.g. iframe viewer resource URI) */
   _meta?: MCPToolMeta;
 }
@@ -272,6 +274,7 @@ export class ErpNextToolsClient {
         inputSchema: t.inputSchema as JSONSchema,
       };
       if (t.annotations) wire.annotations = t.annotations;
+      if (t.requiredScopes) wire.requiredScopes = [...t.requiredScopes];
       if (t._meta) wire._meta = t._meta;
       return wire;
     });

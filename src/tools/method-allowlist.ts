@@ -44,3 +44,28 @@ export function isMethodAllowed(method: string, allowlist: string[]): boolean {
 export function loadMethodAllowlist(): string[] {
   return parseAllowlist(env("ERPNEXT_METHOD_ALLOWLIST"));
 }
+
+/** Enforce the same environment policy at confirmation and invocation time. */
+export function allowedMethod(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(
+      "[erpnext_method_call] 'method' must be a non-empty dotted path",
+    );
+  }
+  const method = value.trim();
+  if (!isValidMethodPath(method)) {
+    throw new Error(
+      `[erpnext_method_call] 'method' is not a valid dotted path: '${method}'`,
+    );
+  }
+
+  const allowlist = loadMethodAllowlist();
+  if (!isMethodAllowed(method, allowlist)) {
+    throw new Error(
+      `[erpnext_method_call] '${method}' is not permitted. Add it (or a ` +
+        "'prefix.*' covering it) to ERPNEXT_METHOD_ALLOWLIST, or set " +
+        "ERPNEXT_METHOD_ALLOWLIST=* to allow any method.",
+    );
+  }
+  return method;
+}

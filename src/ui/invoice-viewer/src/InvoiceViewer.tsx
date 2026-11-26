@@ -11,6 +11,7 @@
  *  - InvoiceViewer : état, connexion, refresh, actions — sans hooks d'UI.
  *  - InvoiceContent : rendu, pile de navigation, boutons — data toujours dispo.
  */
+import { useViewerApp } from "~/shared/viewer-app";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { ActiveContextChip } from "~/shared/ActiveContextChip";
@@ -100,7 +101,10 @@ import {
   type InvoicePayload,
 } from "./types.ts";
 
-const app = new App({ name: "Invoice Viewer", version: "3.0.0" });
+const standaloneApp = /* @__PURE__ */ new App({
+  name: "Invoice Viewer",
+  version: "3.0.0",
+});
 const REFRESH_INTERVAL_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 10_000;
 const CANONICAL_READBACK_DELAY_MS = 1_500;
@@ -145,6 +149,7 @@ interface InvoiceContentProps {
 ══════════════════════════════════════════════════════════════════════════════ */
 
 export function InvoiceViewer() {
+  const app = useViewerApp(standaloneApp);
   const t = useT();
   const fixture = isFixtureMode();
   const initialEnvelope = fixture
@@ -608,6 +613,7 @@ type InvoiceContextBoundaryProps = Omit<
 >;
 
 function InvoiceContextBoundary(props: InvoiceContextBoundaryProps) {
+  const app = useViewerApp(standaloneApp);
   const rootKey = viewerRootKey("invoice", undefined, {
     doctype: props.data.doctype,
     name: props.data.name,
@@ -644,6 +650,7 @@ function InvoiceContent({
   onNavigate,
   setError,
 }: InvoiceContentProps) {
+  const app = useViewerApp(standaloneApp);
   /* ── Hooks d'UI (inconditionnels) ────────────────────────────────────── */
 
   const { ref, width, layout } = useViewerLayout<HTMLDivElement>();

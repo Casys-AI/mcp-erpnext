@@ -35,6 +35,10 @@ filters and ERP permissions. Before a write, the server shows the operation and
 its arguments for the user to approve. The skill is included in both
 distributions and can be installed in hosts that load Agent Skills.
 
+The shell reuses eight direct-result views. Buy Evidence accepts a verified
+recorded session from its archive. The ERPNext capture operation supplies the
+source evidence for that workflow. It cannot open an archived session by itself.
+
 To run a locally packed beta, point the host at the installed binary:
 
 ```sh

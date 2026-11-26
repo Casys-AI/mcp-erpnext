@@ -105,7 +105,7 @@ tmp_shebang="$(mktemp)"
 printf '#!/usr/bin/env node\n' > "$tmp_shebang"
 cat bin/mcp-erpnext.mjs >> "$tmp_shebang"
 mv "$tmp_shebang" bin/mcp-erpnext.mjs
-chmod +x bin/mcp-erpnext.mjs
+chmod 0755 bin/mcp-erpnext.mjs
 cp -r src/ui/dist bin/ui-dist
 cp -r "$ROOT_DIR/skills" bin/skills
 cp "$ROOT_DIR/LICENSE" "$ROOT_DIR/THIRD_PARTY_NOTICES.txt" bin/

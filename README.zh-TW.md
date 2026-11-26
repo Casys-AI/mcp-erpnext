@@ -31,6 +31,10 @@ ERPNext 操作， 並回傳原始結果或計算值。在支援 MCP Apps
 權限。寫入前，伺服器會列出操作及參數，交由使用者確認。 兩種發行套件均附有可供
 Agent Skills 主機安裝的技能。
 
+工作區可直接顯示八種操作結果。第九種 Buy Evidence
+檢視器需要來自封存系統且已通過驗證的工作階段。 ERPNext
+的擷取操作提供原始證據，封存工作階段須由上游系統產生。
+
 [ERPNext Code Mode 技能與範例](skills/erpnext-code-mode/SKILL.md)
 
 ## 截圖

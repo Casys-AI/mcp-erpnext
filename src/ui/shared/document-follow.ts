@@ -2,11 +2,18 @@ import type { InvoiceDocumentRef } from "../../code-mode/document-follow.ts";
 
 export * from "../../code-mode/document-follow.ts";
 
+export type InvoiceFocusReceiver = (document: InvoiceDocumentRef) => boolean;
+
+export interface InvoiceSelection {
+  canFollow(): boolean;
+  subscribe(listener: () => void): () => void;
+  select(document: InvoiceDocumentRef, fallback: () => void): void;
+  cancelPending(): void;
+}
+
 export interface ViewerInteractions {
-  onInvoiceSelected?(document: InvoiceDocumentRef): void;
-  subscribeInvoiceFocus?(
-    listener: (document: InvoiceDocumentRef) => void,
-  ): () => void;
+  invoiceSelection?: InvoiceSelection;
+  setInvoiceFocus?(receiver: InvoiceFocusReceiver | null): void;
 }
 
 export function matchesInvoiceDocument(

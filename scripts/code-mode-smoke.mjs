@@ -22,8 +22,11 @@ const ERP_VIEWER_META = "io.casys/viewer";
 const CONFIRM_META = "io.casys/erpnext-write-confirmation";
 const EXECUTION_REFERENCE_META = "io.casys/erpnext-execution-ref";
 const SNIPPET_EVENT_META = "io.casys/erpnext-snippet-event";
-const EXECUTE_VIEW = "ui://mcp-erpnext/code-mode/v2";
-const LEGACY_EXECUTE_VIEW = "ui://mcp-erpnext/code-mode";
+const EXECUTE_VIEW = "ui://mcp-erpnext/code-mode/v3";
+const LEGACY_EXECUTE_VIEWS = [
+  "ui://mcp-erpnext/code-mode",
+  "ui://mcp-erpnext/code-mode/v2",
+];
 const INVOICE_VIEW = "ui://mcp-erpnext/invoice-viewer";
 const LIST_VIEW = "ui://mcp-erpnext/doclist-viewer";
 const INVOICE_ID = "SINV-SMOKE-0001";
@@ -369,10 +372,12 @@ async function checkApp(client) {
     resources.find(({ uri }) => uri === EXECUTE_VIEW)?.name,
     "ERPNext",
   );
-  assert.match(
-    resources.find(({ uri }) => uri === LEGACY_EXECUTE_VIEW)?.name ?? "",
-    /compatibility/i,
-  );
+  for (const legacyUri of LEGACY_EXECUTE_VIEWS) {
+    assert.match(
+      resources.find(({ uri }) => uri === legacyUri)?.name ?? "",
+      /compatibility/i,
+    );
+  }
   for (const name of [LIST, GET, UPDATE, CONFIRM]) {
     assert.deepEqual(
       tools.find((tool) => tool.name === name)?._meta?.ui?.visibility,
@@ -405,12 +410,14 @@ async function checkApp(client) {
     assert.equal(contents[0].mimeType, APP_MIME);
     assert.match(contents[0].text, /<html\b/i);
     if (uri === EXECUTE_VIEW) {
-      const { contents: legacy } = result(
-        await client("resources/read", { uri: LEGACY_EXECUTE_VIEW }),
-      );
-      assert.equal(legacy[0].uri, LEGACY_EXECUTE_VIEW);
-      assert.equal(legacy[0].mimeType, APP_MIME);
-      assert.equal(legacy[0].text, contents[0].text);
+      for (const legacyUri of LEGACY_EXECUTE_VIEWS) {
+        const { contents: legacy } = result(
+          await client("resources/read", { uri: legacyUri }),
+        );
+        assert.equal(legacy[0].uri, legacyUri);
+        assert.equal(legacy[0].mimeType, APP_MIME);
+        assert.equal(legacy[0].text, contents[0].text);
+      }
       // The dark overrides survive pruning even when the default palette disappears.
       const css = contents[0].text.match(/<style\b[^>]*>([\s\S]*?)<\/style>/i)
         ?.[1];

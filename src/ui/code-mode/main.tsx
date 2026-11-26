@@ -1,5 +1,6 @@
 import {
   composeSnippetBoard,
+  emitSnippetBoardEvent,
   readSnippetPanels,
   type SnippetPanel as SelectedPanel,
 } from "@mcpview/compose/code-mode/board";
@@ -138,7 +139,12 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
   });
   boardLifetime = new AbortController();
   const panelSignal = AbortSignal.any([signal, boardLifetime.signal]);
-  const interactions = createInvoicePanelInteractions(board, panelSignal);
+  const interactions = createInvoicePanelInteractions(
+    board,
+    panelSignal,
+    (id, event, data, deliver) =>
+      emitSnippetBoardEvent(board, id, event, data, deliver),
+  );
   const grid = document.createElement("div");
   grid.className = "code-mode-board";
   viewRoot.hidden = false;
@@ -169,7 +175,7 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
         return typeof value === "function" ? value.bind(target) : value;
       },
     });
-    const interaction = interactions(child.slot, panel.id);
+    const interaction = interactions.forPanel(child.slot, panel.id);
     if (interaction) viewerInteractions.set(panelHost, interaction);
     const mounted = createDeclaredViewDispatcher({
       root: body,
@@ -178,9 +184,12 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
     });
     panels.push(mounted);
     try {
-      if (await mounted.dispatch(native) || panelSignal.aborted) return;
+      const displayed = await mounted.dispatch(native);
+      interactions.setMounted(panel.id, displayed);
+      if (displayed || panelSignal.aborted) return;
       body.textContent = resultText(native);
     } catch (error) {
+      interactions.setMounted(panel.id, false);
       if (!panelSignal.aborted) {
         body.textContent = error instanceof Error
           ? error.message

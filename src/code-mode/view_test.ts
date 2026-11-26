@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { createCodeModeExecute } from "./execute.ts";
 import { registerCodeModeView } from "./view.ts";
 
-Deno.test("Code Mode advertises the versioned shell and serves it at both resource URIs", async () => {
+Deno.test("Code Mode advertises the versioned shell and serves it at previous resource URIs", async () => {
   const root = await Deno.makeTempDir();
   try {
     const dist = `${root}/src/ui/dist/code-mode`;
@@ -16,12 +16,13 @@ Deno.test("Code Mode advertises the versioned shell and serves it at both resour
       registerResource: (...args) => resources.push(args),
     }, pathToFileURL(`${root}/server.ts`).href);
     assert(view);
-    const current = "ui://mcp-erpnext/code-mode/v2";
+    const current = "ui://mcp-erpnext/code-mode/v3";
     const legacy = "ui://mcp-erpnext/code-mode";
     assertEquals(view.resourceUri, current);
     assertEquals(resources.map(([resource]) => resource.uri), [
       current,
       legacy,
+      "ui://mcp-erpnext/code-mode/v2",
     ]);
     assertEquals(resources[1][0].name, "ERPNext (compatibility)");
     for (const [resource, read] of resources) {

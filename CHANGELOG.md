@@ -4,6 +4,11 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+- A Code Mode program can display a sales invoice list and a detail view
+  together. When the user asks for linked views, clicking an invoice updates the
+  existing detail panel using the viewer's authorized read. If the detail panel
+  cannot follow, the list offers its usual inline preview.
+
 ## [4.0.0-beta.3] - 2026-11-26
 
 - Save a successful Code Mode program on request and recall it in a later chat

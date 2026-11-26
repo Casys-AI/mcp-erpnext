@@ -7,7 +7,7 @@
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import {
-  type InvoiceDocumentRef,
+  type InvoiceSelection,
   invoiceSelectionRef,
   SALES_INVOICE_DOCTYPE,
   SALES_INVOICE_GET,
@@ -83,7 +83,7 @@ export function DoclistBody(
     context,
     contextView,
     contextKey,
-    onInvoiceSelected,
+    invoiceSelection,
   }: {
     app: App;
     data: DoclistData;
@@ -112,7 +112,7 @@ export function DoclistBody(
     contextView?: string;
     /** Identité stable du niveau, distincte de son titre visible. */
     contextKey?: string;
-    onInvoiceSelected?: (document: InvoiceDocumentRef) => void;
+    invoiceSelection?: InvoiceSelection;
   },
 ) {
   const t = useT();
@@ -153,12 +153,33 @@ export function DoclistBody(
     };
   }, []);
   const hasLocalDetail = fixture && rows.some((row) => row._detail != null);
+  const [, setRouteRevision] = useState(0);
+  useLayoutEffect(() => {
+    if (!invoiceSelection) return;
+    const update = () => setRouteRevision((revision) => revision + 1);
+    const unsubscribe = invoiceSelection.subscribe(update);
+    update();
+    return unsubscribe;
+  }, [invoiceSelection]);
+  const cancelFollow = invoiceSelection?.cancelPending;
+  useLayoutEffect(() => cancelFollow, [
+    cancelFollow,
+    data.doctype,
+    data._availableTools,
+    serverTools,
+    rowAction,
+    list.sorted,
+    list.page,
+    contextKey,
+    contextView,
+    expandedId,
+  ]);
   const following = Boolean(
-    onInvoiceSelected && !fixture && serverTools &&
+    invoiceSelection?.canFollow() && !fixture && serverTools &&
       data.doctype === SALES_INVOICE_DOCTYPE &&
       hasExplicitAvailableTool(data._availableTools, SALES_INVOICE_GET),
   );
-  const isInspectable = !following && (!!rowAction || hasLocalDetail);
+  const isInspectable = !!rowAction || hasLocalDetail;
   const listContextView = contextView ?? data._title ?? data.doctype ??
     "Document";
   const listContextKey = contextKey ?? listContextView;
@@ -298,7 +319,7 @@ export function DoclistBody(
 
   // La ligne active vit dans la pile ; son détail chargé reste local.
   useEffect(() => {
-    if (following || expandedId === null) {
+    if (expandedId === null) {
       // Fermer coupe la réponse en vol : elle n'aura plus de ligne où aller.
       pendingRowIdRef.current = null;
       setExpanded({ id: null, data: null, loading: false });
@@ -393,7 +414,6 @@ export function DoclistBody(
     })();
   }, [
     expandedId,
-    following,
     // Pas `pageRows` : c'est un `.slice` neuf à chaque render, et
     // `setExpanded(null)` relancerait l'effet en boucle. `rows` change
     // au rafraîchissement, c'est le signal qui nous concerne.
@@ -439,7 +459,12 @@ export function DoclistBody(
         label: t("document.row.open_follow", { label }),
         clickAction: "detail",
         selected: item ? context?.isSelected(item) ?? false : undefined,
-        onActivate: () => onInvoiceSelected?.(invoice),
+        onActivate: () =>
+          invoiceSelection?.select(invoice, () => {
+            if (!mountedRef.current) return;
+            if (isInspectable) list.setExpandedId(rowId);
+            else if (item) void context?.toggle(item);
+          }),
       };
     }
     if (!item && !isInspectable) return undefined;
@@ -463,13 +488,17 @@ export function DoclistBody(
       detailLabel: label,
       controls: isInspectable ? doclistDetailPanelId(rowId) : undefined,
       onActivate: () => {
+        cancelFollow?.();
         if (!item) return;
         if (isInspectable) return context?.toggleReversible(item);
         void context?.toggle(item);
       },
       doublePolicy: "local",
       onDoubleActivate: isInspectable
-        ? () => list.setExpandedId(expandedId === rowId ? null : rowId)
+        ? () => {
+          cancelFollow?.();
+          list.setExpandedId(expandedId === rowId ? null : rowId);
+        }
         : undefined,
     };
   }
@@ -623,7 +652,7 @@ export function DoclistBody(
     }
   }
 
-  const inspecting = !following && expandedId !== null;
+  const inspecting = expandedId !== null;
   const inlineDetail = inspecting
     ? (
       <div id={doclistDetailPanelId(expandedId)}>
@@ -634,7 +663,10 @@ export function DoclistBody(
           fixture={fixture}
           layout={layout}
           embedded
-          onClose={() => list.setExpandedId(null)}
+          onClose={() => {
+            cancelFollow?.();
+            list.setExpandedId(null);
+          }}
           onAction={handleDetailAction}
           onJump={onJump}
           onAsk={onAsk}
@@ -651,7 +683,10 @@ export function DoclistBody(
       {layout === "mobile" && list.searchOpen && (
         <SearchRow
           value={list.filter}
-          onInput={list.setFilter}
+          onInput={(filter) => {
+            cancelFollow?.();
+            list.setFilter(filter);
+          }}
           onClose={() => list.setSearchOpen(false)}
         />
       )}
@@ -662,7 +697,10 @@ export function DoclistBody(
           counts={list.chipCounts}
           total={rows.length}
           pill={layout === "mobile"}
-          onFilterChange={list.setChipFilter}
+          onFilterChange={(column, value) => {
+            cancelFollow?.();
+            list.setChipFilter(column, value);
+          }}
         />
       )}
       {stale && (
@@ -694,11 +732,14 @@ export function DoclistBody(
             columns={list.tableColumns}
             rows={list.pageRows}
             rowId={(row, index) => resolveRowId(row, rowAction, String(index))}
-            selectedId={following ? null : expandedId}
+            selectedId={expandedId}
             struckId={stale?.subject ?? null}
             sortKey={list.sortKey}
             sortDir={list.sortDir}
-            onSort={list.handleSort}
+            onSort={(key) => {
+              cancelFollow?.();
+              list.handleSort(key);
+            }}
             interactionTarget={rowInteractionTarget}
             selection={selection}
             layout={layout}
@@ -730,7 +771,10 @@ export function DoclistBody(
               <ToolButton
                 disabled={list.page === 0}
                 aria-label={t("common.pagination.prev")}
-                onClick={() => list.setPage(list.page - 1)}
+                onClick={() => {
+                  cancelFollow?.();
+                  list.setPage(list.page - 1);
+                }}
               >
                 ‹
               </ToolButton>
@@ -740,7 +784,10 @@ export function DoclistBody(
               <ToolButton
                 disabled={list.page >= list.totalPages - 1}
                 aria-label={t("common.pagination.next")}
-                onClick={() => list.setPage(list.page + 1)}
+                onClick={() => {
+                  cancelFollow?.();
+                  list.setPage(list.page + 1);
+                }}
               >
                 ›
               </ToolButton>

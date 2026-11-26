@@ -1,11 +1,8 @@
 import {
-  type composeSnippetBoard,
-  emitSnippetBoardEvent,
-} from "@mcpview/compose/code-mode/board";
-import {
   INVOICE_FOLLOW_PORTS,
   type InvoiceDocumentRef,
   invoiceDocumentRef,
+  type InvoiceFocusReceiver,
   type ViewerInteractions,
 } from "../shared/document-follow.ts";
 
@@ -19,66 +16,140 @@ export function invoiceViewPorts(uri: string) {
 
 /** Bind the selected invoice routes to this board's mounted viewer instances. */
 export function createInvoicePanelInteractions(
-  board: ReturnType<typeof composeSnippetBoard>,
+  board: {
+    children: readonly { slot: number; componentId?: string }[];
+    sync: readonly {
+      from: number;
+      to: number | "*";
+      event: string;
+      action: string;
+    }[];
+  },
   signal: AbortSignal,
+  emit: (
+    id: string,
+    event: string,
+    data: InvoiceDocumentRef,
+    deliver: (id: string, action: string, data: unknown) => void,
+  ) => void,
 ) {
-  type Receive = (ref: InvoiceDocumentRef) => void;
-  const listeners = new Map<string, Receive>();
-  const pending = new Map<string, InvoiceDocumentRef>();
+  type Target = {
+    mounted?: boolean;
+    receive?: InvoiceFocusReceiver | null;
+  };
+  type Selection = {
+    targets: Set<string>;
+    ref: InvoiceDocumentRef;
+    fallback: () => void;
+    handled: boolean;
+  };
+  const targets = new Map<string, Target>();
+  const pending = new Map<string, Selection>();
+  const listeners = new Set<() => void>();
   signal.addEventListener("abort", () => {
     listeners.clear();
     pending.clear();
+    targets.clear();
   }, { once: true });
 
-  function deliver(id: string, action: string, data: unknown) {
-    if (
-      signal.aborted || action !== target.action || !data ||
-      typeof data !== "object"
-    ) return;
-    const ref = invoiceDocumentRef(
-      "doctype" in data ? data.doctype : undefined,
-      "name" in data ? data.name : undefined,
-    );
-    if (!ref) return;
-    const receive = listeners.get(id);
-    if (receive) receive(ref);
-    // A user can select an invoice while the adjacent viewer is still mounting.
-    else pending.set(id, ref);
+  function targetState(id: string) {
+    const state = targets.get(id);
+    if (state?.mounted === false || state?.receive === null) return false;
+    return state?.mounted ? state.receive : undefined;
   }
 
-  return (slot: number, id: string): ViewerInteractions | undefined => {
-    if (
-      board.sync.some((rule) =>
+  function receive(id: string, ref: InvoiceDocumentRef) {
+    const receiver = targetState(id);
+    if (!receiver) return false;
+    if (receiver(ref)) return true;
+    setTarget(id, { receive: null });
+    return false;
+  }
+
+  function setTarget(id: string, update: Target) {
+    if (signal.aborted) return;
+    const wasAvailable = targetState(id) !== false;
+    targets.set(id, { ...targets.get(id), ...update });
+    const state = targetState(id);
+    if (wasAvailable !== (state !== false)) {
+      for (const listener of listeners) listener();
+    }
+    if (state === undefined) return;
+    for (const [sourceId, selection] of pending) {
+      if (!selection.targets.delete(id)) continue;
+      selection.handled = receive(id, selection.ref) || selection.handled;
+      if (selection.targets.size === 0) {
+        pending.delete(sourceId);
+        if (!selection.handled) selection.fallback();
+      }
+    }
+  }
+
+  return {
+    setMounted(id: string, mounted: boolean) {
+      setTarget(id, { mounted });
+    },
+    forPanel(slot: number, id: string): ViewerInteractions | undefined {
+      const routes = board.sync.filter((rule) =>
         rule.from === slot && rule.event === source.event
-      )
-    ) {
-      return {
-        onInvoiceSelected(ref) {
-          if (!signal.aborted) {
-            emitSnippetBoardEvent(board, id, source.event, ref, deliver);
-          }
-        },
-      };
-    }
-    if (
-      board.sync.some((rule) =>
-        rule.to === slot && rule.action === target.action
-      )
-    ) {
-      return {
-        subscribeInvoiceFocus(receive) {
-          if (signal.aborted) return () => {};
-          listeners.set(id, receive);
-          const ref = pending.get(id);
-          if (ref) {
-            pending.delete(id);
-            receive(ref);
-          }
-          return () => {
-            if (listeners.get(id) === receive) listeners.delete(id);
-          };
-        },
-      };
-    }
+      );
+      if (routes.length) {
+        const routeTargets = board.children.filter((child) =>
+          routes.some((rule) => rule.to === child.slot)
+        ).flatMap((child) => child.componentId ? [child.componentId] : []);
+        return {
+          invoiceSelection: {
+            canFollow: () =>
+              !signal.aborted &&
+              routeTargets.some((id) => targetState(id) !== false),
+            subscribe(listener) {
+              listeners.add(listener);
+              return () => listeners.delete(listener);
+            },
+            cancelPending() {
+              pending.delete(id);
+            },
+            select(ref, fallback) {
+              if (signal.aborted) return;
+              pending.delete(id);
+              const selection: Selection = {
+                targets: new Set(),
+                ref,
+                fallback,
+                handled: false,
+              };
+              emit(
+                id,
+                source.event,
+                ref,
+                (to, action, data) => {
+                  if (
+                    action !== target.action || !data ||
+                    typeof data !== "object"
+                  ) return;
+                  const requested = invoiceDocumentRef(
+                    "doctype" in data ? data.doctype : undefined,
+                    "name" in data ? data.name : undefined,
+                  );
+                  if (!requested) return;
+                  if (targetState(to) === undefined) selection.targets.add(to);
+                  else {selection.handled = receive(to, requested) ||
+                      selection.handled;}
+                },
+              );
+              if (selection.targets.size) pending.set(id, selection);
+              else if (!selection.handled) fallback();
+            },
+          },
+        };
+      }
+      if (
+        board.sync.some((rule) =>
+          rule.to === slot && rule.action === target.action
+        )
+      ) {
+        return { setInvoiceFocus: (receive) => setTarget(id, { receive }) };
+      }
+    },
   };
 }

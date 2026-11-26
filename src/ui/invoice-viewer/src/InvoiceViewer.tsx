@@ -167,8 +167,8 @@ interface InvoiceContentProps {
 
 export function InvoiceViewer() {
   const app = useViewerApp(standaloneApp);
-  const subscribeInvoiceFocus = useContext(ViewerInteractionsContext)
-    ?.subscribeInvoiceFocus;
+  const setInvoiceFocus = useContext(ViewerInteractionsContext)
+    ?.setInvoiceFocus;
   const t = useT();
   const fixture = isFixtureMode();
   const initialEnvelope = fixture
@@ -203,6 +203,7 @@ export function InvoiceViewer() {
     null,
   );
   const envelopeRef = useRef<InvoiceDocumentEnvelope | null>(initialEnvelope);
+  const followIdentityRef = useRef<InvoiceDocumentRef | null>(null);
   const actionScope = useRef(
     initialEnvelope ? invoiceActionScope(null, initialEnvelope) : null,
   );
@@ -250,6 +251,7 @@ export function InvoiceViewer() {
     result: ToolResultPayload,
     expected?: InvoiceDocumentRef,
   ): boolean {
+    if (!expected) followIdentityRef.current = null;
     if (result.isError) {
       const text = extractToolResultText(result);
       setError(text ?? t("invoice.error.tool_error"));
@@ -268,6 +270,12 @@ export function InvoiceViewer() {
       ) {
         throw new Error("Missing explicit document identity");
       }
+      const identity = invoiceDocumentRef(
+        parsedEnvelope.doctype,
+        parsedEnvelope.name,
+      );
+      followIdentityRef.current =
+        identity && matchesInvoiceDocument(parsed, identity) ? identity : null;
       availableToolsRef.current = parsedEnvelope.availableTools;
       const refreshRequest = expected
         ? { toolName: SALES_INVOICE_GET, arguments: { name: expected.name } }
@@ -590,69 +598,81 @@ export function InvoiceViewer() {
         setFollowing(false);
       }
       invalidateRefresh();
-      consumeToolResult(result);
+      if (!consumeToolResult(result)) setInvoiceFocus?.(null);
     };
     app.ontoolinputpartial = () => {
       if (!envelopeRef.current) setLoading(true);
     };
-    app.connect().then(() => bindHostContext(app)).catch(() =>
-      setConnectFailed(true)
-    );
+    app.connect().then(() => bindHostContext(app)).catch(() => {
+      setInvoiceFocus?.(null);
+      setConnectFailed(true);
+    });
   }, [fixture]);
 
-  useEffect(() => {
-    if (fixture || !subscribeInvoiceFocus) return;
-    const unsubscribe = subscribeInvoiceFocus((requested) => {
-      const target = invoiceDocumentRef(requested.doctype, requested.name);
-      const current = envelopeRef.current;
-      if (
-        !target || current?.doctype !== target.doctype ||
-        !app.getHostCapabilities()?.serverTools ||
-        !hasExplicitAvailableTool(availableToolsRef.current, SALES_INVOICE_GET)
-      ) return;
-      const previous = followReadRef.current;
-      if (previous?.name === target.name) return;
-      previous?.request.abort();
-      followReadRef.current = null;
-      if (current.name === target.name) {
-        if (previous) setFollowing(false);
-        confirm.dismiss();
-        setFocusRevision((revision) => revision + 1);
-        return;
-      }
+  function canReceiveInvoiceFocus() {
+    return !fixture && !connectFailed && Boolean(
+      followIdentityRef.current &&
+        app.getHostCapabilities()?.serverTools &&
+        hasExplicitAvailableTool(availableToolsRef.current, SALES_INVOICE_GET),
+    );
+  }
 
-      const request = new AbortController();
-      followReadRef.current = { name: target.name, request };
-      invalidateRefresh();
+  function receiveInvoiceFocus(requested: InvoiceDocumentRef): boolean {
+    const target = invoiceDocumentRef(requested.doctype, requested.name);
+    const current = followIdentityRef.current;
+    if (!target || !current || !canReceiveInvoiceFocus()) return false;
+    const previous = followReadRef.current;
+    if (previous?.name === target.name) return true;
+    previous?.request.abort();
+    followReadRef.current = null;
+    if (current.name === target.name) {
+      if (previous) setFollowing(false);
       confirm.dismiss();
-      setActionMessage(null);
-      setActionIsError(false);
-      setFollowing(true);
-      void (async () => {
-        try {
-          const result = await app.callServerTool(
-            { name: SALES_INVOICE_GET, arguments: { name: target.name } },
-            { timeout: TOOL_CALL_TIMEOUT_MS, signal: request.signal },
-          );
-          if (!request.signal.aborted) consumeToolResult(result, target);
-        } catch (cause) {
-          if (!request.signal.aborted) {
-            setError(normalizeUiRefreshFailureMessage(cause));
-          }
-        } finally {
-          if (!request.signal.aborted) {
-            followReadRef.current = null;
-            setFollowing(false);
-          }
+      setFocusRevision((revision) => revision + 1);
+      return true;
+    }
+
+    const request = new AbortController();
+    followReadRef.current = { name: target.name, request };
+    invalidateRefresh();
+    confirm.dismiss();
+    setActionMessage(null);
+    setActionIsError(false);
+    setFollowing(true);
+    void (async () => {
+      try {
+        const result = await app.callServerTool(
+          { name: SALES_INVOICE_GET, arguments: { name: target.name } },
+          { timeout: TOOL_CALL_TIMEOUT_MS, signal: request.signal },
+        );
+        if (!request.signal.aborted) consumeToolResult(result, target);
+      } catch (cause) {
+        if (!request.signal.aborted) {
+          setError(normalizeUiRefreshFailureMessage(cause));
         }
-      })();
-    });
+      } finally {
+        if (!request.signal.aborted) {
+          followReadRef.current = null;
+          setFollowing(false);
+        }
+      }
+    })();
+    return true;
+  }
+
+  useLayoutEffect(() => {
+    if (canReceiveInvoiceFocus()) setInvoiceFocus?.(receiveInvoiceFocus);
+    else if (fixture || connectFailed || !loading) setInvoiceFocus?.(null);
+  });
+
+  useLayoutEffect(() => {
+    if (!setInvoiceFocus) return;
     return () => {
-      unsubscribe();
+      setInvoiceFocus(null);
       followReadRef.current?.request.abort();
       followReadRef.current = null;
     };
-  }, [app, fixture, subscribeInvoiceFocus, t]);
+  }, [setInvoiceFocus]);
 
   useEffect(() => {
     if (fixture) return;

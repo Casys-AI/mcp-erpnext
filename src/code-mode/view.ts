@@ -9,7 +9,7 @@ import {
 } from "../ui/viewer-resource-paths.ts";
 import { UI_VIEWERS, withViewerResourceMeta } from "../ui/viewers.ts";
 import {
-  CODE_MODE_COMPATIBILITY_URI,
+  CODE_MODE_COMPATIBILITY_URIS,
   CODE_MODE_RESOURCE_URI,
 } from "./resource-uri.ts";
 
@@ -40,7 +40,9 @@ export function registerCodeModeView(
     );
   };
   register(CODE_MODE_RESOURCE_URI, "ERPNext");
-  register(CODE_MODE_COMPATIBILITY_URI, "ERPNext (compatibility)");
+  for (const uri of CODE_MODE_COMPATIBILITY_URIS) {
+    register(uri, "ERPNext (compatibility)");
+  }
 
   const sessionResources = BUY_VIEW_APP_MANIFEST.resources;
   const sessions = new Set<string>(

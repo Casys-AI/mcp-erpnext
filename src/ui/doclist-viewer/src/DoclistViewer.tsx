@@ -478,7 +478,7 @@ function DoclistContent({
           context={context}
           contextView={rootTitle}
           contextKey={rootKey}
-          onInvoiceSelected={interactions?.onInvoiceSelected}
+          invoiceSelection={interactions?.invoiceSelection}
         />
       </LevelBody>
       <ViewerFooter layout={layout} />

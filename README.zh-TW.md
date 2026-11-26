@@ -19,6 +19,16 @@ Code、VS Code Copilot 或自訂代理）。
 > 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。詳見
 > [mcpview.dev](https://mcpview.dev)。
 
+> **試用 Code Mode 測試版。** 下方快速入門使用 npm 預設的 `@latest`
+> 標籤安裝穩定版。若要試用測試版，請在 MCP 主機設定中將 `"command"` 設為
+> `"npx"`，並將 `"args"` 設為 `["-y", "@casys/mcp-erpnext@next"]`。保留現有的
+> ERPNext 連線設定。可執行 `npm view @casys/mcp-erpnext dist-tags`
+> 查詢已發布的版本。
+>
+> 測試版只向 LLM 提供一個工具 `execute`。npm 和 JSR 套件均附有 ERPNext Code Mode
+> 技能，路徑為 `skills/erpnext-code-mode/SKILL.md`。在主機安裝技能後，LLM
+> 即可依指引查找可用操作、開啟發票清單與明細。
+
 ## 截圖
 
 在 MCP 主機中渲染的互動式檢視器，完全由工具結果驅動。

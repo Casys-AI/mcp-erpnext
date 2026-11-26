@@ -19,6 +19,17 @@ Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 > server framework (concurrency, auth, MCP Apps, observability) that powers this
 > project. See [mcpview.dev](https://mcpview.dev).
 
+> **Try the Code Mode beta.** The quick start below uses npm’s default `@latest`
+> tag for the stable release. To opt in to the beta, set `"command"` to `"npx"`
+> and `"args"` to `["-y", "@casys/mcp-erpnext@next"]` in your MCP host
+> configuration. Keep your existing ERPNext connection settings. Run
+> `npm view @casys/mcp-erpnext dist-tags` to see the published versions.
+>
+> The beta exposes one tool to the LLM, `execute`. Both npm and JSR include the
+> ERPNext Code Mode skill at `skills/erpnext-code-mode/SKILL.md`. Install the
+> skill in your host to teach the LLM how to discover operations and open views
+> such as the invoice list and invoice details.
+
 ## Screenshots
 
 Interactive viewers rendered inside an MCP host, driven entirely by tool

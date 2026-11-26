@@ -19,23 +19,15 @@ Code、VS Code Copilot 或自訂代理）。
 > 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。詳見
 > [mcpview.dev](https://mcpview.dev)。
 
-## Code Mode 測試版（4.0.0-beta.1）
-
-安裝測試版後，stdio 和 HTTP 都會直接使用 Code Mode，啟動指令與 ERPNext
-連線設定沿用原有配置。3.5.0 穩定版和下方快速入門範例仍使用原有工具目錄。
-
-測試版只向 LLM 提供 `execute`。JavaScript 可查閱 `erp.catalog`、呼叫可用的
-ERPNext 操作， 並回傳原始結果或計算值。在支援 MCP Apps
-的主機上，回傳發票清單的原始結果會顯示清單，
-回傳指定發票則會顯示明細。檢視器的互動操作會沿用已設定的篩選條件與 ERP
-權限。寫入前，伺服器會列出操作及參數，交由使用者確認。 兩種發行套件均附有可供
-Agent Skills 主機安裝的技能。
-
-工作區可直接顯示八種操作結果。第九種 Buy Evidence
-檢視器需要來自封存系統且已通過驗證的工作階段。 ERPNext
-的擷取操作提供原始證據，封存工作階段須由上游系統產生。
-
-[ERPNext Code Mode 技能與範例](skills/erpnext-code-mode/SKILL.md)
+> **試用 Code Mode 測試版。** 下方快速入門使用 npm 預設的 `@latest`
+> 標籤安裝穩定版。若要試用測試版，請在 MCP 主機設定中將 `"command"` 設為
+> `"npx"`，並將 `"args"` 設為 `["-y", "@casys/mcp-erpnext@next"]`。保留現有的
+> ERPNext 連線設定。可執行 `npm view @casys/mcp-erpnext dist-tags`
+> 查詢已發布的版本。
+>
+> 測試版只向 LLM 提供一個工具 `execute`。npm 和 JSR 套件均附有
+> [ERPNext Code Mode 技能](skills/erpnext-code-mode/SKILL.md)。在主機安裝技能後，LLM
+> 即可依指引查找可用操作、開啟發票清單與明細。
 
 ## 截圖
 

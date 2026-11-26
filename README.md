@@ -19,34 +19,16 @@ Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 > server framework (concurrency, auth, MCP Apps, observability) that powers this
 > project. See [mcpview.dev](https://mcpview.dev).
 
-## Code Mode beta (4.0.0-beta.1)
-
-Installing the beta selects Code Mode for both stdio and HTTP. Use the packaged
-`mcp-erpnext` command with your existing connection settings. The 3.5.0 stable
-release and the quick-start examples below use the classic tool catalogue.
-
-The beta exposes one tool to the LLM, `execute`. Its JavaScript can inspect
-`erp.catalog`, call available ERPNext operations and return a result. In an MCP
-Apps host, returning an original ERP result opens its declared interactive view.
-For example, `erpnext_sales_invoice_list` opens the invoice list and
-`erpnext_sales_invoice_get` opens an invoice. Returning a calculated value
-produces ordinary tool output. View callbacks follow the configured operation
-filters and ERP permissions. Before a write, the server shows the operation and
-its arguments for the user to approve. The skill is included in both
-distributions and can be installed in hosts that load Agent Skills.
-
-The shell reuses eight direct-result views. Buy Evidence accepts a verified
-recorded session from its archive. The ERPNext capture operation supplies the
-source evidence for that workflow. It cannot open an archived session by itself.
-
-To run a locally packed beta, point the host at the installed binary:
-
-```sh
-npm install --prefix ./erpnext-beta ./casys-mcp-erpnext-4.0.0-beta.1.tgz
-./erpnext-beta/node_modules/.bin/mcp-erpnext
-```
-
-[ERPNext Code Mode skill and examples](skills/erpnext-code-mode/SKILL.md)
+> **Try the Code Mode beta.** The quick start below uses npm’s default `@latest`
+> tag for the stable release. To opt in to the beta, set `"command"` to `"npx"`
+> and `"args"` to `["-y", "@casys/mcp-erpnext@next"]` in your MCP host
+> configuration. Keep your existing ERPNext connection settings. Run
+> `npm view @casys/mcp-erpnext dist-tags` to see the published versions.
+>
+> The beta exposes one tool to the LLM, `execute`. Both npm and JSR include the
+> [ERPNext Code Mode skill](skills/erpnext-code-mode/SKILL.md). Install the
+> skill in your host to teach the LLM how to discover operations and open views
+> such as the invoice list and invoice details.
 
 ## Screenshots
 

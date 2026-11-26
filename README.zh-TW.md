@@ -19,6 +19,16 @@ Code、VS Code Copilot 或自訂代理）。
 > 這是驅動本專案的 MCP 伺服器框架（並行處理、驗證、MCP Apps、可觀測性）。詳見
 > [mcpview.dev](https://mcpview.dev)。
 
+> **試用 Code Mode 測試版。** 下方快速入門使用 npm 預設的 `@latest`
+> 標籤安裝穩定版。若要試用測試版，請在 MCP 主機設定中將 `"command"` 設為
+> `"npx"`，並將 `"args"` 設為 `["-y", "@casys/mcp-erpnext@next"]`。保留現有的
+> ERPNext 連線設定。可執行 `npm view @casys/mcp-erpnext dist-tags`
+> 查詢已發布的版本。
+>
+> 測試版的 `execute` 工具說明如何透過 `erp.catalog` 查找可用操作。隨附的 ERPNext
+> Code Mode 技能可選用，並提供開啟發票清單與明細等互動式檢視器的範例。
+> 請參閱[安裝方式](#安裝-code-mode-技能)。
+
 ## 截圖
 
 在 MCP 主機中渲染的互動式檢視器，完全由工具結果驅動。
@@ -158,6 +168,30 @@ Code、VS Code Copilot 或自訂代理）。
 若需要多個用戶端共用一個常駐伺服器，而非每個用戶端各自啟動一個行程：
 [如何執行 HTTP 伺服器](docs/http-deployment.md)。 請注意，3.0.0 對 2026 年前的
 HTTP 用戶端屬於破壞性變更。
+
+### 安裝 Code Mode 技能
+
+測試版套件包含選用技能，路徑為 `skills/erpnext-code-mode/SKILL.md`。
+
+**ChatGPT 網頁版。** 在「Plugins」選擇「Add custom MCP
+server」，輸入您自己的測試版伺服器 HTTPS `/mcp` 網址，然後建立並安裝外掛程式。
+請參閱
+[ChatGPT MCP 連線設定](https://developers.openai.com/api/docs/guides/custom-mcp-server)。
+
+在「Skills」分頁選擇「Create → Upload from your computer」，匯入套件中的
+`SKILL.md` 或
+[GitHub 預發行版本](https://github.com/Casys-AI/mcp-erpnext/releases)中的
+`erpnext-code-mode-skill.zip`。請參閱
+[ChatGPT 技能說明](https://help.openai.com/en/articles/20001066-skills-in-chatgpt)。
+
+**支援 Agent Skills 的本機用戶端。** 在專案目錄中使用 Vercel Skills CLI。以下以
+Codex 為例。若使用其他受支援的用戶端，請將 `-a` 設為該用戶端的識別名稱。請參閱
+[Skills CLI 指令說明](https://github.com/vercel-labs/skills/blob/main/docs/commands.md)。
+
+```sh
+npm install -D @casys/mcp-erpnext@next
+npx --yes skills add ./node_modules/@casys/mcp-erpnext/skills/erpnext-code-mode -a codex -y
+```
 
 ### 類別篩選
 

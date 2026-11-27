@@ -81,6 +81,8 @@ export async function viewerTestDenoConfig(): Promise<unknown> {
         pathToFileURL(join(VIEWER_ROOT, "svg-url-shim.ts")).href,
     },
     scopes: {
+      // The root server uses JSR. Viewer imports use the npm builds from the UI lockfile.
+      [`${pathToFileURL(join(VIEWER_ROOT, "..")).href}/`]: imports,
       [`${pathToFileURL(SHARED_ROOT).href}/`]: {
         "./casys-logo.svg?url": pathToFileURL(
           join(VIEWER_ROOT, "svg-url-shim.ts"),

@@ -6,6 +6,7 @@
     "age": "PT24H",
     "exclude": [
       "jsr:@mcpview/server",
+      "jsr:@mcpview/compose",
       "jsr:@mcpview/contracts"
     ]
   },
@@ -38,7 +39,6 @@
       "mod.ts",
       "server.ts",
       "src/**/*.ts",
-      "src/vendor/mcpview/LICENSE",
       "src/ui/dist/",
       "README.md",
       "LICENSE",
@@ -73,7 +73,6 @@
   "fmt": {
     "exclude": [
       ".grok/",
-      "src/vendor/mcpview/",
       "docs/design/doc-viewer/",
       "src/ui/node_modules/"
     ]
@@ -88,10 +87,8 @@
     ]
   },
   "imports": {
-    "@mcpview/server": "jsr:@mcpview/server@^0.30.2",
-    "@mcpview/server/snippets": "./src/vendor/mcpview/server/snippets.ts",
-    "@mcpview/compose/code-mode/layout": "./src/vendor/mcpview/compose/src/code-mode/layout.ts",
-    "@mcpview/compose/code-mode/layout-runs": "./src/vendor/mcpview/compose/src/code-mode/layout-runs.ts",
+    "@mcpview/server": "jsr:@mcpview/server@0.30.3",
+    "@mcpview/compose": "jsr:@mcpview/compose@0.13.1",
     "@mcpview/contracts": "jsr:@mcpview/contracts@^0.2.1",
     "quickjs-emscripten-core": "npm:quickjs-emscripten-core@0.32.0",
     "@jitl/quickjs-singlefile-browser-release-sync": "npm:@jitl/quickjs-singlefile-browser-release-sync@0.32.0",

@@ -4,7 +4,7 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
-## [4.0.0-beta.5]
+## [4.0.0-beta.5] - 2026-11-27
 
 - Update a saved dashboard's panel positions and widths through `execute`.
   Replaying the snippet restores the arrangement with current ERP data. Context

@@ -89,14 +89,12 @@ npm install --no-fund --no-audit
 # end-to-end validation.
 npm install --no-fund --no-audit \
   "${MCP_SERVER_OVERRIDE:-$(npm_spec @mcpview/server)}" \
+  "$(npm_spec @mcpview/compose)" \
   "${MCP_CONTRACTS_OVERRIDE:-$(npm_spec @mcpview/contracts)}" \
   "$(npm_spec quickjs-emscripten-core)" \
   "$(npm_spec @jitl/quickjs-singlefile-browser-release-sync)"
 ./node_modules/.bin/esbuild server.ts \
   --bundle \
-  --alias:@mcpview/server/snippets=./src/vendor/mcpview/server/snippets.ts \
-  --alias:@mcpview/compose/code-mode/layout=./src/vendor/mcpview/compose/src/code-mode/layout.ts \
-  --alias:@mcpview/compose/code-mode/layout-runs=./src/vendor/mcpview/compose/src/code-mode/layout-runs.ts \
   --platform=node \
   --target=node20 \
   --format=esm \

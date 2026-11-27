@@ -66,11 +66,17 @@ async function runInsideHost() {
     }
   };
   const contextUpdates = [];
+  const teardownId = "teardown-smoke";
+  let refuseContext = false;
+  let rejectedClear = false;
+  let teardownResponse;
   const ready = new Promise((resolve) => {
     globalThis.addEventListener("message", ({ source, origin, data }) => {
       if (source !== frame.contentWindow || origin !== location.origin) return;
       const { id, method, params } = data;
-      if (method === "ui/initialize") {
+      if (id === teardownId && method === undefined) {
+        teardownResponse = data;
+      } else if (method === "ui/initialize") {
         send({
           id,
           result: {
@@ -95,7 +101,14 @@ async function runInsideHost() {
         });
       } else if (method === "ui/update-model-context") {
         contextUpdates.push(params);
-        send({ id, result: {} });
+        if (refuseContext) {
+          rejectedClear = params.structuredContent !== undefined &&
+            Object.keys(params.structuredContent).length === 0 &&
+            !params.content?.length;
+          send({ id, error: { code: -32603, message: "Context unavailable" } });
+        } else {
+          send({ id, result: {} });
+        }
       } else if (id !== undefined) {
         send({ id, result: {} });
       }
@@ -103,6 +116,10 @@ async function runInsideHost() {
   });
   frame.src = "/widget";
   await ready;
+  deliver(snippetEvent("list", [snippet]));
+  await waitFor(() =>
+    find(".mcp-view-snippet-library li")?.textContent.includes("Monday")
+  );
   deliver({ ...first, _meta: { ...first._meta, ...reference } });
   await waitFor(() =>
     frame.contentDocument.body.innerText.includes("SINV-SOLO")
@@ -188,10 +205,17 @@ async function runInsideHost() {
   if (!JSON.stringify(contextUpdates.at(-1) ?? {}).includes("SINV-SOLO")) {
     throw new Error("The update receipt removed the joined invoice");
   }
-  deliver(snippetEvent("list", [snippet]));
-  await waitFor(() =>
-    find(".mcp-view-snippet-library li")?.textContent.includes("Monday")
-  );
+  refuseContext = true;
+  send({ id: teardownId, method: "ui/resource-teardown", params: {} });
+  await waitFor(() => teardownResponse !== undefined);
+  if (
+    !rejectedClear || teardownResponse.error ||
+    JSON.stringify(teardownResponse.result) !== "{}"
+  ) {
+    throw new Error(
+      "Teardown must attempt the final clear and acknowledge closure after host refusal",
+    );
+  }
 }
 
 test("saveable ERP views stay free of snippet controls, text commands show their own views", async (t) => {

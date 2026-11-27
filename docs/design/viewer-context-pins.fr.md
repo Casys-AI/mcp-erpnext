@@ -68,7 +68,7 @@ d’une lecture, l’acquittement d’une épingle et une réponse du modèle à
 question sont vérifiés séparément.
 [Routage des factures](../../src/ui/code-mode/invoice-panels.ts) ·
 [Routage des périodes](../../src/ui/code-mode/kpi-period-panels.tsx) ·
-[Contexte des panneaux](../../src/ui/code-mode/panel-hosts.ts)
+[Branchement du contexte Compose dans ERPNext](../../src/ui/code-mode/main.tsx)
 
 ## Parcours de vérification
 

@@ -1,7 +1,7 @@
 # MCPView source used by the Code Mode beta
 
 The beta uses the snippet catalog and layout modules from MCPView commit
-`b0226b4452cc137fe03dc5950ef70514143c3530`. The TypeScript files here are
+`7e356cb9ec4df348e280331e845905a65bd87d2a`. The TypeScript files here are
 copied verbatim from the corresponding paths under `packages/` in MCPView.
 The Compose archive in `src/ui/vendor/` comes from the same revision.
 

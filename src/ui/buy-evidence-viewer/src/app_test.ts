@@ -1,6 +1,6 @@
 import { act } from "preact/test-utils";
 import { App } from "@modelcontextprotocol/ext-apps";
-import { createPanelContexts } from "../../code-mode/panel-hosts.ts";
+import { createPanelContexts } from "@mcpview/compose/code-mode/board";
 import { mountSession } from "./session-view.ts";
 import { mergeHostContext } from "../../shared/host-context.ts";
 import { assert, assertEquals } from "@std/assert";

@@ -1,5 +1,6 @@
 import {
   composeSnippetBoard,
+  createPanelContexts,
   emitSnippetBoardEvent,
   getPanelControlsCss,
   readSnippetPanels,
@@ -18,7 +19,6 @@ import {
 import type { ViewerInteractions } from "../shared/document-follow.ts";
 import { readDeclaredViewSelection } from "@mcpview/contracts";
 import { CODE_MODE_RESOURCE_URI } from "../../code-mode/resource-uri.ts";
-import { createPanelContexts } from "./panel-hosts.ts";
 import { connectBoardLayout } from "./layout-controls.ts";
 import { BOARD_PANEL_WIDTHS } from "../../code-mode/board-layout.ts";
 import { installMcpViewTheme } from "@mcpview/components";
@@ -101,7 +101,10 @@ const sendContext: App["updateModelContext"] = async (value, options) => {
   if (!("isError" in response && response.isError)) contextStatus.hidden = true;
   return response;
 };
-const panelContexts = createPanelContexts(sendContext);
+const panelContexts = createPanelContexts(
+  sendContext,
+  () => t("context.active.error"),
+);
 
 function contextHost(update: App["updateModelContext"]): App {
   return new Proxy(host, {
@@ -391,7 +394,13 @@ host.onteardown = async () => {
   render(null, snippetRoot);
   dispatcher.dispose();
   clearPanels();
-  await panelContexts.clear();
+  try {
+    await panelContexts.clear();
+  } catch {
+    console.warn(
+      "The host could not acknowledge the final context update during teardown.",
+    );
+  }
   return {};
 };
 const ready = host.connect().then(() => bindHostContext(host));

@@ -12,6 +12,7 @@ export async function viewerTestDenoConfig(): Promise<unknown> {
       "@mcpview/view",
       "@mcpview/contracts",
       "@mcpview/components",
+      "@mcpview/compose",
       "preact",
       "@modelcontextprotocol/ext-apps",
     ]
@@ -40,9 +41,11 @@ export async function viewerTestDenoConfig(): Promise<unknown> {
     "https://raw.githubusercontent.com/mcpview/mcpview/50756aaf062794f08bf412cf0762a4aa8988b28d/packages/view-components/src/testing/surface-app-double.ts";
 
   return {
-    // Resolve the UI lockfile's installed component kit, including private tarball builds.
+    // Exercise the same package builds used by the viewers, including local beta archives.
     nodeModulesDir: "auto",
-    links: [join(VIEWER_ROOT, "..", "node_modules", "@mcpview", "components")],
+    links: ["components", "compose"].map((name) =>
+      join(VIEWER_ROOT, "..", "node_modules", "@mcpview", name)
+    ),
     // The @mcpview/* family is released in lockstep, so these exact versions
     // are too fresh for the one-day delay; the exemption mirrors the
     // `jsr:@mcpview/server` one in the root deno.json. Every other dependency
@@ -53,6 +56,8 @@ export async function viewerTestDenoConfig(): Promise<unknown> {
         "npm:@mcpview/view",
         "npm:@mcpview/contracts",
         "npm:@mcpview/components",
+        "npm:@mcpview/compose",
+        "npm:@mcpview/server",
       ],
     },
     unstable: ["sloppy-imports"],

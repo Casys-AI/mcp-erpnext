@@ -1,0 +1,24 @@
+/* Keep the KPI value, its pin and the detail action readable in a narrow
+ * panel. Reserve the caption in the flow so focus and hover never move them. */
+.kpi-number .detail-toggle::after {
+  content: none;
+}
+
+.kpi-number-hint {
+  display: block;
+  visibility: hidden;
+  padding-block-start: 3px;
+  text-align: end;
+  font: 10px/1.25 var(--font-mono);
+  color: var(--color-ink-muted);
+}
+
+.kpi-number:has(.detail-toggle:focus-visible) > .kpi-number-hint {
+  visibility: visible;
+}
+
+@media (hover: hover) {
+  .kpi-number:has(.detail-toggle:hover) > .kpi-number-hint {
+    visibility: visible;
+  }
+}

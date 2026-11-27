@@ -4,6 +4,7 @@
  * Pile de navigation câblée : sauts « › » quand l'hôte relaie les outils,
  * comportement drillDown inchangé sinon.
  */
+import "./number-detail.css";
 import { useViewerApp, ViewerInteractionsContext } from "~/shared/viewer-app";
 import {
   useContext,
@@ -646,6 +647,10 @@ function KpiCard({
     }
   }
 
+  const numberDetailHint = t(
+    numberAction?.kind === "jump" ? "kpi.drilldown.title_detail" : "nav.ask",
+  );
+
   function renderDetailButton(forTrend: boolean) {
     const action = forTrend ? trendAction : numberAction;
     if (!action || (action.kind === "jump" ? !onOpenJump : !onAsk)) return null;
@@ -661,9 +666,11 @@ function KpiCard({
       <DetailToggleButton
         label={data.label}
         actionLabel={label}
-        hint={action.kind === "jump"
-          ? t("interaction.detail.open_hint")
-          : t("nav.ask")}
+        hint={forTrend
+          ? t(
+            action.kind === "jump" ? "interaction.detail.open_hint" : "nav.ask",
+          )
+          : numberDetailHint}
         onToggle={() => openDetail(action)}
         touch={compact}
         hintSide={compact ? "left" : "right"}
@@ -724,35 +731,43 @@ function KpiCard({
         ? "text-[length:var(--text-metric-compact)]"
         : "text-[length:var(--text-metric)]",
     );
+    const detail = renderDetailButton(false);
     return (
-      <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        {local
-          ? (
-            <button
-              type="button"
-              class={cx(
-                numberClass,
-                "cursor-pointer border-0 bg-transparent p-0 text-start focus-visible:outline-2 focus-visible:outline-accent",
-              )}
-              aria-label={t("interaction.detail.open", {
-                label: numberContext.label,
-              })}
-              onClick={(event) => {
-                if (acceptsDetailToggleClick(event.detail)) {
-                  openDetail(
-                    numberAction,
-                  );
-                }
-              }}
-            >
-              {amountText}
-            </button>
-          )
-          : <span class={numberClass}>{amountText}</span>}
-        <span class="inline-flex shrink-0 items-center">
-          {renderDetailButton(false)}
-          {renderPin(numberContext)}
-        </span>
+      <div class="kpi-number">
+        <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          {local
+            ? (
+              <button
+                type="button"
+                class={cx(
+                  numberClass,
+                  "cursor-pointer border-0 bg-transparent p-0 text-start focus-visible:outline-2 focus-visible:outline-accent",
+                )}
+                aria-label={t("interaction.detail.open", {
+                  label: numberContext.label,
+                })}
+                onClick={(event) => {
+                  if (acceptsDetailToggleClick(event.detail)) {
+                    openDetail(
+                      numberAction,
+                    );
+                  }
+                }}
+              >
+                {amountText}
+              </button>
+            )
+            : <span class={numberClass}>{amountText}</span>}
+          <span class="inline-flex shrink-0 items-center">
+            {detail}
+            {renderPin(numberContext)}
+          </span>
+        </div>
+        {detail && (
+          <span aria-hidden="true" class="kpi-number-hint">
+            {numberDetailHint}
+          </span>
+        )}
       </div>
     );
   }

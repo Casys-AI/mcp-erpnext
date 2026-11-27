@@ -9,8 +9,6 @@
 
 export const ur: Record<string, string> = {
   // ── عام ──────────────────────────────────────────────────────────────
-  "code_mode.last_two_months": "گزشتہ 2 ماہ",
-  "code_mode.margin_period": "مارجن کی مدت",
   "common.loading": "لوڈ ہو رہا ہے…",
   "common.refreshing": "ریفریش ہو رہا ہے…",
   "common.refresh": "ریفریش کریں",
@@ -18,6 +16,14 @@ export const ur: Record<string, string> = {
   "code_mode.confirm_change": "ERPNext میں تبدیلی کی تصدیق کریں",
   "code_mode.approve": "منظور کریں",
   "code_mode.waiting": "ERPNext کے جواب کا انتظار ہے…",
+  "code_mode.snippet_updated": "اسنیپٹ اپ ڈیٹ ہو گیا",
+  "code_mode.move_panel": "{name} کو منتقل کریں",
+  "code_mode.layout_pending": "اگلے پیغام کے لیے ترتیب تیار کی جا رہی ہے…",
+  "code_mode.layout_failed": "نئی ترتیب اس گفتگو میں شامل نہیں ہو سکی۔",
+  "code_mode.layout_local":
+    "اس میزبان میں ترتیب کی تبدیلیاں اسی منظر تک محدود ہیں۔",
+  "code_mode.layout_restore_failed":
+    "محفوظ کردہ ترتیب بحال نہیں ہو سکی۔ پہلے سے طے شدہ ترتیب دکھائی جا رہی ہے۔",
   "code_mode.snippet_saved": "اسنیپٹ محفوظ ہو گیا",
   "code_mode.snippet_library": "میرے اسنیپٹس",
   "code_mode.snippet_view": "اسکرپٹ دیکھیں",

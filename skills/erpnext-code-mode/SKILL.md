@@ -84,11 +84,11 @@ list if there is no invoice to open.
 
 To let the user recalculate gross margin for a month in the Sales Order revenue
 series, link the cards as shown below. Clicking a monthly bar updates the margin
-for that month. The two-month control covers a longer period. Double-clicking or
-holding a month adds or removes that month from context, even while the margin
-shows a different month. Drag a rectangle over several bars to add those months
-together. Start the margin at the current month to date and keep any requested
-company or valuation options in the original margin call.
+for that month. Double-clicking or holding a month adds or removes that month
+from context, even while the margin shows a different month. Drag a rectangle
+over several bars to add those months together. Start the margin at the current
+month to date and keep any requested company or valuation options in the
+original margin call.
 
 ```js
 const revenue = await erp.call("erpnext_kpi_revenue", {});
@@ -143,6 +143,25 @@ conversation, when the user refers to a saved procedure, first call `execute`
 with `{"snippets":true}` to find its actual name, description, and parameter
 keys. If several match, ask which one to use. Call the selected snippet with the
 new values. Save only on request.
+
+For a dashboard, the saved program can also remember the panel order and widths
+chosen in Compose. When the user asks to keep an edited layout, read the latest
+`snippetLayout` receipt from the dashboard's current model context. Use its
+exact `runId` and `revision` when its status is `ready`.
+
+- For a first save, include that revision in the normal `save` command.
+- For “update my Monday snippet”, call the same `execute` with
+  `{"update":{"name":"<saved name>","runId":"<receipt runId>","revision":<receipt revision>}}`.
+  If needed, find the saved name with `{"snippets":true}`. Use the dashboard the
+  user edited. Running it again opens a fresh board.
+- If the receipt is pending, wait for it to be ready. If it failed, tell the
+  user the layout has not been saved and that the dashboard offers a retry.
+  Confirm an update only after `execute` returns the update receipt.
+
+Replay the snippet normally in a new chat. It fetches current ERP data, rebuilds
+the links between panels and restores the saved layout. The conversation basket
+belongs to the current chat. Use its acknowledged selections to answer questions
+about records or months the user has attached.
 
 When the user asks to browse their saved programs, call `execute` with
 `{"snippets":true}`. The library supports searching by name or description. When

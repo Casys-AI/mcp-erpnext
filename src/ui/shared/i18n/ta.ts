@@ -9,8 +9,6 @@
 
 export const ta: Record<string, string> = {
   // ── பொது ──────────────────────────────────────────────────────────────
-  "code_mode.last_two_months": "கடந்த 2 மாதங்கள்",
-  "code_mode.margin_period": "லாப விகிதக் காலம்",
   "common.loading": "ஏற்றுகிறது…",
   "common.refreshing": "புதுப்பிக்கிறது…",
   "common.refresh": "புதுப்பி",
@@ -18,6 +16,14 @@ export const ta: Record<string, string> = {
   "code_mode.confirm_change": "ERPNext மாற்றத்தை உறுதிப்படுத்தவும்",
   "code_mode.approve": "ஒப்புதல் அளி",
   "code_mode.waiting": "ERPNext பதிலுக்காகக் காத்திருக்கிறது…",
+  "code_mode.snippet_updated": "துணுக்குப் புதுப்பிக்கப்பட்டது",
+  "code_mode.move_panel": "{name} ஐ நகர்த்தவும்",
+  "code_mode.layout_pending": "அடுத்த செய்திக்கான தளவமைப்பு தயாராகிறது…",
+  "code_mode.layout_failed": "புதிய தளவமைப்பை இந்த உரையாடலில் இணைக்க முடியவில்லை.",
+  "code_mode.layout_local":
+    "இந்தச் செயலியில் தளவமைப்பு மாற்றங்கள் இந்தக் காட்சிக்கு மட்டுமே பொருந்தும்.",
+  "code_mode.layout_restore_failed":
+    "சேமித்த தளவமைப்பை மீட்டெடுக்க முடியவில்லை. இயல்புநிலைத் தளவமைப்பு காட்டப்படுகிறது.",
   "code_mode.snippet_saved": "குறுநிரல் சேமிக்கப்பட்டது",
   "code_mode.snippet_library": "எனது குறுநிரல்கள்",
   "code_mode.snippet_view": "நிரலைக் காண்க",

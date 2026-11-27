@@ -29,7 +29,7 @@ type Metadata = {
 };
 
 export type SnippetEvent =
-  | { kind: "saved"; snippet: Snippet }
+  | { kind: "saved" | "updated"; snippet: Snippet }
   | { kind: "list"; snippets: Snippet[] }
   | { kind: "source"; snippet: SnippetSource };
 
@@ -65,8 +65,8 @@ export function snippetEvent(result: Metadata): SnippetEvent | undefined {
   const event = result._meta?.["io.casys/erpnext-snippet-event"];
   const structured = result.structuredContent;
   const value = isObject(structured) ? structured.value : undefined;
-  if (event === "saved" && isSnippet(value)) {
-    return { kind: "saved", snippet: value };
+  if ((event === "saved" || event === "updated") && isSnippet(value)) {
+    return { kind: event, snippet: value };
   }
   if (event === "list" && Array.isArray(value) && value.every(isSnippet)) {
     return { kind: "list", snippets: value };

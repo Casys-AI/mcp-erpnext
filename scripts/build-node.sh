@@ -94,6 +94,9 @@ npm install --no-fund --no-audit \
   "$(npm_spec @jitl/quickjs-singlefile-browser-release-sync)"
 ./node_modules/.bin/esbuild server.ts \
   --bundle \
+  --alias:@mcpview/server/snippets=./src/vendor/mcpview/server/snippets.ts \
+  --alias:@mcpview/compose/code-mode/layout=./src/vendor/mcpview/compose/src/code-mode/layout.ts \
+  --alias:@mcpview/compose/code-mode/layout-runs=./src/vendor/mcpview/compose/src/code-mode/layout-runs.ts \
   --platform=node \
   --target=node20 \
   --format=esm \

@@ -11,10 +11,14 @@ Deno.test("the beta shares its filtered operation surface with viewers and fails
   });
   const callbacks = new Map<string, ToolHandler>();
   const model: string[] = [];
-  const count = registerCodeModeTools({
-    registerTool: (tool) => model.push(tool.name),
-    registerAppOnlyTool: (tool, handler) => callbacks.set(tool.name, handler),
-  }, client);
+  const count = registerCodeModeTools(
+    {
+      registerTool: (tool) => model.push(tool.name),
+      registerAppOnlyTool: (tool, handler) => callbacks.set(tool.name, handler),
+    },
+    client,
+    { resourceUri: "ui://test", mountableResourceUris: [] },
+  );
 
   assertEquals(model, ["execute"]);
   assert(callbacks.has("erpnext_sales_invoice_get"));
@@ -23,7 +27,14 @@ Deno.test("the beta shares its filtered operation surface with viewers and fails
   assert(callbacks.has("erpnext_method_call"));
   assert(!callbacks.has("erpnext_customer_list"));
   assert(!callbacks.has("erpnext_kpi_revenue"));
-  assertEquals(count, callbacks.size - 1);
+  assert(callbacks.has("erpnext_stage_board_layout"));
+  assert(callbacks.has("erpnext_confirm_write"));
+  assertEquals(count, callbacks.size - 3);
+  assertThrows(
+    () => callbacks.get("erpnext_stage_board_layout")!({}),
+    Error,
+    "MCP Apps host",
+  );
   assertThrows(
     () => callbacks.get("erpnext_sales_invoice_get")!({ name: "TEST" }),
     Error,

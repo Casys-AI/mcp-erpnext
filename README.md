@@ -35,7 +35,10 @@ Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 > Ask “Save this for Monday” after a successful run to see a save confirmation.
 > Ask “Show my snippets” to search saved programs and read their JavaScript. In
 > a new chat on the same connection, ask “Run my Monday invoice list at €3,000”
-> to see updated results.
+> to see updated results. In a Compose dashboard, you can move or widen a panel
+> and ask “Update my Monday snippet”. Reopening the snippet restores your
+> arrangement with fresh ERP data. Months or records you attach to the
+> conversation stay in that chat.
 
 ## Screenshots
 

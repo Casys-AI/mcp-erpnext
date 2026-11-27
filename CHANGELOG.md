@@ -4,6 +4,14 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [4.0.0-beta.5]
+
+- Update a saved dashboard's panel positions and widths through `execute`.
+  Replaying the snippet restores the arrangement with current ERP data. Context
+  selections stay in their conversation.
+- Composed KPI cards use their own labels. Selecting a monthly revenue bar
+  changes the margin for that month.
+
 ## [4.0.0-beta.4] - 2026-11-27
 
 - A Code Mode program can display a sales invoice list and a detail view

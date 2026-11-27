@@ -9,8 +9,6 @@
 
 export const bn: Record<string, string> = {
   // ── সাধারণ ──────────────────────────────────────────────────────────────
-  "code_mode.last_two_months": "শেষ ২ মাস",
-  "code_mode.margin_period": "মুনাফার হারের সময়কাল",
   "common.loading": "লোড হচ্ছে…",
   "common.refreshing": "রিফ্রেশ হচ্ছে…",
   "common.refresh": "রিফ্রেশ করুন",
@@ -18,6 +16,13 @@ export const bn: Record<string, string> = {
   "code_mode.confirm_change": "ERPNext-এ পরিবর্তন নিশ্চিত করুন",
   "code_mode.approve": "অনুমোদন দিন",
   "code_mode.waiting": "ERPNext-এর উত্তরের অপেক্ষায়…",
+  "code_mode.snippet_updated": "স্নিপেট আপডেট হয়েছে",
+  "code_mode.move_panel": "{name} সরান",
+  "code_mode.layout_pending": "পরের বার্তার জন্য বিন্যাস প্রস্তুত হচ্ছে…",
+  "code_mode.layout_failed": "নতুন বিন্যাসটি এই কথোপকথনে যোগ করা যায়নি।",
+  "code_mode.layout_local": "এই হোস্টে বিন্যাসের পরিবর্তন শুধু এই দৃশ্যেই থাকে।",
+  "code_mode.layout_restore_failed":
+    "সংরক্ষিত বিন্যাস পুনরুদ্ধার করা যায়নি। ডিফল্ট বিন্যাস দেখানো হচ্ছে।",
   "code_mode.snippet_saved": "স্নিপেট সংরক্ষিত হয়েছে",
   "code_mode.snippet_library": "আমার স্নিপেট",
   "code_mode.snippet_view": "স্ক্রিপ্ট দেখুন",

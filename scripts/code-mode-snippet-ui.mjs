@@ -65,6 +65,7 @@ async function runInsideHost() {
       throw new Error("An ordinary execution displayed the snippet panel");
     }
   };
+  const contextUpdates = [];
   const ready = new Promise((resolve) => {
     globalThis.addEventListener("message", ({ source, origin, data }) => {
       if (source !== frame.contentWindow || origin !== location.origin) return;
@@ -75,12 +76,26 @@ async function runInsideHost() {
           result: {
             protocolVersion: params.protocolVersion,
             hostInfo: { name: "Smoke", version: "1" },
-            hostCapabilities: { serverTools: {} },
+            hostCapabilities: {
+              serverTools: {},
+              updateModelContext: { structuredContent: {} },
+            },
             hostContext: { locale: "en", theme: "light" },
           },
         });
       } else if (method === "ui/notifications/initialized") {
         resolve();
+      } else if (
+        method === "tools/call" && params.name === "erpnext_stage_board_layout"
+      ) {
+        const { runId, revision } = params.arguments;
+        send({
+          id,
+          result: { content: [], structuredContent: { runId, revision } },
+        });
+      } else if (method === "ui/update-model-context") {
+        contextUpdates.push(params);
+        send({ id, result: {} });
       } else if (id !== undefined) {
         send({ id, result: {} });
       }
@@ -99,6 +114,7 @@ async function runInsideHost() {
       ...reference,
       "io.mcpview/snippet-panels": [first, second].map((result, i) => ({
         id: "p" + i,
+        layoutId: "invoice:" + (i + 1),
         provider: "erp",
         name: "invoice",
         title: "Panel " + i,
@@ -111,12 +127,66 @@ async function runInsideHost() {
     frame.contentDocument.body.innerText.includes("SINV-PAIRED")
   );
   checkBusinessView();
+  const namedPanel = find('section[data-compose-panel][aria-label="Panel 0"]');
+  if (
+    !namedPanel ||
+    !namedPanel.querySelector('button[aria-label="Move Panel 0"]')
+  ) {
+    throw new Error("The viewer and its move handle need accessible names");
+  }
+  if (namedPanel.innerText.includes("Panel 0")) {
+    throw new Error(
+      "The Compose panel repeated its accessible label in the viewer",
+    );
+  }
+  const invoiceTarget = find(
+    ".code-mode-panel [data-visual-item][aria-pressed=false]",
+  );
+  if (!invoiceTarget) throw new Error("Invoice cannot be joined");
+  invoiceTarget.dispatchEvent(
+    new frame.contentWindow.KeyboardEvent("keydown", {
+      key: " ",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await waitFor(() =>
+    JSON.stringify(contextUpdates.at(-1) ?? {}).includes("SINV-SOLO")
+  );
+  await waitFor(() => find("[data-compose-movement-ready]"));
+  const grips = frame.contentDocument.querySelectorAll(
+    "button[data-compose-grip]",
+  );
+  grips[0].click();
+  grips[1].click();
+  await waitFor(() =>
+    contextUpdates.at(-1)?.structuredContent?.snippetLayout?.status === "ready"
+  );
+  if (!JSON.stringify(contextUpdates.at(-1) ?? {}).includes("SINV-SOLO")) {
+    throw new Error("Moving a viewer removed the joined invoice");
+  }
   deliver(snippetEvent("saved", snippet));
   await waitFor(() =>
     find(".erp-snippets-success")?.textContent.includes("Snippet saved")
   );
   if (find(".code-mode-panel") || find(".erp-snippets button")) {
     throw new Error("The save receipt must stand alone");
+  }
+  await waitFor(() => {
+    const last = contextUpdates.at(-1)?.structuredContent;
+    return last && !last.snippetLayout &&
+      JSON.stringify(last).includes("SINV-SOLO");
+  });
+  deliver(snippetEvent("updated", snippet));
+  await waitFor(() =>
+    find(".erp-snippets-success")?.textContent.includes("Snippet updated")
+  );
+  if (find(".code-mode-panel") || find(".erp-snippets button")) {
+    throw new Error("The update receipt must stand alone");
+  }
+  if (!JSON.stringify(contextUpdates.at(-1) ?? {}).includes("SINV-SOLO")) {
+    throw new Error("The update receipt removed the joined invoice");
   }
   deliver(snippetEvent("list", [snippet]));
   await waitFor(() =>

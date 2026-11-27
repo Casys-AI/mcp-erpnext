@@ -8,8 +8,6 @@
 
 export const zhHant: Record<string, string> = {
   // ── 通用 ──────────────────────────────────────────────────────────────
-  "code_mode.last_two_months": "最近兩個月",
-  "code_mode.margin_period": "毛利率期間",
   "common.loading": "載入中…",
   "common.refreshing": "重新整理中…",
   "common.refresh": "重新整理",
@@ -17,6 +15,13 @@ export const zhHant: Record<string, string> = {
   "code_mode.confirm_change": "確認 ERPNext 變更",
   "code_mode.approve": "核准",
   "code_mode.waiting": "正在等待 ERPNext 回應…",
+  "code_mode.snippet_updated": "程式碼片段已更新",
+  "code_mode.move_panel": "移動{name}",
+  "code_mode.layout_pending": "正在準備版面配置，以供下一則訊息使用…",
+  "code_mode.layout_failed": "無法將新版面配置附加至此對話。",
+  "code_mode.layout_local": "在此主程式中，版面變更只會套用到目前檢視。",
+  "code_mode.layout_restore_failed":
+    "無法還原已儲存的版面配置，已顯示預設版面。",
   "code_mode.snippet_saved": "程式片段已儲存",
   "code_mode.snippet_library": "我的程式片段",
   "code_mode.snippet_view": "查看指令碼",

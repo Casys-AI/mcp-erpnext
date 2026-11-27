@@ -24,6 +24,13 @@ Deno.test("only verified snippet events with matching structured content display
   });
   assertEquals(
     snippetEvent({
+      _meta: { "io.casys/erpnext-snippet-event": "updated" },
+      structuredContent,
+    }),
+    { kind: "updated", snippet },
+  );
+  assertEquals(
+    snippetEvent({
       _meta: { "io.casys/erpnext-snippet-event": "list" },
       structuredContent: { value: [] },
     }),

@@ -1,6 +1,7 @@
 import {
   composeSnippetBoard,
   emitSnippetBoardEvent,
+  getPanelControlsCss,
   readSnippetPanels,
   type SnippetPanel as SelectedPanel,
 } from "@mcpview/compose/code-mode/board";
@@ -18,6 +19,8 @@ import type { ViewerInteractions } from "../shared/document-follow.ts";
 import { readDeclaredViewSelection } from "@mcpview/contracts";
 import { CODE_MODE_RESOURCE_URI } from "../../code-mode/resource-uri.ts";
 import { createPanelContexts } from "./panel-hosts.ts";
+import { connectBoardLayout } from "./layout-controls.ts";
+import { BOARD_PANEL_WIDTHS } from "../../code-mode/board-layout.ts";
 import { installMcpViewTheme } from "@mcpview/components";
 import {
   createDeclaredViewDispatcher,
@@ -79,6 +82,9 @@ for (const name of UI_VIEWERS) {
 
 applyCasysTheme(themeFromSearch());
 installMcpViewTheme();
+const controlsStyle = document.createElement("style");
+controlsStyle.textContent = getPanelControlsCss();
+document.head.append(controlsStyle);
 const root = document.getElementById("root")!;
 const host = new App({ name: "ERPNext", version: "1.0.0" }, {});
 const approval = createWriteApproval(root, host);
@@ -167,6 +173,9 @@ function showText(text: string) {
 
 let panels: ReturnType<typeof createDeclaredViewDispatcher<App>>[] = [];
 let boardLifetime: AbortController | undefined;
+// A receipt can replace a board in the same iframe. Keep its business basket
+// until a new execution or teardown, while retiring layout receipts with the UI.
+let boardBasket: AbortController | undefined;
 
 function clearPanels() {
   boardLifetime?.abort();
@@ -176,6 +185,7 @@ function clearPanels() {
 }
 
 async function showExecution(result: HostResult, signal: AbortSignal) {
+  boardBasket?.abort();
   clearPanels();
   if (signal.aborted) return;
   if (!readSnippetPanels(result).length) {
@@ -195,12 +205,15 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
           CODE_MODE_RESOURCE_URI;
       return {
         resourceUri,
+        supportedWidths: BOARD_PANEL_WIDTHS,
         events: invoiceViewPorts(resourceUri) ??
           kpiViewPorts(resourceUri, panel.name),
       };
     },
   });
   boardLifetime = new AbortController();
+  boardBasket = new AbortController();
+  const basketSignal = boardBasket.signal;
   const panelSignal = AbortSignal.any([signal, boardLifetime.signal]);
   const interactions = createInvoicePanelInteractions(
     board,
@@ -210,6 +223,8 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
   );
   const grid = document.createElement("div");
   grid.className = "code-mode-board";
+  grid.dataset.composeBoard = "";
+  grid.dataset.composeIntrinsic = "";
   viewRoot.replaceChildren(grid);
   const mountedKpis = new Map<string, MountedKpiPanel>();
   await Promise.all(board.children.map(async (child) => {
@@ -217,21 +232,37 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
     const native = panel.result as HostResult;
     const section = document.createElement("section");
     section.className = "code-mode-panel";
-    const heading = document.createElement("h2");
-    heading.id = `erp-panel-${child.slot}`;
-    heading.textContent = panel.title || panel.name;
-    section.setAttribute("aria-labelledby", heading.id);
+    const label = panel.title || panel.name;
+    section.setAttribute("aria-label", label);
+    section.dataset.composePanel = "";
+    section.dataset.panelLabel = label;
+    if ("layoutId" in panel && typeof panel.layoutId === "string") {
+      section.dataset.composePanelId = panel.layoutId;
+    }
+    if (child.supportedWidths?.length) {
+      section.dataset.composeWidths = child.supportedWidths.join(" ");
+    }
+    const grip = document.createElement("button");
+    grip.type = "button";
+    grip.dataset.composeGrip = "";
+    grip.setAttribute(
+      "aria-label",
+      t("code_mode.move_panel", { name: label }),
+    );
     const body = document.createElement("div");
     body.className = "code-mode-panel-body";
-    section.append(heading, body);
+    section.append(grip, body);
     grid.append(section);
 
     const updateContext = panelContexts.forPanel(
       panel.id,
-      heading.textContent,
-      panelSignal,
+      label,
+      basketSignal,
     );
-    const panelHost = contextHost(updateContext);
+    const panelHost = contextHost((value, options) => {
+      panelSignal.throwIfAborted();
+      return updateContext(value, options);
+    });
     const kpiPorts = kpiViewPorts(
       readDeclaredViewSelection(native)?.resourceUri ?? "",
       panel.name,
@@ -274,10 +305,19 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
       }
     }
   }));
+  if (panelSignal.aborted) return;
+  connectBoardLayout(
+    grid,
+    host,
+    result,
+    panelContexts.forBoard(panelSignal),
+    panelSignal,
+  );
   connectKpiPeriods(board, mountedKpis, host, panelSignal);
 }
 
-async function clearExecution(signal: AbortSignal) {
+async function clearExecution(signal: AbortSignal, keepBasket: boolean) {
+  if (!keepBasket) boardBasket?.abort();
   clearPanels();
   if (signal.aborted) return;
   await dispatchSingle({ content: [] }, signal);
@@ -329,7 +369,10 @@ host.ontoolresult = async (result) => {
     if (signal.aborted) return;
     const event = snippetEvent(confirmed);
     if (event) {
-      await clearExecution(signal);
+      await clearExecution(
+        signal,
+        event.kind === "saved" || event.kind === "updated",
+      );
       if (!signal.aborted) showSnippets(event, signal);
     } else {
       await showExecution(confirmed, signal);
@@ -343,6 +386,7 @@ host.ontoolresult = async (result) => {
 };
 host.onteardown = async () => {
   delivery.abort();
+  boardBasket?.abort();
   approval.close();
   render(null, snippetRoot);
   dispatcher.dispose();

@@ -4,6 +4,7 @@
 FROM node:20-slim AS ui-builder
 WORKDIR /app/src/ui
 COPY src/ui/package.json src/ui/package-lock.json ./
+COPY src/ui/vendor/ ./vendor/
 RUN npm ci
 COPY src/ui/ ./
 # Viewers import shared contracts from outside src/ui (buy-evidence-viewer ->

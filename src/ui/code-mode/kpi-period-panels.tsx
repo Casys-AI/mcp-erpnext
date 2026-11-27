@@ -18,7 +18,6 @@ import {
 } from "../../code-mode/kpi-period.ts";
 import { parseToolInputError } from "../../tools/errors.ts";
 import type { KpiPeriodSelection } from "../shared/document-follow.ts";
-import { currentLocale } from "../shared/format.ts";
 import { useT } from "../shared/i18n-hook.ts";
 import { isResultRecord, mergeViewerEnrichment } from "../shared/refresh.ts";
 import { hasExplicitAvailableTool } from "../shared/viewer-tools.ts";
@@ -35,7 +34,6 @@ export interface MountedKpiPanel {
 /** A mounted chart owns its dated bars. Compose owns the actual target filter. */
 export function createPeriodFeed(initial: unknown) {
   let current = initial;
-  let listener: (() => void) | undefined;
   let route: ((period: KpiPeriod) => void) | undefined;
   let active: KpiPeriod | null | undefined;
   const viewers = new Set<() => void>();
@@ -56,16 +54,8 @@ export function createPeriodFeed(initial: unknown) {
   };
   return {
     selection,
-    read: () => current,
     update(periods: unknown) {
       current = periods;
-      listener?.();
-    },
-    subscribe(next: () => void) {
-      listener = next;
-      return () => {
-        listener = undefined;
-      };
     },
     bind(next?: (period: KpiPeriod) => void) {
       route = next;
@@ -90,60 +80,12 @@ export function kpiViewPorts(uri: string, operation: string) {
   if (operation === GROSS_MARGIN_KPI) return { accepts: [KPI_PERIOD_APPLY] };
 }
 
-function formatRange(period: KpiPeriod) {
-  const format = new Intl.DateTimeFormat(currentLocale(), {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-  return format.formatRange(
-    new Date(period.date_from + "T00:00:00Z"),
-    new Date(period.date_to + "T00:00:00Z"),
-  );
-}
-
-function RangeButton({ period, active, select }: {
-  period: KpiPeriod;
-  active: boolean;
-  select(period: KpiPeriod): void;
-}) {
+function MarginError({ detail, retry }: { detail?: string; retry(): void }) {
   const t = useT();
   return (
-    <div
-      class="erp-period-picker"
-      role="group"
-      aria-label={t("code_mode.margin_period")}
-    >
-      <button
-        type="button"
-        title={formatRange(period)}
-        aria-pressed={active}
-        onClick={() => select(period)}
-      >
-        {t("code_mode.last_two_months")}
-      </button>
-    </div>
-  );
-}
-
-function PeriodStatus({ period, state, detail, retry }: {
-  period: KpiPeriod;
-  state: "ready" | "loading" | "error";
-  detail?: string;
-  retry?: () => void;
-}) {
-  const t = useT();
-  return (
-    <div class="erp-period-status" role="status">
-      <span>{formatRange(period)}</span>
-      {state === "loading" && <span>{t("common.loading")}</span>}
-      {state === "error" && (
-        <>
-          <span>{detail ?? t("common.error.refresh_failed")}</span>
-          <button type="button" onClick={retry}>{t("common.retry")}</button>
-        </>
-      )}
+    <div class="erp-period-status" role="alert">
+      <span>{detail ?? t("common.error.refresh_failed")}</span>
+      <button type="button" onClick={retry}>{t("common.retry")}</button>
     </div>
   );
 }
@@ -161,20 +103,7 @@ export function connectKpiPeriods(
   );
   const targets = new Map<string, (period: KpiPeriod) => void>();
   const selectedByTarget = new Map<string, KpiPeriod>();
-  const pickers = new Set<() => void>();
-  const outlets: HTMLElement[] = [];
-  function outlet(before: HTMLElement) {
-    const node = document.createElement("div");
-    before.before(node);
-    outlets.push(node);
-    return node;
-  }
-  signal.addEventListener("abort", () => {
-    for (const node of outlets) {
-      render(null, node);
-      node.remove();
-    }
-  }, { once: true });
+  const notifySources = new Set<() => void>();
 
   for (const child of board.children) {
     const id = child.componentId;
@@ -190,11 +119,15 @@ export function connectKpiPeriods(
       !hasExplicitAvailableTool(data._availableTools, GROSS_MARGIN_KPI)
     ) continue;
     const args = refresh.arguments;
-    const status = outlet(view.body);
+    const status = document.createElement("div");
+    view.body.before(status);
+    signal.addEventListener("abort", () => {
+      render(null, status);
+      status.remove();
+    }, { once: true });
     const firstPeriod = { date_from: args.date_from, date_to: args.date_to };
     if (isKpiPeriod(firstPeriod)) {
       selectedByTarget.set(id, firstPeriod);
-      render(<PeriodStatus state="ready" period={firstPeriod} />, status);
     }
     let current: AbortController | undefined;
     const apply = async (period: KpiPeriod) => {
@@ -202,10 +135,9 @@ export function connectKpiPeriods(
       current = new AbortController();
       const active = AbortSignal.any([signal, current.signal]);
       if (active.aborted) return;
-      selectedByTarget.set(id, period);
-      for (const update of pickers) update();
-      view.body.hidden = true;
-      render(<PeriodStatus state="loading" period={period} />, status);
+      view.body.hidden = false;
+      view.body.setAttribute("aria-busy", "true");
+      render(null, status);
       try {
         const result = await app.callServerTool({
           name: GROSS_MARGIN_KPI,
@@ -234,8 +166,8 @@ export function connectKpiPeriods(
           throw new Error("KPI view unavailable.");
         }
         active.throwIfAborted();
-        view.body.hidden = false;
-        render(<PeriodStatus state="ready" period={period} />, status);
+        selectedByTarget.set(id, period);
+        for (const notify of notifySources) notify();
       } catch (cause) {
         if (!active.aborted) {
           const message = cause instanceof Error ? cause.message : "";
@@ -243,16 +175,17 @@ export function connectKpiPeriods(
           const error = start < 0
             ? null
             : parseToolInputError(message.slice(start, start + 2048));
+          view.body.hidden = true;
           render(
-            <PeriodStatus
-              state="error"
+            <MarginError
               detail={error ? error.message + ". " + error.recovery : undefined}
-              period={period}
               retry={() => void apply(period)}
             />,
             status,
           );
         }
+      } finally {
+        if (!active.aborted) view.body.removeAttribute("aria-busy");
       }
     };
     targets.set(id, (period) => void apply(period));
@@ -268,7 +201,6 @@ export function connectKpiPeriods(
     ).map((target) => target.componentId!);
     if (!targetIds.length || !view.periods) continue;
     const periods = view.periods;
-    const sourceOutlet = outlet(view.body);
     const select = (period: KpiPeriod) =>
       emitSnippetBoardEvent(
         board,
@@ -282,7 +214,6 @@ export function connectKpiPeriods(
         },
       );
     const update = () => {
-      const dates = periods.read();
       const first = selectedByTarget.get(targetIds[0]);
       const common = first && targetIds.every((target) => {
           const current = selectedByTarget.get(target);
@@ -291,30 +222,10 @@ export function connectKpiPeriods(
         ? first
         : null;
       periods.report(common);
-      if (
-        !Array.isArray(dates) || dates.length < 2 || !dates.every(isKpiPeriod)
-      ) {
-        render(null, sourceOutlet);
-        return;
-      }
-      const range = {
-        date_from: dates.at(-2)!.date_from,
-        date_to: dates.at(-1)!.date_to,
-      };
-      render(
-        <RangeButton
-          period={range}
-          active={Boolean(common && samePeriod(range, common))}
-          select={select}
-        />,
-        sourceOutlet,
-      );
     };
     periods.bind(select);
-    pickers.add(update);
-    const unsubscribe = periods.subscribe(update);
+    notifySources.add(update);
     signal.addEventListener("abort", () => {
-      unsubscribe();
       periods.bind(undefined);
       periods.report(undefined);
     }, { once: true });

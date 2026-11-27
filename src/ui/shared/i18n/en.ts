@@ -11,8 +11,6 @@
 
 export const en: Record<string, string> = {
   // ── Commun ──────────────────────────────────────────────────────────────
-  "code_mode.last_two_months": "Last 2 months",
-  "code_mode.margin_period": "Margin period",
   "common.loading": "Loading…",
   "common.refreshing": "Refreshing…",
   "common.refresh": "Refresh",
@@ -20,6 +18,14 @@ export const en: Record<string, string> = {
   "code_mode.confirm_change": "Confirm ERPNext change",
   "code_mode.approve": "Approve",
   "code_mode.waiting": "Waiting for ERPNext…",
+  "code_mode.snippet_updated": "Snippet updated",
+  "code_mode.move_panel": "Move {name}",
+  "code_mode.layout_pending": "Preparing this layout for your next message…",
+  "code_mode.layout_failed":
+    "Could not attach the new layout to this conversation.",
+  "code_mode.layout_local": "Layout changes stay in this view in this host.",
+  "code_mode.layout_restore_failed":
+    "Could not restore the saved layout. Showing the default layout.",
   "code_mode.snippet_saved": "Snippet saved",
   "code_mode.snippet_library": "My snippets",
   "code_mode.snippet_view": "View script",

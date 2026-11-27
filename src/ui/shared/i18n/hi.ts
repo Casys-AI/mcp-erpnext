@@ -9,8 +9,6 @@
 
 export const hi: Record<string, string> = {
   // ── सामान्य ──────────────────────────────────────────────────────────────
-  "code_mode.last_two_months": "पिछले 2 महीने",
-  "code_mode.margin_period": "मार्जिन की अवधि",
   "common.loading": "लोड हो रहा है…",
   "common.refreshing": "रीफ़्रेश हो रहा है…",
   "common.refresh": "रीफ़्रेश करें",
@@ -18,6 +16,13 @@ export const hi: Record<string, string> = {
   "code_mode.confirm_change": "ERPNext में बदलाव की पुष्टि करें",
   "code_mode.approve": "मंज़ूरी दें",
   "code_mode.waiting": "ERPNext के जवाब का इंतज़ार है…",
+  "code_mode.snippet_updated": "स्निपेट अपडेट हो गया",
+  "code_mode.move_panel": "{name} को खिसकाएँ",
+  "code_mode.layout_pending": "अगले संदेश के लिए लेआउट तैयार हो रहा है…",
+  "code_mode.layout_failed": "नया लेआउट इस बातचीत से नहीं जोड़ा जा सका।",
+  "code_mode.layout_local": "इस होस्ट में लेआउट के बदलाव इसी दृश्य तक सीमित हैं।",
+  "code_mode.layout_restore_failed":
+    "सहेजा गया लेआउट बहाल नहीं हो सका। डिफ़ॉल्ट लेआउट दिखाया जा रहा है।",
   "code_mode.snippet_saved": "स्निपेट सहेजा गया",
   "code_mode.snippet_library": "मेरे स्निपेट",
   "code_mode.snippet_view": "स्क्रिप्ट देखें",

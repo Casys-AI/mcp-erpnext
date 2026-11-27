@@ -53,13 +53,15 @@ Deno.test("a rejected update does not enter another panel's acknowledged context
 for (const mode of ["exception", "error response"] as const) {
   Deno.test(`a failed context clear (${mode}) keeps the acknowledged snapshot for the next attempt`, async () => {
     const updates: Update[] = [];
-    const store = createPanelContexts(async (update: Update) => {
+    const store = createPanelContexts((update: Update) => {
       updates.push(update);
       if (updates.length === 2) {
-        if (mode === "exception") throw new Error("temporary failure");
-        return { isError: true };
+        if (mode === "exception") {
+          return Promise.reject(new Error("temporary failure"));
+        }
+        return Promise.resolve({ isError: true });
       }
-      return {};
+      return Promise.resolve({});
     });
     const old = new AbortController();
     const value = {
@@ -78,9 +80,9 @@ for (const mode of ["exception", "error response"] as const) {
 
 Deno.test("a late disposal cannot clear a current board even after a previous clear failed", async () => {
   const updates: Update[] = [];
-  const store = createPanelContexts(async (value: Update) => {
+  const store = createPanelContexts((value: Update) => {
     updates.push(value);
-    return updates.length === 2 ? { isError: true } : {};
+    return Promise.resolve(updates.length === 2 ? { isError: true } : {});
   });
   const old = new AbortController();
   const current = new AbortController();
@@ -128,4 +130,76 @@ Deno.test("a retired pin in flight cannot join the next board or overwrite a new
   current.abort();
   await store.clear();
   assertEquals(updates.at(-1), { structuredContent: { ref: "C" } });
+});
+
+Deno.test("a layout receipt coexists with the October basket and a fresh board starts empty", async () => {
+  const updates: Update[] = [];
+  const store = createPanelContexts((update: Update) => {
+    updates.push(update);
+    return Promise.resolve({});
+  });
+  const life = new AbortController();
+  const revenue = store.forPanel("revenue", "Revenue", life.signal);
+  const layout = store.forBoard(life.signal);
+  const pinned = { activeItems: ["October"] };
+  const receipt = {
+    snippetLayout: { runId: "run-a", revision: 2, status: "ready" },
+  };
+  await revenue({ structuredContent: pinned });
+  await layout({ structuredContent: receipt });
+  assertEquals(updates.at(-1), {
+    structuredContent: { ...pinned, ...receipt },
+  });
+  await revenue({ structuredContent: {} });
+  assertEquals(updates.at(-1), { structuredContent: receipt });
+  life.abort();
+  await store.clear();
+  assertEquals(updates.at(-1), { structuredContent: {} });
+  const again = store.forPanel(
+    "revenue",
+    "Revenue",
+    new AbortController().signal,
+  );
+  await again({ structuredContent: { activeItems: ["December"] } });
+  assertEquals(updates.at(-1), {
+    structuredContent: { activeItems: ["December"] },
+  });
+});
+
+Deno.test("text-only hosts get both the selection and the layout receipt in separate blocks", async () => {
+  const updates: Update[] = [];
+  const store = createPanelContexts((update: Update) => {
+    updates.push(update);
+    return Promise.resolve({});
+  });
+  const { signal } = new AbortController();
+  const data = { type: "text" as const, text: "October" };
+  const receipt = {
+    type: "text" as const,
+    text: '{"snippetLayout":{"revision":1}}',
+  };
+  await store.forBoard(signal)({ content: [receipt] });
+  await store.forPanel("revenue", "Revenue", signal)({ content: [data] });
+  assertEquals(updates.at(-1), { content: [data, receipt] });
+});
+
+Deno.test("an in-place update receipt retires the layout reference and retains the basket until disposal", async () => {
+  const updates: Update[] = [];
+  const store = createPanelContexts((update: Update) => {
+    updates.push(update);
+    return Promise.resolve({});
+  });
+  const basket = new AbortController();
+  const display = new AbortController();
+  const october = { structuredContent: { month: "October" } };
+  await store.forPanel("revenue", "Revenue", basket.signal)(october);
+  await store.forBoard(display.signal)({
+    structuredContent: { snippetLayout: { revision: 2 } },
+  });
+  display.abort();
+  await store.clear();
+  assertEquals(updates.at(-1), october);
+  basket.abort();
+  await store.clear();
+  assertEquals(updates.at(-1), { structuredContent: {} });
 });

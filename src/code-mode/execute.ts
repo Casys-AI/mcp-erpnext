@@ -13,6 +13,7 @@ import {
   type SnippetCatalog,
   SnippetCatalogError,
   type SnippetParameterType,
+  type SnippetSummary,
 } from "@mcpview/server/snippets";
 import {
   INVOICE_FOLLOW_PORTS,
@@ -29,6 +30,12 @@ import {
   KPI_VIEW,
   REVENUE_KPI,
 } from "./kpi-period.ts";
+import {
+  BOARD_PANEL_WIDTHS,
+  EXECUTION_REFERENCE_META,
+  SNIPPET_LAYOUT_META,
+} from "./board-layout.ts";
+import { BoardLayoutRuns } from "@mcpview/compose/code-mode/layout-runs";
 import { VIEWER_META_KEY } from "../tools/model-visible.ts";
 import { runCodeProgram, SuspendCodeMode } from "./sandbox.ts";
 
@@ -37,7 +44,6 @@ type Arguments = Record<string, unknown>;
 const SNIPPET_PANELS_META_KEY = "io.mcpview/snippet-panels";
 const SNIPPET_SYNC_META_KEY = "io.mcpview/snippet-sync";
 const MAX_PANEL_BYTES = 6 * 1024 * 1024;
-const EXECUTION_REFERENCE_META = "io.casys/erpnext-execution-ref";
 const SNIPPET_EVENT_META = "io.casys/erpnext-snippet-event";
 
 interface SnippetAccess {
@@ -82,7 +88,7 @@ function snippetParams(
 
 function dataResult(
   value: unknown,
-  snippetEvent?: "saved" | "list" | "source",
+  snippetEvent?: "saved" | "updated" | "list" | "source",
 ) {
   return {
     content: [{ type: "text", text: JSON.stringify(value) }],
@@ -186,7 +192,9 @@ function panelPorts(
 export function createCodeModeExecute(options: CodeModeExecuteOptions): {
   tool: MCPTool;
   handler: ToolHandler;
+  stageBoardLayout: ToolHandler;
 } {
+  const boardRuns = new BoardLayoutRuns<SnippetSummary>();
   const operations = options.tools.filter((t) =>
     (options.run || isReadOnly(t)) &&
     (t._meta?.ui?.visibility?.includes("model") ?? true)
@@ -235,6 +243,7 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       ...(options.snippets
         ? [
           "When asked to save a successful program, pass save: {runId, name, description?} using that run's execution reference.",
+          "A snippet can include its dashboard layout. After the user arranges a dashboard, pass the latest ready snippetLayout runId and revision from the current model context in save, or use update: {name, runId, revision} when asked to update that saved snippet. Wait for ready before confirming an edited layout. Never invent a revision or use pinned business data as a layout.",
           "Use snippets: true to list saved programs, or snippet: name with params to run a saved program.",
           "When asked to view a saved program's source, pass inspectSnippet: name.",
           "If the user asks to reuse an earlier procedure without its exact name, list saved programs first, even in a new conversation.",
@@ -264,12 +273,23 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
             properties: {
               runId: { type: "string", minLength: 1 },
               name: { type: "string", minLength: 1 },
+              revision: { type: "integer", minimum: 1 },
               description: {
                 type: "string",
                 maxLength: 512,
                 description:
                   "Short purpose that helps find this program later.",
               },
+            },
+          },
+          update: {
+            type: "object",
+            additionalProperties: false,
+            required: ["name", "runId", "revision"],
+            properties: {
+              name: { type: "string", minLength: 1 },
+              runId: { type: "string", minLength: 1 },
+              revision: { type: "integer", minimum: 1 },
             },
           },
           snippet: { type: "string", minLength: 1 },
@@ -282,6 +302,7 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
           oneOf: [
             { required: ["code"] },
             { required: ["save"] },
+            { required: ["update"] },
             { required: ["snippet"] },
             { required: ["snippets"] },
             { required: ["inspectSnippet"] },
@@ -303,19 +324,28 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
     }),
   };
   const handler: ToolHandler = async (args, ctx) => {
-    const { code, input, params, save, snippet, snippets, inspectSnippet } =
-      args;
-    const commands = [code, save, snippet, snippets, inspectSnippet].filter((
-      value,
-    ) => value !== undefined);
+    const {
+      code,
+      input,
+      params,
+      save,
+      update,
+      snippet,
+      snippets,
+      inspectSnippet,
+    } = args;
+    const commands = [code, save, update, snippet, snippets, inspectSnippet]
+      .filter((
+        value,
+      ) => value !== undefined);
     if (commands.length !== 1) {
       throw new Error(
-        "Supply one of code, save, snippet, snippets or inspectSnippet.",
+        "Supply one of code, save, update, snippet, snippets or inspectSnippet.",
       );
     }
     const access = await options.snippets?.(ctx);
     if (
-      save !== undefined || snippets !== undefined ||
+      save !== undefined || update !== undefined || snippets !== undefined ||
       inspectSnippet !== undefined
     ) {
       if (!access) {
@@ -346,6 +376,37 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
           "source",
         );
       }
+      if (update !== undefined) {
+        const selection = objectArgument(update, "update");
+        if (
+          typeof selection?.runId !== "string" ||
+          typeof selection.name !== "string" ||
+          typeof selection.revision !== "number" ||
+          !Number.isSafeInteger(selection.revision) ||
+          Object.keys(selection).some((key) =>
+            !["name", "runId", "revision"].includes(key)
+          )
+        ) {
+          throw new Error(
+            "Supply update.name, update.runId and update.revision.",
+          );
+        }
+        const updateLayout = access.catalog.updateLayout?.bind(access.catalog);
+        if (!updateLayout) {
+          throw new Error(
+            "The configured snippet catalog does not support dashboard updates.",
+          );
+        }
+        const { name, runId, revision } = selection;
+        const receipt = await boardRuns.commitUpdate(
+          access.scope,
+          runId,
+          revision,
+          name,
+          (layout) => updateLayout(access.scope, runId, name, { ...layout }),
+        );
+        return dataResult(receipt, "updated");
+      }
       const selection = objectArgument(save, "save");
       if (
         typeof selection?.runId !== "string" ||
@@ -353,20 +414,21 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
         (selection.description !== undefined &&
           typeof selection.description !== "string") ||
         Object.keys(selection).some((key) =>
-          key !== "runId" && key !== "name" && key !== "description"
+          key !== "runId" && key !== "name" && key !== "description" &&
+          key !== "revision"
         )
       ) {
         throw new Error("Supply save.runId and save.name.");
       }
-      return dataResult(
-        await access.catalog.save(
-          access.scope,
-          selection.runId,
-          selection.name,
-          selection.description,
-        ),
-        "saved",
+      const saved = await access.catalog.save(
+        access.scope,
+        selection.runId,
+        selection.name,
+        selection.description,
+        boardRuns.selected(access.scope, selection.runId, selection.revision),
       );
+      boardRuns.saved(access.scope, selection.runId, selection.name);
+      return dataResult(saved, "saved");
     }
 
     const externalInput = objectArgument(input, "input");
@@ -387,6 +449,7 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       program: unknown,
       parameters: Arguments,
       call: CodeModeExecuteOptions["call"],
+      boardPanels: Map<string, readonly number[]>,
     ): Promise<DeclaredViewNativeResult> {
       const execution = createDeclaredViewExecution({
         tools: allowed,
@@ -451,6 +514,7 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       }
       if ("panels" in output) {
         let nativeBytes = 0;
+        const occurrences = new Map<string, number>();
         const panels = output.panels.map(({ native, name, title }) => {
           const { result, resourceUri } = resolveResult(native.reference);
           if (!resourceUri) {
@@ -469,8 +533,13 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
             );
           }
           const events = panelPorts(name, resourceUri, result);
+          const occurrence = (occurrences.get(name) ?? 0) + 1;
+          occurrences.set(name, occurrence);
+          const layoutId = name + ":" + occurrence;
+          boardPanels.set(layoutId, BOARD_PANEL_WIDTHS);
           return {
             id: native.reference,
+            layoutId,
             provider: "erpnext",
             name,
             title,
@@ -523,7 +592,13 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       program: string,
       parameters: Arguments | undefined,
       recordReference: boolean,
+      replay?: {
+        name: string;
+        layout?: Readonly<Arguments>;
+        recordParameters?: Arguments;
+      },
     ) {
+      const boardPanels = new Map<string, readonly number[]>();
       let completed: DeclaredViewNativeResult | undefined;
       const run = async (call: CodeModeExecuteOptions["call"]) => {
         let completedWrite: string | undefined;
@@ -544,6 +619,7 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
               }
               return result;
             },
+            boardPanels,
           );
           return completed;
         } catch (error) {
@@ -557,13 +633,16 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       const result = options.run
         ? await options.run(ctx, run, args)
         : await run(options.call);
-      if (access && recordReference && completed && completed === result) {
+      if (
+        access && (recordReference || replay && boardPanels.size > 0) &&
+        completed && completed === result
+      ) {
         let runId: string;
         try {
           runId = access.catalog.recordSuccess(
             access.scope,
             program,
-            parameters,
+            replay ? replay.recordParameters : parameters,
           );
         } catch (error) {
           // A non-recordable parameter contract must not turn completed ERP
@@ -574,6 +653,15 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
           ) return result;
           throw error;
         }
+        const restored = boardPanels.size
+          ? boardRuns.open(
+            access.scope,
+            runId,
+            boardPanels,
+            replay?.name,
+            replay?.layout,
+          )
+          : undefined;
         return {
           ...completed,
           content: [
@@ -583,7 +671,14 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
               text: `Execution reference for saving this program: ${runId}`,
             },
           ],
-          _meta: { ...completed._meta, [EXECUTION_REFERENCE_META]: runId },
+          _meta: {
+            ...completed._meta,
+            [EXECUTION_REFERENCE_META]: runId,
+            // null tells the viewer its default arrangement is in use without
+            // exposing panel IDs or widths from a different result shape.
+            ...(replay?.layout && boardPanels.size > 0 &&
+              { [SNIPPET_LAYOUT_META]: restored ?? null }),
+          },
         };
       }
       return result;
@@ -599,8 +694,16 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
         throw new Error("Supply a saved program name and optional params.");
       }
       return await access.catalog.run(access.scope, snippet, params, {
-        validate: snippetParams,
-        execute: (program, parameters) => execute(program, parameters, false),
+        validate: (input, contract) => {
+          const values = snippetParams(input, contract);
+          return { values, recordParameters: contract ? values : undefined };
+        },
+        execute: (program, { values, recordParameters }, layout) =>
+          execute(program, values, false, {
+            name: snippet,
+            layout,
+            recordParameters,
+          }),
       });
     }
     if (typeof code !== "string") {
@@ -613,5 +716,23 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
       externalInput === undefined,
     );
   };
-  return { tool, handler };
+  const stageBoardLayout: ToolHandler = async (args, ctx) => {
+    const access = await options.snippets?.(ctx);
+    if (!access) {
+      throw new Error(
+        "Dashboard layouts require an authenticated ERPNext workspace.",
+      );
+    }
+    const receipt = boardRuns.stage(
+      access.scope,
+      args.runId,
+      args.revision,
+      args.layout,
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(receipt) }],
+      structuredContent: receipt,
+    };
+  };
+  return { tool, handler, stageBoardLayout };
 }

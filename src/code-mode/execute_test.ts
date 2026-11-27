@@ -742,3 +742,182 @@ Deno.test("an invalid panel after an approved write preserves its completed stat
   );
   assertEquals(writes, 1);
 });
+
+Deno.test("save and update capture only an acknowledged arrangement; replay restores it on fresh panel receipts", async () => {
+  const catalog = createSnippetCatalog();
+  let nextValue = 0;
+  const openChat = (scope = "alice") =>
+    createCodeModeExecute({
+      tools: [get, list],
+      mountableResourceUris: [table, detail],
+      snippets: (ctx) => ({ scope: ctx?.authInfo?.subject ?? scope, catalog }),
+      call: () =>
+        Promise.resolve({
+          content: [{ type: "text", text: "ERP read" }],
+          structuredContent: { reading: ++nextValue },
+        }),
+    });
+  const meta = (value: unknown) => {
+    assert(value && typeof value === "object" && "_meta" in value);
+    return value._meta as Record<string, unknown>;
+  };
+  const code =
+    'erp.panel(await erp.call("get",{})); erp.panel(await erp.call("list",{})); return "today"';
+  const name = "Monday";
+  const first = openChat();
+  const opened = await first.handler({ code });
+  const runId = meta(opened)["io.casys/erpnext-execution-ref"];
+  const layout = {
+    version: 1,
+    order: ["list:1", "get:1"],
+    widths: [{ panel: "get:1", width: 640 }],
+    placements: [],
+  };
+  const stage = (revision: number, value = layout) =>
+    first.stageBoardLayout({ runId, revision, layout: value });
+  await assertRejects(
+    async () => await stage(1, { ...layout, order: ["unknown", "get:1"] }),
+    Error,
+    "Invalid layout",
+  );
+  await assertRejects(
+    async () =>
+      await stage(1, { ...layout, widths: [{ panel: "get:1", width: 643 }] }),
+    Error,
+    "Invalid layout",
+  );
+  await assertRejects(
+    async () =>
+      await first.stageBoardLayout({
+        runId,
+        revision: 1,
+        layout: { ...layout, context: ["October"] },
+      }),
+    Error,
+    "Invalid layout",
+  );
+  await assertRejects(
+    async () =>
+      await first.stageBoardLayout(
+        { runId, revision: 3, layout },
+        {
+          toolName: "erpnext_stage_board_layout",
+          request: new Request("http://localhost/mcp"),
+          authInfo: { subject: "bob", scopes: [] },
+        },
+      ),
+    Error,
+    "unavailable",
+  );
+  await stage(2);
+  await stage(2); // A retry after a lost acknowledgment remains idempotent.
+  await assertRejects(async () => await stage(1), Error, "stale");
+  await assertRejects(
+    async () => await first.handler({ save: { runId, name } }),
+    Error,
+    "ready",
+  );
+  await first.handler({ save: { runId, name, revision: 2 } });
+  const unrelatedRun = catalog.recordSuccess("alice", code);
+  await catalog.save("alice", unrelatedRun, "Tuesday");
+  await assertRejects(
+    async () =>
+      await first.handler({ update: { name: "Tuesday", runId, revision: 2 } }),
+    Error,
+    "different snippet",
+  );
+  const replay = openChat();
+  const recalled = meta(await replay.handler({ snippet: name }));
+  assertEquals(recalled["io.mcpview/snippet-layout"], layout);
+  const replayId = recalled["io.casys/erpnext-execution-ref"];
+  assert(typeof replayId === "string" && replayId !== runId);
+  await replay.handler({ save: { runId: replayId, name: "Copy of Monday" } });
+  assertEquals(
+    (await catalog.inspect("alice", "Copy of Monday")).layout,
+    layout,
+  );
+  const before = meta(opened)["io.mcpview/snippet-panels"] as {
+    id: string;
+    layoutId: string;
+  }[];
+  const after = recalled["io.mcpview/snippet-panels"] as typeof before;
+  assertEquals(before.map((p) => p.layoutId), after.map((p) => p.layoutId));
+  assert(before[0].id !== after[0].id);
+  const revised = { ...layout, widths: [{ panel: "get:1", width: 960 }] };
+  const update = (revision: number) =>
+    replay.handler({ update: { name, runId: replayId, revision } });
+  await assertRejects(async () => await update(1), Error, "ready");
+  await replay.stageBoardLayout({
+    runId: replayId,
+    revision: 1,
+    layout: revised,
+  });
+  await assertRejects(async () => await update(2), Error, "ready");
+  await assertRejects(
+    async () =>
+      await replay.handler({
+        update: { name: "different", runId: replayId, revision: 1 },
+      }),
+    Error,
+    "different snippet",
+  );
+  assertEquals(
+    meta(await update(1))["io.casys/erpnext-snippet-event"],
+    "updated",
+  );
+  assertEquals(
+    meta(
+      await openChat().handler({ snippet: name }),
+    )["io.mcpview/snippet-layout"],
+    revised,
+  );
+  assertEquals(nextValue, 6); // save/update/ack never repeated business operations.
+  await assertRejects(
+    async () => await openChat("bob").handler({ snippet: name }),
+    Error,
+    "not found",
+  );
+});
+
+Deno.test("a parameter-dependent board explains its fallback and preserves the saved arrangement", async () => {
+  const catalog = createSnippetCatalog();
+  const execute = createCodeModeExecute({
+    tools: [list, get],
+    mountableResourceUris: [table, detail],
+    snippets: () => ({ scope: "workspace", catalog }),
+    call: () =>
+      Promise.resolve({
+        content: [{ type: "text", text: "fresh" }],
+        structuredContent: { value: 1 },
+      }),
+  });
+  const meta = (result: unknown) => {
+    assert(result && typeof result === "object" && "_meta" in result);
+    return result._meta as Record<string, unknown>;
+  };
+  const name = "Conditional board";
+  const opened = await execute.handler({
+    code:
+      'erp.panel(await erp.call("list",{})); if (erp.params.extra) erp.panel(await erp.call("get",{}));',
+    params: { extra: true },
+  });
+  const runId = meta(opened)["io.casys/erpnext-execution-ref"];
+  const layout = {
+    version: 1,
+    order: ["get:1", "list:1"],
+    widths: [],
+    placements: [],
+  };
+  await execute.stageBoardLayout({ runId, layout, revision: 1 });
+  await execute.handler({ save: { name, runId, revision: 1 } });
+  const changed = meta(
+    await execute.handler({ snippet: name, params: { extra: false } }),
+  );
+  assertEquals(changed["io.mcpview/snippet-layout"], null);
+  assertEquals(
+    meta(
+      await execute.handler({ snippet: name, params: { extra: true } }),
+    )["io.mcpview/snippet-layout"],
+    layout,
+  );
+});

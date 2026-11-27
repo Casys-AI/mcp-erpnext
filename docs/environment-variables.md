@@ -40,7 +40,9 @@ to a filesystem that supports hard links. On a container, mount a persistent
 volume here to keep scripts across replacements.
 
 Each saved entry contains the JavaScript source, its name, its optional
-description and its parameter names and types. A query result is not stored.
+description and its parameter names and types. A saved dashboard can also retain
+panel IDs, their order, relative positions and chosen widths. On replay the
+program retrieves current data. The context basket stays with its conversation.
 Each catalog is tied to the ERPNext URL and a fingerprint derived from the API
 key. Rotating only `ERPNEXT_API_SECRET` preserves access to existing snippets.
 Changing `ERPNEXT_API_KEY` opens a different catalog and leaves the previous

@@ -12,7 +12,7 @@ type Props = {
   canCall: boolean;
   call: (
     args: LibraryRequest,
-  ) => Promise<Exclude<SnippetEvent, { kind: "saved" }>>;
+  ) => Promise<Extract<SnippetEvent, { kind: "list" | "source" }>>;
 };
 
 export function SnippetPanel({ event: initial, canCall, call }: Props) {
@@ -63,12 +63,16 @@ export function SnippetPanel({ event: initial, canCall, call }: Props) {
     }
   }
 
-  if (initial.kind === "saved") {
+  if (initial.kind === "saved" || initial.kind === "updated") {
     return (
       <div class="erp-snippets erp-snippets-summary">
         <p class="erp-snippets-success" role="status">
           <span class="erp-snippets-check" aria-hidden="true">✓</span>
-          {t("code_mode.snippet_saved")}
+          {t(
+            initial.kind === "saved"
+              ? "code_mode.snippet_saved"
+              : "code_mode.snippet_updated",
+          )}
         </p>
         <h2 tabIndex={-1} ref={receipt}>
           <bdi>{initial.snippet.name}</bdi>

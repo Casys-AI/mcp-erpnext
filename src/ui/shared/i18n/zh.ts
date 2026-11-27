@@ -10,8 +10,6 @@
 
 export const zh: Record<string, string> = {
   // ── 通用 ──────────────────────────────────────────────────────────────
-  "code_mode.last_two_months": "最近两个月",
-  "code_mode.margin_period": "毛利率期间",
   "common.loading": "加载中…",
   "common.refreshing": "刷新中…",
   "common.refresh": "刷新",
@@ -19,6 +17,12 @@ export const zh: Record<string, string> = {
   "code_mode.confirm_change": "确认 ERPNext 更改",
   "code_mode.approve": "批准",
   "code_mode.waiting": "正在等待 ERPNext 响应…",
+  "code_mode.snippet_updated": "代码片段已更新",
+  "code_mode.move_panel": "移动{name}",
+  "code_mode.layout_pending": "正在准备布局，以便在下一条消息中使用…",
+  "code_mode.layout_failed": "无法将新布局附加到此对话。",
+  "code_mode.layout_local": "在此宿主中，布局更改仅在当前视图生效。",
+  "code_mode.layout_restore_failed": "无法恢复已保存的布局，已显示默认布局。",
   "code_mode.snippet_saved": "代码片段已保存",
   "code_mode.snippet_library": "我的代码片段",
   "code_mode.snippet_view": "查看脚本",

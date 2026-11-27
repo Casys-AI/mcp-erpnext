@@ -7,8 +7,6 @@
 
 export const fr: Record<string, string> = {
   // ── Commun ──────────────────────────────────────────────────────────────
-  "code_mode.last_two_months": "2 derniers mois",
-  "code_mode.margin_period": "Période de la marge",
   "common.loading": "Chargement…",
   "common.refreshing": "Rafraîchissement…",
   "common.refresh": "Rafraîchir",
@@ -16,6 +14,16 @@ export const fr: Record<string, string> = {
   "code_mode.confirm_change": "Confirmer la modification dans ERPNext",
   "code_mode.approve": "Approuver",
   "code_mode.waiting": "En attente de la réponse d’ERPNext…",
+  "code_mode.snippet_updated": "Snippet mis à jour",
+  "code_mode.move_panel": "Déplacer {name}",
+  "code_mode.layout_pending":
+    "Préparation de la disposition pour le prochain message…",
+  "code_mode.layout_failed":
+    "Impossible de joindre la nouvelle disposition à la conversation.",
+  "code_mode.layout_local":
+    "Dans cet hôte, les changements de disposition restent dans cette vue.",
+  "code_mode.layout_restore_failed":
+    "Impossible de rétablir la disposition enregistrée. La disposition par défaut est affichée.",
   "code_mode.snippet_saved": "Snippet enregistré",
   "code_mode.snippet_library": "Mes snippets",
   "code_mode.snippet_view": "Voir le script",

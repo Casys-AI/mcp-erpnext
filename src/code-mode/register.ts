@@ -20,6 +20,7 @@ import {
   type Operation,
   WriteConfirmations,
 } from "./confirmation.ts";
+import { STAGE_BOARD_LAYOUT_TOOL } from "./board-layout.ts";
 import { createCodeModeExecute } from "./execute.ts";
 
 type CodeModeView = Pick<
@@ -245,6 +246,34 @@ export function registerCodeModeTools(
   });
   server.registerTool(execute.tool, execute.handler);
   if (hasApp) {
+    server.registerAppOnlyTool(
+      {
+        name: STAGE_BOARD_LAYOUT_TOOL,
+        description:
+          "Acknowledge the current viewer arrangement for this open dashboard.",
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+        },
+        inputSchema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["runId", "revision", "layout"],
+          properties: {
+            runId: { type: "string", minLength: 1 },
+            revision: { type: "integer", minimum: 1 },
+            layout: { type: "object" },
+          },
+        },
+      },
+      (args, ctx) => {
+        if (!isAppsHost(ctx)) {
+          throw new Error("Dashboard layout changes require an MCP Apps host.");
+        }
+        return execute.stageBoardLayout(args, ctx);
+      },
+    );
     server.registerAppOnlyTool(
       {
         name: "erpnext_confirm_write",

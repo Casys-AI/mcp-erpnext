@@ -18,6 +18,19 @@ Deno.test("KPI layout - host bounds replace viewport locking and the level body 
   assertEquals(content.includes("h-screen"), false);
 });
 
+Deno.test("KPI layout - the trend splits off only when its own panel has room", () => {
+  assertStringIncludes(content, 'class="@container/kpi"');
+  assertStringIncludes(source, '"grid min-h-0 grid-cols-1"');
+  assertStringIncludes(
+    source,
+    "@min-[40rem]/kpi:grid-cols-[minmax(0,1fr)_min(40%,300px)]",
+  );
+  assertStringIncludes(
+    source,
+    "flex min-w-0 flex-wrap items-center justify-between gap-2",
+  );
+});
+
 Deno.test("KPI formatting - the viewer renders through kpi-format.ts and never reads formattedValue itself", () => {
   assertStringIncludes(source, 'from "./kpi-format.ts"');
   assertEquals(source.includes("function formatKpiParts"), false);

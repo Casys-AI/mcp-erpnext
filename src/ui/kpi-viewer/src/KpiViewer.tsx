@@ -719,13 +719,13 @@ function KpiCard({
       </>
     );
     const numberClass = cx(
-      "min-w-0 rounded-[4px] font-display font-semibold leading-none tracking-metric text-ink tabular-nums",
+      "min-w-0 max-w-full rounded-[4px] font-display font-semibold leading-none tracking-metric text-ink tabular-nums wrap-anywhere",
       compact
         ? "text-[length:var(--text-metric-compact)]"
         : "text-[length:var(--text-metric)]",
     );
     return (
-      <div class="flex min-w-0 items-center justify-between gap-2">
+      <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
         {local
           ? (
             <button
@@ -853,10 +853,12 @@ function KpiCard({
   /* ── Layout wide ──────────────────────────────────────────────── */
   return (
     <>
-      {/* Grille 2 colonnes */}
       <div
-        class="grid min-h-0"
-        style={{ gridTemplateColumns: "1fr 300px" }}
+        class={cx(
+          "grid min-h-0 grid-cols-1",
+          sparkline &&
+            "@min-[40rem]/kpi:grid-cols-[minmax(0,1fr)_min(40%,300px)]",
+        )}
       >
         {/* Colonne gauche */}
         <div class="flex min-w-0 flex-col gap-[10px] p-[18px_16px]">
@@ -931,7 +933,7 @@ function KpiCard({
         </div>
 
         {sparkline && (
-          <div class="border-l border-line bg-sunken p-[18px_16px]">
+          <div class="border-t border-line bg-sunken p-[18px_16px] @min-[40rem]/kpi:border-t-0 @min-[40rem]/kpi:border-l">
             {renderSparkline()}
           </div>
         )}
@@ -1036,7 +1038,11 @@ function KpiViewerContent({
   const { ask } = viewerNav;
 
   return (
-    <ViewerShell containerRef={shellRef} style={boundsStyle}>
+    <ViewerShell
+      class="@container/kpi"
+      containerRef={shellRef}
+      style={boundsStyle}
+    >
       {/* Aux niveaux empilés, un en-tête nomme le niveau ; le fil vient dessous. */}
       {!isRoot && (
         <ViewerHeader

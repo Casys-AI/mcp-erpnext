@@ -1,5 +1,6 @@
 /** @jsxImportSource preact */
 
+import { DisclosureChevron } from "@mcpview/components/preact/controls";
 import { useViewerApp } from "~/shared/viewer-app";
 import { App } from "@modelcontextprotocol/ext-apps";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
@@ -368,6 +369,7 @@ function DocumentContent({
     reconcileView: activeContext.reconcileView,
     pending: activeContext.pending,
     selection: activeContext.selection,
+    recordPins: activeContext.recordPins,
     toggleGroupMember: activeContext.toggleGroupMember,
     setGroupMembers: activeContext.setGroupMembers,
     addGroupMembers: activeContext.addGroupMembers,
@@ -540,8 +542,8 @@ function DocumentContent({
             class="min-h-8 px-2.5 py-1 text-chip"
             onClick={() => nav.jump(jump)}
           >
+            <DisclosureChevron expanded={false} />
             {jump.label}
-            <span aria-hidden="true">›</span>
           </Button>
         ))}
         {rowAsks.map((ask) => (

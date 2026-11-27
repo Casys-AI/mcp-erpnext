@@ -1,10 +1,8 @@
 /** @jsxImportSource preact */
 
 import { useEffect } from "preact/hooks";
-import { projectedRecordNames } from "../active-context-chip.ts";
-import type { ActiveContextSelection } from "../active-context.ts";
-import { kanbanPinCoverage } from "./pin-coverage.ts";
-import { ContextPinButton } from "../ContextPinButton.tsx";
+import { recordPinCoverage } from "../record-pin-coverage.ts";
+import { ContextPinButton } from "@mcpview/components/preact/controls";
 import type { DocumentContextController } from "../document/context-interaction.ts";
 import { useT } from "../i18n-hook.ts";
 import { hasExplicitAvailableTool } from "../viewer-tools.ts";
@@ -28,7 +26,6 @@ export function useKanbanPins(
   board: KanbanBoardData,
   context: DocumentContextController,
   rootKey: string,
-  selections: readonly ActiveContextSelection[],
 ) {
   const t = useT();
   const key = `kanban-cards:${rootKey}`;
@@ -55,14 +52,7 @@ export function useKanbanPins(
   }, [board.cards, complete, key, reconcile]);
 
   if (!context.supported || !board.doctype) return;
-  const sharedNames = projectedRecordNames(selections, rootKey, board.doctype);
-  function pinned(card: KanbanCardData) {
-    return context.isSelected({
-      id: `record:${board.doctype}:${card.id}`,
-      label: card.id,
-      view: board.title,
-    });
-  }
+  const names = context.recordPins(board.doctype);
   function toggle(cards: KanbanCardData[], remove: boolean) {
     if (remove) {
       void context.removeGroupMembers(
@@ -71,17 +61,19 @@ export function useKanbanPins(
       );
     } else void context.addGroupMembers(config, cards.map(kanbanCardMember));
   }
-  function pin(cards: KanbanCardData[], label: string) {
-    const { allSelected, pressed, selected, shared } = kanbanPinCoverage(
+  function pin(cards: KanbanCardData[], label: string, group = false) {
+    const { allSelected, pressed, selected, shared } = recordPinCoverage(
       cards,
-      pinned,
-      sharedNames,
+      (card) => card.id,
+      (card) => names.selected.has(card.id),
+      names.shared,
     );
     const action = t(allSelected ? "context.pin.remove" : "context.pin.add", {
       label,
     });
     return (
       <ContextPinButton
+        group={group}
         label={shared < selected
           ? `${action} · ${
             t("context.active.partly_shared", { shared, total: selected })
@@ -105,6 +97,7 @@ export function useKanbanPins(
           column: kanbanStatusLabel(column.label, t),
           count: cards.length,
         }),
+        true,
       );
     },
   };

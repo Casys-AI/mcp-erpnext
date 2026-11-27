@@ -73,7 +73,7 @@ import {
   isMacControlClick,
   isMacControlClickEcho,
 } from "~/shared/platform.ts";
-import { ContextPinButton } from "~/shared/ContextPinButton.tsx";
+import { ContextPinButton } from "@mcpview/components/preact/controls";
 import { viewerRootKey } from "~/shared/nav-stack";
 import { acceptsDetailToggleClick } from "~/shared/detail-toggle";
 import { PathBar } from "~/shared/PathBar";
@@ -2484,6 +2484,7 @@ function ChartContent(
     reconcileView: activeContext.reconcileView,
     pending: activeContext.pending,
     selection: activeContext.selection,
+    recordPins: activeContext.recordPins,
     toggleGroupMember: activeContext.toggleGroupMember,
     setGroupMembers: activeContext.setGroupMembers,
     addGroupMembers: activeContext.addGroupMembers,

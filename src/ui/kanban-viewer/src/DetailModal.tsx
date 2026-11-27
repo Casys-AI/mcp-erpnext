@@ -1056,7 +1056,8 @@ export function CardDetailModal({
           )}
           {onViewList && (
             <LocalActionButton
-              label={`${t(`kanban.modal.nav.view_list.${board.doctype}`)} ›`}
+              label={t(`kanban.modal.nav.view_list.${board.doctype}`)}
+              opensDetail
               variant="info"
               onClick={() =>
                 requestDiscard(
@@ -1071,9 +1072,10 @@ export function CardDetailModal({
             ).map((hint) => (
               <LocalActionButton
                 key={hint.key ?? hint.label}
-                label={`${
-                  hint.key === "timesheets" ? timesheetLabel : hintLabel(hint)
-                } ›`}
+                label={hint.key === "timesheets"
+                  ? timesheetLabel
+                  : hintLabel(hint)}
+                opensDetail
                 variant="info"
                 onClick={() =>
                   requestDiscard(

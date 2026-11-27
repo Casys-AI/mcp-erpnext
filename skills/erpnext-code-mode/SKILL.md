@@ -74,8 +74,11 @@ The source is a Sales Invoice list from `erpnext_sales_invoice_list` or
 `erpnext_doc_list` with `doctype: "Sales Invoice"` and the `name` field. The
 target is an original result from `erpnext_sales_invoice_get`. Use the exact
 requested invoice as the initial detail, or the first row when the user asks to
-start with the first invoice. The list's invoice selection updates that detail
-panel. A pin beside a row attaches that invoice to the conversation independently.
+start with the first invoice. Clicking a row opens that invoice in the linked
+panel. The pin beside the row attaches it to the conversation. The header pin
+acts on all loaded invoices matching the filter, including other local pages.
+When answering questions about pinned records, use the host's current context
+and respect any reported limit on the number of records it contains.
 Show just the list if there is no invoice to open.
 
 To let the user recalculate gross margin for a month in the Sales Order revenue

@@ -1,6 +1,6 @@
 /** @jsxImportSource preact */
 
-import { ContextPinButton } from "../ContextPinButton.tsx";
+import { ContextPinButton } from "@mcpview/components/preact/controls";
 import { useT } from "../i18n-hook.ts";
 import type { ContextInteractionTarget } from "./context-interaction.ts";
 

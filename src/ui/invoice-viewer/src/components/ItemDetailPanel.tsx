@@ -1,4 +1,5 @@
 /** @jsxImportSource preact */
+import { DisclosureChevron } from "@mcpview/components/preact/controls";
 import { type Jump, jumpFromHint, type NavHint } from "~/shared/jumps";
 import { useEffect, useState } from "preact/hooks";
 import { App } from "@modelcontextprotocol/ext-apps";
@@ -290,21 +291,13 @@ export function ItemDetailPanel({
             title={fixture
               ? t("invoice.preview.title")
               : t("invoice.item.btn.stock.title")}
-            class="group"
             onClick={() => {
               if (stockJump) onJump!(stockJump);
               else void send(t("invoice.item.stock.message", { itemCode }));
             }}
           >
+            {stockJump && <DisclosureChevron expanded={false} />}
             {t("invoice.item.btn.stock.label")}
-            {stockJump && (
-              <span
-                aria-hidden="true"
-                class="ml-1 text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
-              >
-                ›
-              </span>
-            )}
           </Button>
         )}
         {canOfferNavigation(itemJump, messagesEnabled, Boolean(fixture)) && (
@@ -314,21 +307,13 @@ export function ItemDetailPanel({
             title={fixture
               ? t("invoice.preview.title")
               : t("invoice.item.btn.details.title")}
-            class="group"
             onClick={() => {
               if (itemJump) onJump!(itemJump);
               else void send(t("invoice.item.details.message", { itemCode }));
             }}
           >
+            {itemJump && <DisclosureChevron expanded={false} />}
             {t("invoice.item.btn.details.label")}
-            {itemJump && (
-              <span
-                aria-hidden="true"
-                class="ml-1 text-accent opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
-              >
-                ›
-              </span>
-            )}
           </Button>
         )}
       </div>

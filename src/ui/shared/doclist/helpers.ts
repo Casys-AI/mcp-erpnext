@@ -26,46 +26,7 @@ export const FILTERABLE_COLUMNS = new Set([
   "type",
 ]);
 
-/** Max columns shown in the table — extra columns go to the detail panel */
-export const MAX_VISIBLE_COLUMNS = 6;
-
-/** Columns to prioritize (shown first). Order matters. */
-const PRIORITY_COLUMNS = [
-  "name",
-  "status",
-  "customer",
-  "customer_name",
-  "supplier",
-  "supplier_name",
-  "item_code",
-  "item_name",
-  "employee_name",
-  "project",
-  "subject",
-  "grand_total",
-  "outstanding_amount",
-  "posting_date",
-  "transaction_date",
-  "delivery_date",
-];
-
-/** Sort columns by priority: priority columns first (in order), then alphabetical, capped at MAX_VISIBLE_COLUMNS */
-export function selectVisibleColumns(allKeys: string[]): string[] {
-  const prioritized: string[] = [];
-  const rest: string[] = [];
-
-  // First pass: pick priority columns in order
-  for (const col of PRIORITY_COLUMNS) {
-    if (allKeys.includes(col)) prioritized.push(col);
-  }
-
-  // Second pass: remaining columns alphabetically
-  for (const col of allKeys.sort()) {
-    if (!prioritized.includes(col)) rest.push(col);
-  }
-
-  return [...prioritized, ...rest].slice(0, MAX_VISIBLE_COLUMNS);
-}
+export { MAX_VISIBLE_COLUMNS, selectVisibleColumns } from "./columns.ts";
 
 export function isStatusField(key: string): boolean {
   return STATUS_FIELDS.has(key.toLowerCase());

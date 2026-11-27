@@ -49,3 +49,83 @@ Deno.test("a rejected update does not enter another panel's acknowledged context
   await hosts.forPanel("b", "B", signal)(b);
   assertEquals(updates, [a, b]);
 });
+
+for (const mode of ["exception", "error response"] as const) {
+  Deno.test(`a failed context clear (${mode}) keeps the acknowledged snapshot for the next attempt`, async () => {
+    const updates: Update[] = [];
+    const store = createPanelContexts(async (update: Update) => {
+      updates.push(update);
+      if (updates.length === 2) {
+        if (mode === "exception") throw new Error("temporary failure");
+        return { isError: true };
+      }
+      return {};
+    });
+    const old = new AbortController();
+    const value = {
+      structuredContent: { ref: "invoice-A" },
+      content: [{ type: "text" as const, text: "A" }],
+    };
+    await store.forPanel("a", "A", old.signal)(value);
+    old.abort();
+    await assertRejects(() => store.clear());
+    await store.clear();
+    await store.clear();
+    const empty = { structuredContent: {}, content: [] };
+    assertEquals(updates, [value, empty, empty]);
+  });
+}
+
+Deno.test("a late disposal cannot clear a current board even after a previous clear failed", async () => {
+  const updates: Update[] = [];
+  const store = createPanelContexts(async (value: Update) => {
+    updates.push(value);
+    return updates.length === 2 ? { isError: true } : {};
+  });
+  const old = new AbortController();
+  const current = new AbortController();
+  const a = { structuredContent: { ref: "invoice-A" } };
+  const b = { structuredContent: { ref: "invoice-B" } };
+  await store.forPanel("detail", "Detail", old.signal)(a);
+  old.abort();
+  await assertRejects(() => store.clear());
+  await store.forPanel("detail", "Detail", current.signal)(b);
+  await store.clear();
+  assertEquals(updates, [a, { structuredContent: {} }, b]);
+  current.abort();
+  await store.clear();
+  assertEquals(updates.at(-1), { structuredContent: {} });
+});
+
+Deno.test("a retired pin in flight cannot join the next board or overwrite a newer selection", async () => {
+  const pending = Promise.withResolvers<void>();
+  const started = Promise.withResolvers<void>();
+  const updates: Update[] = [];
+  const store = createPanelContexts(async (value: Update) => {
+    updates.push(value);
+    if (updates.length === 1) {
+      started.resolve();
+      await pending.promise;
+    }
+    return {};
+  });
+  const old = new AbortController();
+  const current = new AbortController();
+  const a = { structuredContent: { ref: "invoice-A" } };
+  const b = { structuredContent: { ref: "invoice-B" } };
+  const oldPin = store.forPanel("old", "A", old.signal)(a);
+  await started.promise;
+  old.abort();
+  const newerPin = store.forPanel("new", "B", current.signal)(b);
+  const lateCleanup = store.clear();
+  pending.resolve();
+  await Promise.all([oldPin, newerPin, lateCleanup]);
+  assertEquals(updates, [a, b]);
+  const third = new AbortController();
+  await store.forPanel("third", "C", third.signal)({
+    structuredContent: { ref: "C" },
+  });
+  current.abort();
+  await store.clear();
+  assertEquals(updates.at(-1), { structuredContent: { ref: "C" } });
+});

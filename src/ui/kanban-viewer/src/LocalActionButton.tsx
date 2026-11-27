@@ -5,6 +5,7 @@
  * Écrit ici plutôt que dans shared/ tant qu'un seul viewer l'emploie —
  * à remonter si un deuxième en a besoin.
  */
+import { DisclosureChevron } from "@mcpview/components/preact/controls";
 import { Button } from "~/shared/ui";
 
 const VARIANT_MAP: Record<
@@ -20,12 +21,14 @@ const VARIANT_MAP: Record<
 export function LocalActionButton({
   label,
   variant = "default",
+  opensDetail,
   disabled,
   loading,
   onClick,
 }: {
   label: string;
   variant?: "success" | "error" | "info" | "default";
+  opensDetail?: boolean;
   disabled?: boolean;
   loading?: boolean;
   /** Non utilisé dans cette implémentation — conservé pour la compatibilité. */
@@ -38,6 +41,7 @@ export function LocalActionButton({
       disabled={disabled || loading}
       onClick={onClick}
     >
+      {opensDetail && <DisclosureChevron expanded={false} />}
       {loading ? "…" : label}
     </Button>
   );

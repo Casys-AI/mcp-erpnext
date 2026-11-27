@@ -3,6 +3,7 @@
  * dessous, les questions « ~ » (pointillé, sortent vers le modèle).
  */
 
+import { DisclosureChevron } from "@mcpview/components/preact/controls";
 import { type Jump, jumpLabel } from "../jumps";
 import { useT } from "../i18n-hook";
 import { cx } from "../ui";
@@ -27,21 +28,12 @@ export function JumpList(
           disabled={!onJump}
           onClick={() => onJump?.(jump)}
           class={cx(
-            "group focus-visible:outline-2 focus-visible:outline-accent flex w-full items-center justify-between gap-2 rounded-[5px] border border-line-modal bg-count px-2.5 py-[7px] text-left font-mono text-[11.5px] text-ink transition-colors hover:border-accent hover:bg-control disabled:cursor-not-allowed disabled:opacity-50",
+            "focus-visible:outline-2 focus-visible:outline-accent flex w-full items-center gap-2 rounded-[5px] border border-line-modal bg-count px-2.5 py-[7px] text-left font-mono text-[11.5px] text-ink transition-colors hover:border-accent hover:bg-control disabled:cursor-not-allowed disabled:opacity-50",
             narrow && "min-h-[44px]",
           )}
         >
+          {onJump && <DisclosureChevron expanded={false} />}
           <span class="truncate">{jumpLabel(jump, t)}</span>
-          <span
-            aria-hidden="true"
-            class={cx(
-              "shrink-0 text-[13px] text-accent",
-              !narrow &&
-                "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
-            )}
-          >
-            ›
-          </span>
         </button>
       ))}
       {asks.length > 0 && (

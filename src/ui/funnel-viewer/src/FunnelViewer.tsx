@@ -49,7 +49,8 @@ import {
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
 import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
-import { ContextPinButton } from "~/shared/ContextPinButton.tsx";
+import { ContextPinButton, DisclosureChevron } from "@mcpview/components/preact/controls";
+import { acceptsDetailToggleClick } from "~/shared/detail-toggle.ts";
 import {
   canShareActiveContextResource,
   type ContextSelectionItem,
@@ -109,7 +110,7 @@ interface FunnelChartProps {
 function StageActions({ stage, chart, onDetail, touch = false }: {
   stage: FunnelStage;
   chart: FunnelChartProps;
-  onDetail: () => void;
+  onDetail?: () => void;
   touch?: boolean;
 }) {
   const t = useT();
@@ -117,7 +118,7 @@ function StageActions({ stage, chart, onDetail, touch = false }: {
   const local = chart.hasNavJump(stage.label);
   return (
     <div class="flex shrink-0 items-center justify-end">
-      {chart.hasDetail(stage) && (
+      {onDetail && chart.hasDetail(stage) && (
         <DetailToggleButton
           label={stage.label}
           actionLabel={t(
@@ -418,6 +419,7 @@ function SentArc() {
 
 function MobileFunnelChart(chart: FunnelChartProps & { touch: boolean }) {
   const { stages, activeStage, onInspect, onOpenDetail, touch } = chart;
+  const t = useT();
   const maxCount = Math.max(1, ...stages.map((s) => s.count));
   const firstCount = stages[0]?.count ?? 1;
 
@@ -448,10 +450,8 @@ function MobileFunnelChart(chart: FunnelChartProps & { touch: boolean }) {
         const nextStage = stages[idx + 1];
         const hasConnector = nextStage?.conversionRate != null;
         const isSelected = activeStage === stage.label;
-        // Truncate long labels to fit 132px column (~13 chars)
-        const label = stage.label.length > 12
-          ? stage.label.slice(0, 11) + "."
-          : stage.label;
+        const opensDetail = chart.hasNavJump(stage.label);
+        const summary = `${stage.label} · ${stage.count}`;
 
         // Pourcentage du total (1ère étape = 100 %)
         const totalPct = firstCount > 0
@@ -479,27 +479,21 @@ function MobileFunnelChart(chart: FunnelChartProps & { touch: boolean }) {
                   gridTemplateColumns:
                     "minmax(0, 1.6fr) minmax(18px, 1fr) auto auto",
                   gap: touch ? 6 : 7,
-                  minHeight: touch ? 40 : undefined,
+                  minHeight: touch ? 44 : 36,
                 }}
-                onClick={() => onInspect(stage.label)}
-                onDblClick={chart.hasNavJump(stage.label)
-                  ? () => void handleRowDetail(stage, idx)
-                  : undefined}
-                aria-label={`${stage.label} · ${stage.count}`}
-                aria-pressed={isSelected}
+                onClick={(event) => {
+                  if (!acceptsDetailToggleClick(event.detail)) return;
+                  if (opensDetail) void handleRowDetail(stage, idx);
+                  else onInspect(stage.label);
+                }}
+                aria-label={opensDetail
+                  ? t("interaction.detail.open", { label: summary })
+                  : summary}
+                aria-pressed={opensDetail ? undefined : isSelected}
               >
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 10.5,
-                    textTransform: "uppercase",
-                    color: "var(--color-ink-muted)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {label}
+                <span class="flex min-w-0 items-center gap-1 font-mono text-[10.5px] uppercase text-ink-muted">
+                  {opensDetail && <DisclosureChevron expanded={false} />}
+                  <span class="truncate">{stage.label}</span>
                 </span>
                 {/* Barre avec track de fond — hauteur 26px, overflow hidden */}
                 <div class="h-[26px] w-full rounded-[3px] bg-sunken overflow-hidden">
@@ -530,7 +524,9 @@ function MobileFunnelChart(chart: FunnelChartProps & { touch: boolean }) {
               <StageActions
                 stage={stage}
                 chart={chart}
-                onDetail={() => void handleRowDetail(stage, idx)}
+                onDetail={opensDetail
+                  ? undefined
+                  : () => void handleRowDetail(stage, idx)}
                 touch={touch}
               />
             </div>
@@ -654,6 +650,7 @@ function FunnelContent(
     reconcileView: activeContext.reconcileView,
     pending: activeContext.pending,
     selection: activeContext.selection,
+    recordPins: activeContext.recordPins,
     toggleGroupMember: activeContext.toggleGroupMember,
     setGroupMembers: activeContext.setGroupMembers,
     addGroupMembers: activeContext.addGroupMembers,
@@ -673,8 +670,7 @@ function FunnelContent(
   }, [data, activeContext.reconcileView]);
   /** Indique si une étape a un saut serveur disponible. */
   const availableTools = readAvailableTools(data);
-  const hasNavJump = (label: string): boolean =>
-    stageIsJumpable(data._stageJumps, label, jumpsEnabled, availableTools);
+  const hasNavJump = (label: string): boolean => stageJump(label) !== null;
 
   function stageMessage(stage: FunnelStage): string | undefined {
     return stage._drillDown ?? getStageDrillDown(stage.label, t);
@@ -682,7 +678,8 @@ function FunnelContent(
 
   function stageJump(label: string) {
     const navJumpHint = stageNavHint(data._stageJumps, label);
-    return navJumpHint && hasNavJump(label)
+    return navJumpHint &&
+        stageIsJumpable(data._stageJumps, label, jumpsEnabled, availableTools)
       ? jumpFromHint(
         navJumpHint,
         {},

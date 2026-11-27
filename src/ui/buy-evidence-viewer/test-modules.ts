@@ -40,6 +40,9 @@ export async function viewerTestDenoConfig(): Promise<unknown> {
     "https://raw.githubusercontent.com/mcpview/mcpview/50756aaf062794f08bf412cf0762a4aa8988b28d/packages/view-components/src/testing/surface-app-double.ts";
 
   return {
+    // Resolve the UI lockfile's installed component kit, including private tarball builds.
+    nodeModulesDir: "auto",
+    links: [join(VIEWER_ROOT, "..", "node_modules", "@mcpview", "components")],
     // The @mcpview/* family is released in lockstep, so these exact versions
     // are too fresh for the one-day delay; the exemption mirrors the
     // `jsr:@mcpview/server` one in the root deno.json. Every other dependency

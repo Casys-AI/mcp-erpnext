@@ -76,7 +76,7 @@ import {
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
 import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
-import { ContextPinButton } from "~/shared/ContextPinButton.tsx";
+import { ContextPinButton } from "@mcpview/components/preact/controls";
 import type { KpiPeriod } from "../../../code-mode/kpi-period.ts";
 import { acceptsDetailToggleClick } from "~/shared/detail-toggle.ts";
 import {
@@ -998,6 +998,7 @@ function KpiViewerContent({
     reconcileView: activeContext.reconcileView,
     pending: activeContext.pending,
     selection: activeContext.selection,
+    recordPins: activeContext.recordPins,
     toggleGroupMember: activeContext.toggleGroupMember,
     setGroupMembers: activeContext.setGroupMembers,
     addGroupMembers: activeContext.addGroupMembers,

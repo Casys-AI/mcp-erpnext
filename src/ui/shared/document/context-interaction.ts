@@ -1,3 +1,4 @@
+import type { RecordPinNames } from "../record-pin-coverage.ts";
 import type {
   ActiveContextLocalResource,
   ContextSelectionItem,
@@ -22,6 +23,7 @@ export interface DocumentContextController {
   supported: boolean;
   pending: boolean;
   selection: SelectionState;
+  recordPins: (doctype: string) => RecordPinNames;
   toggleGroupMember: (
     config: Omit<SelectionGroupConfig, "scopeKey">,
     member: SelectionGroupMemberInput,

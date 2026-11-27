@@ -11,6 +11,7 @@
  * demandé. Dans l'hôte, elle est absente et l'hôte décide.
  */
 
+import { installMcpViewInteractionStyles } from "@mcpview/components/preact/controls";
 import { getHostContext, subscribeHostContext } from "./host-context-hook";
 
 export type CasysTheme = "light" | "dark";
@@ -41,6 +42,7 @@ export function resolveTheme(override?: CasysTheme | null): CasysTheme {
  * Avec surcharge, l'abonnement n'est pas posé — elle gagne, point.
  */
 export function applyCasysTheme(override?: CasysTheme | null): CasysTheme {
+  installMcpViewInteractionStyles();
   const resolved = resolveTheme(override);
   document.documentElement.dataset.theme = resolved;
 

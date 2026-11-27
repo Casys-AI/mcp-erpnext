@@ -1,11 +1,13 @@
 import { assertEquals } from "@std/assert";
-import { projectedRecordNames } from "../active-context-chip.ts";
+import {
+  projectedRecordNames,
+  recordPinCoverage,
+} from "../record-pin-coverage.ts";
 import {
   emptySelectionState,
   projectedSelectionEntries,
   setSelectionGroupMembers,
 } from "../selection-projection.ts";
-import { kanbanPinCoverage } from "./pin-coverage.ts";
 
 Deno.test("column and card pins report only the acknowledged identities in bounded groups", () => {
   for (
@@ -32,7 +34,7 @@ Deno.test("column and card pins report only the acknowledged identities in bound
       "board",
       "Task",
     );
-    const body = kanbanPinCoverage(cards, () => true, names);
+    const body = recordPinCoverage(cards, (card) => card.id, () => true, names);
     assertEquals(body, {
       pressed: expected === count ? true : "mixed",
       allSelected: true,
@@ -41,11 +43,14 @@ Deno.test("column and card pins report only the acknowledged identities in bound
     });
     for (const card of cards) {
       assertEquals(
-        kanbanPinCoverage([card], () => true, names).pressed,
+        recordPinCoverage([card], (item) => item.id, () => true, names).pressed,
         names.has(card.id) ? true : "mixed",
       );
     }
-    assertEquals(kanbanPinCoverage(cards, () => false, names).pressed, false);
+    assertEquals(
+      recordPinCoverage(cards, (card) => card.id, () => false, names).pressed,
+      false,
+    );
     assertEquals(
       projectedRecordNames(
         projectedSelectionEntries(group),

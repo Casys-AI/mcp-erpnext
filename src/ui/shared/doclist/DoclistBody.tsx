@@ -37,11 +37,11 @@ import type { DoclistState, Row } from "./useDoclist";
 import { canCallViewerTool, hasExplicitAvailableTool } from "../viewer-tools";
 import { doclistDetailPanelId } from "./detail-panel.ts";
 import { nearestScrollDelta } from "./scroll-nearest.ts";
+import { recordPinCoverage } from "../record-pin-coverage.ts";
 import { doclistRowContextItem } from "./context-items.ts";
 import {
   doclistFilteredSelectionOperation,
   doclistGroupMember,
-  doclistHeaderSelection,
   doclistQueryFields,
   doclistQueryParent,
   extendDoclistRange,
@@ -56,10 +56,10 @@ export function resolveRowId(
   rowAction: DoclistData["_rowAction"],
   fallback: string,
 ): string {
-  if (rowAction) {
-    return String(getNestedValue(row, rowAction.idField) ?? fallback);
-  }
-  return String(row._id ?? row.name ?? fallback);
+  const declared = rowAction
+    ? getNestedValue(row, rowAction.idField)
+    : undefined;
+  return String(declared ?? row._id ?? row.name ?? fallback);
 }
 
 export function DoclistBody(
@@ -185,7 +185,7 @@ export function DoclistBody(
 
   function groupMemberForRow(row: Row, rowIndex: number) {
     if (!data.doctype) return null;
-    const name = resolveRowId(row, rowAction, String(rowIndex));
+    const name = resolveRowId(row, payloadRowAction, String(rowIndex));
     const envelope = recordOf(row, { doctype: data.doctype, name });
     return envelope
       ? doclistGroupMember(
@@ -218,41 +218,25 @@ export function DoclistBody(
       return member ? [member] : [];
     })
     : [];
-  const pinnedNames = new Set<string>();
-  if (groupConfig && context) {
-    // A partial server refresh can move pinned rows outside the loaded window.
-    for (const group of context.selection.groups) {
-      if (
-        group.doctype !== groupConfig.doctype ||
-        group.reconcileKey !== listContextKey
-      ) continue;
-      for (const { name } of group.members) {
-        if (context.isGroupMemberSelected(listContextKey, name)) {
-          pinnedNames.add(name);
-        }
-      }
-    }
-    // A document can also be pinned from its detail or another list.
-    for (const [index, row] of rows.entries()) {
-      const name = resolveRowId(row, rowAction, String(index));
-      if (pinnedNames.has(name)) continue;
-      const item = contextItemForRow(row, index);
-      if (item && context.isSelected(item)) pinnedNames.add(name);
-    }
-  }
-  const selectedMembers = filteredMembers.filter((member) =>
-    pinnedNames.has(member.name)
-  );
-  const headerSelection = doclistHeaderSelection(
+  const pins = groupConfig && context
+    ? context.recordPins(groupConfig.doctype)
+    : undefined;
+  const coverage = pins && recordPinCoverage(
     filteredMembers,
-    selectedMembers,
+    (member) => member.name,
+    (member) => pins.selected.has(member.name),
+    pins.shared,
   );
-  const selection = groupConfig && context
+  const selection = groupConfig && context && pins && coverage
     ? {
-      ...headerSelection,
-      pinnedCount: pinnedNames.size,
-      isSelected: (row: Row, index: number) =>
-        pinnedNames.has(resolveRowId(row, rowAction, String(index))),
+      ...coverage,
+      totalCount: filteredMembers.length,
+      pressedFor: (name: string): boolean | "mixed" =>
+        !pins.selected.has(name)
+          ? false
+          : pins.shared.has(name)
+          ? true
+          : "mixed",
       onToggle: (row: Row, index: number, shiftKey: boolean) => {
         const member = groupMemberForRow(row, index);
         if (!member) return;
@@ -274,7 +258,7 @@ export function DoclistBody(
       },
       onToggleAll: () => {
         const operation = doclistFilteredSelectionOperation(
-          headerSelection.checked,
+          coverage.allSelected,
           filteredMembers,
         );
         if (operation.kind === "remove") {
@@ -291,7 +275,7 @@ export function DoclistBody(
     rowIndex: number,
   ) {
     if (!context?.supported || !data.doctype) return null;
-    const rowId = resolveRowId(row, rowAction, String(rowIndex));
+    const rowId = resolveRowId(row, payloadRowAction, String(rowIndex));
     const envelope = recordOf(row, { doctype: data.doctype, name: rowId });
     return envelope
       ? doclistRowContextItem(
@@ -328,7 +312,7 @@ export function DoclistBody(
     list.tableColumns,
     reconcileView,
     reconcileGroup,
-    rowAction,
+    payloadRowAction,
     rows,
   ]);
 
@@ -341,7 +325,7 @@ export function DoclistBody(
       return;
     }
     const row = pageRows.find((r, i) =>
-      resolveRowId(r, rowAction, String(i)) === expandedId
+      resolveRowId(r, payloadRowAction, String(i)) === expandedId
     );
     if (!row) {
       // Le tableau ne rend que `pageRows`. Chercher dans `rows` laisserait
@@ -434,6 +418,7 @@ export function DoclistBody(
     // au rafraîchissement, c'est le signal qui nous concerne.
     rows,
     rowAction,
+    payloadRowAction,
     fixture,
     data.doctype,
   ]);
@@ -465,7 +450,7 @@ export function DoclistBody(
     row: Row,
     rowIndex: number,
   ): ContextInteractionTarget | undefined {
-    const rowId = resolveRowId(row, rowAction, String(rowIndex));
+    const rowId = resolveRowId(row, payloadRowAction, String(rowIndex));
     const isInspectable = Boolean(rowAction || row._detail != null);
     const invoice = following ? invoiceSelectionRef(data.doctype, row) : null;
     if (invoice && invoiceSelection) {
@@ -725,7 +710,8 @@ export function DoclistBody(
           <DoclistTable
             columns={list.tableColumns}
             rows={list.pageRows}
-            rowId={(row, index) => resolveRowId(row, rowAction, String(index))}
+            rowId={(row, index) =>
+              resolveRowId(row, payloadRowAction, String(index))}
             selectedId={expandedId}
             isFollowed={following && invoiceSelection
               ? (row) => {

@@ -85,12 +85,71 @@ const approval = createWriteApproval(root, host);
 const snippetRoot = document.createElement("div");
 const viewRoot = document.createElement("div");
 viewRoot.tabIndex = -1;
-root.append(snippetRoot, viewRoot);
+const contextStatus = document.createElement("p");
+contextStatus.setAttribute("role", "status");
+contextStatus.hidden = true;
+root.append(snippetRoot, contextStatus, viewRoot);
+
+const sendContext: App["updateModelContext"] = async (value, options) => {
+  const response = await host.updateModelContext(value, options);
+  if (!("isError" in response && response.isError)) contextStatus.hidden = true;
+  return response;
+};
+const panelContexts = createPanelContexts(sendContext);
+
+function contextHost(update: App["updateModelContext"]): App {
+  return new Proxy(host, {
+    get(target, key) {
+      if (key === "updateModelContext") return update;
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+// The declared-view dispatcher keeps a same-view update mounted and aborts its
+// signal when it replaces, rejects or disposes that viewer.
+const singleLoaders = new Map<string, () => Promise<View>>();
+for (const [uri, load] of loaders) {
+  singleLoaders.set(uri, async (): Promise<View> => {
+    const view = await load();
+    const scoped = (signal: AbortSignal) =>
+      contextHost(panelContexts.forPanel("single", uri, signal));
+    if ("mountSession" in view) {
+      return {
+        mountSession(root, _host, session, signal) {
+          return view.mountSession(root, scoped(signal), session, signal);
+        },
+      };
+    }
+    return {
+      mount(root, _host, result, signal) {
+        return view.mount(root, scoped(signal), result, signal);
+      },
+    };
+  });
+}
+
 const dispatcher = createDeclaredViewDispatcher({
   root: viewRoot,
   host,
-  loaders,
+  loaders: singleLoaders,
 });
+async function dispatchSingle(result: HostResult, signal: AbortSignal) {
+  try {
+    return await dispatcher.dispatch(result);
+  } finally {
+    try {
+      await panelContexts.clear();
+    } catch {
+      // The next delivery or context update retries from the last acknowledged snapshot.
+      if (!signal.aborted) {
+        contextStatus.textContent = t("context.active.error");
+        contextStatus.hidden = false;
+      }
+    }
+  }
+}
 
 type HostResult = Awaited<ReturnType<App["callServerTool"]>>;
 
@@ -107,33 +166,28 @@ function showText(text: string) {
   viewRoot.replaceChildren(message);
 }
 
-const panelContexts = createPanelContexts(host.updateModelContext.bind(host));
 let panels: ReturnType<typeof createDeclaredViewDispatcher<App>>[] = [];
 let boardLifetime: AbortController | undefined;
-let clearing = Promise.resolve();
 
 function clearPanels() {
-  if (!boardLifetime) return clearing;
-  boardLifetime.abort();
+  boardLifetime?.abort();
   boardLifetime = undefined;
   for (const panel of panels) panel.dispose();
   panels = [];
-  clearing = panelContexts.clear().catch(console.error);
-  return clearing;
 }
 
 async function showExecution(result: HostResult, signal: AbortSignal) {
-  await clearPanels();
+  clearPanels();
   if (signal.aborted) return;
   if (!readSnippetPanels(result).length) {
-    const rendered = await dispatcher.dispatch(result);
+    const rendered = await dispatchSingle(result, signal);
     if (signal.aborted) return;
     viewRoot.hidden = false;
     if (!rendered) showText(resultText(result));
     return;
   }
 
-  await dispatcher.dispatch({ content: [] });
+  await dispatchSingle({ content: [] }, signal);
   if (signal.aborted) return;
   const board = composeSnippetBoard(result, {
     layout: "grid",
@@ -180,13 +234,7 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
       heading.textContent,
       panelSignal,
     );
-    const panelHost = new Proxy(host, {
-      get(target, key) {
-        if (key === "updateModelContext") return updateContext;
-        const value = Reflect.get(target, key, target);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-    });
+    const panelHost = contextHost(updateContext);
     const kpiPorts = kpiViewPorts(
       readDeclaredViewSelection(native)?.resourceUri ?? "",
       panel.name,
@@ -233,9 +281,9 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
 }
 
 async function clearExecution(signal: AbortSignal) {
-  await clearPanels();
+  clearPanels();
   if (signal.aborted) return;
-  await dispatcher.dispatch({ content: [] });
+  await dispatchSingle({ content: [] }, signal);
   if (!signal.aborted) {
     viewRoot.replaceChildren();
     viewRoot.hidden = false;
@@ -327,7 +375,8 @@ host.onteardown = async () => {
   approval.close();
   render(null, snippetRoot);
   dispatcher.dispose();
-  await clearPanels();
+  clearPanels();
+  await panelContexts.clear();
   return {};
 };
 const ready = host.connect().then(() => bindHostContext(host));

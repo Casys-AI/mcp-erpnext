@@ -140,7 +140,20 @@ Deno.test("funnel charts inspect locally and give pinning a sibling button", asy
   );
   assertEquals(
     source.match(/onClick=\{\(\) => onInspect\(stage.label\)\}/g)?.length,
-    2,
+    1,
+  );
+  assertStringIncludes(
+    source,
+    "if (opensDetail) void handleRowDetail(stage, idx)",
+  );
+  assertStringIncludes(source, "else onInspect(stage.label)");
+  assertStringIncludes(
+    source,
+    "{opensDetail && <DisclosureChevron expanded={false} />}",
+  );
+  assertStringIncludes(
+    source,
+    "aria-pressed={opensDetail ? undefined : isSelected}",
   );
   assertStringIncludes(source, "aria-pressed={isSelected}");
   assertStringIncludes(source, "<ContextPinButton");

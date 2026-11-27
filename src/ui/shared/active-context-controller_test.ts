@@ -1317,3 +1317,48 @@ Deno.test("context resources - refresh preserves hidden derived resource until i
     },
   }]);
 });
+
+Deno.test("document pins reflect host acknowledgements, including other views and bounded identity queries", async () => {
+  for (
+    const [count, queryAvailable, represented] of [[12, false, 8], [
+      130,
+      true,
+      100,
+    ]] as const
+  ) {
+    const h = harness();
+    const rows = rowMembers(count);
+    const group = { ...listGroup, queryAvailable };
+    const operation = h.actions.addGroupMembers(group, rows);
+    const pins = () => h.actions.recordPins("Sales Invoice");
+    assertEquals(pins().shared.size, 0);
+    await acknowledge(h, operation);
+    const expectedNames = rows.map((row) => row.name);
+    assertEquals([...pins().selected], expectedNames);
+    const expectedShared = queryAvailable
+      ? expectedNames.slice(0, represented)
+      : expectedNames.slice(-represented);
+    assertEquals([...pins().shared], expectedShared);
+    assertEquals(h.actions.recordPins("Purchase Invoice").selected.size, 0);
+    assertEquals(
+      h.controller.actionsForScope("unrelated-panel").recordPins(
+        "Sales Invoice",
+      ).shared.size,
+      0,
+    );
+
+    const localOnly = rows.find((row) => !pins().shared.has(row.name))!;
+    await acknowledge(h, h.actions.toggleGroupMember(group, localOnly));
+    assertEquals(pins().selected.has(localOnly.name), false);
+
+    await acknowledge(
+      h,
+      h.actions.activate(item("record:Sales Invoice:FROM-DETAIL")),
+    );
+    assertEquals(pins().selected.has("FROM-DETAIL"), true);
+    assertEquals(pins().shared.has("FROM-DETAIL"), true);
+    await acknowledge(h, h.actions.removeGroupMembers(group, expectedNames));
+    assertEquals([...pins().selected], ["FROM-DETAIL"]);
+    assertEquals([...pins().shared], ["FROM-DETAIL"]);
+  }
+});

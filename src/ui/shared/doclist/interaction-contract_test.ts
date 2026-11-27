@@ -81,8 +81,8 @@ Deno.test("doclist wires the shared disclosure to the real inline panel", async 
     "const childRowsContextKey = documentChildRowsReconcileKey(envelope)",
   );
   assertStringIncludes(detail, "rowIndex,\n            childRowsContextKey,");
-  assertStringIncludes(table, "controls={target.controls}");
-  assertStringIncludes(table, "onToggle={() => target.onActivate()}");
+  assertStringIncludes(table, "contextInteractionProps(target, {");
+  assertStringIncludes(table, "<DisclosureChevron expanded={open} />");
 });
 
 Deno.test("generic doclist detail only exposes explicit relation asks", async () => {
@@ -147,12 +147,7 @@ Deno.test("doclist pin selection uses the filtered sort before pagination and th
   assertStringIncludes(body, "extendDoclistRange(");
   assertStringIncludes(body, "doclistFilteredSelectionOperation(");
   assertEquals(body.includes("if (context.pending) return"), false);
-  assertStringIncludes(body, "context.isSelected(item)");
-  assertStringIncludes(
-    body,
-    "context.isGroupMemberSelected(listContextKey, name)",
-  );
-  assertStringIncludes(body, "pinnedCount: pinnedNames.size");
+  assertStringIncludes(body, "context.recordPins(groupConfig.doctype)");
   assertStringIncludes(body, "hasExplicitAvailableTool(");
   assertStringIncludes(body, "complete: isDoclistResultComplete(data)");
   const row = body.slice(
@@ -163,38 +158,28 @@ Deno.test("doclist pin selection uses the filtered sort before pagination and th
   assertEquals(row.includes("context?.toggle"), false);
 });
 
-Deno.test("the dock exposes a separate pin action at the end of every row layout", async () => {
+Deno.test("all list layouts keep the detail chevron with the identity and expose one permanent pin column", async () => {
   const table = await Deno.readTextFile(
     new URL("./DoclistTable.tsx", import.meta.url),
   );
-  assertEquals(table.includes('type="checkbox"'), false);
+  assertEquals(
+    table.includes('type="checkbox"') || table.includes("railOpen"),
+    false,
+  );
   assertStringIncludes(
     table,
-    "const [railOpen, setRailOpen] = useState(false)",
+    "{interactive && <DisclosureChevron expanded={open} />}",
   );
-  assertStringIncludes(table, "aria-expanded={showPins}");
   assertStringIncludes(
     table,
-    'pressed={selection.indeterminate ? "mixed" : selection.checked}',
+    "pressed={selection.pressed}",
   );
-  const rowAction = table.slice(
-    table.indexOf("function RowAction("),
-    table.indexOf("function dueValue("),
-  );
-  assertStringIncludes(rowAction, "if (selection)");
-  assertStringIncludes(rowAction, "<ContextPinButton");
-  assertStringIncludes(rowAction, "<DetailToggleButton");
-  assertStringIncludes(
-    table,
-    "colSpan={columns.length + (hasRowAction ? 1 : 0)}",
-  );
+  assertStringIncludes(table, "colSpan={columns.length + (selection ? 1 : 0)}");
   for (const mode of ["CompactTable", "WideTable", "StackedList"]) {
     const source = table.split(`function ${mode}(`)[1].split("function ")[0];
-    assertEquals([...source.matchAll(/<RowAction\s/g)].length, 1, mode);
-    assertStringIncludes(
-      source,
-      "selection={showPins ? selection : undefined}",
-    );
+    assertEquals([...source.matchAll(/<RowPin\s/g)].length, 1, mode);
+    assertEquals([...source.matchAll(/<BulkPin\s/g)].length, 1, mode);
+    assertEquals([...source.matchAll(/<RowIdentity\s/g)].length, 1, mode);
   }
 });
 
@@ -238,7 +223,7 @@ Deno.test("all viewer context adapters expose relative group actions", async () 
   }
 });
 
-Deno.test("doclist row modifiers share checkbox actions and platform detection in every layout", async () => {
+Deno.test("doclist row modifiers share pin actions and platform detection in every layout", async () => {
   const table = await Deno.readTextFile(
     new URL("./DoclistTable.tsx", import.meta.url),
   );

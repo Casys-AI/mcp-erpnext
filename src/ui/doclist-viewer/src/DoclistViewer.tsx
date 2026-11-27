@@ -347,6 +347,7 @@ function DoclistContent({
     reconcileView: activeContext.reconcileView,
     pending: activeContext.pending,
     selection: activeContext.selection,
+    recordPins: activeContext.recordPins,
     toggleGroupMember: activeContext.toggleGroupMember,
     setGroupMembers: activeContext.setGroupMembers,
     addGroupMembers: activeContext.addGroupMembers,

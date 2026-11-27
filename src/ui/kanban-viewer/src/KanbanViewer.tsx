@@ -45,6 +45,7 @@ import {
   getErrorPresentation,
   normalizeMoveFailureMessage,
 } from "~/shared/kanban/presentation";
+import { DisclosureChevron } from "@mcpview/components/preact/controls";
 import { useKanbanPins } from "~/shared/kanban/useKanbanPins.tsx";
 import { useKanbanBoard } from "~/shared/kanban/useKanbanBoard";
 import { useTaskTimesheetAvailability } from "~/shared/kanban/useTaskTimesheetAvailability";
@@ -446,7 +447,7 @@ function KanbanCard({
                   })}
                   aria-haspopup="dialog"
                   class={cx(
-                    "group text-start text-cell text-ink transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                    "inline-flex w-full items-baseline gap-1 text-start text-cell text-ink transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                     "min-h-10",
                   )}
                   onClick={(event) => {
@@ -454,38 +455,8 @@ function KanbanCard({
                     onTitleClick(card);
                   }}
                 >
+                  <DisclosureChevron expanded={false} />
                   {card.title}
-                  {
-                    /*
-                    Le chevron est la seule chose qui dise que ce titre s'ouvre.
-                    La carte entière se saisit pour être déplacée, donc le clic
-                    n'est pas un geste disponible sur elle : sans marque, rien
-                    ne distingue ce titre du texte qui l'entoure.
-
-                    Il vit dans le bouton et non dans le coin de la carte, déjà
-                    occupé par le badge jalon ou l’épingle — et parce qu'une
-                    affordance doit toucher ce qu'elle désigne.
-                  */
-                  }
-                  <svg
-                    aria-hidden="true"
-                    width="5"
-                    height="8"
-                    viewBox="0 0 5 8"
-                    fill="none"
-                    class={cx(
-                      "ml-1.5 inline-block shrink-0 align-[-1px] text-ink-faint transition-all group-hover:text-accent",
-                      "group-hover:translate-x-0.5",
-                    )}
-                  >
-                    <path
-                      d="M1 1L4 4L1 7"
-                      stroke="currentColor"
-                      stroke-width="1.3"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
                 </button>
               )
               : card.title}
@@ -1041,6 +1012,7 @@ function KanbanBoardWithNav({
     reconcileView: activeContext.reconcileView,
     pending: activeContext.pending,
     selection: activeContext.selection,
+    recordPins: activeContext.recordPins,
     toggleGroupMember: activeContext.toggleGroupMember,
     setGroupMembers: activeContext.setGroupMembers,
     addGroupMembers: activeContext.addGroupMembers,
@@ -1052,7 +1024,7 @@ function KanbanBoardWithNav({
     canShareResource: (resource) =>
       canShareActiveContextResource(hostCapabilities, resource),
   };
-  const pins = useKanbanPins(board, context, rootKey, activeContext.selections);
+  const pins = useKanbanPins(board, context, rootKey);
   useLayoutEffect(() => {
     const root = nav.stack.levels[0];
     if (rootFreshEvent > rootMutationEvent && root?.stale) {

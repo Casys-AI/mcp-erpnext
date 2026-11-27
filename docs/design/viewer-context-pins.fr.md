@@ -12,7 +12,7 @@ Inventaire des neuf viewers enregistrés dans `src/ui/viewers.ts`. Le point de c
 
 | Vue | Avant cette migration | Règle de la bêta |
 | --- | --- | --- |
-| Liste de documents | Seule, clic ou Espace joignait la ligne. Le double-clic, Entrée ou le chevron dépliait la fiche. Dans une liste de factures liée, le clic ouvrait déjà le panneau voisin. Les cases étaient à gauche. | Ouvrir depuis la ligne, sous celle-ci en solo ou dans la fiche voisine si elle est reliée. Épingle indépendante à droite. L’en-tête permet d’épingler en bloc les résultats filtrés chargés, même au-delà de la page à l’écran. Replier la colonne conserve les épingles. |
+| Liste de documents | Seule, clic ou Espace joignait la ligne. Le double-clic, Entrée ou le chevron dépliait la fiche. Dans une liste de factures liée, le clic ouvrait déjà le panneau voisin. Les cases étaient à gauche. | Ouvrir depuis la ligne, sous celle-ci en solo ou dans la fiche voisine si elle est reliée. Épingle indépendante à droite. L’en-tête permet d’épingler en bloc les résultats filtrés chargés, même au-delà de la page à l’écran. Le chevron devant l’identité reste visible quand une autre facture est épinglée. |
 | Document | L’en-tête et les lignes enfants sélectionnables alimentaient le contexte. Des chevrons ouvraient les détails disponibles. | Épingles sur le document et les lignes partageables. Déplier un enfant reste une action de lecture. L’aperçu des pièces jointes et le partage du fichier avec sa note restent deux opérations distinctes. |
 | Facture | L’en-tête et les articles pouvaient être joints. Un article s’ouvrait au double-clic, avec Entrée ou par son chevron. | Épingler la facture ou un article depuis son propre contrôle à droite. L’ouverture d’un article et le changement de facture ont leur propre état. |
 | KPI | Le clic sur la barre ajoutait son mois au contexte. Dans le tableau lié, une seconde rangée de boutons répétait les mois pour piloter la marge. | Le clic active le mois et transmet la période au panneau lié. Épingler le point est un choix séparé. Un chiffre scalaire seul sans composant sélectionnable garde son affichage simple. |
@@ -24,9 +24,9 @@ Inventaire des neuf viewers enregistrés dans `src/ui/viewers.ts`. Le point de c
 
 ## Épingler les résultats d’une liste
 
-Au repos, le chevron en bout de ligne permet d’ouvrir le détail. Quand on déplie « Épingler au contexte », un trait occupe son emplacement. La ligne reste cliquable pour ouvrir la fiche et les colonnes gardent leur largeur. Le trait est oblique au repos et vertical lorsque la ligne est épinglée. Dans l’en-tête, un trait vertical interrompu signale une sélection partielle. Le bouton collectif agit sur toutes les lignes chargées qui correspondent à la recherche et aux filtres, en conservant les autres épingles.
+Le chevron précède l’identité du document et pivote quand sa fiche est ouverte. Le clic sur la ligne ouvre la fiche. L’épingle individuelle reste accessible en bout de ligne. Son trait est oblique au repos et vertical lorsque la ligne est épinglée. Deux traits dans l’en-tête indiquent l’action collective. Lorsque seule une partie du résultat est épinglée, un seul des deux traits se redresse. Au clavier et dans l’infobulle, le libellé précise l’action et le nombre de lignes concernées. Le bouton collectif agit sur toutes les lignes chargées qui correspondent à la recherche et aux filtres, en conservant les autres épingles.
 
-Lorsque le contexte peut contenir moins de références que l’utilisateur n’en a épinglées, un statut indique les deux nombres. Par exemple, 30 lignes épinglées peuvent fournir 8 références si l’opération de lecture de liste est indisponible. Avec cette opération, une sélection de 130 lignes peut fournir une requête portant sur 100 identifiants. [Sélections groupées et projections](selection-tiers/README.md)
+Lorsque le contexte peut contenir moins de références que l’utilisateur n’en a épinglées, un statut indique les deux nombres. Sur une ligne retenue localement mais absente du contexte transmis, le trait vertical est interrompu. Une activation la retire de la sélection locale. Par exemple, 30 lignes épinglées peuvent fournir 8 références si l’opération de lecture de liste est indisponible. Avec cette opération, une sélection de 130 lignes peut fournir une requête portant sur 100 identifiants. [Sélections groupées et projections](selection-tiers/README.md)
 
 Le focus clavier, la ligne ouverte et l’épingle représentent trois états différents. Le bouton d’épingle a un nom accessible, reste utilisable au tactile et conserve le focus quand on l’active. Les boutons ou chevrons de détail donnent un chemin utilisable sans double-clic. Un double-clic de compatibilité ne doit ni ouvrir deux fois ni envoyer de message.
 
@@ -34,12 +34,18 @@ Le focus clavier, la ligne ouverte et l’épingle représentent trois états di
 
 Une épingle est destinée au prochain tour de conversation où la vue fournit son contexte. Son état est lié à la racine de la vue. Épingler Blue Harbour **dans la liste**, puis afficher Amber **dans la fiche**, conserve Blue Harbour. Remplacer une fiche change sa racine et retire les contributions propres au document précédent. Le tableau Compose continue de fusionner les contributions des autres panneaux. Rejouer un snippet crée un nouveau tableau.
 
-Le viewer déclenche explicitement chaque effet. Une liaison Compose livre un événement tel que `invoice.selected` ou `kpi.period.selected` ; le contrôleur de contexte utilise `ui/update-model-context`. Le succès d’une lecture, l’acquittement d’une épingle et une réponse du modèle à une question sont vérifiés séparément. [Routage des factures](../../src/ui/code-mode/invoice-panels.ts) · [Routage des périodes](../../src/ui/code-mode/kpi-period-panels.tsx) · [Contexte des panneaux](../../src/ui/code-mode/panel-hosts.ts)
+Les vues importent leurs deux contrôles graphiques depuis `@mcpview/components/preact/controls`. Le composant reçoit son libellé et son état. Le viewer fournit l’identité métier et déclenche explicitement chaque effet. Une liaison Compose livre un événement tel que `invoice.selected` ou `kpi.period.selected` ; le contrôleur de contexte utilise `ui/update-model-context`. Le shell conserve le dernier état acquitté, y compris si un effacement échoue, et peut réessayer à la livraison suivante. Le succès d’une lecture, l’acquittement d’une épingle et une réponse du modèle à une question sont vérifiés séparément. [Routage des factures](../../src/ui/code-mode/invoice-panels.ts) · [Routage des périodes](../../src/ui/code-mode/kpi-period-panels.tsx) · [Contexte des panneaux](../../src/ui/code-mode/panel-hosts.ts)
 
 ## Parcours de vérification
 
-- Épingler Blue avant d’ouvrir une facture, lire Amber, puis vérifier que l’hôte reçoit toujours Blue. Répéter avec la colonne repliée.
-- Filtrer la liste, épingler le résultat, changer de page et modifier la recherche. L’épingle collective et le compteur doivent refléter les identités réellement jointes.
+Dans la bêta privée, `npm ci` dans `src/ui` installe les archives locales de
+`@mcpview/components` et de `@mcpview/compose` identifiées dans le lockfile.
+La première fournit les contrôles partagés. La seconde contient le routage de
+panneaux du commit MCPView `112cabf`. Les bundles HTML distribués embarquent ces
+modules au build.
+
+- Épingler Blue avant d’ouvrir une facture, lire Amber, puis vérifier que l’hôte reçoit toujours Blue. Retirer Blue depuis son épingle et vérifier que la fiche d’Amber reste ouverte.
+- Filtrer la liste, épingler le résultat, changer de page et modifier la recherche. L’état de l’épingle collective doit suivre les lignes du nouveau filtre. Vérifier les identités et les éventuelles limites annoncées dans le contexte reçu.
 - Lire octobre, l’épingler, puis lire novembre. Vérifier la nouvelle marge et l’absence d’une nouvelle écriture de contexte. Demander au chat quel mois est épinglé.
 - Vérifier les contrôles au clavier et au tactile, les erreurs d’acquittement et les lectures tardives. Le bouton de partage d’un fichier doit conserver son comportement et sa note.
 - Charger une preuve Buy valide, puis une session rejetée. Le changement doit retirer le contexte de l’ancienne session sans altérer les contributions des autres panneaux.

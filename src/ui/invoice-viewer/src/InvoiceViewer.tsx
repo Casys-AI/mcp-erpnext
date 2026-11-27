@@ -23,7 +23,7 @@ import {
 import { App } from "@modelcontextprotocol/ext-apps";
 import { ActiveContextChip } from "~/shared/ActiveContextChip";
 import { canShareActiveContextResource } from "~/shared/active-context";
-import { DisclosureChevron } from "~/shared/DisclosureChevron.tsx";
+import { DisclosureChevron } from "@mcpview/components/preact/controls";
 import { bindHostContext } from "~/shared/host-context-hook";
 import {
   type InvoiceDocumentRef,
@@ -845,6 +845,7 @@ function InvoiceContent({
     reconcileView: activeContext.reconcileView,
     pending: activeContext.pending,
     selection: activeContext.selection,
+    recordPins: activeContext.recordPins,
     toggleGroupMember: activeContext.toggleGroupMember,
     setGroupMembers: activeContext.setGroupMembers,
     addGroupMembers: activeContext.addGroupMembers,
@@ -1152,12 +1153,9 @@ function InvoiceContent({
       <Button
         key={action.key}
         variant={action.key === "payments" ? "accent" : "secondary"}
-        class={cx(
-          "group",
-          isMobile
-            ? "min-h-[44px] w-full rounded-touch text-body"
-            : "text-cell",
-        )}
+        class={isMobile
+          ? "min-h-[44px] w-full rounded-touch text-body"
+          : "text-cell"}
         disabled={fixture || actionLoading === actionKey}
         title={fixture
           ? previewTitle
@@ -1170,19 +1168,8 @@ function InvoiceContent({
           }
         }}
       >
+        {action.jump && <DisclosureChevron expanded={false} />}
         {actionLoading === actionKey ? "…" : action.label}
-        {action.jump && (
-          <span
-            aria-hidden="true"
-            class={cx(
-              "ml-1 text-accent",
-              !isMobile &&
-                "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
-            )}
-          >
-            ›
-          </span>
-        )}
       </Button>
     );
   }

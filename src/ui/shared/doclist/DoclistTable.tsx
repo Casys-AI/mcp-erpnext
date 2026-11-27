@@ -22,10 +22,8 @@ import {
   toneForStatus,
 } from "~/shared/status";
 import { type ComponentChildren, Fragment } from "preact";
-import { useId, useState } from "preact/hooks";
-import { ContextPinButton } from "~/shared/ContextPinButton.tsx";
+import { ContextPinButton, DisclosureChevron } from "@mcpview/components/preact/controls";
 import type { ClickIntentArbiter } from "~/shared/click-intent";
-import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import {
   contextInteractionProps,
   type ContextInteractionTarget,
@@ -74,11 +72,12 @@ interface CommonProps {
 }
 
 interface DoclistSelectionControls {
-  checked: boolean;
-  indeterminate: boolean;
+  pressed: boolean | "mixed";
+  allSelected: boolean;
+  selected: number;
+  shared: number;
   totalCount: number;
-  pinnedCount: number;
-  isSelected: (row: Record<string, unknown>, index: number) => boolean;
+  pressedFor: (name: string) => boolean | "mixed";
   onToggle: (
     row: Record<string, unknown>,
     index: number,
@@ -91,8 +90,6 @@ type ModeProps = CommonProps & {
   shape: (row: Record<string, unknown>, index: number) => RowShape;
   amountKey?: string;
   clickIntent: ClickIntentArbiter;
-  hasRowAction: boolean;
-  showPins: boolean;
 };
 
 export function DoclistTable(
@@ -108,18 +105,8 @@ export function DoclistTable(
 ) {
   const t = useT();
   const clickIntent = useClickIntent();
-  const [railOpen, setRailOpen] = useState(false);
-  const listId = useId();
-  const selection = common.selection;
-  const showPins = Boolean(railOpen && selection);
-
   /** Le statut ne s'affiche qu'en large, mais il colore la ligne partout. */
   const statusKey = common.columns.find((c) => isStatusField(c.id))?.id;
-  const hasRowAction = showPins ||
-    common.rows.some((row, index) =>
-      Boolean(common.interactionTarget?.(row, index)?.controls)
-    );
-
   const shape = (row: Record<string, unknown>, index: number): RowShape => {
     const id = common.rowId(row, index);
     return {
@@ -138,76 +125,27 @@ export function DoclistTable(
     shape,
     amountKey,
     clickIntent,
-    hasRowAction,
-    showPins,
   };
-  const railLabel = t(showPins ? "doclist.pin.hide" : "doclist.pin.show");
-  const countLabel = selection?.pinnedCount
-    ? t("doclist.pin.count", { count: selection.pinnedCount })
-    : undefined;
   return (
     <>
-      {selection && (
-        <div class="flex items-center justify-end border-b border-line-soft text-ink-muted">
-          {showPins && (
-            <span class="min-w-0 flex-1 truncate px-3 text-note">
-              {t("context.pin.label")}
-            </span>
-          )}
-          <button
-            type="button"
-            aria-expanded={showPins}
-            aria-controls={listId}
-            aria-label={countLabel ? `${railLabel} · ${countLabel}` : railLabel}
-            title={railLabel}
-            class="inline-flex min-h-9 min-w-9 items-center justify-center gap-1 rounded-chip px-1 text-note hover:bg-control focus-visible:outline-2 focus-visible:outline-accent [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-            onClick={() => setRailOpen(!railOpen)}
-          >
-            {countLabel && (
-              <span class="font-mono tabular-nums">
-                {selection.pinnedCount}
-              </span>
-            )}
-            <span aria-hidden="true" class="font-mono text-[16px]">
-              {showPins ? "›" : "‹"}
-            </span>
-          </button>
-          {showPins && (
-            <ContextPinButton
-              label={t(
-                selection.checked
-                  ? "doclist.pin.remove_all"
-                  : "doclist.pin.all",
-                { count: selection.totalCount },
-              )}
-              pressed={selection.indeterminate ? "mixed" : selection.checked}
-              disabled={selection.totalCount === 0}
-              onToggle={selection.onToggleAll}
-            />
-          )}
-        </div>
+      {layout === "mobile"
+        ? <CompactTable {...props} />
+        : layout === "panel"
+        ? <StackedList {...props} />
+        : (
+          <WideTable
+            {...props}
+            statusKey={statusKey}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={onSort}
+          />
+        )}
+      {common.rows.length === 0 && (
+        <p class="px-4 py-10 text-center text-data text-ink-muted">
+          {t("doclist.table.no_match")}
+        </p>
       )}
-      <div id={listId}>
-        {common.rows.length === 0
-          ? (
-            <p class="px-4 py-10 text-center text-data text-ink-muted">
-              {t("doclist.table.no_match")}
-            </p>
-          )
-          : layout === "mobile"
-          ? <CompactTable {...props} />
-          : layout === "panel"
-          ? <StackedList {...props} />
-          : (
-            <WideTable
-              {...props}
-              statusKey={statusKey}
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={onSort}
-            />
-          )}
-      </div>
     </>
   );
 }
@@ -236,42 +174,65 @@ function rowInteractionProps(
   };
 }
 
-// One column for either disclosure or pinning. Both controls have the same
-// footprint, so switching the rail does not move a readable row’s content.
-const ROW_ACTION_WIDTH = "w-9 shrink-0 [@media(pointer:coarse)]:w-11";
+const PIN_COLUMN_WIDTH = "w-9 shrink-0 [@media(pointer:coarse)]:w-11";
 
-function RowAction({ target, selection, name, row, index }: {
-  target?: ContextInteractionTarget;
-  selection?: DoclistSelectionControls;
+function RowIdentity({ interactive, open, children }: {
+  interactive: boolean;
+  open: boolean;
+  children: ComponentChildren;
+}) {
+  return (
+    <span class="inline-flex max-w-full items-center gap-1 align-middle">
+      {interactive && <DisclosureChevron expanded={open} />}
+      <span class="min-w-0 truncate">{children}</span>
+    </span>
+  );
+}
+
+function BulkPin({ selection }: { selection: DoclistSelectionControls }) {
+  const t = useT();
+  const action = t(
+    selection.allSelected ? "doclist.pin.remove_all" : "doclist.pin.all",
+    { count: selection.totalCount },
+  );
+  const label = selection.shared < selection.selected
+    ? `${action} · ${
+      t("context.active.partly_shared", {
+        shared: selection.shared,
+        total: selection.selected,
+      })
+    }`
+    : action;
+  return (
+    <ContextPinButton
+      group
+      label={label}
+      pressed={selection.pressed}
+      disabled={selection.totalCount === 0}
+      onToggle={selection.onToggleAll}
+    />
+  );
+}
+
+function RowPin({ selection, name, row, index }: {
+  selection: DoclistSelectionControls;
   name: string;
   row: Record<string, unknown>;
   index: number;
 }) {
   const t = useT();
-  if (selection) {
-    const pinned = selection.isSelected(row, index);
-    return (
-      <ContextPinButton
-        label={t(pinned ? "context.pin.remove" : "context.pin.add", {
-          label: name,
-        })}
-        pressed={pinned}
-        onToggle={(shift) => selection.onToggle(row, index, shift)}
-        class="self-start"
-      />
-    );
-  }
-  if (!target?.controls) {
-    return <span aria-hidden="true" class={ROW_ACTION_WIDTH} />;
-  }
+  const pressed = selection.pressedFor(name);
+  const labelKey = pressed === "mixed"
+    ? "context.pin.remove_local"
+    : pressed
+    ? "context.pin.remove"
+    : "context.pin.add";
   return (
-    <DetailToggleButton
-      expanded={Boolean(target.expanded)}
-      label={target.detailLabel ?? target.label}
-      controls={target.controls}
-      onToggle={() => target.onActivate()}
-      hint={target.label}
-      class={`${ROW_ACTION_WIDTH} h-9 self-start [@media(pointer:coarse)]:h-11`}
+    <ContextPinButton
+      label={t(labelKey, { label: name })}
+      pressed={pressed}
+      onToggle={(shift) => selection.onToggle(row, index, shift)}
+      className="self-start"
     />
   );
 }
@@ -350,9 +311,7 @@ function WideTable(
     onSort,
     detail,
     clickIntent,
-    hasRowAction,
     selection,
-    showPins,
   }:
     & ModeProps
     & {
@@ -362,7 +321,6 @@ function WideTable(
       onSort: (key: string) => void;
     },
 ) {
-  const t = useT();
   return (
     <table class="w-full table-fixed border-collapse">
       <thead>
@@ -421,15 +379,12 @@ function WideTable(
               </button>
             </th>
           ))}
-          {hasRowAction && (
-            <th scope="col" class={`${ROW_ACTION_WIDTH} border-b border-line`}>
-              <span class="sr-only">
-                {t(
-                  showPins
-                    ? "context.pin.label"
-                    : "doclist.detail.inspector_label",
-                )}
-              </span>
+          {selection && (
+            <th
+              scope="col"
+              class={`${PIN_COLUMN_WIDTH} border-b border-line p-0 text-center`}
+            >
+              <BulkPin selection={selection} />
             </th>
           )}
         </tr>
@@ -445,7 +400,7 @@ function WideTable(
           return (
             <Fragment key={id}>
               <tr
-                class={`border-b border-line-soft ${
+                class={`border-b border-line-soft [@media(pointer:coarse)]:h-11 ${
                   rowClasses(open, interactive, struck)
                 }`}
                 {...rowInteractionProps(
@@ -464,6 +419,14 @@ function WideTable(
                   const value = row[column.id];
                   const isFirst = columnIndex === 0;
                   const isLast = columnIndex === columns.length - 1;
+                  const cell =
+                    statusKey === column.id && typeof value === "string"
+                      ? <StatusCell value={value} />
+                      : value == null
+                      ? <span class="text-ink-ghost">—</span>
+                      : isFirst
+                      ? shortenId(formatCell(value))
+                      : formatCell(value);
                   return (
                     <td
                       key={column.id}
@@ -475,7 +438,7 @@ function WideTable(
                           : "px-3.5",
                         // Et le bord de sélection 2 px de la dernière : sur <tr>
                         // il ne se peindrait pas en border-collapse.
-                        isLast && !hasRowAction &&
+                        isLast && !selection &&
                         selectionEdge(
                           open,
                           interactive,
@@ -495,27 +458,24 @@ function WideTable(
                           : "text-ink-2",
                       ].filter(Boolean).join(" ")}
                     >
-                      {statusKey === column.id && typeof value === "string"
-                        ? <StatusCell value={value} />
-                        : value == null
-                        ? <span class="text-ink-ghost">—</span>
-                        // La première colonne porte l'identifiant : elle se
-                        // tronque par la gauche, seule la fin distingue les pièces.
-                        : isFirst
-                        ? shortenId(formatCell(value))
-                        : formatCell(value)}
+                      {isFirst
+                        ? (
+                          <RowIdentity interactive={interactive} open={open}>
+                            {cell}
+                          </RowIdentity>
+                        )
+                        : cell}
                     </td>
                   );
                 })}
-                {hasRowAction && (
+                {selection && (
                   <td
                     class={`p-0 text-center align-top ${
                       open ? "shadow-[inset_-2px_0_var(--color-accent)]" : ""
                     }`}
                   >
-                    <RowAction
-                      target={interactionTarget}
-                      selection={showPins ? selection : undefined}
+                    <RowPin
+                      selection={selection}
                       name={id}
                       row={raw}
                       index={index}
@@ -527,7 +487,7 @@ function WideTable(
                 <tr>
                   <td
                     class="p-0"
-                    colSpan={columns.length + (hasRowAction ? 1 : 0)}
+                    colSpan={columns.length + (selection ? 1 : 0)}
                   >
                     {detail}
                   </td>
@@ -570,9 +530,7 @@ function CompactTable(
     amountKey,
     detail,
     clickIntent,
-    hasRowAction,
     selection,
-    showPins,
   }: ModeProps,
 ) {
   const t = useT();
@@ -587,7 +545,7 @@ function CompactTable(
 
   return (
     <div>
-      <div class="flex border-y border-line bg-sunken">
+      <div class="flex items-center border-y border-line bg-sunken pr-[2px]">
         <div class={`grid ${mobileGrid} min-w-0 flex-1 px-3 py-1.5`}>
           <span class={MOBILE_HEAD}>
             {amountKey
@@ -607,7 +565,7 @@ function CompactTable(
             </span>
           )}
         </div>
-        {hasRowAction && <span aria-hidden="true" class={ROW_ACTION_WIDTH} />}
+        {selection && <BulkPin selection={selection} />}
       </div>
 
       <ul>
@@ -628,7 +586,7 @@ function CompactTable(
             <li key={id}>
               <div
                 class={[
-                  "flex min-h-10 items-stretch",
+                  "flex min-h-10 items-stretch [@media(pointer:coarse)]:min-h-[45px]",
                   `border-b border-line-soft border-l-2 ${TONE_RULE[tone]}`,
                   // Ici la ligne est une div : le bord droit tient dessus.
                   selectionEdge(
@@ -657,7 +615,9 @@ function CompactTable(
                       open ? "text-accent-text" : "text-ink-2"
                     }`}
                   >
-                    {idKey ? shortenId(formatCell(row[idKey]), 10, 1) : ""}
+                    <RowIdentity interactive={interactive} open={open}>
+                      {idKey ? shortenId(formatCell(row[idKey]), 10, 1) : ""}
+                    </RowIdentity>
                   </span>
                   <span class="truncate pr-2 text-data text-ink-muted">
                     {labelKey ? formatCell(row[labelKey]) : ""}
@@ -678,10 +638,9 @@ function CompactTable(
                     </span>
                   )}
                 </div>
-                {hasRowAction && (
-                  <RowAction
-                    target={interactionTarget}
-                    selection={showPins ? selection : undefined}
+                {selection && (
+                  <RowPin
+                    selection={selection}
                     name={id}
                     row={raw}
                     index={index}
@@ -714,9 +673,7 @@ function StackedList(
     amountKey,
     detail,
     clickIntent,
-    hasRowAction,
     selection,
-    showPins,
   }: ModeProps,
 ) {
   const { idKey, labelKey, trailingKey } = pickNarrowColumns(
@@ -728,91 +685,99 @@ function StackedList(
     trailingKey === amountKey;
 
   return (
-    <ul class="flex flex-col">
-      {rows.map((raw, index) => {
-        const { id, row, selected, open, interactionTarget, tone, struck } =
-          shape(
-            raw,
-            index,
-          );
-        const interactive = Boolean(interactionTarget);
-        const trailingValue = trailingIsAmount
-          ? dueValue(row, amountKey)
-          : trailingKey
-          ? row[trailingKey]
-          : undefined;
+    <>
+      {selection && (
+        <div class="flex justify-end border-b border-line bg-sunken pr-[2px]">
+          <BulkPin selection={selection} />
+        </div>
+      )}
+      <ul class="flex flex-col">
+        {rows.map((raw, index) => {
+          const { id, row, selected, open, interactionTarget, tone, struck } =
+            shape(
+              raw,
+              index,
+            );
+          const interactive = Boolean(interactionTarget);
+          const trailingValue = trailingIsAmount
+            ? dueValue(row, amountKey)
+            : trailingKey
+            ? row[trailingKey]
+            : undefined;
 
-        return (
-          <li key={id}>
-            <div
-              class={[
-                "flex min-h-10 items-stretch",
-                `border-b border-line-soft border-l-2 ${TONE_RULE[tone]}`,
-                selectionEdge(
-                  open,
-                  interactive,
-                ),
-                open ? "bg-row-selected" : "hover:bg-row-hover",
-              ].join(" ")}
-            >
+          return (
+            <li key={id}>
               <div
-                class={`flex min-w-0 flex-1 items-center justify-between gap-2.5 px-3 py-[9px] ${
-                  rowClasses(open, interactive, struck)
-                }`}
-                {...rowInteractionProps(
-                  interactionTarget,
-                  id,
-                  raw,
-                  index,
-                  selection,
-                  clickIntent,
-                )}
-                aria-current={open || undefined}
+                class={[
+                  "flex min-h-10 items-stretch [@media(pointer:coarse)]:min-h-[45px]",
+                  `border-b border-line-soft border-l-2 ${TONE_RULE[tone]}`,
+                  selectionEdge(
+                    open,
+                    interactive,
+                  ),
+                  open ? "bg-row-selected" : "hover:bg-row-hover",
+                ].join(" ")}
               >
-                <div class="flex min-w-0 flex-col gap-px">
-                  <span
-                    class={`truncate font-mono text-note ${
-                      open ? "text-accent-text" : "text-ink-2"
-                    }`}
-                  >
-                    {idKey ? shortenId(formatCell(row[idKey])) : ""}
-                  </span>
-                  {labelKey && (
-                    <span class="truncate text-note text-ink-muted">
-                      {formatCell(row[labelKey])}
+                <div
+                  class={`flex min-w-0 flex-1 items-center justify-between gap-2.5 px-3 py-[9px] ${
+                    rowClasses(open, interactive, struck)
+                  }`}
+                  {...rowInteractionProps(
+                    interactionTarget,
+                    id,
+                    raw,
+                    index,
+                    selection,
+                    clickIntent,
+                  )}
+                  aria-current={open || undefined}
+                >
+                  <div class="flex min-w-0 flex-col gap-px">
+                    <span
+                      class={`truncate font-mono text-note ${
+                        open ? "text-accent-text" : "text-ink-2"
+                      }`}
+                    >
+                      <RowIdentity interactive={interactive} open={open}>
+                        {idKey ? shortenId(formatCell(row[idKey])) : ""}
+                      </RowIdentity>
+                    </span>
+                    {labelKey && (
+                      <span class="truncate text-note text-ink-muted">
+                        {formatCell(row[labelKey])}
+                      </span>
+                    )}
+                  </div>
+                  {trailingKey && (
+                    <span
+                      class={`max-w-[45%] shrink-0 truncate font-mono text-cell ${
+                        trailingIsAmount ? "tabular-nums" : ""
+                      } ${
+                        trailingValue == null
+                          ? "text-ink-ghost"
+                          : trailingIsAmount
+                          ? `font-medium ${TONE_AMOUNT[tone]}`
+                          : "text-ink-muted"
+                      }`}
+                    >
+                      {trailingValue == null ? "—" : formatCell(trailingValue)}
                     </span>
                   )}
                 </div>
-                {trailingKey && (
-                  <span
-                    class={`max-w-[45%] shrink-0 truncate font-mono text-cell ${
-                      trailingIsAmount ? "tabular-nums" : ""
-                    } ${
-                      trailingValue == null
-                        ? "text-ink-ghost"
-                        : trailingIsAmount
-                        ? `font-medium ${TONE_AMOUNT[tone]}`
-                        : "text-ink-muted"
-                    }`}
-                  >
-                    {trailingValue == null ? "—" : formatCell(trailingValue)}
-                  </span>
+                {selection && (
+                  <RowPin
+                    selection={selection}
+                    name={id}
+                    row={raw}
+                    index={index}
+                  />
                 )}
               </div>
-              {hasRowAction && (
-                <RowAction
-                  target={interactionTarget}
-                  selection={showPins ? selection : undefined}
-                  name={id}
-                  row={raw}
-                  index={index}
-                />
-              )}
-            </div>
-            {selected && detail}
-          </li>
-        );
-      })}
-    </ul>
+              {selected && detail}
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }

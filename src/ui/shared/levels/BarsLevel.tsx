@@ -5,7 +5,7 @@
 
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
-import { ContextPinButton } from "../ContextPinButton.tsx";
+import { ContextPinButton } from "@mcpview/components/preact/controls";
 import { DetailToggleButton } from "../DetailToggleButton.tsx";
 import { formatCurrency, formatNumber, formatPercent } from "../format";
 import { useT } from "../i18n-hook";
@@ -601,7 +601,7 @@ export function BarsLevel(
           {inspected &&
             canSharePoint(activePoint.labelIndex, activePoint.seriesIndex) && (
             <ContextPinButton
-              class="ml-auto"
+              className="ml-auto"
               label={t(
                 isPointSelected?.(
                     activePoint.labelIndex,

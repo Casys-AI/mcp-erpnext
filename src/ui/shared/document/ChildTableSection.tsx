@@ -2,7 +2,7 @@
 
 import type { ComponentChildren } from "preact";
 import { DocumentPin } from "./DocumentPin.tsx";
-import { DisclosureChevron } from "../DisclosureChevron.tsx";
+import { DisclosureChevron } from "@mcpview/components/preact/controls";
 import { formatNumber } from "../format";
 import { type TFunction, useT } from "../i18n-hook";
 import { useClickIntent } from "../useClickIntent.ts";

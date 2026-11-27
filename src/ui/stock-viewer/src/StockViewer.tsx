@@ -32,9 +32,8 @@ import {
   ViewerShell,
 } from "~/shared/ui";
 import { useViewerLayout } from "~/shared/useViewerLayout";
-import { DisclosureChevron } from "~/shared/DisclosureChevron.tsx";
+import { ContextPinButton, DisclosureChevron } from "@mcpview/components/preact/controls";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
-import { ContextPinButton } from "~/shared/ContextPinButton.tsx";
 import { acceptsDetailToggleClick } from "~/shared/detail-toggle.ts";
 import { type Tone, TONE_RULE } from "~/shared/status";
 import {
@@ -458,6 +457,7 @@ function StockContent(
     reconcileView: activeContext.reconcileView,
     pending: activeContext.pending,
     selection: activeContext.selection,
+    recordPins: activeContext.recordPins,
     toggleGroupMember: activeContext.toggleGroupMember,
     setGroupMembers: activeContext.setGroupMembers,
     addGroupMembers: activeContext.addGroupMembers,
@@ -823,6 +823,7 @@ function StockContent(
           </div>
           {bulkState !== undefined && (
             <ContextPinButton
+              group
               label={t(
                 bulkState === true
                   ? "doclist.pin.remove_all"

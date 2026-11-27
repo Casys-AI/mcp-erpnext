@@ -1,3 +1,4 @@
+import { recordPinNames } from "./record-pin-coverage.ts";
 import {
   type ActiveContextResult,
   type ActiveContextSelection,
@@ -597,6 +598,8 @@ export function createActiveContextController(
           )
         ),
       isGroupMemberSelected,
+      recordPins: (doctype: string) =>
+        recordPinNames(state.selection, state.selections, actionScope, doctype),
       remove,
       clear,
       runConversation,

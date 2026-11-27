@@ -3,9 +3,37 @@ import {
   pickAmountColumn,
   pickDateColumn,
   pickNarrowColumns,
+  selectVisibleColumns,
   shortenId,
   sumColumn,
 } from "./columns.ts";
+
+Deno.test("a declared document ID leads all layouts even outside the six default columns", () => {
+  const fields = [
+    "customer",
+    "status",
+    "supplier",
+    "project",
+    "grand_total",
+    "posting_date",
+    "asset_ref",
+  ];
+  const visible = selectVisibleColumns(fields, "asset_ref");
+  assertEquals(visible.length, 6);
+  assertEquals(visible[0], "asset_ref");
+  assertEquals(
+    pickNarrowColumns(
+      visible.map((id) => ({ id, numeric: false })),
+      "grand_total",
+      (id) => id === "status",
+    ).idKey,
+    "asset_ref",
+  );
+  assertEquals(
+    selectVisibleColumns(["customer", "name"], "missing")[0],
+    "name",
+  );
+});
 
 Deno.test("pickDateColumn préfère la date métier et accepte un champ de date personnalisé", () => {
   assertEquals(

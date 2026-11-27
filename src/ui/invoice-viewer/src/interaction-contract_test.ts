@@ -10,7 +10,10 @@ Deno.test("invoice lines expose one detail-only chevron in wide and narrow layou
     source,
     "controls: lineDetailId(rowIndex)",
   );
-  assertEquals([...source.matchAll(/<DisclosureChevron/g)].length, 2);
+  assertEquals(
+    [...source.matchAll(/<DisclosureChevron expanded=\{isExpanded\}/g)].length,
+    2,
+  );
   assertEquals(
     [...source.matchAll(/<div id=\{lineDetailId\(rowIndex\)\}>/g)].length,
     2,

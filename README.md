@@ -234,7 +234,13 @@ screens remains an upstream MCP View follow-up.
 
 ### Navigation and active context
 
-Viewers progressively select the best interaction supported by the host:
+In the Code Mode beta, clicking a document row opens its detail. A leading
+chevron marks rows you can open. Use the pin at the right to attach that record
+to the conversation, or the double pin in the header to attach all loaded rows
+matching the current filter. On linked KPI cards, clicking a month updates the
+neighbouring card. Pinning the month keeps it in context while you explore another.
+
+Viewers use the capabilities announced by the host:
 
 - `serverTools` opens typed list, record, and chart targets inside the current
   viewer through `app.callServerTool()`. Back and breadcrumb navigation restore
@@ -243,10 +249,10 @@ Viewers progressively select the best interaction supported by the host:
   bounded embedded resource. The server also requires the MCP client to announce
   the MCP Apps extension and HTML MIME type before serving file bytes. The
   viewer never opens an ERPNext file URL directly.
-- `updateModelContext` lets chart, KPI, and funnel selections join a bounded
-  active-context snapshot. The compact context chip keeps up to eight items and
-  lets users remove one item or clear them all. The snapshot contains selected
-  values, never hidden instructions for the model.
+- `updateModelContext` sends a bounded snapshot of the pins. In Compose, the
+  snapshot includes the contributions from the active panels. Users can remove
+  a pin or clear the basket. When a group exceeds the supported projection, the
+  viewer reports how many of the selected records are represented.
 - `message.text` keeps `app.sendMessage()` as a conversational fallback when
   direct navigation or context replacement is unavailable.
 - Without these capabilities, local inspection remains available and unsupported

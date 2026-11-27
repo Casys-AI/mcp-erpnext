@@ -6,6 +6,45 @@
  * hors navigateur. Ici tout est pur, donc vérifiable par `deno test`.
  */
 
+/** Max columns shown in the table — extra columns go to the detail panel */
+export const MAX_VISIBLE_COLUMNS = 6;
+
+/** Columns to prioritize (shown first). Order matters. */
+const PRIORITY_COLUMNS = [
+  "name",
+  "status",
+  "customer",
+  "customer_name",
+  "supplier",
+  "supplier_name",
+  "item_code",
+  "item_name",
+  "employee_name",
+  "project",
+  "subject",
+  "grand_total",
+  "outstanding_amount",
+  "posting_date",
+  "transaction_date",
+  "delivery_date",
+];
+
+/** Keep the declared row identity visible even when the table caps its columns. */
+export function selectVisibleColumns(
+  allKeys: readonly string[],
+  identityField?: string,
+): string[] {
+  const available = new Set(allKeys);
+  const priority = identityField
+    ? [identityField, ...PRIORITY_COLUMNS]
+    : PRIORITY_COLUMNS;
+  const ordered = new Set([...priority, ...[...available].sort()]);
+  return [...ordered].filter((field) => available.has(field)).slice(
+    0,
+    MAX_VISIBLE_COLUMNS,
+  );
+}
+
 /**
  * Champs de montant d'ERPNext, du plus parlant au moins parlant.
  *

@@ -8,6 +8,14 @@
 
 @import "./shared/tokens.css";
 
+.mcp-view-context-pin, .mcp-view-disclosure-chevron {
+  --mcp-view-quiet: var(--color-ink-faint);
+  --mcp-view-accent: var(--color-accent);
+  --mcp-view-accent-text: var(--color-accent);
+  --mcp-view-subtle: var(--color-control);
+  --mcp-view-radius-control: var(--radius-chip);
+}
+
 @layer base {
   /**
    * Surtout ne pas poser de font-size ici : `rem` se rapporte à la racine, et

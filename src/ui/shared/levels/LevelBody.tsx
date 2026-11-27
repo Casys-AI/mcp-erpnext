@@ -4,6 +4,7 @@
  * tout ce qu'on y a empilé.
  */
 
+import { DisclosureChevron } from "@mcpview/components/preact/controls";
 import type { App } from "@modelcontextprotocol/ext-apps";
 import type { ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
@@ -430,8 +431,8 @@ function RecordDocumentLevel({
             class="min-h-8 px-2.5 py-1 text-chip"
             onClick={() => onJump?.(jump)}
           >
+            <DisclosureChevron expanded={false} />
             {jump.label}
-            <span aria-hidden="true">›</span>
           </Button>
         ))}
         {rowAsks.map((ask) => (

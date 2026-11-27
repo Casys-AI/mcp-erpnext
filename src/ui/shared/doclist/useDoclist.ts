@@ -72,8 +72,8 @@ export function useDoclist(
         if (!HIDDEN_FIELDS.has(key) && !key.startsWith("_")) allKeys.add(key);
       }
     }
-    return selectVisibleColumns(Array.from(allKeys));
-  }, [rows]);
+    return selectVisibleColumns(Array.from(allKeys), data._rowAction?.idField);
+  }, [rows, data._rowAction?.idField]);
 
   const filtered = useMemo(() => {
     let result = rows;

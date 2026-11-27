@@ -33,8 +33,9 @@ Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 > [Code Mode prerelease](https://github.com/Casys-AI/mcp-erpnext/releases).
 >
 > Ask “Save this for Monday” after a successful run to see a save confirmation.
-> Ask “Show my snippets” to search saved programs and read their JavaScript. In a new chat on the same
-> connection, ask “Run my Monday invoice list at €3,000” to see updated results.
+> Ask “Show my snippets” to search saved programs and read their JavaScript. In
+> a new chat on the same connection, ask “Run my Monday invoice list at €3,000”
+> to see updated results.
 
 ## Screenshots
 
@@ -238,7 +239,8 @@ In the Code Mode beta, clicking a document row opens its detail. A leading
 chevron marks rows you can open. Use the pin at the right to attach that record
 to the conversation, or the double pin in the header to attach all loaded rows
 matching the current filter. On linked KPI cards, clicking a month updates the
-neighbouring card. Pinning the month keeps it in context while you explore another.
+neighbouring card. Pinning the month keeps it in context while you explore
+another.
 
 Viewers use the capabilities announced by the host:
 
@@ -250,8 +252,8 @@ Viewers use the capabilities announced by the host:
   the MCP Apps extension and HTML MIME type before serving file bytes. The
   viewer never opens an ERPNext file URL directly.
 - `updateModelContext` sends a bounded snapshot of the pins. In Compose, the
-  snapshot includes the contributions from the active panels. Users can remove
-  a pin or clear the basket. When a group exceeds the supported projection, the
+  snapshot includes the contributions from the active panels. Users can remove a
+  pin or clear the basket. When a group exceeds the supported projection, the
   viewer reports how many of the selected records are represented.
 - `message.text` keeps `app.sendMessage()` as a conversational fallback when
   direct navigation or context replacement is unavailable.

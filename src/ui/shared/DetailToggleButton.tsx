@@ -18,7 +18,7 @@ export interface DetailToggleButtonProps {
 }
 
 /**
- * Voie explicite vers le detail, complementaire au double-clic de la donnee.
+ * Commande explicite du détail pour la souris, le clavier et le tactile.
  * Le second `click` natif d'un double-clic est ignore pour ne pas replier le
  * detail que le premier vient d'ouvrir.
  */

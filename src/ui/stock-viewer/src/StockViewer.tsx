@@ -32,9 +32,10 @@ import {
   ViewerShell,
 } from "~/shared/ui";
 import { useViewerLayout } from "~/shared/useViewerLayout";
-import { ContextPinButton, DisclosureChevron } from "@mcpview/components/preact/controls";
+import { DisclosureChevron } from "@mcpview/components/preact/controls";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
-import { acceptsDetailToggleClick } from "~/shared/detail-toggle.ts";
+import { useVisualItemGestures } from "@mcpview/components/preact/controls";
+import { visualRowProps } from "~/shared/document/visual-row-props.ts";
 import { type Tone, TONE_RULE } from "~/shared/status";
 import {
   currentLocale,
@@ -77,7 +78,6 @@ import { buildStockRowJump } from "./stockJumps.ts";
 import {
   STOCK_CONTEXT_RECONCILE_KEY,
   stockBinMember,
-  stockBulkPinState,
   stockRowContextItem,
   stockRowDetailId,
 } from "./stock-interactions.ts";
@@ -451,6 +451,7 @@ function StockContent(
   const context: DocumentContextController = {
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
+    activateMany: activeContext.activateMany,
     activateReversible: activeContext.activateReversible,
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
@@ -584,11 +585,6 @@ function StockContent(
     });
   }, [filtered, sortKey, sortDir]);
 
-  const visibleMembers = sorted.flatMap((row) => membersByRow.get(row) ?? []);
-  const bulkState = context.supported && visibleMembers.length === sorted.length
-    ? stockBulkPinState(activeContext.selection, binGroup, visibleMembers)
-    : undefined;
-
   const totalValue = useMemo(
     () => sorted.reduce((sum, entry) => sum + (entry.stock_value ?? 0), 0),
     [sorted],
@@ -622,11 +618,42 @@ function StockContent(
     setExpandedKey((cur) => (cur === key ? null : key));
   }
 
+  const rowsById = new Map(sorted.map((row) => [rowKey(row), row]));
+  function toggleStockContext(row: StockEntry) {
+    const member = membersByRow.get(row);
+    if (member) void context.toggleGroupMember(binGroup, member);
+    else void context.toggle(contextItemFor(row));
+  }
+  const visualItemsRef = useVisualItemGestures({
+    onActivate: (id) => {
+      const row = rowsById.get(id);
+      if (row && canDrillRow(row)) toggleRowDetail(row, rowJump(row));
+    },
+    onToggle: (id) => {
+      const row = rowsById.get(id);
+      if (row && context.supported) toggleStockContext(row);
+    },
+    onAdd: (ids) => {
+      if (!context.supported) return;
+      const members = [];
+      const singles = [];
+      for (const id of ids) {
+        const row = rowsById.get(id);
+        if (!row) continue;
+        const member = membersByRow.get(row);
+        if (member) members.push(member);
+        else singles.push(contextItemFor(row));
+      }
+      if (members.length) {
+        void context.addGroupMembers(binGroup, members, singles);
+      } else if (singles.length) {
+        void context.activateMany(singles);
+      }
+    },
+  });
+
   const warehouse = deriveWarehouse(data);
   const grid = isMobile ? GRID_MOBILE : GRID_WIDE;
-  const rowGrid = context.supported
-    ? "grid-cols-[minmax(0,1fr)_36px] [@media(pointer:coarse)]:grid-cols-[minmax(0,1fr)_44px]"
-    : "grid-cols-[minmax(0,1fr)]";
 
   return (
     <ViewerShell containerRef={ref}>
@@ -752,14 +779,13 @@ function StockContent(
       )}
 
       {/* ── Scrollable body ─────────────────────────────── */}
-      <div class="min-h-0 flex-1 overflow-y-auto scroll-slim">
+      <div
+        ref={visualItemsRef}
+        data-visual-selection-surface={context.supported ? "" : undefined}
+        class="min-h-0 flex-1 touch-pan-y overflow-y-auto scroll-slim"
+      >
         {/* Column headers */}
-        <div
-          class={cx(
-            "grid shrink-0 items-center border-b border-l-2 border-line border-l-transparent bg-sunken",
-            rowGrid,
-          )}
-        >
+        <div class="grid shrink-0 items-center border-b border-l-2 border-line border-l-transparent bg-sunken">
           <div
             class="grid min-w-0"
             style={{
@@ -821,27 +847,6 @@ function StockContent(
                 </>
               )}
           </div>
-          {bulkState !== undefined && (
-            <ContextPinButton
-              group
-              label={t(
-                bulkState === true
-                  ? "doclist.pin.remove_all"
-                  : "doclist.pin.all",
-                { count: visibleMembers.length },
-              )}
-              pressed={bulkState}
-              disabled={activeContext.pending}
-              onToggle={() => {
-                if (bulkState === true) {
-                  void context.removeGroupMembers(
-                    binGroup,
-                    visibleMembers.map((member) => member.name),
-                  );
-                } else void context.addGroupMembers(binGroup, visibleMembers);
-              }}
-            />
-          )}
         </div>
 
         {/* Data rows */}
@@ -877,12 +882,17 @@ function StockContent(
             );
 
             return (
-              <div key={key}>
+              <div
+                key={key}
+                data-mcp-view-context-row={isContextSelected
+                  ? "selected"
+                  : "idle"}
+                data-mcp-view-context-row-break={isExpanded ? "" : undefined}
+              >
                 {/* Main row */}
                 <div
                   class={cx(
                     "grid items-center border-l-2 border-b border-b-line-soft transition-colors",
-                    rowGrid,
                     TONE_RULE[tone],
                     isDanger || isExpanded
                       ? "bg-row-selected"
@@ -894,27 +904,29 @@ function StockContent(
                   }}
                 >
                   <RowControl
+                    data-mcp-view-context-row-outline
                     class={cx(
                       "grid min-w-0 items-center text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
-                      canDrill &&
+                      (canDrill || context.supported) &&
                         "min-h-9 cursor-pointer self-stretch active:bg-row-selected [@media(pointer:coarse)]:min-h-11",
                     )}
                     style={{
                       gridTemplateColumns: grid,
                       padding: isMobile ? "0 4px 0 12px" : "8px 4px 8px 16px",
                     }}
-                    {...(canDrill && {
-                      type: "button" as const,
-                      "aria-label": detailLabel,
-                      title: detailLabel,
-                      "aria-expanded": isExpanded,
-                      "aria-controls": isExpanded ? detailId : undefined,
-                      onClick: (event: MouseEvent) => {
-                        if (acceptsDetailToggleClick(event.detail)) {
-                          toggleRowDetail(row, jump);
+                    {...visualRowProps(
+                      key,
+                      canDrill
+                        ? {
+                          label: detailLabel,
+                          expanded: isExpanded,
+                          controls: isExpanded ? detailId : undefined,
+                          onActivate: () => toggleRowDetail(row, jump),
                         }
-                      },
-                    })}
+                        : undefined,
+                      context.supported ? isContextSelected : undefined,
+                    )}
+                    {...(canDrill && { type: "button" as const })}
                   >
                     {/* item_code */}
                     <span
@@ -972,23 +984,6 @@ function StockContent(
                       {formatCurrency(row.stock_value, data.currency)}
                     </span>
                   </RowControl>
-
-                  {context.supported && (
-                    <ContextPinButton
-                      label={t(
-                        isContextSelected
-                          ? "context.pin.remove"
-                          : "context.pin.add",
-                        { label: rowLabel },
-                      )}
-                      pressed={isContextSelected}
-                      onToggle={() => {
-                        if (member) {
-                          void context.toggleGroupMember(binGroup, member);
-                        } else void context.toggle(contextItem);
-                      }}
-                    />
-                  )}
                 </div>
 
                 {isJumpExpanded && (

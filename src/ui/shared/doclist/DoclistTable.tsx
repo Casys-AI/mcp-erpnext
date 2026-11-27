@@ -22,14 +22,11 @@ import {
   toneForStatus,
 } from "~/shared/status";
 import { type ComponentChildren, Fragment } from "preact";
-import { ContextPinButton, DisclosureChevron } from "@mcpview/components/preact/controls";
-import type { ClickIntentArbiter } from "~/shared/click-intent";
-import {
-  contextInteractionProps,
-  type ContextInteractionTarget,
-} from "~/shared/document/context-interaction";
+import { DisclosureChevron } from "@mcpview/components/preact/controls";
+import type { ContextInteractionTarget } from "~/shared/document/context-interaction";
+import { useVisualItemGestures } from "@mcpview/components/preact/controls";
+import { visualRowProps } from "~/shared/document/visual-row-props.ts";
 import type { ViewerLayout } from "~/shared/useViewerLayout";
-import { useClickIntent } from "~/shared/useClickIntent";
 import { useT } from "~/shared/i18n-hook";
 import { formatCell, isStatusField } from "./helpers";
 import { pickNarrowColumns, shortenId } from "./columns";
@@ -72,24 +69,20 @@ interface CommonProps {
 }
 
 interface DoclistSelectionControls {
-  pressed: boolean | "mixed";
-  allSelected: boolean;
-  selected: number;
-  shared: number;
-  totalCount: number;
   pressedFor: (name: string) => boolean | "mixed";
   onToggle: (
     row: Record<string, unknown>,
     index: number,
     shiftKey: boolean,
   ) => void;
-  onToggleAll: () => void;
+  onAdd: (
+    rows: readonly { row: Record<string, unknown>; index: number }[],
+  ) => void;
 }
 
 type ModeProps = CommonProps & {
   shape: (row: Record<string, unknown>, index: number) => RowShape;
   amountKey?: string;
-  clickIntent: ClickIntentArbiter;
 };
 
 export function DoclistTable(
@@ -104,7 +97,29 @@ export function DoclistTable(
     },
 ) {
   const t = useT();
-  const clickIntent = useClickIntent();
+  const rowsById = new Map(common.rows.map((row, index) => [
+    common.rowId(row, index),
+    { row, index },
+  ]));
+  const visualItemsRef = useVisualItemGestures({
+    onActivate: (id) => {
+      const entry = rowsById.get(id);
+      if (entry) {
+        common.interactionTarget?.(entry.row, entry.index)?.onActivate();
+      }
+    },
+    onToggle: (id) => {
+      const entry = rowsById.get(id);
+      if (entry) common.selection?.onToggle(entry.row, entry.index, false);
+    },
+    onAdd: (ids) => {
+      const entries = ids.flatMap((id) => {
+        const entry = rowsById.get(id);
+        return entry ? [entry] : [];
+      });
+      if (entries.length) common.selection?.onAdd(entries);
+    },
+  });
   /** Le statut ne s'affiche qu'en large, mais il colore la ligne partout. */
   const statusKey = common.columns.find((c) => isStatusField(c.id))?.id;
   const shape = (row: Record<string, unknown>, index: number): RowShape => {
@@ -124,10 +139,13 @@ export function DoclistTable(
     ...common,
     shape,
     amountKey,
-    clickIntent,
   };
   return (
-    <>
+    <div
+      ref={visualItemsRef}
+      data-visual-selection-surface={common.selection ? "" : undefined}
+      class={common.selection ? "touch-pan-y" : undefined}
+    >
       {layout === "mobile"
         ? <CompactTable {...props} />
         : layout === "panel"
@@ -146,7 +164,7 @@ export function DoclistTable(
           {t("doclist.table.no_match")}
         </p>
       )}
-    </>
+    </div>
   );
 }
 
@@ -156,16 +174,10 @@ function rowInteractionProps(
   row: Record<string, unknown>,
   index: number,
   selection: DoclistSelectionControls | undefined,
-  arbiter: ClickIntentArbiter,
 ) {
-  const base = contextInteractionProps(target, {
-    arbiter,
-    key: `doclist-row:${id}`,
-  });
   return {
-    ...base,
-    ...doclistRowEvents(base, {
-      arbiter,
+    ...visualRowProps(id, target, selection?.pressedFor(id)),
+    ...doclistRowEvents({
       platform: getBrowserPlatform(),
       onToggle: selection
         ? (shiftKey) => selection.onToggle(row, index, shiftKey)
@@ -173,8 +185,6 @@ function rowInteractionProps(
     }),
   };
 }
-
-const PIN_COLUMN_WIDTH = "w-9 shrink-0 [@media(pointer:coarse)]:w-11";
 
 function RowIdentity({ interactive, open, children }: {
   interactive: boolean;
@@ -186,54 +196,6 @@ function RowIdentity({ interactive, open, children }: {
       {interactive && <DisclosureChevron expanded={open} />}
       <span class="min-w-0 truncate">{children}</span>
     </span>
-  );
-}
-
-function BulkPin({ selection }: { selection: DoclistSelectionControls }) {
-  const t = useT();
-  const action = t(
-    selection.allSelected ? "doclist.pin.remove_all" : "doclist.pin.all",
-    { count: selection.totalCount },
-  );
-  const label = selection.shared < selection.selected
-    ? `${action} · ${
-      t("context.active.partly_shared", {
-        shared: selection.shared,
-        total: selection.selected,
-      })
-    }`
-    : action;
-  return (
-    <ContextPinButton
-      group
-      label={label}
-      pressed={selection.pressed}
-      disabled={selection.totalCount === 0}
-      onToggle={selection.onToggleAll}
-    />
-  );
-}
-
-function RowPin({ selection, name, row, index }: {
-  selection: DoclistSelectionControls;
-  name: string;
-  row: Record<string, unknown>;
-  index: number;
-}) {
-  const t = useT();
-  const pressed = selection.pressedFor(name);
-  const labelKey = pressed === "mixed"
-    ? "context.pin.remove_local"
-    : pressed
-    ? "context.pin.remove"
-    : "context.pin.add";
-  return (
-    <ContextPinButton
-      label={t(labelKey, { label: name })}
-      pressed={pressed}
-      onToggle={(shift) => selection.onToggle(row, index, shift)}
-      className="self-start"
-    />
   );
 }
 
@@ -300,6 +262,15 @@ function selectionEdge(selected: boolean, interactive: boolean): string {
 
 /* ── Large ────────────────────────────────────────────────────────── */
 
+function wideColumnLayout(column: DoclistColumn, isIdentity: boolean) {
+  const date = column.id === "date" || column.id.endsWith("_date");
+  const numeric = !isIdentity && column.numeric;
+  return {
+    compact: !isIdentity && (numeric || date || isStatusField(column.id)),
+    endAligned: !isIdentity && (numeric || date),
+  };
+}
+
 function WideTable(
   {
     columns,
@@ -310,7 +281,6 @@ function WideTable(
     sortDir,
     onSort,
     detail,
-    clickIntent,
     selection,
   }:
     & ModeProps
@@ -322,71 +292,70 @@ function WideTable(
     },
 ) {
   return (
-    <table class="w-full table-fixed border-collapse">
+    <table class="w-full table-auto border-collapse">
       <thead>
         <tr class="bg-sunken">
-          {columns.map((column, index) => (
-            <th
-              key={column.id}
-              scope="col"
-              aria-sort={sortKey === column.id
-                ? (sortDir === "desc" ? "descending" : "ascending")
-                : "none"}
-              class={[
-                "border-b border-line py-[7px] font-normal",
-                index === 0 ? "pl-4 pr-3.5" : "px-3.5",
-                column.numeric ? "text-right" : "text-left",
-              ].join(" ")}
-            >
-              <button
-                type="button"
-                onClick={() => onSort(column.id)}
-                class={`font-mono text-micro uppercase tracking-label transition-colors hover:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                  sortKey === column.id ? "text-accent" : "text-ink-faint"
-                }`}
+          {columns.map((column, index) => {
+            const { compact, endAligned } = wideColumnLayout(
+              column,
+              index === 0,
+            );
+            return (
+              <th
+                key={column.id}
+                scope="col"
+                aria-sort={sortKey === column.id
+                  ? (sortDir === "desc" ? "descending" : "ascending")
+                  : "none"}
+                class={[
+                  "border-b border-line py-[7px] font-normal",
+                  index === 0 ? "pl-4 pr-3.5" : "px-3.5",
+                  compact && "w-px",
+                  endAligned ? "text-right" : "text-left",
+                ].join(" ")}
               >
-                {column.label}
-                {sortKey === column.id && (
-                  <svg
-                    aria-hidden="true"
-                    width="7"
-                    height="5"
-                    viewBox="0 0 7 5"
-                    fill="none"
-                    class="ml-1 inline-block text-accent"
-                  >
-                    {sortDir === "asc"
-                      ? (
-                        <path
-                          d="M1 4L3.5 1L6 4"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        />
-                      )
-                      : (
-                        <path
-                          d="M1 1L3.5 4L6 1"
-                          stroke="currentColor"
-                          stroke-width="1.5"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                        />
-                      )}
-                  </svg>
-                )}
-              </button>
-            </th>
-          ))}
-          {selection && (
-            <th
-              scope="col"
-              class={`${PIN_COLUMN_WIDTH} border-b border-line p-0 text-center`}
-            >
-              <BulkPin selection={selection} />
-            </th>
-          )}
+                <button
+                  type="button"
+                  onClick={() => onSort(column.id)}
+                  class={`w-max max-w-[min(28ch,15vw)] [overflow-wrap:anywhere] [text-align:inherit] font-mono text-micro uppercase tracking-label transition-colors hover:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                    sortKey === column.id ? "text-accent" : "text-ink-faint"
+                  }`}
+                >
+                  {column.label}
+                  {sortKey === column.id && (
+                    <svg
+                      aria-hidden="true"
+                      width="7"
+                      height="5"
+                      viewBox="0 0 7 5"
+                      fill="none"
+                      class="ml-1 inline-block text-accent"
+                    >
+                      {sortDir === "asc"
+                        ? (
+                          <path
+                            d="M1 4L3.5 1L6 4"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        )
+                        : (
+                          <path
+                            d="M1 1L3.5 4L6 1"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        )}
+                    </svg>
+                  )}
+                </button>
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>
@@ -397,28 +366,34 @@ function WideTable(
               index,
             );
           const interactive = Boolean(interactionTarget);
+          const {
+            role,
+            tabIndex,
+            "aria-pressed": pressed,
+            "aria-label": label,
+            "aria-keyshortcuts": shortcuts,
+            "aria-expanded": expanded,
+            "aria-controls": controls,
+            ...pointerProps
+          } = rowInteractionProps(interactionTarget, id, raw, index, selection);
           return (
             <Fragment key={id}>
               <tr
                 class={`border-b border-line-soft [@media(pointer:coarse)]:h-11 ${
                   rowClasses(open, interactive, struck)
                 }`}
-                {...rowInteractionProps(
-                  interactionTarget,
-                  id,
-                  raw,
-                  index,
-                  selection,
-                  clickIntent,
-                )}
-                role="row"
-                aria-pressed={undefined}
+                {...pointerProps}
+                data-mcp-view-context-row={pressed ? "selected" : "idle"}
                 aria-current={open || undefined}
               >
                 {columns.map((column, columnIndex) => {
                   const value = row[column.id];
                   const isFirst = columnIndex === 0;
                   const isLast = columnIndex === columns.length - 1;
+                  const { compact, endAligned } = wideColumnLayout(
+                    column,
+                    isFirst,
+                  );
                   const cell =
                     statusKey === column.id && typeof value === "string"
                       ? <StatusCell value={value} />
@@ -431,23 +406,20 @@ function WideTable(
                     <td
                       key={column.id}
                       class={[
-                        "truncate py-2",
+                        "py-2",
                         // Le liseré occupe 2 px du padding gauche de la 1re cellule.
                         isFirst
                           ? `border-l-2 ${TONE_RULE[tone]} pl-[14px] pr-3.5`
                           : "px-3.5",
                         // Et le bord de sélection 2 px de la dernière : sur <tr>
                         // il ne se peindrait pas en border-collapse.
-                        isLast && !selection &&
+                        isLast &&
                         selectionEdge(
                           open,
                           interactive,
                         ),
-                        column.numeric
-                          ? "text-right font-mono text-cell tabular-nums"
-                          : isFirst
-                          ? "font-mono text-data"
-                          : "text-cell",
+                        endAligned && "text-right font-mono tabular-nums",
+                        isFirst ? "font-mono text-data" : "text-cell",
                         // La première cellule (ID) est en accent-text quand la ligne
                         // est sélectionnée : elle sert d'ancre visuelle. Les autres
                         // cellules restent en text-ink (légèrement plus clair).
@@ -458,36 +430,43 @@ function WideTable(
                           : "text-ink-2",
                       ].filter(Boolean).join(" ")}
                     >
-                      {isFirst
-                        ? (
-                          <RowIdentity interactive={interactive} open={open}>
-                            {cell}
-                          </RowIdentity>
-                        )
-                        : cell}
+                      <div
+                        class={compact
+                          ? "max-w-[22ch] truncate"
+                          : "[contain:inline-size]"}
+                      >
+                        {isFirst
+                          ? (
+                            <span
+                              role={role}
+                              tabIndex={tabIndex}
+                              aria-pressed={pressed}
+                              aria-label={label}
+                              aria-keyshortcuts={shortcuts}
+                              aria-expanded={expanded}
+                              aria-controls={controls}
+                              data-visual-activate
+                              class="inline-block max-w-full rounded-sm focus-visible:outline-2 focus-visible:outline-accent"
+                            >
+                              <RowIdentity
+                                interactive={interactive}
+                                open={open}
+                              >
+                                {cell}
+                              </RowIdentity>
+                            </span>
+                          )
+                          : <span class="block truncate">{cell}</span>}
+                      </div>
                     </td>
                   );
                 })}
-                {selection && (
-                  <td
-                    class={`p-0 text-center align-top ${
-                      open ? "shadow-[inset_-2px_0_var(--color-accent)]" : ""
-                    }`}
-                  >
-                    <RowPin
-                      selection={selection}
-                      name={id}
-                      row={raw}
-                      index={index}
-                    />
-                  </td>
-                )}
               </tr>
               {selected && detail && (
                 <tr>
                   <td
                     class="p-0"
-                    colSpan={columns.length + (selection ? 1 : 0)}
+                    colSpan={columns.length}
                   >
                     {detail}
                   </td>
@@ -504,13 +483,11 @@ function WideTable(
 /* ── Mobile ───────────────────────────────────────────────────────── */
 
 /**
- * Grilles fixes : l'identifiant et l'éventuelle valeur terminale ont une
- * largeur arrêtée, le libellé prend ce qui reste et s'ellipse. Les classes sont
- * écrites en dur — Tailwind scanne le texte source et ne verrait pas une classe
- * composée à l'exécution.
+ * L'identifiant et la valeur finale sont plafonnés. Le libellé reçoit
+ * l'espace restant dans la même grille pour l'en-tête et les lignes.
  */
-const MOBILE_GRID = "grid-cols-[92px_1fr_78px]";
-const MOBILE_GRID_WITHOUT_TRAILING = "grid-cols-[92px_1fr]";
+const MOBILE_GRID = "grid-cols-[min(27%,92px)_minmax(0,1fr)_min(23%,78px)]";
+const MOBILE_GRID_WITHOUT_TRAILING = "grid-cols-[min(27%,92px)_minmax(0,1fr)]";
 
 const MOBILE_HEAD =
   "truncate font-mono text-nano uppercase tracking-label text-ink-faint";
@@ -529,34 +506,40 @@ function CompactTable(
     shape,
     amountKey,
     detail,
-    clickIntent,
     selection,
   }: ModeProps,
 ) {
   const t = useT();
-  const { idKey, labelKey, trailingKey } = pickNarrowColumns(
+  const { idKey, labelKey, trailingKey: proposedTrailing } = pickNarrowColumns(
     columns,
     amountKey,
     isStatusField,
   );
+  const trailingKey = proposedTrailing === idKey ? undefined : proposedTrailing;
   const trailingIsAmount = trailingKey !== undefined &&
     trailingKey === amountKey;
-  const mobileGrid = trailingKey ? MOBILE_GRID : MOBILE_GRID_WITHOUT_TRAILING;
+  const mobileGrid = labelKey
+    ? (trailingKey ? MOBILE_GRID : MOBILE_GRID_WITHOUT_TRAILING)
+    : trailingKey
+    ? "grid-cols-[minmax(0,1fr)_min(23%,78px)]"
+    : "grid-cols-1";
 
   return (
     <div>
-      <div class="flex items-center border-y border-line bg-sunken pr-[2px]">
+      <div class="flex items-center border-y border-line bg-sunken px-[2px]">
         <div class={`grid ${mobileGrid} min-w-0 flex-1 px-3 py-1.5`}>
           <span class={MOBILE_HEAD}>
             {amountKey
               ? t("doclist.table.header.id")
               : columnLabel(columns, idKey)}
           </span>
-          <span class={MOBILE_HEAD}>
-            {amountKey
-              ? t("doclist.table.header.party")
-              : columnLabel(columns, labelKey)}
-          </span>
+          {labelKey && (
+            <span class={MOBILE_HEAD}>
+              {amountKey
+                ? t("doclist.table.header.party")
+                : columnLabel(columns, labelKey)}
+            </span>
+          )}
           {trailingKey && (
             <span class={`${MOBILE_HEAD} text-right`}>
               {amountKey
@@ -565,7 +548,6 @@ function CompactTable(
             </span>
           )}
         </div>
-        {selection && <BulkPin selection={selection} />}
       </div>
 
       <ul>
@@ -583,7 +565,15 @@ function CompactTable(
             : undefined;
 
           return (
-            <li key={id}>
+            <li
+              key={id}
+              data-mcp-view-context-row={selection?.pressedFor(id)
+                ? "selected"
+                : "idle"}
+              data-mcp-view-context-row-break={selected && detail
+                ? ""
+                : undefined}
+            >
               <div
                 class={[
                   "flex min-h-10 items-stretch [@media(pointer:coarse)]:min-h-[45px]",
@@ -600,13 +590,13 @@ function CompactTable(
                   class={`grid ${mobileGrid} min-w-0 flex-1 items-center px-3 ${
                     rowClasses(open, interactive, struck)
                   }`}
+                  data-mcp-view-context-row-outline
                   {...rowInteractionProps(
                     interactionTarget,
                     id,
                     raw,
                     index,
                     selection,
-                    clickIntent,
                   )}
                   aria-current={open || undefined}
                 >
@@ -619,9 +609,11 @@ function CompactTable(
                       {idKey ? shortenId(formatCell(row[idKey]), 10, 1) : ""}
                     </RowIdentity>
                   </span>
-                  <span class="truncate pr-2 text-data text-ink-muted">
-                    {labelKey ? formatCell(row[labelKey]) : ""}
-                  </span>
+                  {labelKey && (
+                    <span class="truncate pr-2 text-data text-ink-muted">
+                      {formatCell(row[labelKey])}
+                    </span>
+                  )}
                   {trailingKey && (
                     <span
                       class={`truncate text-right font-mono text-data ${
@@ -638,14 +630,6 @@ function CompactTable(
                     </span>
                   )}
                 </div>
-                {selection && (
-                  <RowPin
-                    selection={selection}
-                    name={id}
-                    row={raw}
-                    index={index}
-                  />
-                )}
               </div>
               {selected && detail}
             </li>
@@ -672,7 +656,6 @@ function StackedList(
     shape,
     amountKey,
     detail,
-    clickIntent,
     selection,
   }: ModeProps,
 ) {
@@ -686,11 +669,6 @@ function StackedList(
 
   return (
     <>
-      {selection && (
-        <div class="flex justify-end border-b border-line bg-sunken pr-[2px]">
-          <BulkPin selection={selection} />
-        </div>
-      )}
       <ul class="flex flex-col">
         {rows.map((raw, index) => {
           const { id, row, selected, open, interactionTarget, tone, struck } =
@@ -706,7 +684,15 @@ function StackedList(
             : undefined;
 
           return (
-            <li key={id}>
+            <li
+              key={id}
+              data-mcp-view-context-row={selection?.pressedFor(id)
+                ? "selected"
+                : "idle"}
+              data-mcp-view-context-row-break={selected && detail
+                ? ""
+                : undefined}
+            >
               <div
                 class={[
                   "flex min-h-10 items-stretch [@media(pointer:coarse)]:min-h-[45px]",
@@ -722,13 +708,13 @@ function StackedList(
                   class={`flex min-w-0 flex-1 items-center justify-between gap-2.5 px-3 py-[9px] ${
                     rowClasses(open, interactive, struck)
                   }`}
+                  data-mcp-view-context-row-outline
                   {...rowInteractionProps(
                     interactionTarget,
                     id,
                     raw,
                     index,
                     selection,
-                    clickIntent,
                   )}
                   aria-current={open || undefined}
                 >
@@ -764,14 +750,6 @@ function StackedList(
                     </span>
                   )}
                 </div>
-                {selection && (
-                  <RowPin
-                    selection={selection}
-                    name={id}
-                    row={raw}
-                    index={index}
-                  />
-                )}
               </div>
               {selected && detail}
             </li>

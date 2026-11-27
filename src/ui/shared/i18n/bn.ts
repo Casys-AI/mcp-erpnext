@@ -228,9 +228,6 @@ export const bn: Record<string, string> = {
   "kpi.coverage.lines": "সারি: {count}",
   "kpi.coverage.omitted": "না দেখানো অতিরিক্ত আইটেম/গুদাম জোড়া: {count}",
   "kpi.coverage.unknown": "কভারেজ উপলব্ধ নয়",
-  "kpi.drilldown.title_message": "কথোপকথনে জিজ্ঞাসা করতে ডাবল-ক্লিক করুন বা এন্টার চাপুন",
-  "kpi.drilldown.title_context":
-    "প্রসঙ্গে যোগ/সরাতে ক্লিক বা স্পেস চাপুন · বিবরণের জন্য ডাবল-ক্লিক বা এন্টার চাপুন",
   // ── /KPI ভিউয়ার ───────────────────────────────────────────────────────────
 
   // ── চালান ভিউয়ার ────────────────────────────────────────────────────────
@@ -336,11 +333,6 @@ export const bn: Record<string, string> = {
   "drill.sent": "কথোপকথনে পাঠানো হয়েছে",
   "message.sending": "পাঠানো হচ্ছে…",
   "message.send_error": "কথোপকথনে পাঠানো যায়নি",
-  "context.pin.add": "{label} প্রসঙ্গে পিন করুন",
-  "context.pin.remove_local": "নির্বাচিত পিন থেকে {label} সরান (শেয়ার করা হয়নি)",
-  "context.pin.remove": "প্রসঙ্গ থেকে {label} আনপিন করুন",
-  "doclist.pin.all": "মিলে যাওয়া {count}টি সারি প্রসঙ্গে পিন করুন",
-  "doclist.pin.remove_all": "মিলে যাওয়া {count}টি সারি প্রসঙ্গ থেকে আনপিন করুন",
   "context.active.partly_shared":
     "আংশিক শেয়ার করা হয়েছে ({total}টির মধ্যে {shared}টি)",
   "context.active.label": "প্রসঙ্গ",
@@ -354,8 +346,8 @@ export const bn: Record<string, string> = {
   "context.active.evicted": "সর্বোচ্চ ৮ · {label} সরানো হয়েছে",
   "interaction.detail.open": "{label}-এর বিবরণ খুলুন",
   "interaction.detail.close": "{label}-এর বিবরণ বন্ধ করুন",
-  "interaction.detail.open_hint": "বিবরণ · ডাবল-ক্লিক",
-  "interaction.detail.close_hint": "বন্ধ · ডাবল-ক্লিক",
+  "interaction.detail.open_hint": "বিবরণ",
+  "interaction.detail.close_hint": "বন্ধ",
   // ── détail sans double-clic : boutons visibles (tactile) ──
   "interaction.detail.button_hint": "বিবরণ",
   "interaction.detail.ask": "{label} নিয়ে জিজ্ঞাসা করুন",
@@ -363,26 +355,8 @@ export const bn: Record<string, string> = {
   "chart.detail_bar.open": "বিবরণ খুলুন: {label}",
   "chart.detail_bar.close": "বিবরণ বন্ধ করুন: {label}",
   "chart.detail_bar.ask": "জিজ্ঞাসা করুন: {label}",
-  "document.row.open_actions":
-    "{label} প্রসঙ্গে যোগ বা সরাতে ক্লিক বা স্পেস চাপুন · কাজ দেখতে ডাবল-ক্লিক বা এন্টার চাপুন",
-  "document.row.close_actions":
-    "{label} প্রসঙ্গে যোগ বা সরাতে ক্লিক বা স্পেস চাপুন · কাজ বন্ধ করতে ডাবল-ক্লিক বা এন্টার চাপুন",
-  "document.row.open_actions_only":
-    "{label}-এর কাজ দেখতে ডাবল-ক্লিক করুন বা এন্টার চাপুন",
-  "document.row.close_actions_only":
-    "{label}-এর কাজ বন্ধ করতে ডাবল-ক্লিক করুন বা এন্টার চাপুন",
-  "document.row.open_detail":
-    "{label} প্রসঙ্গে যোগ বা সরাতে ক্লিক বা স্পেস চাপুন · বিবরণ খুলতে ডাবল-ক্লিক বা এন্টার চাপুন",
-  "document.row.close_detail":
-    "{label} প্রসঙ্গে যোগ বা সরাতে ক্লিক বা স্পেস চাপুন · বিবরণ বন্ধ করতে ডাবল-ক্লিক বা এন্টার চাপুন",
   "document.row.open_follow": "{label}-এর বিবরণ খুলুন",
-  "document.row.open_detail_only":
-    "{label}-এর বিবরণ খুলতে ডাবল-ক্লিক করুন বা এন্টার চাপুন",
-  "document.row.close_detail_only":
-    "{label}-এর বিবরণ বন্ধ করতে ডাবল-ক্লিক করুন বা এন্টার চাপুন",
-  "chart.tooltip.click_action_context": "ক্লিক: প্রসঙ্গ যোগ/সরান · ২× বিবরণ",
-  "chart.tooltip.click_action_context_only": "ক্লিক: প্রসঙ্গ যোগ/সরান",
-  "chart.tooltip.click_action_fallback": "২× বিবরণ",
+  "chart.tooltip.click_action_fallback": "ক্লিক: বিবরণ",
   "chart.tooltip.click_action_detail": "ক্লিক: বিবরণ",
   // ── নেভিগেশন স্ট্যাক (পথ, স্তর, লাফ) ──
   "nav.back": "পেছনে",
@@ -404,7 +378,6 @@ export const bn: Record<string, string> = {
   "nav.refresh": "রিফ্রেশ করুন",
   "nav.stale_title": "স্ট্যাকের গভীরে কোনো কাজ এই স্তরের বিষয়বস্তু বদলে দিয়েছে।",
   "nav.trail": "নেভিগেশন পথ",
-  "kanban.pin.loaded_cards": "{column}-এ লোড করা কার্ড ({count})",
   "kanban.nav.edit_card": "{id} সম্পাদনা করুন",
   "nav.bar_click": "ক্লিক: আরও এক স্তর",
   "nav.unexpected_body": "এই স্তরে অপ্রত্যাশিত বিষয় এসেছে।",

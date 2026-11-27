@@ -81,7 +81,12 @@ Deno.test("doclist wires the shared disclosure to the real inline panel", async 
     "const childRowsContextKey = documentChildRowsReconcileKey(envelope)",
   );
   assertStringIncludes(detail, "rowIndex,\n            childRowsContextKey,");
-  assertStringIncludes(table, "contextInteractionProps(target, {");
+  assertStringIncludes(
+    table,
+    "visualRowProps(id, target, selection?.pressedFor(id))",
+  );
+  assertStringIncludes(table, "useVisualItemGestures({");
+  assertStringIncludes(body, "context.addGroupMembers(groupConfig, members)");
   assertStringIncludes(table, "<DisclosureChevron expanded={open} />");
 });
 
@@ -122,7 +127,7 @@ Deno.test("non-financial narrow lists use real columns without a fake due field"
 
   assertStringIncludes(
     table,
-    "const mobileGrid = trailingKey ? MOBILE_GRID : MOBILE_GRID_WITHOUT_TRAILING;",
+    "(trailingKey ? MOBILE_GRID : MOBILE_GRID_WITHOUT_TRAILING)",
   );
   assertStringIncludes(table, ": columnLabel(columns, idKey)");
   assertStringIncludes(table, ": columnLabel(columns, labelKey)");
@@ -132,6 +137,8 @@ Deno.test("non-financial narrow lists use real columns without a fake due field"
     "const trailingIsAmount = trailingKey !== undefined &&",
   );
   assertStringIncludes(table, "{trailingKey && (");
+  assertStringIncludes(table, "{labelKey && (");
+  assertStringIncludes(table, ': "grid-cols-1"');
 });
 
 Deno.test("doclist pin selection uses the filtered sort before pagination and the group controller", async () => {
@@ -143,9 +150,7 @@ Deno.test("doclist pin selection uses the filtered sort before pagination and th
   assertStringIncludes(body, '"erpnext_doc_list"');
   assertStringIncludes(body, "context.toggleGroupMember(groupConfig, member)");
   assertStringIncludes(body, "context.addGroupMembers(");
-  assertStringIncludes(body, "context.removeGroupMembers(");
   assertStringIncludes(body, "extendDoclistRange(");
-  assertStringIncludes(body, "doclistFilteredSelectionOperation(");
   assertEquals(body.includes("if (context.pending) return"), false);
   assertStringIncludes(body, "context.recordPins(groupConfig.doctype)");
   assertStringIncludes(body, "hasExplicitAvailableTool(");
@@ -158,7 +163,7 @@ Deno.test("doclist pin selection uses the filtered sort before pagination and th
   assertEquals(row.includes("context?.toggle"), false);
 });
 
-Deno.test("all list layouts keep the detail chevron with the identity and expose one permanent pin column", async () => {
+Deno.test("all list layouts keep the detail chevron with the identity and expose context on the row itself", async () => {
   const table = await Deno.readTextFile(
     new URL("./DoclistTable.tsx", import.meta.url),
   );
@@ -170,15 +175,13 @@ Deno.test("all list layouts keep the detail chevron with the identity and expose
     table,
     "{interactive && <DisclosureChevron expanded={open} />}",
   );
-  assertStringIncludes(
-    table,
-    "pressed={selection.pressed}",
-  );
-  assertStringIncludes(table, "colSpan={columns.length + (selection ? 1 : 0)}");
+  assertStringIncludes(table, "selection?.pressedFor(id)");
+  assertStringIncludes(table, "colSpan={columns.length}");
+  assertStringIncludes(table, "aria-pressed={pressed}");
+  assertStringIncludes(table, "data-visual-activate");
+  assertEquals(table.includes("ContextPinButton"), false);
   for (const mode of ["CompactTable", "WideTable", "StackedList"]) {
     const source = table.split(`function ${mode}(`)[1].split("function ")[0];
-    assertEquals([...source.matchAll(/<RowPin\s/g)].length, 1, mode);
-    assertEquals([...source.matchAll(/<BulkPin\s/g)].length, 1, mode);
     assertEquals([...source.matchAll(/<RowIdentity\s/g)].length, 1, mode);
   }
 });
@@ -232,7 +235,7 @@ Deno.test("doclist row modifiers share pin actions and platform detection in eve
   );
   assertEquals(
     [...table.matchAll(
-      /\.\.\.rowInteractionProps\(\s*interactionTarget,\s*id,\s*raw,\s*index,\s*selection,\s*clickIntent,?\s*\)/g,
+      /rowInteractionProps\(\s*interactionTarget,\s*id,\s*raw,\s*index,\s*selection,?\s*\)/g,
     )].length,
     3,
   );

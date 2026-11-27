@@ -11,7 +11,6 @@
  *  - InvoiceViewer : état, connexion, refresh, actions — sans hooks d'UI.
  *  - InvoiceContent : rendu, pile de navigation, boutons — data toujours dispo.
  */
-import { DocumentPin } from "~/shared/document/DocumentPin.tsx";
 import { useViewerApp, ViewerInteractionsContext } from "~/shared/viewer-app";
 import {
   useContext,
@@ -38,7 +37,11 @@ import type {
   ContextInteractionTarget,
   DocumentContextController,
 } from "~/shared/document/context-interaction";
-import { contextInteractionProps } from "~/shared/document/context-interaction";
+import {
+  CONTEXT_ROW_OUTLINE,
+  useVisualItemGestures,
+} from "@mcpview/components/preact/controls";
+import { visualRowProps } from "~/shared/document/visual-row-props.ts";
 import {
   childRowContextItem,
   documentContextItem,
@@ -84,7 +87,6 @@ import { useT } from "~/shared/i18n-hook";
 import { ConfirmSheet, type ConfirmState, useConfirm } from "~/shared/confirm";
 import { useViewerNav } from "~/shared/useViewerNav";
 import { useActiveContext } from "~/shared/useActiveContext";
-import { useClickIntent } from "~/shared/useClickIntent";
 import { viewerRootKey } from "~/shared/nav-stack";
 import { PathBar } from "~/shared/PathBar";
 import { LevelBody } from "~/shared/levels/LevelBody";
@@ -805,7 +807,6 @@ function InvoiceContent({
     origin: "record",
     key: rootKey,
   }, { fixture });
-  const clickIntent = useClickIntent();
   const nav = viewerNav.nav;
 
   const rootLevelId = nav.stack.levels[0].id;
@@ -839,6 +840,7 @@ function InvoiceContent({
   const context: DocumentContextController = {
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
+    activateMany: activeContext.activateMany,
     activateReversible: activeContext.activateReversible,
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
@@ -1028,8 +1030,39 @@ function InvoiceContent({
         onActivate: () => void context.toggle(item),
       }
       : undefined;
-    return { detail, pin, isExpanded };
+    return {
+      visualId: item?.id ?? lineDetailId(rowIndex),
+      detail,
+      pin,
+      item,
+      isExpanded,
+    };
   }
+  const linePresentations = rows.map(linePresentation);
+  const linesById = new Map(
+    linePresentations.map((line) => [line.visualId, line]),
+  );
+  const lineItemsRef = useVisualItemGestures({
+    onActivate: (id) => linesById.get(id)?.detail?.onActivate(),
+    onToggle: (id) => linesById.get(id)?.pin?.onActivate(),
+    onAdd: (ids) => {
+      const items = ids.flatMap((id) => {
+        const item = linesById.get(id)?.item;
+        return item ? [item] : [];
+      });
+      if (items.length) void context.activateMany(items);
+    },
+  });
+  const rootItemRef = useVisualItemGestures({
+    onToggle: () => rootContextTarget?.onActivate(),
+  });
+  const rootItemProps = visualRowProps(
+    contextDocumentItem.id,
+    undefined,
+    rootContextTarget?.selected,
+    false,
+  );
+
   const previewTitle = fixture ? t("invoice.preview.title") : undefined;
   const isWide = layout === "wide";
   const isMobile = layout === "mobile";
@@ -1312,12 +1345,21 @@ function InvoiceContent({
     return (
       <ViewerShell containerRef={ref}>
         {/* Header 2 colonnes — toujours visible */}
-        <div class="flex min-w-0 flex-col border-b border-line p-4">
+        <div
+          ref={rootItemRef}
+          class="flex min-w-0 flex-col border-b border-line p-4"
+        >
           <div
             class="grid gap-5"
             style={{ gridTemplateColumns: "1fr auto" }}
           >
-            <div class="flex min-w-0 flex-col gap-1.5">
+            <div
+              {...rootItemProps}
+              class={cx(
+                "flex min-w-0 flex-col gap-1.5 focus-visible:outline-2 focus-visible:outline-accent",
+                CONTEXT_ROW_OUTLINE,
+              )}
+            >
               <span class="font-mono text-micro uppercase tracking-eyebrow text-ink-faint">
                 {doctype}
               </span>
@@ -1350,7 +1392,6 @@ function InvoiceContent({
                   <span class="font-mono text-micro uppercase tracking-label text-ink-faint">
                     {t("invoice.header.outstanding")}
                   </span>
-                  <DocumentPin target={rootContextTarget} />
                 </div>
                 <span
                   class={cx(
@@ -1406,7 +1447,13 @@ function InvoiceContent({
           {messages}
 
           <div
-            class={showAttachmentSidebar ? "grid min-w-0" : "min-w-0"}
+            ref={lineItemsRef}
+            data-visual-selection-surface={context.supported && itemContextTable
+              ? ""
+              : undefined}
+            class={showAttachmentSidebar
+              ? "grid min-w-0 touch-pan-y"
+              : "min-w-0 touch-pan-y"}
             style={showAttachmentSidebar
               ? { gridTemplateColumns: "minmax(0, 1fr) 268px" }
               : undefined}
@@ -1434,22 +1481,22 @@ function InvoiceContent({
                     {t("invoice.table.col.amount")}
                   </span>
                 </div>
-                {context.supported && itemContextTable && (
-                  <span
-                    aria-hidden="true"
-                    class="w-9 shrink-0 [@media(pointer:coarse)]:w-11"
-                  />
-                )}
               </div>
 
               {/* Lignes article */}
               {rows.map((row, rowIndex) => {
-                const { detail, pin, isExpanded } = linePresentation(
-                  row,
-                  rowIndex,
-                );
+                const { visualId, detail, pin, isExpanded } =
+                  linePresentations[rowIndex];
                 return (
-                  <div key={`${row.idx}-${row.item_code}`}>
+                  <div
+                    key={`${row.idx}-${row.item_code}`}
+                    data-mcp-view-context-row={pin?.selected
+                      ? "selected"
+                      : "idle"}
+                    data-mcp-view-context-row-break={isExpanded
+                      ? ""
+                      : undefined}
+                  >
                     <div
                       class={cx(
                         "flex min-w-0 items-stretch border-b border-line-soft transition-colors",
@@ -1464,16 +1511,14 @@ function InvoiceContent({
                       <div
                         class={cx(
                           "grid min-w-0 flex-1 items-center focus-visible:outline-2 focus-visible:outline-accent",
-                          detail && "cursor-pointer",
+                          (detail || pin) && "cursor-pointer",
                         )}
                         style={{
                           gridTemplateColumns: "2.6fr 0.5fr 0.9fr 1fr",
                           padding: "10px 16px",
                         }}
-                        {...contextInteractionProps(detail, {
-                          arbiter: clickIntent,
-                          key: `invoice-line:${data.name}:${rowIndex}`,
-                        })}
+                        data-mcp-view-context-row-outline
+                        {...visualRowProps(visualId, detail, pin?.selected)}
                       >
                         <div class="flex flex-col gap-0.5">
                           <span class="text-body text-ink">
@@ -1495,7 +1540,6 @@ function InvoiceContent({
                           {formatNumber(row.amount)}
                         </span>
                       </div>
-                      <DocumentPin target={pin} />
                     </div>
 
                     {isExpanded && (
@@ -1558,17 +1602,27 @@ function InvoiceContent({
   return (
     <ViewerShell containerRef={ref}>
       {/* Header flex-col — toujours visible */}
-      <div class="flex flex-col gap-[10px] border-b border-line px-3 py-[13px]">
+      <div
+        ref={rootItemRef}
+        class="flex flex-col gap-[10px] border-b border-line px-3 py-[13px]"
+      >
         <div class="flex flex-col gap-[3px]">
           <div class="flex items-center justify-between">
             <span class="font-mono text-nano uppercase tracking-eyebrow text-ink-faint">
               {doctype}
             </span>
-            <DocumentPin target={rootContextTarget} />
           </div>
-          <h3 class="m-0 font-display font-semibold text-title text-ink tracking-title">
-            {nav.isRoot ? data.name : nav.current.title}
-          </h3>
+          <div
+            {...rootItemProps}
+            class={cx(
+              "focus-visible:outline-2 focus-visible:outline-accent",
+              CONTEXT_ROW_OUTLINE,
+            )}
+          >
+            <h3 class="m-0 font-display font-semibold text-title text-ink tracking-title">
+              {nav.isRoot ? data.name : nav.current.title}
+            </h3>
+          </div>
           {nav.isRoot && (
             <span class="text-data text-ink-muted">{partyName}</span>
           )}
@@ -1636,7 +1690,13 @@ function InvoiceContent({
         {messages}
 
         {/* Section lignes — cartes */}
-        <div class="flex flex-col gap-[7px] border-b border-line px-3 py-[11px]">
+        <div
+          ref={lineItemsRef}
+          data-visual-selection-surface={context.supported && itemContextTable
+            ? ""
+            : undefined}
+          class="flex touch-pan-y flex-col gap-[7px] border-b border-line px-3 py-[11px]"
+        >
           <span class="font-mono text-nano uppercase tracking-label text-ink-faint">
             {t("invoice.lines.count", {
               n: rows.length,
@@ -1644,10 +1704,8 @@ function InvoiceContent({
             })}
           </span>
           {rows.map((row, rowIndex) => {
-            const { detail, pin, isExpanded } = linePresentation(
-              row,
-              rowIndex,
-            );
+            const { visualId, detail, pin, isExpanded } =
+              linePresentations[rowIndex];
             return (
               <div key={`${row.idx}-${row.item_code}`}>
                 <div
@@ -1664,12 +1722,10 @@ function InvoiceContent({
                   <div
                     class={cx(
                       "flex min-w-0 flex-1 flex-col gap-[5px] px-[11px] py-[10px] focus-visible:outline-2 focus-visible:outline-accent",
-                      detail && "cursor-pointer",
+                      CONTEXT_ROW_OUTLINE,
+                      (detail || pin) && "cursor-pointer",
                     )}
-                    {...contextInteractionProps(detail, {
-                      arbiter: clickIntent,
-                      key: `invoice-line:${data.name}:${rowIndex}`,
-                    })}
+                    {...visualRowProps(visualId, detail, pin?.selected)}
                   >
                     <span
                       class={cx(
@@ -1695,7 +1751,6 @@ function InvoiceContent({
                       </span>
                     </div>
                   </div>
-                  <DocumentPin target={pin} />
                 </div>
                 {isExpanded && (
                   <div id={lineDetailId(rowIndex)}>

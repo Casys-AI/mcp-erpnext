@@ -6,6 +6,12 @@ Deno.test("invoice lines expose one detail-only chevron in wide and narrow layou
   );
 
   assertStringIncludes(source, 'clickAction: "detail"');
+  assertStringIncludes(source, "linesById.get(id)?.detail?.onActivate()");
+  assertStringIncludes(source, "linesById.get(id)?.pin?.onActivate()");
+  assertEquals(
+    [...source.matchAll(/visualRowProps\(visualId, detail/g)].length,
+    2,
+  );
   assertStringIncludes(
     source,
     "controls: lineDetailId(rowIndex)",
@@ -22,10 +28,7 @@ Deno.test("invoice lines expose one detail-only chevron in wide and narrow layou
   assertStringIncludes(source, "reconcileInvoiceDocument(");
   assertStringIncludes(source, "contextDocumentItem.id, contextCandidates");
   assertStringIncludes(source, "const rootContextTarget:");
-  assertEquals([...source.matchAll(/<DocumentPin target=\{pin\}/g)].length, 2);
-  assertEquals(
-    [...source.matchAll(/<DocumentPin target=\{rootContextTarget\}/g)]
-      .length,
-    2,
-  );
+  assertEquals(source.includes("DocumentPin"), false);
+  assertStringIncludes(source, "context.activateMany(items)");
+  assertStringIncludes(source, "pin?.selected");
 });

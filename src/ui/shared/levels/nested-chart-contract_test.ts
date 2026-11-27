@@ -7,45 +7,46 @@ const levelBody = await Deno.readTextFile(
   new URL("./LevelBody.tsx", import.meta.url),
 );
 
-Deno.test("nested chart interaction - pointer and keyboard intents stay exclusive", () => {
-  assertStringIncludes(bars, "inspectPoint(");
-  assertStringIncludes(bars, "<ContextPinButton");
-  assertStringIncludes(bars, 'case "ArrowLeft"');
-  assertStringIncludes(bars, "openPointDetail(");
-  assertStringIncludes(bars, "keyDownPoint(");
-  assertStringIncludes(bars, 'event.key === " "');
-  assertStringIncludes(bars, 'event.key === "Enter"');
-  assertEquals(bars.includes("clickCount < 2"), false);
+Deno.test("nested chart delegates direct point, path and rectangle gestures", () => {
+  assertStringIncludes(bars, "useChartGestures<HTMLDivElement>");
+  assertStringIncludes(
+    bars,
+    'data-visual-selection-surface={onPointRange ? "" : undefined}',
+  );
+  assertStringIncludes(
+    bars,
+    'onPointRange && !overflowsHorizontally ? "touch-pan-y" : ""',
+  );
+  assertStringIncludes(bars, "data-visual-selection-start");
+  assertStringIncludes(bars, "data-chart-geometry");
+  assertStringIncludes(bars, "activateNearestChartMark(");
+  assertStringIncludes(bars, "openPointDetail(label, series)");
+  assertStringIncludes(bars, "onPointContext(label, series)");
+  assertStringIncludes(bars, "onPointRange(ids.map");
+  assertStringIncludes(bars, "aria-pressed={shared}");
+  assertEquals(bars.includes("ContextPinButton"), false);
 });
 
-Deno.test("nested chart interaction - detail opens on double-click, Enter or the visible per-bar button", () => {
-  // Voie tactile : un bouton par barre qui a un détail, sans pied de graphe.
+Deno.test("nested chart preserves arrow navigation and visible detail buttons", () => {
+  assertStringIncludes(bars, 'case "ArrowLeft"');
+  assertStringIncludes(bars, "inspectPoint(label, series)");
   assertStringIncludes(bars, "DetailToggleButton");
   assertStringIncludes(bars, "onPointDetail?.(");
   assertStringIncludes(bars, "canOpenPoint(labelIndex, seriesIndex)");
-  // Chaque série garde son emplacement : le bouton reste sous sa barre.
   assertStringIncludes(bars, "detailSlotCount");
   assertStringIncludes(bars, 'hint={t("interaction.detail.button_hint")}');
   assertStringIncludes(bars, "touch={narrow}");
-  // Le saut reste une action : jamais d'état de disclosure.
-  assertEquals(bars.includes("expanded="), false);
-  assertStringIncludes(bars, "onDblClick=");
-  assertStringIncludes(bars, 'event.key === "Enter"');
-  assertStringIncludes(bars, "onPointDetail?.(");
-  assertStringIncludes(bars, "setCurrentPoint({");
-  assertStringIncludes(bars, "isPointSelected");
-  if (bars.includes("aria-expanded")) {
-    throw new Error("A nested chart jump must not expose disclosure state");
-  }
+  assertEquals(bars.includes("aria-expanded"), false);
   assertStringIncludes(bars, "after:size-10");
   assertStringIncludes(bars, 'narrow ? "size-10" : "size-6"');
 });
 
-Deno.test("nested chart interaction - context is scoped and reconciled by level view", () => {
+Deno.test("nested chart reconciles individual and rectangle selections against its level", () => {
   assertStringIncludes(levelBody, "contextView={level.title}");
   assertStringIncludes(levelBody, "context.reconcileView");
   assertStringIncludes(levelBody, "level.key ?? level.id");
   assertStringIncludes(levelBody, "nestedChartContextCandidates(");
   assertStringIncludes(levelBody, "context!.toggle(item)");
+  assertStringIncludes(levelBody, "context!.activateMany(items)");
   assertStringIncludes(levelBody, "pointJump(labelIndex, seriesIndex)");
 });

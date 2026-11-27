@@ -37,7 +37,7 @@ export interface ChartSelection {
   y?: number;
 }
 
-export type ChartPointActivation = "inspect" | "drilldown";
+export type ChartPointActivation = "inspect" | "activate";
 
 export type ChartPointExpansionState = boolean | undefined;
 

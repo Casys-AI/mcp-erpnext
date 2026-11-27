@@ -221,9 +221,6 @@ export const zhHant: Record<string, string> = {
   "kpi.coverage.lines": "明細數：{count}",
   "kpi.coverage.omitted": "未顯示的其他品項／倉庫組合：{count}",
   "kpi.coverage.unknown": "涵蓋率無法取得",
-  "kpi.drilldown.title_message": "連按兩下或按 Enter 鍵，在對話中詢問",
-  "kpi.drilldown.title_context":
-    "點選或按空白鍵加入／移除上下文 · 連按兩下或按 Enter 鍵查看明細",
   // ── KPI 檢視 ───────────────────────────────────────────────────────────
 
   // ── 發票檢視 ────────────────────────────────────────────────────────
@@ -330,11 +327,6 @@ export const zhHant: Record<string, string> = {
   "drill.sent": "已傳送至對話",
   "message.sending": "傳送中…",
   "message.send_error": "無法傳送至對話",
-  "context.pin.add": "將{label}釘選到上下文",
-  "context.pin.remove_local": "從已選釘選項目中移除 {label}（尚未分享）",
-  "context.pin.remove": "從上下文取消釘選{label}",
-  "doclist.pin.all": "將全部 {count} 筆相符的資料釘選到上下文",
-  "doclist.pin.remove_all": "從上下文取消釘選全部 {count} 筆相符的資料",
   "context.active.partly_shared": "已分享 {shared} 筆，共 {total} 筆",
   "context.active.label": "上下文",
   "context.active.items": "作用中上下文選取",
@@ -347,8 +339,8 @@ export const zhHant: Record<string, string> = {
   "context.active.evicted": "最多 8 項 · 已移除 {label}",
   "interaction.detail.open": "開啟 {label} 明細",
   "interaction.detail.close": "關閉 {label} 明細",
-  "interaction.detail.open_hint": "明細 · 連按兩下",
-  "interaction.detail.close_hint": "關閉 · 連按兩下",
+  "interaction.detail.open_hint": "明細",
+  "interaction.detail.close_hint": "關閉",
   // ── détail sans double-clic : boutons visibles (tactile) ──
   "interaction.detail.button_hint": "明細",
   "interaction.detail.ask": "詢問 {label}",
@@ -356,23 +348,8 @@ export const zhHant: Record<string, string> = {
   "chart.detail_bar.open": "開啟明細：{label}",
   "chart.detail_bar.close": "關閉明細：{label}",
   "chart.detail_bar.ask": "詢問：{label}",
-  "document.row.open_actions":
-    "點選或按空白鍵將 {label} 加入上下文或自其中移除 · 連按兩下或按 Enter 鍵顯示其操作",
-  "document.row.close_actions":
-    "點選或按空白鍵將 {label} 加入上下文或自其中移除 · 連按兩下或按 Enter 鍵關閉其操作",
-  "document.row.open_actions_only": "連按兩下或按 Enter 鍵顯示 {label} 的操作",
-  "document.row.close_actions_only": "連按兩下或按 Enter 鍵關閉 {label} 的操作",
-  "document.row.open_detail":
-    "點選或按空白鍵將 {label} 加入上下文或自其中移除 · 連按兩下或按 Enter 鍵開啟其明細",
-  "document.row.close_detail":
-    "點選或按空白鍵將 {label} 加入上下文或自其中移除 · 連按兩下或按 Enter 鍵關閉其明細",
   "document.row.open_follow": "開啟 {label} 的詳細資料",
-  "document.row.open_detail_only": "連按兩下或按 Enter 鍵開啟 {label} 的明細",
-  "document.row.close_detail_only": "連按兩下或按 Enter 鍵關閉 {label} 的明細",
-  "chart.tooltip.click_action_context":
-    "點選：加入／移除上下文 · 連按兩下看明細",
-  "chart.tooltip.click_action_context_only": "點選：加入／移除上下文",
-  "chart.tooltip.click_action_fallback": "連按兩下看明細",
+  "chart.tooltip.click_action_fallback": "點選：看明細",
   "chart.tooltip.click_action_detail": "點選：看明細",
   // ── 導覽堆疊（路徑、層級、跳轉） ──
   "nav.back": "返回",
@@ -394,7 +371,6 @@ export const zhHant: Record<string, string> = {
   "nav.refresh": "重新整理",
   "nav.stale_title": "堆疊深處的操作已變更此層級顯示的內容。",
   "nav.trail": "導覽路徑",
-  "kanban.pin.loaded_cards": "「{column}」中已載入的卡片（{count}）",
   "kanban.nav.edit_card": "編輯 {id}",
   "nav.bar_click": "點選：再深入一層",
   "nav.unexpected_body": "此層級收到非預期的內容。",

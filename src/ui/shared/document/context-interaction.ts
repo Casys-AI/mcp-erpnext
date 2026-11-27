@@ -35,6 +35,7 @@ export interface DocumentContextController {
   addGroupMembers: (
     config: Omit<SelectionGroupConfig, "scopeKey">,
     members: readonly SelectionGroupMemberInput[],
+    singles?: readonly ContextSelectionItem[],
   ) => Promise<unknown>;
   removeGroupMembers: (
     config: Omit<SelectionGroupConfig, "scopeKey">,
@@ -46,6 +47,7 @@ export interface DocumentContextController {
     options?: { complete?: boolean },
   ) => Promise<unknown>;
   isGroupMemberSelected: (reconcileKey: string, name: string) => boolean;
+  activateMany: (items: readonly ContextSelectionItem[]) => Promise<unknown>;
   activate: (item: ContextSelectionItem) => Promise<unknown>;
   activateReversible: (
     item: ContextSelectionItem,
@@ -69,6 +71,7 @@ export interface ContextInteractionTarget {
   label: string;
   /** Libelle brut du chevron, distinct de l'instruction portee par la ligne. */
   detailLabel?: string;
+  item?: ContextSelectionItem;
   /** Présence dans le panier de contexte ; absente si ce canal n'existe pas. */
   selected?: boolean;
   /** État du rail d'actions distinct de la sélection de contexte. */

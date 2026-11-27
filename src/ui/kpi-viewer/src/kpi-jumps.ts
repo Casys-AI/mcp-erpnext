@@ -19,15 +19,13 @@ export type KpiAction =
   | { kind: "drill"; message: string }
   | null;
 
-/**
- * Seule une courbe (sparkline) peut être ajoutée au contexte : un KPI scalaire
- * n'a pas de contexte disponible, même sur un hôte qui sait le recevoir.
- */
+/** A KPI contributes context only when its displayed value is complete. */
 export function kpiContextEnabled(
   contextSupported: boolean,
-  hasSparkline: boolean,
+  value: number | undefined,
+  partial: boolean,
 ): boolean {
-  return contextSupported && hasSparkline;
+  return contextSupported && Number.isFinite(value) && !partial;
 }
 
 /**

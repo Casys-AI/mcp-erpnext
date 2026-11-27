@@ -9,6 +9,7 @@ import { cx, Label } from "../ui";
 import {
   type ChildRowDisclosure,
   ChildTableSection,
+  type ChildTableSectionProps,
 } from "./ChildTableSection";
 import { DocumentHeader } from "./DocumentHeader";
 import { DocumentPreviewFields } from "./DocumentPreviewFields.tsx";
@@ -61,6 +62,8 @@ export interface DocumentSurfaceProps {
   ) => ComponentChildren;
   childRowActionsPlacement?: "disclosure" | "visible";
   childRowsExpandable?: boolean;
+  onAddChildRowContext?: ChildTableSectionProps["onAddRowContext"];
+  renderChildRowDetailTarget?: ChildTableSectionProps["renderRowDetailTarget"];
   contextTarget?: ContextInteractionTarget;
   renderChildRowContextTarget?: (
     table: ChildTableModel,
@@ -256,6 +259,8 @@ export function DocumentSurface({
   childRowActionsPlacement = "disclosure",
   contextTarget,
   renderChildRowContextTarget,
+  renderChildRowDetailTarget,
+  onAddChildRowContext,
   childRowsExpandable = true,
 }: DocumentSurfaceProps) {
   const t = useT();
@@ -394,6 +399,8 @@ export function DocumentSurface({
                 renderRowActions={renderChildRowActions}
                 rowActionsPlacement={childRowActionsPlacement}
                 renderRowContextTarget={renderChildRowContextTarget}
+                renderRowDetailTarget={renderChildRowDetailTarget}
+                onAddRowContext={onAddChildRowContext}
                 childRowsExpandable={childRowsExpandable}
                 activeDisclosure={activeDisclosure}
                 onDisclosureChange={setActiveDisclosure}
@@ -451,6 +458,8 @@ export function DocumentSurface({
               renderRowActions={renderChildRowActions}
               rowActionsPlacement={childRowActionsPlacement}
               renderRowContextTarget={renderChildRowContextTarget}
+              renderRowDetailTarget={renderChildRowDetailTarget}
+              onAddRowContext={onAddChildRowContext}
               childRowsExpandable={childRowsExpandable}
               activeDisclosure={activeDisclosure}
               onDisclosureChange={setActiveDisclosure}
@@ -515,6 +524,8 @@ export function DocumentSurface({
               renderRowActions={renderChildRowActions}
               rowActionsPlacement={childRowActionsPlacement}
               renderRowContextTarget={renderChildRowContextTarget}
+              renderRowDetailTarget={renderChildRowDetailTarget}
+              onAddRowContext={onAddChildRowContext}
               childRowsExpandable={childRowsExpandable}
               activeDisclosure={activeDisclosure}
               onDisclosureChange={setActiveDisclosure}

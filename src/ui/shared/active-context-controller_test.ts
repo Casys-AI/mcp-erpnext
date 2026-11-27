@@ -1362,3 +1362,321 @@ Deno.test("document pins reflect host acknowledgements, including other views an
     assertEquals([...pins().shared], ["FROM-DETAIL"]);
   }
 });
+
+Deno.test("a selection rectangle adds all new identities in one acknowledged write", async () => {
+  const h = harness();
+  await h.seed("A", "B");
+  const added = h.actions.activateMany([
+    item("B"),
+    item("C"),
+    item("C"),
+    item("D"),
+  ]);
+  await flush();
+  assertEquals(h.requests.length, 3);
+  assertEquals(h.requests[2].ids, ["A", "B", "C", "D"]);
+  assertEquals(h.ids(), ["A", "B"]);
+  await h.ack(2);
+  await added;
+  await h.actions.activateMany([item("C"), item("B")]);
+  await h.actions.activateMany([]);
+  assertEquals(h.requests.length, 3);
+  const removed = h.actions.toggle(item("C"));
+  await flush();
+  await h.ack(3);
+  await removed;
+  assertEquals(h.ids(), ["A", "B", "D"]);
+});
+
+Deno.test("a rejected rectangle keeps the previous context and can be retried", async () => {
+  const h = harness();
+  await h.seed("A");
+  const failed = h.actions.activateMany([item("B"), item("C")]);
+  await flush();
+  await h.ack(1, false);
+  assertEquals(await failed, "none");
+  assertEquals(h.ids(), ["A"]);
+  const retry = h.actions.activateMany([item("B"), item("C")]);
+  await flush();
+  await h.ack(2);
+  assertEquals(await retry, "context");
+  assertEquals(h.ids(), ["A", "B", "C"]);
+});
+
+Deno.test("a mixed rectangle adds named records and individual values in the same snapshot", async () => {
+  const h = harness();
+  await h.seed("kept");
+  const rows = rowMembers(2);
+  const pending = h.actions.addGroupMembers(listGroup, rows, [
+    item("standalone"),
+  ]);
+  await flush();
+  assertEquals(h.requests.length, 2);
+  assertEquals(h.requests[1].ids, [
+    "kept",
+    ...rows.map((row) => "record:Sales Invoice:" + row.name),
+    "standalone",
+  ]);
+  await h.ack(1);
+  await pending;
+  assertEquals(h.ids(), h.requests[1].ids);
+});
+
+Deno.test("previous scope clear can be retried after rejection and shares an in-flight request", async () => {
+  const h = harness();
+  await h.seed("evidence");
+  h.controller.setScope("inactive");
+  const first = h.controller.clearPreviousScope();
+  assertExists(first);
+  assertEquals(h.controller.clearPreviousScope(), first);
+  await flush();
+  assertEquals(h.requests.map((entry) => entry.ids), [["evidence"], []]);
+  await h.ack(1, false);
+  assertEquals(await first, "error");
+  assertEquals(h.ids(), ["evidence"]);
+  const retry = h.controller.clearPreviousScope();
+  assertExists(retry);
+  assertEquals(h.controller.clearPreviousScope(), retry);
+  await flush();
+  assertEquals(h.requests[2].ids, []);
+  await h.ack(2);
+  assertEquals(await retry, "cleared");
+  assertEquals(h.ids(), []);
+  assertEquals(h.controller.clearPreviousScope(), undefined);
+  assertEquals(h.controller.getSnapshot().failed, false);
+});
+
+Deno.test("an acknowledged earlier clear makes a queued later clear redundant", async () => {
+  const h = harness();
+  await h.seed("evidence");
+  h.controller.setScope("inactive");
+  const first = h.controller.clearPreviousScope();
+  await flush();
+  h.controller.setScope("new-evidence");
+  const second = h.controller.clearPreviousScope();
+  const next = h.controller.actionsForScope("new-evidence")
+    .toggle(item("current-evidence"));
+  await h.ack(1);
+  assertEquals(await first, "cleared");
+  assertEquals(await second, "unchanged");
+  assertEquals(h.requests[2].ids, ["current-evidence"]);
+  await h.ack(2);
+  assertEquals(await next, "context");
+  assertEquals(h.ids(), ["current-evidence"]);
+  assertEquals(h.requests.length, 3);
+  assertEquals(h.controller.getSnapshot().failed, false);
+});
+
+Deno.test("a late refusal still allows the queued current clear to run", async () => {
+  const h = harness();
+  await h.seed("evidence");
+  h.controller.setScope("inactive");
+  const first = h.controller.clearPreviousScope();
+  await flush();
+  h.controller.setScope("new-evidence");
+  const second = h.controller.clearPreviousScope();
+  await h.ack(1, false);
+  assertEquals(await first, "error");
+  assertEquals(h.controller.clearPreviousScope(), second);
+  assertEquals(h.requests[2].ids, []);
+  await h.ack(2);
+  assertEquals(await second, "cleared");
+  assertEquals(h.ids(), []);
+  assertEquals(h.controller.getSnapshot().failed, false);
+});
+
+Deno.test("retrying an old scope clear preserves a replacement already queued for the new scope", async () => {
+  const h = harness();
+  await h.seed("old-evidence");
+  h.controller.setScope("new-evidence");
+  const first = h.controller.clearPreviousScope();
+  await flush();
+  const newEvidence = h.controller.actionsForScope("new-evidence")
+    .toggle(item("current-evidence"));
+  await h.ack(1, false);
+  assertEquals(await first, "error");
+  const retry = h.controller.clearPreviousScope();
+  assertEquals(h.requests[2].ids, ["current-evidence"]);
+  await h.ack(2);
+  assertEquals(await newEvidence, "context");
+  assertEquals(await retry, "unchanged");
+  assertEquals(h.ids(), ["current-evidence"]);
+  assertEquals(h.requests.length, 3);
+});
+
+Deno.test("an acknowledged reversible replacement retires the old scope without restoring it on undo", async () => {
+  const h = harness();
+  await h.seed("old-evidence");
+  h.controller.setScope("new-evidence");
+  const first = h.controller.clearPreviousScope();
+  await flush();
+  const actions = h.controller.actionsForScope("new-evidence");
+  const newEvidence = actions.toggleReversible(item("current-evidence"));
+  await h.ack(1, false);
+  assertEquals(await first, "error");
+  const retry = h.controller.clearPreviousScope();
+  assertEquals(h.requests[2].ids, ["current-evidence"]);
+  await h.ack(2);
+  const undo = await newEvidence;
+  assertExists(undo);
+  assertEquals(await retry, "unchanged");
+  assertEquals(h.ids(), ["current-evidence"]);
+  assertEquals(h.requests.length, 3);
+
+  const reverted = undo();
+  await flush();
+  assertEquals(h.requests[3].ids, []);
+  await h.ack(3);
+  assertEquals(await reverted, true);
+  assertEquals(h.ids(), []);
+  assertEquals(h.requests.length, 4);
+});
+
+Deno.test("a late reversible ACK retires the previous scope even when the newer clear fails", async () => {
+  const h = harness();
+  await h.seed("old-evidence");
+  h.controller.setScope("proof-A");
+  const first = h.controller.clearPreviousScope();
+  await flush();
+  const next = h.controller.actionsForScope("proof-A")
+    .toggleReversible(item("A"));
+  await h.ack(1, false);
+  assertEquals(await first, "error");
+  assertEquals(h.requests[2].ids, ["A"]);
+
+  h.controller.setScope("proof-B");
+  const second = h.controller.clearPreviousScope();
+  await h.ack(2);
+  const undo = await next;
+  assertExists(undo);
+  assertEquals(h.requests[3].ids, []);
+  await h.ack(3, false);
+  assertEquals(await second, "error");
+
+  const reverted = undo();
+  await flush();
+  const sent = h.requests[4].ids;
+  await h.ack(4);
+  assertEquals(await reverted, true);
+  assertEquals(sent, []);
+  assertEquals(h.ids(), []);
+});
+
+Deno.test("a late successful clear retires an earlier failure notice without another host write", async () => {
+  const h = harness();
+  await h.seed("old-evidence");
+  h.controller.setScope("first");
+  const first = h.controller.clearPreviousScope();
+  await flush();
+  await h.ack(1, false);
+  assertEquals(await first, "error");
+  assertEquals(h.controller.getSnapshot().failed, true);
+
+  h.controller.setScope("second");
+  const second = h.controller.clearPreviousScope();
+  await flush();
+  h.controller.setScope("current");
+  const current = h.controller.clearPreviousScope();
+  await h.ack(2);
+  assertEquals(await second, "cleared");
+  assertEquals(await current, "unchanged");
+  assertEquals(h.ids(), []);
+  assertEquals(h.requests.length, 3);
+  assertEquals(h.controller.getSnapshot().failed, false);
+});
+
+Deno.test("two matching group rectangles compare against the ACK at execution time", async () => {
+  const h = harness();
+  const rows = rowMembers(2);
+  const first = h.actions.addGroupMembers(listGroup, rows);
+  const duplicate = h.actions.addGroupMembers(listGroup, rows.toReversed());
+  await flush();
+  assertEquals(h.requests.length, 1);
+  await h.ack(0);
+  assertEquals(await first, "context");
+  assertEquals(await duplicate, "context");
+  assertEquals(h.requests.length, 1);
+
+  const enriched = { ...rows[0], value: "Updated balance" };
+  await acknowledge(h, h.actions.addGroupMembers(listGroup, [enriched]));
+  assertEquals(h.requests[1].items[0].value, "Updated balance");
+  assertEquals(
+    await h.actions.addGroupMembers(listGroup, [enriched]),
+    "context",
+  );
+  assertEquals(h.requests.length, 2);
+});
+
+Deno.test("a group rectangle queued after a rejection retries the unconfirmed addition", async () => {
+  const h = harness();
+  const rows = rowMembers(2);
+  const first = h.actions.addGroupMembers(listGroup, rows);
+  const retry = h.actions.addGroupMembers(listGroup, rows);
+  await flush();
+  await h.ack(0, false);
+  assertEquals(await first, "none");
+  assertEquals(h.requests[1].ids, h.requests[0].ids);
+  await h.ack(1);
+  assertEquals(await retry, "context");
+  assertEquals(h.ids(), h.requests[1].ids);
+});
+
+Deno.test("an unprojected rectangle enrichment is retained locally without a new host write", async () => {
+  const h = harness();
+  const config = { ...listGroup, queryAvailable: false };
+  const rows = rowMembers(9);
+  await acknowledge(h, h.actions.addGroupMembers(config, rows));
+  const local = rows[0];
+  assertEquals(
+    h.actions.recordPins(config.doctype).shared.has(local.name),
+    false,
+  );
+  assertEquals(
+    await h.actions.addGroupMembers(config, [{
+      ...local,
+      value: "Updated local",
+    }]),
+    "context",
+  );
+  assertEquals(h.requests.length, 1);
+  assertEquals(
+    h.actions.recordPins(config.doctype).selected.has(local.name),
+    true,
+  );
+  assertEquals(
+    h.controller.getSnapshot().selection.groups[0].members[0].value,
+    "Updated local",
+  );
+  await acknowledge(
+    h,
+    h.actions.removeGroupMembers(config, [rows.at(-1)!.name]),
+  );
+  assertEquals(h.requests[1].items[0].value, "Updated local");
+});
+
+Deno.test("an individual rectangle enriches selections without reordering or downgrading them", async () => {
+  const h = harness();
+  await h.seed("A", "B");
+  const enriched = { ...item("A", "New balance"), modified: "2026-11-27" };
+  await acknowledge(h, h.actions.activateMany([enriched]));
+  assertEquals(h.requests[2].ids, ["A", "B"]);
+  assertEquals(h.requests[2].items[0].value, "New balance");
+  assertEquals(
+    await h.actions.activateMany([
+      { ...enriched, modified: "2026-11-28" },
+    ]),
+    "context",
+  );
+  assertEquals(
+    await h.actions.activateMany([{
+      ...item("A", "Older balance"),
+      modified: "2026-11-26",
+    }]),
+    "context",
+  );
+  assertEquals(h.requests.length, 3);
+  assertEquals(h.controller.getSnapshot().selection.singles[0].item, {
+    ...enriched,
+    modified: "2026-11-28",
+  });
+});

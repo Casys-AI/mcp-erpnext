@@ -235,10 +235,6 @@ export const ta: Record<string, string> = {
   "kpi.coverage.lines": "வரிகள்: {count}",
   "kpi.coverage.omitted": "காட்டப்படாத கூடுதல் பொருள்/கிடங்கு இணைகள்: {count}",
   "kpi.coverage.unknown": "கணக்கீட்டு வரம்பு கிடைக்கவில்லை",
-  "kpi.drilldown.title_message":
-    "உரையாடலில் கேட்க இரட்டைக் கிளிக் செய்யவும் அல்லது என்டர் அழுத்தவும்",
-  "kpi.drilldown.title_context":
-    "சூழலில் சேர்க்க/நீக்கக் கிளிக் அல்லது ஸ்பேஸ் · விவரத்திற்கு இரட்டைக் கிளிக் அல்லது என்டர்",
   // ── /KPI பார்வையாளர் ───────────────────────────────────────────────────────────
 
   // ── விலைப்பட்டியல் பார்வையாளர் ────────────────────────────────────────────────────────
@@ -344,12 +340,6 @@ export const ta: Record<string, string> = {
   "drill.sent": "உரையாடலுக்கு அனுப்பப்பட்டது",
   "message.sending": "அனுப்புகிறது…",
   "message.send_error": "உரையாடலுக்கு அனுப்ப முடியவில்லை",
-  "context.pin.add": "{label} ஐச் சூழலில் பின் செய்",
-  "context.pin.remove_local": "தேர்ந்தெடுத்த பின்களிலிருந்து {label} ஐ அகற்று (பகிரப்படவில்லை)",
-  "context.pin.remove": "{label} ஐச் சூழலில் பின் செய்ததிலிருந்து நீக்கு",
-  "doclist.pin.all": "பொருந்தும் {count} வரிகளையும் சூழலில் பின் செய்",
-  "doclist.pin.remove_all":
-    "பொருந்தும் {count} வரிகளையும் சூழலில் பின் செய்ததிலிருந்து நீக்கு",
   "context.active.partly_shared": "பகுதியளவு பகிரப்பட்டது ({total} இல் {shared})",
   "context.active.label": "சூழல்",
   "context.active.items": "செயல் சூழல் தேர்வுகள்",
@@ -363,8 +353,8 @@ export const ta: Record<string, string> = {
   "context.active.evicted": "அதிகம் 8 · {label} நீக்கப்பட்டது",
   "interaction.detail.open": "{label} விவரத்தைத் திற",
   "interaction.detail.close": "{label} விவரத்தை மூடுக",
-  "interaction.detail.open_hint": "விவரம் · இரட்டைக் கிளிக்",
-  "interaction.detail.close_hint": "மூடுக · இரட்டைக் கிளிக்",
+  "interaction.detail.open_hint": "விவரம்",
+  "interaction.detail.close_hint": "மூடுக",
   // ── détail sans double-clic : boutons visibles (tactile) ──
   "interaction.detail.button_hint": "விவரம்",
   "interaction.detail.ask": "{label} பற்றிக் கேள்",
@@ -372,26 +362,8 @@ export const ta: Record<string, string> = {
   "chart.detail_bar.open": "விவரத்தைத் திற: {label}",
   "chart.detail_bar.close": "விவரத்தை மூடுக: {label}",
   "chart.detail_bar.ask": "கேள்: {label}",
-  "document.row.open_actions":
-    "{label} ஐச் சூழலில் சேர்க்க அல்லது நீக்கக் கிளிக் அல்லது ஸ்பேஸ் · செயல்களைப் பார்க்க இரட்டைக் கிளிக் அல்லது என்டர்",
-  "document.row.close_actions":
-    "{label} ஐச் சூழலில் சேர்க்க அல்லது நீக்கக் கிளிக் அல்லது ஸ்பேஸ் · செயல்களை மூட இரட்டைக் கிளிக் அல்லது என்டர்",
-  "document.row.open_actions_only":
-    "{label} இன் செயல்களைப் பார்க்க இரட்டைக் கிளிக் செய்க அல்லது என்டர் அழுத்துக",
-  "document.row.close_actions_only":
-    "{label} இன் செயல்களை மூட இரட்டைக் கிளிக் செய்க அல்லது என்டர் அழுத்துக",
-  "document.row.open_detail":
-    "{label} ஐச் சூழலில் சேர்க்க அல்லது நீக்கக் கிளிக் அல்லது ஸ்பேஸ் · விவரத்தைத் திறக்க இரட்டைக் கிளிக் அல்லது என்டர்",
-  "document.row.close_detail":
-    "{label} ஐச் சூழலில் சேர்க்க அல்லது நீக்கக் கிளிக் அல்லது ஸ்பேஸ் · விவரத்தை மூட இரட்டைக் கிளிக் அல்லது என்டர்",
   "document.row.open_follow": "{label} விவரங்களைத் திறக்கவும்",
-  "document.row.open_detail_only":
-    "{label} விவரத்தைத் திறக்க இரட்டைக் கிளிக் செய்க அல்லது என்டர் அழுத்துக",
-  "document.row.close_detail_only":
-    "{label} விவரத்தை மூட இரட்டைக் கிளிக் செய்க அல்லது என்டர் அழுத்துக",
-  "chart.tooltip.click_action_context": "கிளிக்: சூழலில் சேர்/நீக்கு · 2× விவரம்",
-  "chart.tooltip.click_action_context_only": "கிளிக்: சூழலில் சேர்/நீக்கு",
-  "chart.tooltip.click_action_fallback": "2× விவரம்",
+  "chart.tooltip.click_action_fallback": "கிளிக்: விவரம்",
   "chart.tooltip.click_action_detail": "கிளிக்: விவரம்",
   // ── வழிசெல் அடுக்கு (தடம், நிலைகள், தாவல்கள்) ──
   "nav.back": "பின் செல்",
@@ -413,7 +385,6 @@ export const ta: Record<string, string> = {
   "nav.refresh": "புதுப்பி",
   "nav.stale_title": "அடுக்கில் ஆழமான செயல் இந்நிலை காட்டுவதை மாற்றிவிட்டது.",
   "nav.trail": "வழிசெல் தடம்",
-  "kanban.pin.loaded_cards": "{column} இல் ஏற்றப்பட்ட அட்டைகள் ({count})",
   "kanban.nav.edit_card": "{id} ஐத் திருத்து",
   "nav.bar_click": "கிளிக்: இன்னொரு நிலை",
   "nav.unexpected_body": "இந்நிலை எதிர்பாராத உள்ளடக்கத்தைப் பெற்றது.",

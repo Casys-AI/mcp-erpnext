@@ -245,10 +245,6 @@ export const fr: Record<string, string> = {
   "kpi.coverage.omitted":
     "Autres couples article/entrepôt non affichés : {count}",
   "kpi.coverage.unknown": "Couverture indisponible",
-  "kpi.drilldown.title_message":
-    "Double-clic ou Entrée pour demander dans la conversation",
-  "kpi.drilldown.title_context":
-    "Clic ou Espace pour ajouter ou retirer du contexte · double-clic ou Entrée pour le détail",
   // ── /kpi-viewer ───────────────────────────────────────────────────────────
 
   // ── invoice-viewer ────────────────────────────────────────────────────────
@@ -360,11 +356,6 @@ export const fr: Record<string, string> = {
   "drill.sent": "Envoyé à la conversation",
   "message.sending": "Envoi…",
   "message.send_error": "Envoi à la conversation impossible",
-  "context.pin.add": "Épingler {label} au contexte",
-  "context.pin.remove_local": "Retirer {label} des épingles sélectionnées (hors du contexte transmis)",
-  "context.pin.remove": "Désépingler {label} du contexte",
-  "doclist.pin.all": "Épingler les résultats au contexte ({count})",
-  "doclist.pin.remove_all": "Désépingler les résultats du contexte ({count})",
   "context.active.partly_shared": "partagé en partie ({shared} sur {total})",
   "context.active.label": "Contexte",
   "context.active.items": "Sélections du contexte actif",
@@ -378,8 +369,8 @@ export const fr: Record<string, string> = {
   "context.active.evicted": "8 max · {label} retiré",
   "interaction.detail.open": "Ouvrir le détail de {label}",
   "interaction.detail.close": "Fermer le détail de {label}",
-  "interaction.detail.open_hint": "Détail · double-clic",
-  "interaction.detail.close_hint": "Fermer · double-clic",
+  "interaction.detail.open_hint": "Détail",
+  "interaction.detail.close_hint": "Fermer",
   // ── détail sans double-clic : boutons visibles (tactile) ──
   "interaction.detail.button_hint": "Détail",
   "interaction.detail.ask": "Demander le détail de {label}",
@@ -387,28 +378,8 @@ export const fr: Record<string, string> = {
   "chart.detail_bar.open": "Ouvrir le détail : {label}",
   "chart.detail_bar.close": "Fermer le détail : {label}",
   "chart.detail_bar.ask": "Demander le détail : {label}",
-  "document.row.open_actions":
-    "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour afficher ses actions",
-  "document.row.close_actions":
-    "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour fermer ses actions",
-  "document.row.open_actions_only":
-    "Double-clic ou Entrée pour afficher les actions de {label}",
-  "document.row.close_actions_only":
-    "Double-clic ou Entrée pour fermer les actions de {label}",
-  "document.row.open_detail":
-    "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour ouvrir son détail",
-  "document.row.close_detail":
-    "Clic ou Espace pour ajouter ou retirer {label} du contexte · double-clic ou Entrée pour fermer son détail",
   "document.row.open_follow": "Ouvrir la fiche de {label}",
-  "document.row.open_detail_only":
-    "Double-clic ou Entrée pour ouvrir le détail de {label}",
-  "document.row.close_detail_only":
-    "Double-clic ou Entrée pour fermer le détail de {label}",
-  "chart.tooltip.click_action_context":
-    "clic : ajouter/retirer du contexte · 2× détail",
-  "chart.tooltip.click_action_context_only":
-    "clic : ajouter/retirer du contexte",
-  "chart.tooltip.click_action_fallback": "2× détail",
+  "chart.tooltip.click_action_fallback": "clic : détail",
   "chart.tooltip.click_action_detail": "clic : détail",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Retour",
@@ -430,7 +401,6 @@ export const fr: Record<string, string> = {
   "nav.refresh": "actualiser",
   "nav.stale_title": "Une action plus bas a changé ce que ce niveau montre.",
   "nav.trail": "Fil de navigation",
-  "kanban.pin.loaded_cards": "Cartes chargées dans {column} ({count})",
   "kanban.nav.edit_card": "éditer {id}",
   "nav.bar_click": "clic : un niveau de plus",
   "nav.unexpected_body": "Ce niveau a reçu un corps inattendu.",

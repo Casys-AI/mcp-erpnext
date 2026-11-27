@@ -1,29 +1,15 @@
 import { assertEquals } from "@std/assert";
-import { createClickIntentArbiter } from "../click-intent.ts";
-import { contextInteractionProps } from "../document/context-interaction.ts";
 import { doclistRowEvents, extendDoclistRange } from "./selection.ts";
 
 function setup(platform = "Win32", enabled = true) {
   const effects: string[] = [];
-  const arbiter = createClickIntentArbiter(() => () => {});
-  const base = contextInteractionProps({
-    label: "Invoice A",
-    onActivate: () => {
-      effects.push("single");
-    },
-    onDoubleActivate: () => {
-      effects.push("detail");
-    },
-    doublePolicy: "local",
-  }, { arbiter, key: "A" });
-  const props = doclistRowEvents(base, {
+  const props = doclistRowEvents({
     onToggle: enabled
       ? (shiftKey) => effects.push(shiftKey ? "range" : "toggle")
       : undefined,
-    arbiter,
     platform,
   });
-  return { effects, props, base, arbiter };
+  return { effects, props };
 }
 
 function event(overrides: Record<string, unknown> = {}) {
@@ -159,41 +145,6 @@ Deno.test("doclist row - hors Mac contextmenu puis Ctrl click conserve une bascu
   }
 });
 
-Deno.test("doclist row - geste explicite libère l'arbitrage précédent sans annuler la sélection", async () => {
-  const effects: string[] = [];
-  const arbiter = createClickIntentArbiter(() => () => {});
-  arbiter.click({
-    key: "earlier",
-    onSingle: () =>
-      Object.assign(() => {
-        effects.push("undo");
-      }, { release: () => effects.push("release") }),
-    onDouble: () => {
-      effects.push("detail");
-    },
-  });
-  const props = doclistRowEvents({}, {
-    arbiter,
-    platform: "Win32",
-    onToggle: () => effects.push("toggle"),
-  });
-  props.onClick(event({ metaKey: true }));
-  await Promise.resolve();
-  await Promise.resolve();
-  assertEquals(effects, ["toggle", "release"]);
-});
-
-Deno.test("doclist row - conserve clic, double-clic, Entrée et Espace", () => {
-  const { props, base, effects } = setup();
-  const click = event();
-  props.onClick(click);
-  props.onDblClick(event({ detail: 2 }));
-  base.onKeyDown({ key: "Enter", preventDefault() {} });
-  base.onKeyDown({ key: " ", preventDefault() {} });
-  assertEquals(effects, ["single", "detail", "detail", "single"]);
-  assertEquals(click.actions, []);
-});
-
 Deno.test("doclist row - sans sélection de groupe les gestes restent inchangés", () => {
   const { props, effects } = setup("MacIntel", false);
   const down = event({ shiftKey: true });
@@ -201,7 +152,7 @@ Deno.test("doclist row - sans sélection de groupe les gestes restent inchangés
   props.onClick(event({ shiftKey: true }));
   const menu = event({ ctrlKey: true });
   props.onContextMenu(menu);
-  assertEquals(effects, ["single"]);
+  assertEquals(effects, []);
   assertEquals(down.actions, []);
   assertEquals(menu.actions, []);
 });
@@ -215,8 +166,7 @@ Deno.test("doclist row - Ctrl choisit une nouvelle ancre puis Shift suit le tri 
   const selected: string[][] = [];
   let anchor = "D";
   let clicked = "A";
-  const props = doclistRowEvents({}, {
-    arbiter: createClickIntentArbiter(() => () => {}),
+  const props = doclistRowEvents({
     platform: "Win32",
     onToggle: (shiftKey) => {
       if (shiftKey) {
@@ -236,27 +186,4 @@ Deno.test("doclist row - Ctrl choisit une nouvelle ancre puis Shift suit le tri 
   props.onClick(event({ shiftKey: true }));
   assertEquals(anchor, "A");
   assertEquals(selected, [["A"], ["A", "C"]]);
-});
-
-Deno.test("a linked row opens its detail once and preserves modified selection", () => {
-  const { arbiter, effects } = setup();
-  const base = contextInteractionProps({
-    clickAction: "detail",
-    label: "Invoice A",
-    onActivate: () => {
-      effects.push("focus");
-    },
-  }, { arbiter, key: "A" });
-  const props = doclistRowEvents(base, {
-    onToggle: (shiftKey) => effects.push(shiftKey ? "range" : "toggle"),
-    arbiter,
-    platform: "Win32",
-  });
-  props.onClick(event());
-  props.onClick(event({ detail: 2 }));
-  props.onDblClick(event({ detail: 2 }));
-  props.onClick(event({ shiftKey: true }));
-  props.onClick(event({ ctrlKey: true }));
-  base.onKeyDown({ key: "Enter", preventDefault() {} });
-  assertEquals(effects, ["focus", "range", "toggle", "focus"]);
 });

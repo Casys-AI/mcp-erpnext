@@ -1,15 +1,12 @@
 import { assertEquals } from "@std/assert";
-import {
-  projectedRecordNames,
-  recordPinCoverage,
-} from "../record-pin-coverage.ts";
+import { projectedRecordNames } from "../record-pin-coverage.ts";
 import {
   emptySelectionState,
   projectedSelectionEntries,
   setSelectionGroupMembers,
 } from "../selection-projection.ts";
 
-Deno.test("column and card pins report only the acknowledged identities in bounded groups", () => {
+Deno.test("Kanban context shares record identities within group bounds", () => {
   for (
     const [count, queryAvailable, expected] of [[12, false, 8], [
       230,
@@ -34,22 +31,10 @@ Deno.test("column and card pins report only the acknowledged identities in bound
       "board",
       "Task",
     );
-    const body = recordPinCoverage(cards, (card) => card.id, () => true, names);
-    assertEquals(body, {
-      pressed: expected === count ? true : "mixed",
-      allSelected: true,
-      selected: count,
-      shared: expected,
-    });
-    for (const card of cards) {
-      assertEquals(
-        recordPinCoverage([card], (item) => item.id, () => true, names).pressed,
-        names.has(card.id) ? true : "mixed",
-      );
-    }
+    assertEquals(names.size, expected);
     assertEquals(
-      recordPinCoverage(cards, (card) => card.id, () => false, names).pressed,
-      false,
+      [...names].every((name) => cards.some(({ id }) => id === name)),
+      true,
     );
     assertEquals(
       projectedRecordNames(

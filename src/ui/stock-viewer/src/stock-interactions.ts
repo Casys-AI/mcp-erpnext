@@ -3,12 +3,8 @@ import {
   type ContextSelectionItem,
 } from "../../shared/active-context.ts";
 import {
-  addSelectionGroupMembers,
   fnv1a64,
-  projectSelection,
-  type SelectionGroupConfig,
   type SelectionGroupMemberInput,
-  type SelectionState,
 } from "../../shared/selection-projection.ts";
 import type { StockEntry } from "./types.ts";
 
@@ -67,38 +63,6 @@ export function stockBinMember(
     fieldsSource: "row",
     modified: item.modified,
   };
-}
-
-/** Offer a bulk pin only if the context projection can represent every matching Bin. */
-export function stockBulkPinState(
-  state: SelectionState,
-  config: SelectionGroupConfig,
-  filtered: readonly SelectionGroupMemberInput[],
-): boolean | "mixed" | undefined {
-  // A query projection can serialize at most 100 exact ERP record names.
-  if (!filtered.length || filtered.length > 100) return;
-  const existing = state.groups.find((group) =>
-    group.scopeKey === config.scopeKey &&
-    group.reconcileKey === config.reconcileKey
-  );
-  const pinned = new Set(existing?.members.map((row) => row.name));
-  const count = filtered.filter((row) => pinned.has(row.name)).length;
-  const allPinned = count === filtered.length;
-  const projected = projectSelection(
-    allPinned ? state : addSelectionGroupMembers(state, config, filtered),
-  );
-  const included = new Set<string>();
-  for (const item of projected) {
-    if (item.reconcileKey !== config.reconcileKey) continue;
-    if (item.query) {
-      if (item.query.truncated) return;
-      for (const name of item.query.args.filters[0][2]) included.add(name);
-    } else if (item.id.startsWith("record:Bin:")) {
-      included.add(item.id.slice("record:Bin:".length));
-    }
-  }
-  if (!filtered.every((row) => included.has(row.name))) return;
-  return allPinned || (count ? "mixed" : false);
 }
 
 /** Cible ARIA sans espace pour le detail inline de la ligne. */

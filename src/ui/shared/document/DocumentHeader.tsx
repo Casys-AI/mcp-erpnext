@@ -6,7 +6,11 @@ import { TONE_BADGE, toneForStatus } from "../status";
 import type { ViewerLayout } from "../useViewerLayout";
 import { ContextChipRow, cx, Label, LiveDot } from "../ui";
 import type { ContextInteractionTarget } from "./context-interaction.ts";
-import { DocumentPin } from "./DocumentPin.tsx";
+import {
+  CONTEXT_ROW_OUTLINE,
+  useVisualItemGestures,
+} from "@mcpview/components/preact/controls";
+import { visualRowProps } from "./visual-row-props.ts";
 
 export interface DocumentHeaderProps {
   doctype: string;
@@ -22,7 +26,7 @@ export interface DocumentHeaderProps {
   contextChip?: ComponentChildren;
   contextSupported?: boolean;
   live?: boolean;
-  /** Explicit pin for the displayed record. */
+  /** Context target for the displayed record. */
   contextTarget?: ContextInteractionTarget;
 }
 
@@ -58,16 +62,28 @@ export function DocumentHeader({
 }: DocumentHeaderProps) {
   const t = useT();
   const narrow = layout !== "wide";
+  const visualItemsRef = useVisualItemGestures({
+    onToggle: () => contextTarget?.onActivate(),
+  });
+  const identityProps = visualRowProps(
+    `${doctype}:${name}`,
+    undefined,
+    contextTarget?.selected,
+    false,
+  );
 
   if (narrow) {
     return (
-      <header aria-label={t("document.header")} class="shrink-0">
+      <header
+        ref={visualItemsRef}
+        aria-label={t("document.header")}
+        class="shrink-0"
+      >
         <div class="flex min-h-10 items-center justify-between gap-2.5 px-3 py-2">
           <div class="min-w-0 flex-1">{navigation}</div>
           <Label class="max-w-[45%] truncate text-center">{doctype}</Label>
           <div class="flex min-w-0 flex-1 items-center justify-end gap-1.5">
             {trailing}
-            <DocumentPin target={contextTarget} />
             {live && (
               <span aria-hidden="true" class="size-1.5 rounded-full bg-ok" />
             )}
@@ -83,7 +99,13 @@ export function DocumentHeader({
         )}
 
         <div class="border-b border-line">
-          <div class="flex flex-col gap-1.5 px-3 pb-3 pt-1">
+          <div
+            {...identityProps}
+            class={cx(
+              "flex flex-col gap-1.5 px-3 pb-3 pt-1 focus-visible:outline-2 focus-visible:outline-accent",
+              CONTEXT_ROW_OUTLINE,
+            )}
+          >
             <span class="truncate font-mono text-nano uppercase tracking-label text-ink-faint">
               {name}
             </span>
@@ -108,6 +130,7 @@ export function DocumentHeader({
 
   return (
     <header
+      ref={visualItemsRef}
       aria-label={t("document.header")}
       class="flex shrink-0 flex-col border-b border-line px-4 py-[13px]"
     >
@@ -115,7 +138,13 @@ export function DocumentHeader({
         <div class="flex min-w-0 items-start gap-3">
           {navigation && <div class="shrink-0 pt-0.5">{navigation}</div>}
           <div class="min-w-0">
-            <div class="flex min-w-0 flex-col gap-1">
+            <div
+              {...identityProps}
+              class={cx(
+                "flex min-w-0 flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent",
+                CONTEXT_ROW_OUTLINE,
+              )}
+            >
               <span class="truncate font-mono text-micro uppercase tracking-label text-ink-faint">
                 {doctype} · {name}
               </span>
@@ -138,7 +167,6 @@ export function DocumentHeader({
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
           {trailing}
-          <DocumentPin target={contextTarget} />
         </div>
       </div>
       <ContextChipRow reserve={contextSupported}>{contextChip}</ContextChipRow>

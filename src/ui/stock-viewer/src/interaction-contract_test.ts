@@ -9,13 +9,25 @@ Deno.test("stock viewer - contexte et detail gardent des commandes exclusives", 
     source,
     "const activeContext = useActiveContext(app, rootKey)",
   );
-  assertStringIncludes(source, "<ContextPinButton");
+  assertEquals(source.includes("ContextPinButton"), false);
   assertStringIncludes(
     source,
     "context.toggleGroupMember(binGroup, member)",
   );
-  assertStringIncludes(source, "pressed={isContextSelected}");
-  assertStringIncludes(source, "acceptsDetailToggleClick(event.detail)");
+  assertStringIncludes(
+    source,
+    "context.supported ? isContextSelected : undefined",
+  );
+  assertStringIncludes(
+    source,
+    "context.addGroupMembers(binGroup, members, singles)",
+  );
+  assertStringIncludes(source, "context.activateMany(singles)");
+  assertStringIncludes(source, "useVisualItemGestures({");
+  assertStringIncludes(
+    source,
+    "if (row && context.supported) toggleStockContext(row)",
+  );
   assertStringIncludes(
     source,
     "nav.toggleRootChild(jump, contextItemFor(row).id)",
@@ -39,12 +51,12 @@ Deno.test("stock viewer - detail explicite, aria et niveaux imbriques restent ca
     source,
     'const RowControl = canDrill ? "button" : "div"',
   );
-  assertStringIncludes(source, "title: detailLabel");
+  assertStringIncludes(source, "label: detailLabel");
   assertStringIncludes(
     source,
     "{canDrill && <DisclosureChevron expanded={isExpanded} />}",
   );
-  assertStringIncludes(source, '"aria-controls": isExpanded ? detailId');
+  assertStringIncludes(source, "controls: isExpanded ? detailId");
   assertMatch(source, /<section\s+id=\{detailId\}/s);
   assertMatch(source, /<div id=\{detailId\}>/s);
   assertStringIncludes(source, "touch={hasTouchTargets}");

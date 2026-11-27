@@ -2,14 +2,17 @@ import { recordPinNames } from "./record-pin-coverage.ts";
 import {
   type ActiveContextResult,
   type ActiveContextSelection,
+  boundActiveContextItem,
   canReplaceActiveContext,
   clearActiveContext,
   type ContextSelectionItem,
   createActiveContextQueue,
+  fresherSelectionItem,
   reconcileActiveContextDocumentSelections,
   reconcileActiveContextSelections,
   reconcileActiveContextViewSelections,
   replaceActiveContext,
+  sameActiveContextItem,
   sameActiveContextSelections,
 } from "./active-context.ts";
 import type {
@@ -64,8 +67,12 @@ export function createActiveContextController(
   initialScope: string,
 ) {
   let scope = initialScope;
-  let clearedScope = initialScope;
   let generation = 0;
+  let clearedGeneration = generation;
+  let previousClear: {
+    generation: number;
+    promise: Promise<ActiveContextReconcileResult>;
+  } | undefined;
   let state: ActiveContextState = {
     selections: [],
     selection: emptySelectionState(),
@@ -155,20 +162,36 @@ export function createActiveContextController(
       ? clearActiveContext(app)
       : replaceActiveContext(app, items);
   }
-  function clear(): Promise<ActiveContextResult> {
+  function clear(): Promise<ActiveContextResult>;
+  function clear(
+    previousGeneration: number,
+  ): Promise<ActiveContextReconcileResult>;
+  function clear(
+    previousGeneration?: number,
+  ): Promise<ActiveContextReconcileResult> {
     // Sans cette capacité, aucun contexte distant ne peut avoir été partagé.
     if (!canReplaceActiveContext(app.getHostCapabilities())) {
       return Promise.resolve("unsupported");
     }
+    const clearGeneration = generation;
     const finish = beginOperation();
     publish({ evictedLabel: null });
     return queue.run(async () => {
       try {
+        if (
+          previousGeneration !== undefined &&
+          (previousGeneration !== generation ||
+            previousGeneration === clearedGeneration)
+        ) return "unchanged";
         const result = await clearActiveContext(app);
         if (result === "cleared") {
+          // The acknowledged empty payload precedes all later writes in the queue.
+          clearedGeneration = generation;
           mutationBase = emptySelectionState();
           mutationLog = [];
           commit(emptySelectionState());
+          // No later queued write could have recorded a new failure yet.
+          if (clearGeneration !== generation) publish({ failed: false });
         }
         // Une capacité disparue reste un résultat neutre.
         finish(result === "unsupported" ? undefined : result === "cleared");
@@ -192,6 +215,12 @@ export function createActiveContextController(
           entry.scopeKey === actionScope
         ),
       };
+    }
+    function containsOnlyActionScope(selection: SelectionState): boolean {
+      return selection.singles.every((entry) =>
+        entry.scopeKey === actionScope
+      ) &&
+        selection.groups.every((entry) => entry.scopeKey === actionScope);
     }
     function change(
       applyMembers: SelectionMutation["apply"],
@@ -255,16 +284,37 @@ export function createActiveContextController(
           }, [member]), true);
     }
     function perform(
-      prepare: () => SelectionChange,
+      prepare: () => SelectionChange | undefined,
+      skipUnchangedProjection = false,
     ): Promise<ActiveContextActivation> {
       const finish = beginOperation(actionGeneration);
       return queue.run(async () => {
         try {
           if (!current()) return "superseded";
           const mutation = prepare();
+          if (!mutation) return "context";
+          if (
+            skipUnchangedProjection &&
+            sameActiveContextSelections(
+              sharedSelections(state.selections),
+              sharedSelections(projectedSelectionEntries(mutation.selection)),
+            )
+          ) {
+            if (!sameSelectionState(state.selection, mutation.selection)) {
+              record(mutation.apply);
+              commit(mutation.selection);
+            }
+            return "context";
+          }
           const result = await replace(mutation.selection);
           const accepted = result === "shared" || result === "cleared";
           if (accepted) {
+            if (
+              current() && actionScope === scope &&
+              containsOnlyActionScope(mutation.selection)
+            ) {
+              clearedGeneration = actionGeneration;
+            }
             record(mutation.apply);
             commit(mutation.selection);
             if (current() && (mutation.removing || mutation.evicted.length)) {
@@ -292,11 +342,20 @@ export function createActiveContextController(
         try {
           if (!current()) return () => false;
           const change = prepare();
+          const retiresPreviousScope = actionScope === scope &&
+            clearedGeneration !== actionGeneration &&
+            containsOnlyActionScope(change.selection);
           const result = await replace(change.selection);
           if (result !== "shared" && result !== "cleared") {
             finish(false);
             // A failed context must not unlock a conversation fallback.
             return () => false;
+          }
+          if (retiresPreviousScope) {
+            // An ACK retired the previous scope. Undo may only restore items
+            // from the new scope, even if the explicit clear was refused.
+            record(scoped);
+            if (current()) clearedGeneration = actionGeneration;
           }
           const mutation = record(change.apply, true);
           commit(change.selection);
@@ -514,19 +573,71 @@ export function createActiveContextController(
         group.members.some((member) => member.name === name)
       );
     }
-    function isSelected(candidate: ContextSelectionItem) {
-      return state.selection.singles.some((selection) =>
+    function containsItem(
+      selection: SelectionState,
+      candidate: ContextSelectionItem,
+    ) {
+      return selection.singles.some((selection) =>
         selection.scopeKey === actionScope && selection.item.id === candidate.id
       ) ||
-        state.selection.groups.some((group) =>
+        selection.groups.some((group) =>
           group.scopeKey === actionScope &&
           group.members.some((member) =>
             candidate.id === `record:${group.doctype}:${member.name}`
           )
         );
     }
+    function addRectangleItems(
+      selection: SelectionState,
+      items: readonly ContextSelectionItem[],
+    ) {
+      let next = selection;
+      for (const item of items) {
+        const previous = next.singles.find((entry) =>
+          entry.scopeKey === actionScope && entry.item.id === item.id
+        );
+        if (previous) {
+          const candidate = !("resource" in item) && previous.item.resource
+            ? { ...item, resource: previous.item.resource }
+            : item;
+          const fresh = fresherSelectionItem(previous.item, candidate);
+          if (!sameActiveContextItem(previous.item, fresh)) {
+            next = {
+              ...next,
+              singles: next.singles.map((entry) =>
+                entry === previous ? { ...entry, item: fresh } : entry
+              ),
+            };
+          }
+        } else if (containsItem(next, item)) {
+          next = reconcileSelectionDocumentFields(
+            next,
+            actionScope,
+            item.id,
+            item,
+          );
+        } else {
+          next = addSelectionSingle(next, actionScope, item);
+        }
+      }
+      return next;
+    }
+    function isSelected(candidate: ContextSelectionItem) {
+      return containsItem(state.selection, candidate);
+    }
     return {
       activate,
+      activateMany: (items: readonly ContextSelectionItem[]) =>
+        perform(
+          () =>
+            items.length
+              ? change(
+                (selection) => addRectangleItems(scoped(selection), items),
+                true,
+              )
+              : undefined,
+          true,
+        ),
       activateReversible,
       toggle: (next: ContextSelectionItem) => activate(next, true),
       toggleReversible: (next: ContextSelectionItem) =>
@@ -542,14 +653,16 @@ export function createActiveContextController(
       addGroupMembers: (
         config: GroupConfig,
         members: readonly SelectionGroupMemberInput[],
+        singles: readonly ContextSelectionItem[] = [],
       ) =>
         perform(() =>
-          change((selection) =>
-            addSelectionGroupMembers(scoped(selection), {
+          change((selection) => {
+            const grouped = addSelectionGroupMembers(scoped(selection), {
               ...config,
               scopeKey: actionScope,
-            }, members), true)
-        ),
+            }, members);
+            return addRectangleItems(grouped, singles);
+          }, true), true),
       removeGroupMembers: (
         config: GroupConfig,
         names: readonly string[],
@@ -683,16 +796,28 @@ export function createActiveContextController(
       // Conserver l’historique acquitté jusqu’au succès de l’effacement distant.
     },
     clearPreviousScope() {
-      if (clearedScope === scope) return;
-      clearedScope = scope;
+      if (clearedGeneration === generation) return;
+      if (previousClear?.generation === generation) {
+        return previousClear.promise;
+      }
       // Changing a KPI period can change its scope without ever pinning a value.
       // An outstanding write, failed ACK or reversible gesture can still own host context.
       if (
         !state.pending && !state.failed && !mutationLog.length &&
         !state.selection.singles.length && !state.selection.groups.length &&
         canReplaceActiveContext(app.getHostCapabilities())
-      ) return Promise.resolve("unchanged" as const);
-      return clear();
+      ) {
+        clearedGeneration = generation;
+        return Promise.resolve("unchanged" as const);
+      }
+      const targetGeneration = generation;
+      const promise = clear(targetGeneration).finally(() => {
+        if (previousClear?.generation === targetGeneration) {
+          previousClear = undefined;
+        }
+      });
+      previousClear = { generation: targetGeneration, promise };
+      return promise;
     },
     dismissEviction: () => publish({ evictedLabel: null }),
     actionsForScope,
@@ -709,4 +834,12 @@ function sameSelectionState(
       single.order === right.singles[index].order
     ) &&
     JSON.stringify(left.groups) === JSON.stringify(right.groups);
+}
+
+/** Local freshness metadata does not change the host payload. */
+function sharedSelections(selections: readonly ActiveContextSelection[]) {
+  return selections.map(({ scopeKey, item }) => ({
+    scopeKey,
+    item: { ...boundActiveContextItem(item), resource: item.resource },
+  }));
 }

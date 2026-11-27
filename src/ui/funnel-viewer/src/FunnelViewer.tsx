@@ -49,8 +49,10 @@ import {
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
 import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
-import { ContextPinButton, DisclosureChevron } from "@mcpview/components/preact/controls";
-import { acceptsDetailToggleClick } from "~/shared/detail-toggle.ts";
+import {
+  DisclosureChevron,
+  useVisualItemGestures,
+} from "@mcpview/components/preact/controls";
 import {
   canShareActiveContextResource,
   type ContextSelectionItem,
@@ -102,43 +104,53 @@ interface FunnelChartProps {
   contextEnabled: boolean;
   isPinned: (stage: FunnelStage) => boolean;
   onTogglePin: (stage: FunnelStage) => void;
+  onAddPins: (stages: readonly FunnelStage[]) => void;
   hasNavJump: (label: string) => boolean;
   hasDetail: (stage: FunnelStage) => boolean;
   onOpenDetail: (stage: FunnelStage) => Promise<DrillDownChannel>;
 }
 
-function StageActions({ stage, chart, onDetail, touch = false }: {
+function useFunnelGestures(
+  chart: FunnelChartProps,
+  activate: (stage: FunnelStage) => void,
+) {
+  const findStage = (id: string) =>
+    chart.stages.find(({ label }) => label === id);
+  return useVisualItemGestures<HTMLDivElement>({
+    onActivate: (id) => {
+      const stage = findStage(id);
+      if (stage) activate(stage);
+    },
+    onToggle: chart.contextEnabled
+      ? (id) => {
+        const stage = findStage(id);
+        if (stage) chart.onTogglePin(stage);
+      }
+      : undefined,
+    onAdd: chart.contextEnabled
+      ? (ids) =>
+        chart.onAddPins(chart.stages.filter(({ label }) => ids.includes(label)))
+      : undefined,
+  });
+}
+
+function StageDetailAction({ stage, chart, onDetail, touch = false }: {
   stage: FunnelStage;
   chart: FunnelChartProps;
   onDetail?: () => void;
   touch?: boolean;
 }) {
   const t = useT();
-  const pinned = chart.isPinned(stage);
-  const local = chart.hasNavJump(stage.label);
+  if (!onDetail || !chart.hasDetail(stage)) return null;
   return (
     <div class="flex shrink-0 items-center justify-end">
-      {onDetail && chart.hasDetail(stage) && (
-        <DetailToggleButton
-          label={stage.label}
-          actionLabel={t(
-            local ? "interaction.detail.open" : "interaction.detail.ask",
-            { label: stage.label },
-          )}
-          hint={t(local ? "interaction.detail.button_hint" : "nav.ask")}
-          onToggle={onDetail}
-          touch={touch}
-        />
-      )}
-      {chart.contextEnabled && (
-        <ContextPinButton
-          label={t(pinned ? "context.pin.remove" : "context.pin.add", {
-            label: stage.label,
-          })}
-          pressed={pinned}
-          onToggle={() => chart.onTogglePin(stage)}
-        />
-      )}
+      <DetailToggleButton
+        label={stage.label}
+        actionLabel={t("interaction.detail.ask", { label: stage.label })}
+        hint={t("nav.ask")}
+        onToggle={onDetail}
+        touch={touch}
+      />
     </div>
   );
 }
@@ -242,6 +254,11 @@ function WideConnector({ rate }: { rate: number }) {
 
 function WideFunnelChart(chart: FunnelChartProps) {
   const { stages, currency, activeStage, onInspect, onOpenDetail } = chart;
+  const t = useT();
+  const gesturesRef = useFunnelGestures(chart, (stage) => {
+    if (chart.hasNavJump(stage.label)) void onOpenDetail(stage);
+    else onInspect(stage.label);
+  });
   const maxCount = Math.max(1, ...stages.map((s) => s.count));
   const MAX_BAR_H = 64;
   const MIN_BAR_H = 4;
@@ -258,9 +275,12 @@ function WideFunnelChart(chart: FunnelChartProps) {
     <>
       {/* Chart area */}
       <div
+        ref={gesturesRef}
+        data-visual-selection-surface={chart.contextEnabled ? "" : undefined}
         style={{
           display: "flex",
           alignItems: "flex-end",
+          touchAction: chart.contextEnabled ? "pan-y" : undefined,
           padding: "22px 16px 0",
           minHeight: 142,
         }}
@@ -275,6 +295,9 @@ function WideFunnelChart(chart: FunnelChartProps) {
           const nextStage = stages[idx + 1];
           const hasConnector = nextStage?.conversionRate != null;
           const isSelected = activeStage === stage.label;
+          const pinned = chart.contextEnabled && chart.isPinned(stage);
+          const opensDetail = chart.hasNavJump(stage.label);
+          const summary = `${stage.label} · ${stage.count}`;
 
           return (
             <>
@@ -282,24 +305,33 @@ function WideFunnelChart(chart: FunnelChartProps) {
                 key={`stage-${idx}`}
                 class={cx(
                   "relative flex flex-1 flex-col justify-end rounded-[3px]",
-                  isSelected &&
+                  pinned &&
                     "bg-sunken outline outline-1 outline-accent-edge outline-offset-0",
+                  isSelected && !pinned && "bg-sunken",
                 )}
               >
-                <StageActions
+                <StageDetailAction
                   stage={stage}
                   chart={chart}
-                  onDetail={() => void onOpenDetail(stage)}
+                  onDetail={opensDetail
+                    ? undefined
+                    : () => void onOpenDetail(stage)}
                 />
                 <button
                   type="button"
                   class="flex w-full cursor-pointer flex-col justify-end gap-2 rounded-[3px] text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  onClick={() => onInspect(stage.label)}
-                  onDblClick={chart.hasNavJump(stage.label)
-                    ? () => void onOpenDetail(stage)
+                  data-visual-item={stage.label}
+                  data-visual-selection-start={chart.contextEnabled
+                    ? ""
                     : undefined}
-                  aria-label={`${stage.label} · ${stage.count}`}
-                  aria-pressed={isSelected}
+                  aria-keyshortcuts={chart.contextEnabled
+                    ? "Shift+Space"
+                    : undefined}
+                  aria-label={opensDetail
+                    ? t("interaction.detail.open", { label: summary })
+                    : summary}
+                  aria-current={isSelected || undefined}
+                  aria-pressed={chart.contextEnabled ? pinned : undefined}
                 >
                   <span
                     style={{
@@ -439,8 +471,23 @@ function MobileFunnelChart(chart: FunnelChartProps & { touch: boolean }) {
     setTimeout(() => setSentStage(null), 1500);
   }
 
+  const gesturesRef = useFunnelGestures(chart, (stage) => {
+    if (chart.hasNavJump(stage.label)) {
+      void handleRowDetail(stage, stages.indexOf(stage));
+    } else onInspect(stage.label);
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", padding: 12 }}>
+    <div
+      ref={gesturesRef}
+      data-visual-selection-surface={chart.contextEnabled ? "" : undefined}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        padding: 12,
+        touchAction: chart.contextEnabled ? "pan-y" : undefined,
+      }}
+    >
       {stages.map((stage, idx) => {
         const color = getBarColor(idx, stages.length);
         const barWidthPct = Math.max(
@@ -450,6 +497,7 @@ function MobileFunnelChart(chart: FunnelChartProps & { touch: boolean }) {
         const nextStage = stages[idx + 1];
         const hasConnector = nextStage?.conversionRate != null;
         const isSelected = activeStage === stage.label;
+        const pinned = chart.contextEnabled && chart.isPinned(stage);
         const opensDetail = chart.hasNavJump(stage.label);
         const summary = `${stage.label} · ${stage.count}`;
 
@@ -464,8 +512,9 @@ function MobileFunnelChart(chart: FunnelChartProps & { touch: boolean }) {
               key={`row-${idx}`}
               class={cx(
                 "grid items-center rounded-[5px]",
-                isSelected &&
+                pinned &&
                   "bg-sunken outline outline-1 outline-accent-edge outline-offset-0",
+                isSelected && !pinned && "bg-sunken",
               )}
               style={{
                 gridTemplateColumns: "minmax(0, 1fr) auto",
@@ -481,15 +530,18 @@ function MobileFunnelChart(chart: FunnelChartProps & { touch: boolean }) {
                   gap: touch ? 6 : 7,
                   minHeight: touch ? 44 : 36,
                 }}
-                onClick={(event) => {
-                  if (!acceptsDetailToggleClick(event.detail)) return;
-                  if (opensDetail) void handleRowDetail(stage, idx);
-                  else onInspect(stage.label);
-                }}
+                data-visual-item={stage.label}
+                data-visual-selection-start={chart.contextEnabled
+                  ? ""
+                  : undefined}
+                aria-keyshortcuts={chart.contextEnabled
+                  ? "Shift+Space"
+                  : undefined}
                 aria-label={opensDetail
                   ? t("interaction.detail.open", { label: summary })
                   : summary}
-                aria-pressed={opensDetail ? undefined : isSelected}
+                aria-current={isSelected || undefined}
+                aria-pressed={chart.contextEnabled ? pinned : undefined}
               >
                 <span class="flex min-w-0 items-center gap-1 font-mono text-[10.5px] uppercase text-ink-muted">
                   {opensDetail && <DisclosureChevron expanded={false} />}
@@ -521,7 +573,7 @@ function MobileFunnelChart(chart: FunnelChartProps & { touch: boolean }) {
                   {totalPct} %
                 </span>
               </button>
-              <StageActions
+              <StageDetailAction
                 stage={stage}
                 chart={chart}
                 onDetail={opensDetail
@@ -644,6 +696,7 @@ function FunnelContent(
   const documentContext: DocumentContextController = {
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
+    activateMany: activeContext.activateMany,
     activateReversible: activeContext.activateReversible,
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
@@ -747,6 +800,10 @@ function FunnelContent(
       activeContext.isSelected(funnelStageContext(data, stage)),
     onTogglePin: (stage) =>
       void activeContext.toggle(funnelStageContext(data, stage)),
+    onAddPins: (stages) =>
+      void activeContext.activateMany(
+        stages.map((stage) => funnelStageContext(data, stage)),
+      ),
     hasNavJump,
     hasDetail: hasStageDetail,
     onOpenDetail: openStageDetail,
@@ -938,8 +995,8 @@ function FunnelContent(
       >
         {/* Contenu racine — funnel chart */}
         {isWide
-          ? <WideFunnelChart {...chart} />
-          : <MobileFunnelChart {...chart} touch={isMobile} />}
+          ? <WideFunnelChart key={rootKey} {...chart} />
+          : <MobileFunnelChart key={rootKey} {...chart} touch={isMobile} />}
         {inspected && (
           <div
             role="status"

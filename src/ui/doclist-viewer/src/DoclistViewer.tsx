@@ -341,6 +341,7 @@ function DoclistContent({
   const context: DocumentContextController = {
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
+    activateMany: activeContext.activateMany,
     activateReversible: activeContext.activateReversible,
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,

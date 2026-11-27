@@ -37,10 +37,8 @@ import type { DoclistState, Row } from "./useDoclist";
 import { canCallViewerTool, hasExplicitAvailableTool } from "../viewer-tools";
 import { doclistDetailPanelId } from "./detail-panel.ts";
 import { nearestScrollDelta } from "./scroll-nearest.ts";
-import { recordPinCoverage } from "../record-pin-coverage.ts";
 import { doclistRowContextItem } from "./context-items.ts";
 import {
-  doclistFilteredSelectionOperation,
   doclistGroupMember,
   doclistQueryFields,
   doclistQueryParent,
@@ -221,16 +219,8 @@ export function DoclistBody(
   const pins = groupConfig && context
     ? context.recordPins(groupConfig.doctype)
     : undefined;
-  const coverage = pins && recordPinCoverage(
-    filteredMembers,
-    (member) => member.name,
-    (member) => pins.selected.has(member.name),
-    pins.shared,
-  );
-  const selection = groupConfig && context && pins && coverage
+  const selection = groupConfig && context && pins
     ? {
-      ...coverage,
-      totalCount: filteredMembers.length,
       pressedFor: (name: string): boolean | "mixed" =>
         !pins.selected.has(name)
           ? false
@@ -256,16 +246,12 @@ export function DoclistBody(
           void context.toggleGroupMember(groupConfig, member);
         }
       },
-      onToggleAll: () => {
-        const operation = doclistFilteredSelectionOperation(
-          coverage.allSelected,
-          filteredMembers,
-        );
-        if (operation.kind === "remove") {
-          void context.removeGroupMembers(groupConfig, operation.names);
-        } else {
-          void context.addGroupMembers(groupConfig, operation.members);
-        }
+      onAdd: (entries: readonly { row: Row; index: number }[]) => {
+        const members = entries.flatMap(({ row, index }) => {
+          const member = groupMemberForRow(row, index);
+          return member ? [member] : [];
+        });
+        if (members.length) void context.addGroupMembers(groupConfig, members);
       },
     }
     : undefined;

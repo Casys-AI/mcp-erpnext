@@ -9,18 +9,11 @@ import { translatorForLocale } from "../../shared/i18n.ts";
 import {
   STOCK_CONTEXT_RECONCILE_KEY,
   stockBinMember,
-  stockBulkPinState,
   stockRowContextId,
   stockRowContextItem,
   stockRowDetailId,
 } from "./stock-interactions.ts";
 import type { StockEntry } from "./types.ts";
-
-import {
-  addSelectionGroupMembers,
-  emptySelectionState,
-  projectSelection,
-} from "../../shared/selection-projection.ts";
 
 const ROW: StockEntry = {
   item_code: "BOLT M6",
@@ -201,45 +194,8 @@ Deno.test("stock locale reconciliation refreshes every selected warehouse while 
   }
 });
 
-Deno.test("stock bulk pins use only exact Bin names and keep equal items in different warehouses distinct", () => {
-  const rows = [...Array(12)].map((_, i) => ({
-    ...ROW,
-    name: `BIN-${i}`,
-    warehouse: `Station ${i}`,
-  }));
-  const members = rows.map((row) =>
-    stockBinMember(row, stockRowContextItem(row, "Stock", "Actual", "12"))!
-  );
-  assertEquals(
-    stockBinMember(ROW, stockRowContextItem(ROW, "Stock", "Actual", "12")),
-    undefined,
-  );
-  const config = {
-    scopeKey: "site",
-    reconcileKey: STOCK_CONTEXT_RECONCILE_KEY,
-    doctype: "Bin",
-    view: "Stock",
-    fields: ["name", "item_code", "warehouse", "actual_qty"],
-    queryAvailable: true,
-  };
-  const state = emptySelectionState();
-  assertEquals(stockBulkPinState(state, config, []), undefined);
-  assertEquals(stockBulkPinState(state, config, members), false);
-  const first = addSelectionGroupMembers(state, config, members.slice(0, 1));
-  assertEquals(stockBulkPinState(first, config, members), "mixed");
-  const all = addSelectionGroupMembers(first, config, members);
-  assertEquals(stockBulkPinState(all, config, members), true);
-  assertEquals(projectSelection(all)[0].query?.args.filters, [[
-    "name",
-    "in",
-    rows.map((r) => r.name),
-  ]]);
-  const localOnly = { ...config, queryAvailable: false };
-  assertEquals(stockBulkPinState(state, localOnly, members), undefined);
-  assertEquals(stockBulkPinState(state, localOnly, members.slice(0, 2)), false);
-  const overflow = Array.from(
-    { length: 101 },
-    (_, i) => ({ ...members[0], name: `BIN-${i}` }),
-  );
-  assertEquals(stockBulkPinState(state, config, overflow), undefined);
+Deno.test("a rectangle groups only stock lines with an actual Bin name", () => {
+  const item = stockRowContextItem(ROW, "Stock", "Actual", "12");
+  assertEquals(stockBinMember(ROW, item), undefined);
+  assertEquals(stockBinMember({ ...ROW, name: "BIN-1" }, item)?.name, "BIN-1");
 });

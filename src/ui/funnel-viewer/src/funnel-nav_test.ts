@@ -113,7 +113,7 @@ Deno.test("stageIsJumpable : true quand jumpsEnabled, étape connue, tool prése
   assertEquals(stageIsJumpable(jumps, "Opportunities", true), true);
 });
 
-Deno.test("stage double-click opens only a tool exposed to this viewer", () => {
+Deno.test("stage click opens only a tool exposed to this viewer", () => {
   const jumps = { Leads: { label: "Leads", tool: "erpnext_lead_list" } };
   assertEquals(stageIsJumpable(jumps, "Leads", true, []), false);
   assertEquals(
@@ -134,32 +134,35 @@ Deno.test("funnel detail navigation is an action, not a mounted disclosure", asy
   assertStringIncludes(source, "await nav.jump(jump)");
 });
 
-Deno.test("funnel charts inspect locally and give pinning a sibling button", async () => {
+Deno.test("funnel charts expose context state and a keyboard shortcut on stages", async () => {
   const source = await Deno.readTextFile(
     new URL("./FunnelViewer.tsx", import.meta.url),
   );
-  assertEquals(
-    source.match(/onClick=\{\(\) => onInspect\(stage.label\)\}/g)?.length,
-    1,
-  );
-  assertStringIncludes(
-    source,
-    "if (opensDetail) void handleRowDetail(stage, idx)",
-  );
+  assertEquals(source.match(/data-visual-item=\{stage.label\}/g)?.length, 2);
+  assertEquals(source.includes("onDblClick"), false);
   assertStringIncludes(source, "else onInspect(stage.label)");
+  assertStringIncludes(source, "activeContext.activateMany");
+  assertEquals(source.includes("<ContextPinButton"), false);
   assertStringIncludes(
     source,
-    "{opensDetail && <DisclosureChevron expanded={false} />}",
+    "aria-pressed={chart.contextEnabled ? pinned : undefined}",
   );
-  assertStringIncludes(
-    source,
-    "aria-pressed={opensDetail ? undefined : isSelected}",
+  assertStringIncludes(source, "aria-current={isSelected || undefined}");
+  assertStringIncludes(source, "Shift+Space");
+  assertEquals(
+    source.match(/data-visual-selection-surface=\{chart.contextEnabled/g)
+      ?.length,
+    2,
   );
-  assertStringIncludes(source, "aria-pressed={isSelected}");
-  assertStringIncludes(source, "<ContextPinButton");
-  assertStringIncludes(source, "onToggle={() => chart.onTogglePin(stage)}");
+  assertEquals(source.match(/touchAction: chart.contextEnabled/g)?.length, 2);
+  assertEquals(
+    source.match(
+      /bg-sunken outline outline-1 outline-accent-edge outline-offset-0/g,
+    )
+      ?.length,
+    2,
+  );
   assertStringIncludes(source, '"interaction.detail.ask"');
-  assertEquals(source.includes("toggleReversible(funnelStageContext"), false);
 });
 
 Deno.test("funnel stage value - carries the payload currency symbol, never a bare number", () => {

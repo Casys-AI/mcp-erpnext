@@ -1,11 +1,12 @@
 /** @jsxImportSource preact */
 
 import type { ComponentChildren } from "preact";
-import { DocumentPin } from "./DocumentPin.tsx";
 import { DisclosureChevron } from "@mcpview/components/preact/controls";
+import type { ContextSelectionItem } from "../active-context.ts";
 import { formatNumber } from "../format";
 import { type TFunction, useT } from "../i18n-hook";
-import { useClickIntent } from "../useClickIntent.ts";
+import { useVisualItemGestures } from "@mcpview/components/preact/controls";
+import { visualRowProps } from "./visual-row-props.ts";
 import type { ViewerLayout } from "../useViewerLayout";
 import { CountBadge, cx, Label, TotalRow } from "../ui";
 import {
@@ -20,10 +21,7 @@ import type {
   DocumentFieldModel,
 } from "./types.ts";
 import { DocumentFieldValue } from "./ScalarFields";
-import {
-  contextInteractionProps,
-  type ContextInteractionTarget,
-} from "./context-interaction.ts";
+import type { ContextInteractionTarget } from "./context-interaction.ts";
 
 export interface ChildTableSectionProps {
   table: ChildTableModel;
@@ -38,6 +36,11 @@ export interface ChildTableSectionProps {
   ) => ComponentChildren;
   /** Dans un détail déjà ouvert, les actions restent visibles sans disclosure. */
   rowActionsPlacement?: "disclosure" | "visible";
+  renderRowDetailTarget?: (
+    table: ChildTableModel,
+    row: ChildTableRow,
+    rowIndex: number,
+  ) => ContextInteractionTarget | undefined;
   /** A pin next to the row operates independently of its disclosure. */
   renderRowContextTarget?: (
     table: ChildTableModel,
@@ -46,6 +49,7 @@ export interface ChildTableSectionProps {
   ) => ContextInteractionTarget | undefined;
   /** Les fiches complètes peuvent révéler les colonnes cachées ; un accordéon non. */
   childRowsExpandable?: boolean;
+  onAddRowContext?: (items: readonly ContextSelectionItem[]) => void;
   /** Disclosure unique, partage par toutes les tables de la fiche. */
   activeDisclosure: ChildRowDisclosure | null;
   onDisclosureChange: (next: ChildRowDisclosure | null) => void;
@@ -179,12 +183,13 @@ export function ChildTableSection({
   renderRowActions,
   rowActionsPlacement = "disclosure",
   renderRowContextTarget,
+  renderRowDetailTarget,
+  onAddRowContext,
   childRowsExpandable = true,
   activeDisclosure,
   onDisclosureChange,
 }: ChildTableSectionProps) {
   const t = useT();
-  const clickIntent = useClickIntent();
   const columns = childTableColumnsForLayout(table, layout);
   const tableId = `${idPrefix}-${table.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
   const panel = layout === "panel";
@@ -192,7 +197,7 @@ export function ChildTableSection({
   const pinTargets = table.rows.map((row, index) =>
     renderRowContextTarget?.(table, row, index)
   );
-  const hasPinColumn = pinTargets.some((target) =>
+  const hasSelectableRows = pinTargets.some((target) =>
     target?.selected !== undefined
   );
 
@@ -234,8 +239,9 @@ export function ChildTableSection({
         clickAction: "detail",
         onActivate: toggle,
       }
-      : undefined;
+      : renderRowDetailTarget?.(table, row, rowIndex);
     return {
+      visualId: contextTarget?.item?.id ?? rowPanelId,
       hidden,
       rowActions: disclosedActions,
       visibleActions,
@@ -247,10 +253,32 @@ export function ChildTableSection({
     };
   }
 
+  const presentations = table.rows.map(rowPresentation);
+  const byId = new Map(presentations.map((row) => [row.visualId, row]));
+  const visualItemsRef = useVisualItemGestures({
+    onActivate: (id) => byId.get(id)?.interactionTarget?.onActivate(),
+    onToggle: (id) => byId.get(id)?.contextTarget?.onActivate(),
+    onAdd: (ids) => {
+      const items = ids.flatMap((id) => {
+        const item = byId.get(id)?.contextTarget?.item;
+        return item ? [item] : [];
+      });
+      if (items.length) onAddRowContext?.(items);
+    },
+  });
+
   return (
     <section
+      ref={visualItemsRef}
+      data-visual-selection-surface={onAddRowContext && hasSelectableRows
+        ? ""
+        : undefined}
       aria-label={table.label}
-      class={cx("flex min-w-0 flex-col", klass)}
+      class={cx(
+        "flex min-w-0 flex-col",
+        hasSelectableRows && "touch-pan-y",
+        klass,
+      )}
     >
       <div class="flex items-baseline justify-between gap-3 px-4 pb-2 pt-3.5">
         <Label>{table.label}</Label>
@@ -267,7 +295,7 @@ export function ChildTableSection({
         ? (
           <div class="flex flex-col border-t border-line-soft">
             {table.rows.map((row, rowIndex) => {
-              const presentation = rowPresentation(row, rowIndex);
+              const presentation = presentations[rowIndex];
               const active = presentation.expanded;
               const content = (
                 <span class="flex flex-col gap-1.5 px-3.5 py-2.5">
@@ -277,7 +305,7 @@ export function ChildTableSection({
                       class="flex min-w-0 items-baseline justify-between gap-3"
                     >
                       <span class="inline-flex shrink-0 items-center gap-1 font-mono text-chip text-ink-faint">
-                        {index === 0 && presentation.canDisclose && (
+                        {index === 0 && presentation.interactionTarget && (
                           <DisclosureChevron expanded={presentation.expanded} />
                         )}
                         {column.label}
@@ -295,7 +323,17 @@ export function ChildTableSection({
                 </span>
               );
               return (
-                <div key={rowIndex}>
+                <div
+                  key={rowIndex}
+                  data-mcp-view-context-row={presentation.contextTarget
+                      ?.selected
+                    ? "selected"
+                    : "idle"}
+                  data-mcp-view-context-row-break={active ||
+                      hasContent(presentation.visibleActions)
+                    ? ""
+                    : undefined}
+                >
                   <div
                     class={cx(
                       "flex min-w-0 items-stretch border-b border-r-2 border-line-soft transition-colors",
@@ -305,22 +343,20 @@ export function ChildTableSection({
                     )}
                   >
                     <div
-                      {...contextInteractionProps(
+                      data-mcp-view-context-row-outline
+                      {...visualRowProps(
+                        presentation.visualId,
                         presentation.interactionTarget,
-                        {
-                          arbiter: clickIntent,
-                          key: presentation.rowPanelId,
-                        },
+                        presentation.contextTarget?.selected,
                       )}
                       class={cx(
-                        "min-w-0 flex-1",
-                        presentation.interactionTarget &&
-                          "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
+                        "min-w-0 flex-1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
+                        (presentation.interactionTarget ||
+                          presentation.contextTarget) && "cursor-pointer",
                       )}
                     >
                       {content}
                     </div>
-                    <DocumentPin target={presentation.contextTarget} />
                   </div>
                   {hasContent(presentation.visibleActions) && (
                     <div class="flex flex-wrap justify-end gap-1.5 border-b border-line-soft bg-sunken px-3.5 py-1.5">
@@ -364,15 +400,9 @@ export function ChildTableSection({
                   </span>
                 ))}
               </div>
-              {hasPinColumn && (
-                <span
-                  aria-hidden="true"
-                  class="w-9 shrink-0 [@media(pointer:coarse)]:w-11"
-                />
-              )}
             </div>
             {table.rows.map((row, rowIndex) => {
-              const presentation = rowPresentation(row, rowIndex);
+              const presentation = presentations[rowIndex];
               const active = presentation.expanded;
               const rowClass = cx(
                 "grid items-center gap-3 border-l-2 border-l-transparent px-4",
@@ -380,7 +410,17 @@ export function ChildTableSection({
                 gridClass(layout, columns.length),
               );
               return (
-                <div key={rowIndex}>
+                <div
+                  key={rowIndex}
+                  data-mcp-view-context-row={presentation.contextTarget
+                      ?.selected
+                    ? "selected"
+                    : "idle"}
+                  data-mcp-view-context-row-break={active ||
+                      hasContent(presentation.visibleActions)
+                    ? ""
+                    : undefined}
+                >
                   <div
                     class={cx(
                       "flex min-w-0 items-stretch border-b border-r-2 border-line-soft transition-colors",
@@ -390,37 +430,28 @@ export function ChildTableSection({
                     )}
                   >
                     <div
-                      {...contextInteractionProps(
+                      data-mcp-view-context-row-outline
+                      {...visualRowProps(
+                        presentation.visualId,
                         presentation.interactionTarget,
-                        {
-                          arbiter: clickIntent,
-                          key: presentation.rowPanelId,
-                        },
+                        presentation.contextTarget?.selected,
                       )}
                       class={cx(
                         rowClass,
-                        "min-w-0 flex-1",
-                        presentation.interactionTarget &&
-                          "cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
+                        "min-w-0 flex-1 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
+                        (presentation.interactionTarget ||
+                          presentation.contextTarget) && "cursor-pointer",
                       )}
                     >
                       {cells(
                         row,
                         columns,
                         t,
-                        presentation.canDisclose
+                        presentation.interactionTarget
                           ? presentation.expanded
                           : undefined,
                       )}
                     </div>
-                    {presentation.contextTarget?.selected !== undefined
-                      ? <DocumentPin target={presentation.contextTarget} />
-                      : hasPinColumn && (
-                        <span
-                          aria-hidden="true"
-                          class="w-9 shrink-0 [@media(pointer:coarse)]:w-11"
-                        />
-                      )}
                   </div>
                   {hasContent(presentation.visibleActions) && (
                     <div class="flex flex-wrap justify-end gap-1.5 border-b border-line-soft bg-sunken px-4 py-1.5">

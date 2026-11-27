@@ -20,7 +20,7 @@ The embedded webfonts are maintained by hand (section 3).
 
 - @jitl/quickjs-ffi-types@0.32.0 (MIT) [node]
 - @jitl/quickjs-singlefile-browser-release-sync@0.32.0 (MIT) [node]
-- @mcpview/components@0.14.0-beta.2 (MIT) [ui]
+- @mcpview/components@0.14.0 (MIT) [ui]
 - @mcpview/compose@0.12.1-dev.112cabf (MIT) [ui]
 - @mcpview/contracts@0.2.1 (MIT) [node, ui]
 - @mcpview/server@0.30.2 (MIT) [node]
@@ -158,7 +158,7 @@ THE SOFTWARE.
 ==============================================================================
 MIT
 Applies to:
-  @mcpview/components@0.14.0-beta.2
+  @mcpview/components@0.14.0
   @mcpview/compose@0.12.1-dev.112cabf
   @mcpview/contracts@0.2.1
   @mcpview/server@0.30.2

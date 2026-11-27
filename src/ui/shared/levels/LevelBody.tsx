@@ -238,7 +238,9 @@ function ChartLevel({
     )
   );
   const contextEnabled = Boolean(context?.supported);
-  const caption = detailEnabled ? t("interaction.detail.button_hint") : undefined;
+  const caption = detailEnabled
+    ? t("interaction.detail.button_hint")
+    : undefined;
 
   return (
     <BarsLevel
@@ -258,6 +260,15 @@ function ChartLevel({
         ? (labelIndex, seriesIndex) => {
           const item = itemAt(labelIndex, seriesIndex);
           if (item) void context!.toggle(item);
+        }
+        : undefined}
+      onPointRange={contextEnabled
+        ? (points) => {
+          const items = points.flatMap(([labelIndex, seriesIndex]) => {
+            const item = itemAt(labelIndex, seriesIndex);
+            return item ? [item] : [];
+          });
+          void context!.activateMany(items);
         }
         : undefined}
       onPointDetail={detailEnabled
@@ -465,6 +476,7 @@ function RecordDocumentLevel({
     return item
       ? {
         label: item.label,
+        item,
         detailLabel: item.label,
         selected: context.isSelected(item),
         onActivate: () => void context.toggle(item),
@@ -492,6 +504,9 @@ function RecordDocumentLevel({
       contextTarget={contextTarget}
       renderChildRowActions={renderChildRowActions}
       renderChildRowContextTarget={renderChildRowContextTarget}
+      onAddChildRowContext={context?.supported
+        ? context.activateMany
+        : undefined}
       childRowActionsPlacement="visible"
     />
   );

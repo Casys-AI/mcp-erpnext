@@ -223,9 +223,6 @@ export const zh: Record<string, string> = {
   "kpi.coverage.lines": "明细数：{count}",
   "kpi.coverage.omitted": "未显示的其他物料/仓库组合：{count}",
   "kpi.coverage.unknown": "覆盖率不可用",
-  "kpi.drilldown.title_message": "双击或按回车键，在对话中询问",
-  "kpi.drilldown.title_context":
-    "单击或空格键加入/移出上下文 · 双击或回车键查看详情",
   // ── kpi视图 ───────────────────────────────────────────────────────────
 
   // ── 发票视图 ────────────────────────────────────────────────────────
@@ -331,11 +328,6 @@ export const zh: Record<string, string> = {
   "drill.sent": "已发送至对话",
   "message.sending": "发送中…",
   "message.send_error": "无法发送至对话",
-  "context.pin.add": "将{label}固定到上下文",
-  "context.pin.remove_local": "从已选固定项中移除 {label}（尚未共享）",
-  "context.pin.remove": "从上下文中取消固定{label}",
-  "doclist.pin.all": "将全部 {count} 条匹配结果固定到上下文",
-  "doclist.pin.remove_all": "从上下文中取消固定全部 {count} 条匹配结果",
   "context.active.partly_shared": "仅共享了 {shared} 项，共 {total} 项",
   "context.active.label": "上下文",
   "context.active.items": "活动上下文选择",
@@ -348,8 +340,8 @@ export const zh: Record<string, string> = {
   "context.active.evicted": "最多 8 项 · 已移除 {label}",
   "interaction.detail.open": "打开 {label} 详情",
   "interaction.detail.close": "关闭 {label} 详情",
-  "interaction.detail.open_hint": "详情 · 双击",
-  "interaction.detail.close_hint": "关闭 · 双击",
+  "interaction.detail.open_hint": "详情",
+  "interaction.detail.close_hint": "关闭",
   // ── détail sans double-clic : boutons visibles (tactile) ──
   "interaction.detail.button_hint": "详情",
   "interaction.detail.ask": "询问 {label}",
@@ -357,22 +349,8 @@ export const zh: Record<string, string> = {
   "chart.detail_bar.open": "打开详情：{label}",
   "chart.detail_bar.close": "关闭详情：{label}",
   "chart.detail_bar.ask": "询问：{label}",
-  "document.row.open_actions":
-    "单击或空格键将 {label} 加入或移出上下文 · 双击或回车键显示操作",
-  "document.row.close_actions":
-    "单击或空格键将 {label} 加入或移出上下文 · 双击或回车键关闭操作",
-  "document.row.open_actions_only": "双击或按回车显示 {label} 的操作",
-  "document.row.close_actions_only": "双击或按回车关闭 {label} 的操作",
-  "document.row.open_detail":
-    "单击或空格键将 {label} 加入或移出上下文 · 双击或回车键打开详情",
-  "document.row.close_detail":
-    "单击或空格键将 {label} 加入或移出上下文 · 双击或回车键关闭详情",
   "document.row.open_follow": "打开 {label} 的详情",
-  "document.row.open_detail_only": "双击或按回车打开 {label} 的详情",
-  "document.row.close_detail_only": "双击或按回车关闭 {label} 的详情",
-  "chart.tooltip.click_action_context": "单击：加入/移出上下文 · 双击详情",
-  "chart.tooltip.click_action_context_only": "单击：加入/移出上下文",
-  "chart.tooltip.click_action_fallback": "双击详情",
+  "chart.tooltip.click_action_fallback": "单击：详情",
   "chart.tooltip.click_action_detail": "单击：详情",
   // ── 导航栈（路径、层级、跳转） ──
   "nav.back": "返回",
@@ -394,7 +372,6 @@ export const zh: Record<string, string> = {
   "nav.refresh": "刷新",
   "nav.stale_title": "堆栈中更深处的操作已改变此层级显示的内容。",
   "nav.trail": "导航路径",
-  "kanban.pin.loaded_cards": "{column}中已加载的卡片（{count}）",
   "kanban.nav.edit_card": "编辑 {id}",
   "nav.bar_click": "单击：进入下一层",
   "nav.unexpected_body": "此层级收到意外的内容。",

@@ -66,7 +66,7 @@ async function runInsideHost() {
     }
   };
   const ready = new Promise((resolve) => {
-    window.addEventListener("message", ({ source, origin, data }) => {
+    globalThis.addEventListener("message", ({ source, origin, data }) => {
       if (source !== frame.contentWindow || origin !== location.origin) return;
       const { id, method, params } = data;
       if (method === "ui/initialize") {

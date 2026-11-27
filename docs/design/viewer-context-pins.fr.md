@@ -1,51 +1,96 @@
-# Explorer une vue ERPNext et épingler des éléments au contexte
+# Consulter les données et les joindre au contexte
 
-Inventaire des neuf viewers enregistrés dans `src/ui/viewers.ts`. Le point de comparaison est la candidate Code Mode `fb32608`. La règle de la bêta distingue le contenu que la personne regarde de celui qu’elle choisit de communiquer au prochain tour de conversation.
+Dans la bêta de travail, un clic ou un toucher bref ouvre le détail disponible.
+Dans un tableau Compose lié, il peut aussi afficher la facture dans le panneau
+voisin ou recalculer la marge sur le mois choisi. Si un point dispose uniquement
+d’une valeur à lire, le clic affiche cette valeur.
 
-## Trois gestes sur les commandes d’octobre
+Un double-clic ou un appui long sur un élément l’ajoute au contexte. Répéter le
+geste sur le même élément le retire. L’identité provient de la cible du geste,
+même si le détail d’une autre donnée est ouvert. Le panier reflète la dernière
+réponse confirmée par l’hôte.
 
-1. Cliquer sur la barre **octobre** active ce mois. Dans un tableau où le programme a relié les commandes à la marge, le panneau voisin recalcule la marge pour octobre. Cliquer ensuite sur novembre remplace le filtre. Une plage de deux mois fait l’objet d’un choix explicite.
-2. Activer **l’épingle** du point d’octobre le joint au contexte. On peut ensuite regarder novembre et poser une question sur octobre. Le bouton indique l’état confirmé par l’hôte. Un clic sur une autre barre n’ajoute rien au panier.
-3. Utiliser l’action de **détail** pour poursuivre l’examen. Sa destination dépend de l’opération ERP. Sur le KPI des commandes, le grand nombre peut mener à la liste des commandes du mois courant. L’action associée à la tendance peut demander un graphique des douze derniers mois. Le titre du contrôle doit annoncer l’action effectivement disponible.
+Pour joindre plusieurs éléments, tracer un rectangle sur la collection et
+relâcher. Les éléments couverts sont ajoutés ensemble. Repasser sur un élément
+déjà joint le conserve. Sur le Kanban, commencer dans l’espace libre pour
+laisser le déplacement d’une carte disponible. Sur écran tactile, amorcer le
+rectangle horizontalement pour conserver le défilement vertical.
 
-## Inventaire par vue
+| Vue                 | Exemple                                                                                                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Liste de documents  | Cliquer sur une facture ouvre sa fiche. Épingler une autre ligne conserve la fiche ouverte.                                                                                       |
+| Document et facture | Les lignes avec détail s’ouvrent au clic. Les lignes éligibles peuvent être jointes individuellement ou par rectangle. Le partage d’une pièce jointe conserve sa commande propre. |
+| KPI                 | Cliquer sur octobre actualise la marge liée. Un appui long sur juin ajoute uniquement juin au contexte.                                                                           |
+| Graphique           | Cliquer sur un point ouvre son détail disponible. Un rectangle permet de joindre plusieurs points.                                                                                |
+| Tunnel de ventes    | Cliquer sur une étape donne accès au détail disponible. Un rectangle peut couvrir plusieurs étapes.                                                                               |
+| Stock               | L’identité d’une ligne est le couple article–entrepôt. Deux lignes du même article peuvent être jointes séparément.                                                               |
+| Kanban              | Une carte peut être ouverte, jointe au contexte ou déplacée. Le déplacement conserve son effet métier.                                                                            |
+| Buy Evidence        | Une preuve de session validée fournit une seule référence de contexte, rattachée à sa version.                                                                                    |
 
-| Vue | Avant cette migration | Règle de la bêta |
-| --- | --- | --- |
-| Liste de documents | Seule, clic ou Espace joignait la ligne. Le double-clic, Entrée ou le chevron dépliait la fiche. Dans une liste de factures liée, le clic ouvrait déjà le panneau voisin. Les cases étaient à gauche. | Ouvrir depuis la ligne, sous celle-ci en solo ou dans la fiche voisine si elle est reliée. Épingle indépendante à droite. L’en-tête permet d’épingler en bloc les résultats filtrés chargés, même au-delà de la page à l’écran. Le chevron devant l’identité reste visible quand une autre facture est épinglée. |
-| Document | L’en-tête et les lignes enfants sélectionnables alimentaient le contexte. Des chevrons ouvraient les détails disponibles. | Épingles sur le document et les lignes partageables. Déplier un enfant reste une action de lecture. L’aperçu des pièces jointes et le partage du fichier avec sa note restent deux opérations distinctes. |
-| Facture | L’en-tête et les articles pouvaient être joints. Un article s’ouvrait au double-clic, avec Entrée ou par son chevron. | Épingler la facture ou un article depuis son propre contrôle à droite. L’ouverture d’un article et le changement de facture ont leur propre état. |
-| KPI | Le clic sur la barre ajoutait son mois au contexte. Dans le tableau lié, une seconde rangée de boutons répétait les mois pour piloter la marge. | Le clic active le mois et transmet la période au panneau lié. Épingler le point est un choix séparé. Un chiffre scalaire seul sans composant sélectionnable garde son affichage simple. |
-| Graphique | Clic sur une marque pour partager, titre ou fond pour joindre le graphique visible, flèches pour explorer, double-clic ou commande pour les détails. | Explorer la marque et épingler la valeur active, une série ou le graphique visible selon le cas. La légende garde son rôle de visibilité. Les mini-graphiques imbriqués utilisent le panier de leur vue racine. |
-| Tunnel de ventes | Clic ou Espace partageait l’étape et son effectif. La commande de détail pouvait lire une liste ou demander une réponse dans le chat. | Inspecter l’étape au clic. Son épingle est distincte du détail et de la demande conversationnelle. Les lignes mobiles donnent accès aux mêmes actions. |
-| Stock | Clic ou Espace partageait le couple article–entrepôt. Double-clic, Entrée ou chevron ouvrait le détail. | Lire le détail depuis la ligne et épingler le couple article–entrepôt à droite. Deux lignes du même article dans deux entrepôts restent deux éléments différents. |
-| Kanban | Le titre ouvrait la carte. Le glisser-déposer avait une incidence sur l’état ERP. Les vues imbriquées disposaient d’un panier. | Ouvrir la carte par son titre, l’épingler depuis son angle supérieur droit ou déplacer la carte par son geste métier. L’épingle d’une colonne porte sur ses cartes chargées. |
-| Buy Evidence | La vue affichait une projection de session enregistrée, à partir d’une preuve vérifiée. Le résultat brut et les appels ERP en direct étaient exclus. | Lire la preuve enregistrée. Seule une projection validée peut fournir une référence à épingler, bornée et rattachée à sa version. Une session invalide ou indisponible ne fournit aucun résultat à épingler. |
+## Retrouver les éléments joints
 
-## Épingler les résultats d’une liste
+Le chevron devant l'identité d'un document indique que sa fiche peut s'ouvrir.
+Le contour d'une donnée et le panier indiquent son appartenance au contexte. Ils
+restent visibles lorsqu'on ouvre le détail d'une autre donnée. On peut retirer
+un élément depuis le panier, par double-clic, par appui long ou avec Maj +
+Espace lorsqu'il a le focus.
 
-Le chevron précède l’identité du document et pivote quand sa fiche est ouverte. Le clic sur la ligne ouvre la fiche. L’épingle individuelle reste accessible en bout de ligne. Son trait est oblique au repos et vertical lorsque la ligne est épinglée. Deux traits dans l’en-tête indiquent l’action collective. Lorsque seule une partie du résultat est épinglée, un seul des deux traits se redresse. Au clavier et dans l’infobulle, le libellé précise l’action et le nombre de lignes concernées. Le bouton collectif agit sur toutes les lignes chargées qui correspondent à la recherche et aux filtres, en conservant les autres épingles.
+Les colonnes du tableau occupent toute la largeur disponible. La sélection se
+dessine à l’intérieur des cellules. Des lignes jointes contiguës forment un
+contour extérieur continu. Une seule séparation fine reste entre deux lignes.
+Retirer la ligne du milieu ferme les contours des deux groupes restants.
 
-Lorsque le contexte peut contenir moins de références que l’utilisateur n’en a épinglées, un statut indique les deux nombres. Sur une ligne retenue localement mais absente du contexte transmis, le trait vertical est interrompu. Une activation la retire de la sélection locale. Par exemple, 30 lignes épinglées peuvent fournir 8 références si l’opération de lecture de liste est indisponible. Avec cette opération, une sélection de 130 lignes peut fournir une requête portant sur 100 identifiants. [Sélections groupées et projections](selection-tiers/README.md)
-
-Le focus clavier, la ligne ouverte et l’épingle représentent trois états différents. Le bouton d’épingle a un nom accessible, reste utilisable au tactile et conserve le focus quand on l’active. Les boutons ou chevrons de détail donnent un chemin utilisable sans double-clic. Un double-clic de compatibilité ne doit ni ouvrir deux fois ni envoyer de message.
+Dans une liste filtrée ou paginée, le rectangle s'applique aux lignes visibles
+qu’il recouvre. Les sélections précédentes restent disponibles dans le panier
+lorsqu'on change de page. Si le nombre de références transmissibles est limité,
+le panier indique combien de lignes sont jointes et combien peuvent être
+transmises. [Sélections groupées et projections](selection-tiers/README.md)
 
 ## Portée du contexte et synchronisation
 
-Une épingle est destinée au prochain tour de conversation où la vue fournit son contexte. Son état est lié à la racine de la vue. Épingler Blue Harbour **dans la liste**, puis afficher Amber **dans la fiche**, conserve Blue Harbour. Remplacer une fiche change sa racine et retire les contributions propres au document précédent. Le tableau Compose continue de fusionner les contributions des autres panneaux. Rejouer un snippet crée un nouveau tableau.
+Une épingle est destinée au prochain tour de conversation où la vue fournit son
+contexte. Son état est lié à la racine de la vue. Épingler Blue Harbour **dans
+la liste**, puis afficher Amber **dans la fiche**, conserve Blue Harbour.
+Remplacer une fiche change sa racine et retire les contributions propres au
+document précédent. Le tableau Compose continue de fusionner les contributions
+des autres panneaux. Rejouer un snippet crée un nouveau tableau.
 
-Les vues importent leurs deux contrôles graphiques depuis `@mcpview/components/preact/controls`. Le composant reçoit son libellé et son état. Le viewer fournit l’identité métier et déclenche explicitement chaque effet. Une liaison Compose livre un événement tel que `invoice.selected` ou `kpi.period.selected` ; le contrôleur de contexte utilise `ui/update-model-context`. Le shell conserve le dernier état acquitté, y compris si un effacement échoue, et peut réessayer à la livraison suivante. Le succès d’une lecture, l’acquittement d’une épingle et une réponse du modèle à une question sont vérifiés séparément. [Routage des factures](../../src/ui/code-mode/invoice-panels.ts) · [Routage des périodes](../../src/ui/code-mode/kpi-period-panels.tsx) · [Contexte des panneaux](../../src/ui/code-mode/panel-hosts.ts)
+Les vues installent les styles de `@mcpview/components/preact/controls` une fois
+par document. La bibliothèque reconnaît le clic, le double-clic, l’appui long et
+le rectangle. Elle dessine le contour des lignes marquées
+`data-mcp-view-context-row="selected"`, y compris après un tri ou une ouverture
+de détail. Le viewer fournit l’identité métier et déclenche explicitement chaque
+effet. Une liaison Compose livre un événement tel que `invoice.selected` ou
+`kpi.period.selected` ; le contrôleur de contexte utilise
+`ui/update-model-context`. Le shell conserve le dernier état acquitté, y compris
+si un effacement échoue, et peut réessayer à la livraison suivante. Le succès
+d’une lecture, l’acquittement d’une épingle et une réponse du modèle à une
+question sont vérifiés séparément.
+[Routage des factures](../../src/ui/code-mode/invoice-panels.ts) ·
+[Routage des périodes](../../src/ui/code-mode/kpi-period-panels.tsx) ·
+[Contexte des panneaux](../../src/ui/code-mode/panel-hosts.ts)
 
 ## Parcours de vérification
 
 Dans la bêta privée, `npm ci` dans `src/ui` installe les archives locales de
-`@mcpview/components` et de `@mcpview/compose` identifiées dans le lockfile.
-La première fournit les contrôles partagés. La seconde contient le routage de
+`@mcpview/components` et de `@mcpview/compose` identifiées dans le lockfile. La
+première fournit les contrôles partagés. La seconde contient le routage de
 panneaux du commit MCPView `112cabf`. Les bundles HTML distribués embarquent ces
 modules au build.
 
-- Épingler Blue avant d’ouvrir une facture, lire Amber, puis vérifier que l’hôte reçoit toujours Blue. Retirer Blue depuis son épingle et vérifier que la fiche d’Amber reste ouverte.
-- Filtrer la liste, épingler le résultat, changer de page et modifier la recherche. L’état de l’épingle collective doit suivre les lignes du nouveau filtre. Vérifier les identités et les éventuelles limites annoncées dans le contexte reçu.
-- Lire octobre, l’épingler, puis lire novembre. Vérifier la nouvelle marge et l’absence d’une nouvelle écriture de contexte. Demander au chat quel mois est épinglé.
-- Vérifier les contrôles au clavier et au tactile, les erreurs d’acquittement et les lectures tardives. Le bouton de partage d’un fichier doit conserver son comportement et sa note.
-- Charger une preuve Buy valide, puis une session rejetée. Le changement doit retirer le contexte de l’ancienne session sans altérer les contributions des autres panneaux.
+- Épingler Blue avant d’ouvrir une facture, lire Amber, puis vérifier que l’hôte
+  reçoit toujours Blue. Retirer Blue par un nouveau double-clic et vérifier que
+  la fiche d’Amber reste ouverte.
+- Filtrer la liste, tracer un rectangle sur trois lignes, puis changer de page
+  et modifier la recherche. Le panier doit conserver les trois factures, ainsi
+  que toute facture jointe auparavant. Vérifier les identités et les éventuelles
+  limites annoncées dans le contexte reçu.
+- Lire octobre, l’épingler, puis lire novembre. Vérifier la nouvelle marge et
+  l’absence d’une nouvelle écriture de contexte. Demander au chat quel mois est
+  épinglé.
+- Vérifier les contrôles au clavier et au tactile, les erreurs d’acquittement et
+  les lectures tardives. Le bouton de partage d’un fichier doit conserver son
+  comportement et sa note.
+- Charger une preuve Buy valide, puis une session rejetée. Le changement doit
+  retirer le contexte de l’ancienne session sans altérer les contributions des
+  autres panneaux.

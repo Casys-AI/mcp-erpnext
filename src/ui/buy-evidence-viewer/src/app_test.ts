@@ -331,13 +331,13 @@ Deno.test({
         ),
       );
       const pin = () =>
-        root.querySelector<HTMLButtonElement>("[data-context-pin]");
+        root.querySelector<HTMLElement>("[data-visual-item][aria-pressed]");
       try {
         await act(() => fake.session(complete));
         assert(pin());
         assertEquals(snapshots.length, 0);
         await act(async () => {
-          clickPin(pin()!);
+          toggleEvidence(pin()!);
           await until(() => snapshots.length === 1, "first pin");
         });
         assertEquals(
@@ -357,7 +357,7 @@ Deno.test({
         assertEquals(snapshots[1], {});
         assertEquals(pin()?.getAttribute("aria-pressed"), "false");
         await act(async () => {
-          clickPin(pin()!);
+          toggleEvidence(pin()!);
           await until(() => snapshots.length === 3, "new pin");
         });
         assertEquals(
@@ -386,10 +386,12 @@ Deno.test({
     }),
 });
 
-function clickPin(button: HTMLButtonElement) {
-  const event = button.ownerDocument.createEvent("CustomEvent");
-  event.initCustomEvent("click", true, true, 1);
-  button.dispatchEvent(event);
+function toggleEvidence(element: HTMLElement) {
+  for (const count of [1, 2]) {
+    const event = element.ownerDocument.createEvent("CustomEvent");
+    event.initCustomEvent("click", true, true, count);
+    element.dispatchEvent(event);
+  }
 }
 
 Deno.test({
@@ -408,9 +410,9 @@ Deno.test({
       const lifetime = new AbortController();
       const updates: Array<{ structuredContent?: Record<string, unknown> }> =
         [];
-      const context = createPanelContexts(async (value) => {
+      const context = createPanelContexts((value) => {
         updates.push(value);
-        return {};
+        return Promise.resolve({});
       });
       const sibling = { structuredContent: { invoice: "INV-FIXTURE" } };
       await context.forPanel("invoice", "Invoice", lifetime.signal)(sibling);
@@ -434,14 +436,14 @@ Deno.test({
       );
       try {
         await until(
-          () => !!root.querySelector("[data-context-pin]"),
+          () => !!root.querySelector("[data-visual-item][aria-pressed]"),
           "mounted panel pin",
         );
-        const pin = root.querySelector<HTMLButtonElement>(
-          "[data-context-pin]",
+        const pin = root.querySelector<HTMLElement>(
+          "[data-visual-item][aria-pressed]",
         )!;
         await act(async () => {
-          clickPin(pin);
+          toggleEvidence(pin);
           await until(() => updates.length === 2, "panel aggregation");
         });
         const both = updates[1].structuredContent?.panels as Array<
@@ -458,7 +460,7 @@ Deno.test({
           ),
         );
         await act(async () => {
-          clickPin(pin);
+          toggleEvidence(pin);
           await until(() => updates.length === 3, "remove only evidence");
         });
         assertEquals(updates[2], sibling);
@@ -478,7 +480,10 @@ Deno.test({
           () => !!root.querySelector(".buy-evidence-shell"),
           "read-only evidence",
         );
-        assertEquals(root.querySelector("[data-context-pin]"), null);
+        assertEquals(
+          root.querySelector("[data-visual-item][aria-pressed]"),
+          null,
+        );
         assertEquals(updates.length, 3);
       } finally {
         readonly.dispose();

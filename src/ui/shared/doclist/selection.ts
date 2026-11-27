@@ -1,5 +1,4 @@
 import { DOC_LIST_DEFAULT_LIMIT } from "../../doc-list-defaults.ts";
-import type { ClickIntentArbiter } from "../click-intent.ts";
 import { isMacControlClick, isMacControlClickEcho } from "../platform.ts";
 import type { DocumentModel } from "../document/types.ts";
 import type { SelectionGroupMemberInput } from "../selection-projection.ts";
@@ -89,33 +88,6 @@ export function doclistGroupMember(
   };
 }
 
-export function doclistHeaderSelection(
-  filteredMembers: readonly SelectionGroupMemberInput[],
-  selectedMembers: readonly SelectionGroupMemberInput[],
-) {
-  const selectedNames = new Set(selectedMembers.map((member) => member.name));
-  const totalCount = filteredMembers.length;
-  const selectedCount =
-    filteredMembers.filter((member) => selectedNames.has(member.name)).length;
-  return {
-    checked: totalCount > 0 && selectedCount === totalCount,
-    indeterminate: selectedCount > 0 && selectedCount < totalCount,
-    selectedCount,
-    totalCount,
-  };
-}
-
-export function doclistFilteredSelectionOperation(
-  checked: boolean,
-  filteredMembers: readonly SelectionGroupMemberInput[],
-):
-  | { kind: "add"; members: SelectionGroupMemberInput[] }
-  | { kind: "remove"; names: string[] } {
-  return checked
-    ? { kind: "remove", names: filteredMembers.map((member) => member.name) }
-    : { kind: "add", members: [...filteredMembers] };
-}
-
 function unionMembers(
   current: readonly SelectionGroupMemberInput[],
   added: readonly SelectionGroupMemberInput[],
@@ -123,18 +95,6 @@ function unionMembers(
   return [...new Map(
     [...current, ...added].map((member) => [member.name, member]),
   ).values()];
-}
-
-/** Le filtre s'applique avant la pagination ; les membres hors filtre restent. */
-export function toggleDoclistFilteredMembers(
-  selectedMembers: readonly SelectionGroupMemberInput[],
-  filteredMembers: readonly SelectionGroupMemberInput[],
-): SelectionGroupMemberInput[] {
-  if (!doclistHeaderSelection(filteredMembers, selectedMembers).checked) {
-    return unionMembers(selectedMembers, filteredMembers);
-  }
-  const names = new Set(filteredMembers.map((member) => member.name));
-  return selectedMembers.filter((member) => !names.has(member.name));
 }
 
 /** L'identité de l'ancre survit aux tris ; sa position est recalculée au clic. */
@@ -180,20 +140,15 @@ function rowControlTarget(event: RowPointerEvent): boolean {
     typeof target.closest !== "function"
   ) return false;
   const control = target.closest(
-    'a,button,input,label,select,textarea,[contenteditable]:not([contenteditable="false"]),[role="button"],[role="checkbox"],[role="link"]',
+    'a,button,input,label,select,textarea,[contenteditable]:not([contenteditable="false"]),[role="button"]:not([data-visual-activate]),[role="checkbox"],[role="link"]',
   );
   return Boolean(control && control !== event.currentTarget);
 }
 
 /** Les modificateurs de ligne empruntent la case, pas le détail différé. */
 export function doclistRowEvents(
-  base: {
-    onClick?: (event?: { detail?: number }) => void;
-    onDblClick?: () => void;
-  },
-  { onToggle, arbiter, platform }: {
+  { onToggle, platform }: {
     onToggle?: (shiftKey: boolean) => void;
-    arbiter: ClickIntentArbiter;
     platform: string;
   },
 ) {
@@ -202,7 +157,6 @@ export function doclistRowEvents(
   const consume = (event: RowPointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    arbiter.cancelAll();
   };
   return {
     onMouseDown: (event: RowPointerEvent) => {
@@ -218,17 +172,13 @@ export function doclistRowEvents(
       if (onToggle && modified(event)) {
         consume(event);
         onToggle(Boolean(event.shiftKey));
-        return;
       }
-      base.onClick?.(event);
     },
     onDblClick: (event: RowPointerEvent) => {
       if (rowControlTarget(event)) return;
       if (onToggle && modified(event)) {
         consume(event);
-        return;
       }
-      base.onDblClick?.();
     },
     onContextMenu: (event: RowPointerEvent) => {
       if (

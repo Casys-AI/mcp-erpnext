@@ -363,6 +363,7 @@ function DocumentContent({
   const context: DocumentContextController = {
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
+    activateMany: activeContext.activateMany,
     activateReversible: activeContext.activateReversible,
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
@@ -579,6 +580,7 @@ function DocumentContent({
       ? {
         label: item.label,
         detailLabel: item.label,
+        item,
         selected: context.isSelected(item),
         onActivate: () => void context.toggle(item),
       }
@@ -874,6 +876,9 @@ function DocumentContent({
               contextTarget={rootContextTarget}
               renderChildRowActions={renderChildRowActions}
               renderChildRowContextTarget={renderChildRowContextTarget}
+              onAddChildRowContext={context?.supported
+                ? context.activateMany
+                : undefined}
             />
             {showJson && (
               <div class="absolute inset-0 z-20 flex min-h-0 flex-col bg-surface/98">

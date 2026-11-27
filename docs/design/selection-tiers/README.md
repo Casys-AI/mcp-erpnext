@@ -210,52 +210,16 @@ refresh never downgrades fresh record fields.
 
 ## Gestures
 
-### Phase A: doclist
+Click a row or chart mark to open its available detail or update its linked
+panel. Double-click or hold an item to toggle its membership in the conversation
+context. Drag a rectangle to add the covered items together. A rectangle
+preserves previously selected identities. In paginated lists the rectangle
+covers visible rows on the current page. Selected records from other pages stay
+in the basket.
 
-- **Leading checkbox column**, visible only when the host supports the active
-  context. The header checkbox selects or clears every row matching the current
-  local filters, all loaded pages included. A row checkbox toggles that row.
-- **Shift + click on a row or its checkbox** selects the range from the last
-  anchor, in the current local sort order. Shift-click on a row prevents browser
-  text selection; normal text selection remains available.
-- **Ctrl + click (Windows/Linux) or Cmd + click (macOS) on a row** toggles the
-  row and sets the range anchor, without opening detail. On macOS, Ctrl +
-  primary click does the same; a normal right-click keeps the browser menu.
-- **Unchanged**: a row click toggles context, double-click, `›` and Enter open
-  the detail, and Space toggles the row.
-- **Chip**:
-  - a group shows « 30 rows · Sales Invoice » with its summary and a remove
-    button;
-  - « details shared » appears when compact records are being sent;
-  - « partly shared » appears when rule 2 applies.
-
-### Chart point gestures
-
-- **Click or tap in a category/time plot** selects the nearest column and the
-  visible series closest to the pointer vertically. Grouped bars select the bar
-  under the pointer, otherwise the nearest bar. This applies to line, area,
-  vertical bar, stacked bar/area and composed charts; hidden series are ignored.
-- **Ctrl/Cmd + click** selects the same point, including Ctrl + primary click on
-  macOS. **Shift + click in the plot** selects the whole chart, as does a click
-  outside the plot in the chart frame. An ordinary plot click never selects it.
-- **Double-click** uses the same snapped point for the existing drill-down when
-  available, preserving the prior context through click/double-click
-  arbitration.
-- Horizontal bars and radar have no horizontal category columns and keep their
-  existing precise-target gestures. Scatter, pie/donut, treemap and the separate
-  funnel viewer, keyboard controls, legend and tooltip keep their existing
-  gestures.
-
-### Phase B: charts (separate design, with mockups)
-
-- **Lasso**: Shift + drag, or a « select » toggle button. A plain drag stays
-  reserved for scrolling, which matters inline on mobile.
-- **Merging points** only when the union is exactly expressible: same DocType,
-  same scope, one canonical identity.
-  - Income and Expenses points produce separate query items.
-  - Disjoint months produce one item per range, or a `name in` list.
-  - `erpnext_price_vs_qty` points are Bins (item + warehouse): their identity is
-    the Bin, not `item_code`.
+Groups and individual records still use the projections and bounds described
+above. For the current viewer-specific interactions, see
+[viewer context controls](../viewer-context-pins.fr.md).
 
 ## Model-facing description
 

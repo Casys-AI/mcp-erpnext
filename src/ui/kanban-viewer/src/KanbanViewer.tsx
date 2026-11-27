@@ -45,8 +45,11 @@ import {
   getErrorPresentation,
   normalizeMoveFailureMessage,
 } from "~/shared/kanban/presentation";
-import { DisclosureChevron } from "@mcpview/components/preact/controls";
-import { useKanbanPins } from "~/shared/kanban/useKanbanPins.tsx";
+import {
+  DisclosureChevron,
+  useVisualItemGestures,
+} from "@mcpview/components/preact/controls";
+import { useKanbanPins } from "~/shared/kanban/useKanbanPins.ts";
 import { useKanbanBoard } from "~/shared/kanban/useKanbanBoard";
 import { useTaskTimesheetAvailability } from "~/shared/kanban/useTaskTimesheetAvailability";
 import { taskTimesheetRevalidationKey } from "~/shared/kanban/task-timesheet-availability";
@@ -179,9 +182,14 @@ export function badgeTone(tone?: string): string {
 function DragScrollContainer({
   children,
   style,
+  selectionEnabled,
   ...rest
 }:
-  & { children: ComponentChildren; style?: JSX.CSSProperties }
+  & {
+    children: ComponentChildren;
+    style?: JSX.CSSProperties;
+    selectionEnabled: boolean;
+  }
   & JSX.HTMLAttributes<HTMLDivElement>) {
   const ref = useRef<HTMLDivElement>(null);
   const dragState = useRef({ active: false, startX: 0, scrollLeft: 0 });
@@ -279,12 +287,12 @@ function DragScrollContainer({
         WebkitMaskImage: maskImage,
         maskImage,
       }) as JSX.CSSProperties}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
+      onMouseDown={selectionEnabled ? undefined : onMouseDown}
+      onMouseMove={selectionEnabled ? undefined : onMouseMove}
+      onMouseUp={selectionEnabled ? undefined : onMouseUp}
+      onMouseLeave={selectionEnabled ? undefined : onMouseUp}
       onScroll={updateFades}
-      class="drag-scroll"
+      class={selectionEnabled ? undefined : "drag-scroll"}
       {...rest}
     >
       {children}
@@ -342,7 +350,7 @@ function KanbanCard({
 }) {
   const t = useT();
   const isDraggable = enableDrag && !card.pending && !isMobile;
-  const pointerOnPin = useRef(false);
+  const pinned = pins?.isSelected(card);
   const accentColor = card.accent ?? "var(--color-accent)";
   const isMilestone = isMilestoneBadge(card.badges);
   const { isOverdue, overdueDays, needsDueDateFallback } =
@@ -391,28 +399,22 @@ function KanbanCard({
   return (
     <div
       draggable={isDraggable}
-      onPointerDownCapture={(event) => {
-        const element = event.target;
-        pointerOnPin.current = element instanceof Element &&
-          !!element.closest("[data-context-pin]");
-      }}
       onDragStart={isDraggable
-        ? (event) => {
-          // Native dragstart targets this draggable ancestor, even when grabbing a pin.
-          if (pointerOnPin.current) event.preventDefault();
-          else onDragStart(card, event as unknown as KanbanDragEvent);
-        }
+        ? (event) => onDragStart(card, event as unknown as KanbanDragEvent)
         : undefined}
       onDragEnd={isDraggable ? onDragEnd : undefined}
       style={{ cursor: isDraggable ? "grab" : undefined }}
     >
       <article
+        data-visual-item={card.id}
+        data-visual-no-toggle={card.pending || undefined}
         aria-busy={card.pending}
         class={cx(
           "overflow-hidden rounded-chip border bg-row-hover",
           isMobile ? "p-[11px]" : "p-[10px]",
           isMobile ? "rounded-[5px]" : "rounded-chip",
           borderClass,
+          pinned && "ring-1 ring-accent",
           card.pending ? "opacity-60" : undefined,
         )}
       >
@@ -446,14 +448,15 @@ function KanbanCard({
                     label: card.title,
                   })}
                   aria-haspopup="dialog"
+                  aria-pressed={pinned}
                   class={cx(
                     "inline-flex w-full items-baseline gap-1 text-start text-cell text-ink transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                     "min-h-10",
                   )}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onTitleClick(card);
-                  }}
+                  data-visual-activate
+                  aria-keyshortcuts={pins && !card.pending
+                    ? "Shift+Space"
+                    : undefined}
                 >
                   <DisclosureChevron expanded={false} />
                   {card.title}
@@ -462,7 +465,6 @@ function KanbanCard({
               : card.title}
           </span>
 
-          {/* Keep the record pin and existing card actions independent. */}
           {isMilestone
             ? (
               <span
@@ -476,7 +478,6 @@ function KanbanCard({
               </span>
             )
             : null}
-          {pins?.card(card)}
         </div>
 
         {/* Subtitle */}
@@ -714,14 +715,14 @@ function KanbanColumn({
             {kanbanStatusLabel(column.label, t)}
           </span>
         </div>
-        <div class="flex items-center gap-1">
-          <span class="font-mono text-chip text-ink-faint">{column.count}</span>
-          {pins?.column(column, cards)}
-        </div>
+        <span class="font-mono text-chip text-ink-faint">{column.count}</span>
       </div>
 
-      {/* Cards */}
-      <div class="flex flex-col gap-2 p-[10px]">
+      {/* The header still pans the board horizontally on touch screens. */}
+      <div
+        class="flex flex-1 flex-col gap-2 p-[10px]"
+        style={{ touchAction: pins ? "pan-y" : undefined }}
+      >
         {cards.map((card) => (
           <KanbanCard
             key={card.id}
@@ -833,7 +834,6 @@ function MobileColumnNavWrapper({
         >
           ›
         </button>
-        {pins?.column(column, cards)}
       </div>
 
       {/* Dot progress indicator */}
@@ -1006,6 +1006,7 @@ function KanbanBoardWithNav({
   const context: DocumentContextController = {
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
+    activateMany: activeContext.activateMany,
     activateReversible: activeContext.activateReversible,
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
@@ -1025,6 +1026,23 @@ function KanbanBoardWithNav({
       canShareActiveContextResource(hostCapabilities, resource),
   };
   const pins = useKanbanPins(board, context, rootKey);
+  const selectionEnabled = pins !== undefined;
+  const findCard = (id: string) => board.cards.find((card) => card.id === id);
+  const gesturesRoot = useVisualItemGestures<HTMLDivElement>({
+    onActivate: (id) => {
+      const card = findCard(id);
+      if (card) onTitleClick(card);
+    },
+    onToggle: pins
+      ? (id) => {
+        const card = findCard(id);
+        if (card) pins.toggleCard(card);
+      }
+      : undefined,
+    onAdd: pins
+      ? (ids) => pins.addCards(board.cards.filter(({ id }) => ids.includes(id)))
+      : undefined,
+  });
   useLayoutEffect(() => {
     const root = nav.stack.levels[0];
     if (rootFreshEvent > rootMutationEvent && root?.stale) {
@@ -1257,52 +1275,72 @@ function KanbanBoardWithNav({
         >
           {/* Contenu racine : le tableau kanban lui-même */}
           {inlineError && <StateMessage tone="bad">{inlineError}</StateMessage>}
-          {useFocusMode
-            ? (
-              <MobileColumnNavWrapper
-                board={actionableBoard}
-                layout={layout}
-                onMove={onMove}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-                onTitleClick={onTitleClick}
-                pins={pins}
-              />
-            )
-            : (
-              <DragScrollContainer
-                style={{ overflowX: "auto", cursor: "grab" }}
-              >
-                <div
+          <div
+            key={rootKey}
+            ref={gesturesRoot}
+            style={{
+              touchAction: useFocusMode && selectionEnabled
+                ? "pan-y"
+                : undefined,
+            }}
+            data-visual-selection-surface={useFocusMode && selectionEnabled
+              ? ""
+              : undefined}
+          >
+            {useFocusMode
+              ? (
+                <MobileColumnNavWrapper
+                  board={actionableBoard}
+                  layout={layout}
+                  onMove={onMove}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onTitleClick={onTitleClick}
+                  pins={pins}
+                />
+              )
+              : (
+                <DragScrollContainer
+                  data-visual-selection-surface={selectionEnabled
+                    ? ""
+                    : undefined}
+                  selectionEnabled={selectionEnabled}
                   style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      `repeat(${board.columns.length}, minmax(220px, 1fr))`,
-                    gap: 1,
-                    background: "var(--color-line)",
+                    overflowX: "auto",
+                    cursor: selectionEnabled ? undefined : "grab",
                   }}
                 >
-                  {board.columns.map((column) => (
-                    <KanbanColumn
-                      key={column.id}
-                      column={column}
-                      board={actionableBoard}
-                      cards={board.cards.filter((card) =>
-                        card.columnId === column.id
-                      )}
-                      activeDropColumn={activeDropColumn}
-                      onMove={onMove}
-                      onDropCard={onDropCard}
-                      onDragStart={onDragStart}
-                      onDragEnd={onDragEnd}
-                      onDragOverColumn={onDragOverColumn}
-                      onTitleClick={onTitleClick}
-                      pins={pins}
-                    />
-                  ))}
-                </div>
-              </DragScrollContainer>
-            )}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        `repeat(${board.columns.length}, minmax(220px, 1fr))`,
+                      gap: 1,
+                      background: "var(--color-line)",
+                    }}
+                  >
+                    {board.columns.map((column) => (
+                      <KanbanColumn
+                        key={column.id}
+                        column={column}
+                        board={actionableBoard}
+                        cards={board.cards.filter((card) =>
+                          card.columnId === column.id
+                        )}
+                        activeDropColumn={activeDropColumn}
+                        onMove={onMove}
+                        onDropCard={onDropCard}
+                        onDragStart={onDragStart}
+                        onDragEnd={onDragEnd}
+                        onDragOverColumn={onDragOverColumn}
+                        onTitleClick={onTitleClick}
+                        pins={pins}
+                      />
+                    ))}
+                  </div>
+                </DragScrollContainer>
+              )}
+          </div>
         </LevelBody>
 
         {/* Pied de page — depuis un niveau, le chemin court vers la carte ouverte */}

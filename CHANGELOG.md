@@ -4,10 +4,26 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+## [4.0.0-beta.4] - 2026-11-27
+
 - A Code Mode program can display a sales invoice list and a detail view
   together. When the user asks for linked views, clicking an invoice updates the
   existing detail panel using the viewer's authorized read. If the detail panel
   cannot follow, the list offers its usual inline preview.
+
+- Link a revenue KPI to a margin KPI in Compose so that choosing a period
+  updates the other panel.
+- Click or tap a record to inspect it. Double-click or long-press to add or
+  remove an item from conversation context. Drag across visible items to add a
+  group and keep earlier selections.
+- The invoice list uses its full width. Adjacent selected rows share one
+  outline. Repeating a selection that is already shared preserves its
+  acknowledged state.
+- Kanban accepts selections while the host confirms an earlier gesture. Touch
+  users can select cards in a column and swipe a column header to reach the rest
+  of a wide board.
+- Buy Evidence retries clearing a previous selection when the host refused the
+  first attempt.
 
 ## [4.0.0-beta.3] - 2026-11-26
 

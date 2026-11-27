@@ -232,9 +232,6 @@ export const hi: Record<string, string> = {
   "kpi.coverage.lines": "पंक्तियाँ: {count}",
   "kpi.coverage.omitted": "न दिखाए गए अतिरिक्त आइटम/गोदाम जोड़े: {count}",
   "kpi.coverage.unknown": "कवरेज उपलब्ध नहीं",
-  "kpi.drilldown.title_message": "बातचीत में पूछने के लिए दोहरा क्लिक करें या एंटर दबाएँ",
-  "kpi.drilldown.title_context":
-    "संदर्भ में जोड़ने/हटाने के लिए क्लिक या स्पेस दबाएँ · विवरण के लिए दोहरा क्लिक या एंटर दबाएँ",
   // ── /KPI व्यूअर ───────────────────────────────────────────────────────────
 
   // ── चालान व्यूअर ────────────────────────────────────────────────────────
@@ -341,11 +338,6 @@ export const hi: Record<string, string> = {
   "drill.sent": "बातचीत में भेजा गया",
   "message.sending": "भेजा जा रहा है…",
   "message.send_error": "बातचीत में नहीं भेजा जा सका",
-  "context.pin.add": "{label} को संदर्भ में पिन करें",
-  "context.pin.remove_local": "चुने हुए पिन से {label} हटाएँ (साझा नहीं किया गया)",
-  "context.pin.remove": "{label} को संदर्भ से अनपिन करें",
-  "doclist.pin.all": "मेल खाने वाली सभी {count} पंक्तियों को संदर्भ में पिन करें",
-  "doclist.pin.remove_all": "मेल खाने वाली सभी {count} पंक्तियों को संदर्भ से अनपिन करें",
   "context.active.partly_shared": "आंशिक रूप से साझा ({total} में से {shared})",
   "context.active.label": "संदर्भ",
   "context.active.items": "सक्रिय संदर्भ चयन",
@@ -358,8 +350,8 @@ export const hi: Record<string, string> = {
   "context.active.evicted": "अधिकतम 8 · {label} हटाया गया",
   "interaction.detail.open": "{label} का विवरण खोलें",
   "interaction.detail.close": "{label} का विवरण बंद करें",
-  "interaction.detail.open_hint": "विवरण · दोहरा क्लिक",
-  "interaction.detail.close_hint": "बंद करें · दोहरा क्लिक",
+  "interaction.detail.open_hint": "विवरण",
+  "interaction.detail.close_hint": "बंद करें",
   // ── détail sans double-clic : boutons visibles (tactile) ──
   "interaction.detail.button_hint": "विवरण",
   "interaction.detail.ask": "{label} के बारे में पूछें",
@@ -367,26 +359,8 @@ export const hi: Record<string, string> = {
   "chart.detail_bar.open": "विवरण खोलें: {label}",
   "chart.detail_bar.close": "विवरण बंद करें: {label}",
   "chart.detail_bar.ask": "पूछें: {label}",
-  "document.row.open_actions":
-    "{label} को संदर्भ में जोड़ने या हटाने के लिए क्लिक या स्पेस दबाएँ · कार्रवाइयाँ देखने के लिए दोहरा क्लिक या एंटर दबाएँ",
-  "document.row.close_actions":
-    "{label} को संदर्भ में जोड़ने या हटाने के लिए क्लिक या स्पेस दबाएँ · कार्रवाइयाँ बंद करने के लिए दोहरा क्लिक या एंटर दबाएँ",
-  "document.row.open_actions_only":
-    "{label} की कार्रवाइयाँ देखने के लिए दोहरा क्लिक करें या एंटर दबाएँ",
-  "document.row.close_actions_only":
-    "{label} की कार्रवाइयाँ बंद करने के लिए दोहरा क्लिक करें या एंटर दबाएँ",
-  "document.row.open_detail":
-    "{label} को संदर्भ में जोड़ने या हटाने के लिए क्लिक या स्पेस दबाएँ · विवरण खोलने के लिए दोहरा क्लिक या एंटर दबाएँ",
-  "document.row.close_detail":
-    "{label} को संदर्भ में जोड़ने या हटाने के लिए क्लिक या स्पेस दबाएँ · विवरण बंद करने के लिए दोहरा क्लिक या एंटर दबाएँ",
   "document.row.open_follow": "{label} का विवरण खोलें",
-  "document.row.open_detail_only":
-    "{label} का विवरण खोलने के लिए दोहरा क्लिक करें या एंटर दबाएँ",
-  "document.row.close_detail_only":
-    "{label} का विवरण बंद करने के लिए दोहरा क्लिक करें या एंटर दबाएँ",
-  "chart.tooltip.click_action_context": "क्लिक: संदर्भ जोड़ें/हटाएँ · 2× विवरण",
-  "chart.tooltip.click_action_context_only": "क्लिक: संदर्भ जोड़ें/हटाएँ",
-  "chart.tooltip.click_action_fallback": "2× विवरण",
+  "chart.tooltip.click_action_fallback": "क्लिक: विवरण",
   "chart.tooltip.click_action_detail": "क्लिक: विवरण",
   // ── नेविगेशन स्टैक (पथ, स्तर, छलाँग) ──
   "nav.back": "वापस",
@@ -408,7 +382,6 @@ export const hi: Record<string, string> = {
   "nav.refresh": "रीफ़्रेश करें",
   "nav.stale_title": "स्टैक में गहरी किसी कार्रवाई ने इस स्तर की सामग्री बदल दी है।",
   "nav.trail": "नेविगेशन पथ",
-  "kanban.pin.loaded_cards": "{column} में लोड किए गए कार्ड ({count})",
   "kanban.nav.edit_card": "{id} संपादित करें",
   "nav.bar_click": "क्लिक: एक और स्तर",
   "nav.unexpected_body": "इस स्तर को अप्रत्याशित सामग्री मिली।",

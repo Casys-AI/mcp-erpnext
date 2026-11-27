@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertMatch, assertStringIncludes } from "@std/assert";
 
 const source = await Deno.readTextFile(
   new URL("./KpiViewer.tsx", import.meta.url),
@@ -62,13 +62,26 @@ Deno.test("KPI formatting - the viewer renders through kpi-format.ts and never r
   assertEquals(source.includes("data.formattedValue"), false);
 });
 
-Deno.test("KPI inspection and pinning use independent controls in both layouts", () => {
+Deno.test("KPI monthly gestures preserve linked periods and select the same context items", () => {
   assertStringIncludes(source, "data-kpi-month={index}");
-  assertStringIncludes(source, "onInspect={inspectPoint}");
+  assertStringIncludes(source, "data-visual-item={pointIds[index]}");
   assertStringIncludes(
     source,
-    "onToggle={() => void activeContext.toggle(item)}",
+    'data-visual-selection-surface={canSelectRange ? "" : undefined}',
   );
-  assertEquals(source.includes("toggleReversible("), false);
+  assertStringIncludes(source, 'canSelectRange && "touch-pan-y"');
+  assertStringIncludes(source, "interactive && isInContext !== undefined");
+  assertStringIncludes(source, "periodSelection?.inspect(period)");
+  assertStringIncludes(source, "activeContext.toggle(point.item)");
+  assertStringIncludes(source, "activeContext.activateMany(members)");
+  assertStringIncludes(
+    source,
+    "activeContext.isSelected(trendPointContexts[index])",
+  );
+  assertMatch(
+    source,
+    /isInContext\?\.\(index\) &&\s*"ring-1 ring-accent ring-offset-1 ring-offset-sunken"/,
+  );
+  assertEquals(source.includes("ContextPinButton"), false);
   assertEquals(source.split("{renderSparkline()}").length - 1, 2);
 });

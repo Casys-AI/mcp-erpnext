@@ -73,7 +73,10 @@ import {
   isMacControlClick,
   isMacControlClickEcho,
 } from "~/shared/platform.ts";
-import { ContextPinButton } from "@mcpview/components/preact/controls";
+import {
+  activateNearestChartMark,
+  useChartGestures,
+} from "~/shared/levels/use-chart-gestures.ts";
 import { viewerRootKey } from "~/shared/nav-stack";
 import { acceptsDetailToggleClick } from "~/shared/detail-toggle";
 import { PathBar } from "~/shared/PathBar";
@@ -116,6 +119,7 @@ import {
   chartFocusedDetailAction,
   chartFocusExists,
   chartJumpHint,
+  chartNavigationGroups,
   chartPlotIntent,
   type ChartPointActivation,
   chartPointDetailMode,
@@ -178,21 +182,36 @@ const ChartSelectionContext = createContext<
   ChartSelectionPredicate | undefined
 >(undefined);
 
-interface ChartPointerEvent {
-  target: EventTarget | null;
-  detail: number;
-  stopPropagation(): void;
+const ChartBasketContext = createContext<ChartSelectionPredicate | undefined>(
+  undefined,
+);
+
+function useChartMarkState(
+  label: string,
+  series?: string,
+  index?: number,
+  isSelected?: ChartSelectionPredicate,
+) {
+  const inspectedAt = useContext(ChartSelectionContext) ?? isSelected;
+  const inBasketAt = useContext(ChartBasketContext);
+  const inspected = inspectedAt?.(label, series, index) === true;
+  const shared = inBasketAt?.(label, series, index) === true;
+  return { selected: inspected || shared, shared };
 }
 
-interface ColumnPointerEvent extends ChartPointerEvent {
-  currentTarget: EventTarget | null;
-  clientX: number;
-  clientY: number;
-  shiftKey: boolean;
-  ctrlKey: boolean;
-  button: number;
-  preventDefault(): void;
+function chartMarkId(label: string, series?: string, index?: number) {
+  return JSON.stringify([label, series ?? null, index ?? null]);
 }
+
+function chartMark(label: string, series?: string, index?: number) {
+  if (!label) return {};
+  return {
+    "data-visual-item": chartMarkId(label, series, index),
+    "data-visual-selection-start": "",
+  };
+}
+
+type ChartPointerEvent = MouseEvent;
 
 /** Bornes exactes du tracé fournies par Recharts. */
 function ChartPlotBounds() {
@@ -208,11 +227,14 @@ function activateColumnPoint(
   data: ChartData,
   onDataClick: ChartDataClick | undefined,
   state: Record<string, unknown> | null | undefined,
-  event: ColumnPointerEvent,
+  event: ChartPointerEvent,
   activation: ChartPointActivation,
   contextMenu = false,
 ) {
-  if (event.shiftKey) return;
+  if (
+    event.shiftKey || event.altKey || event.metaKey ||
+    (event.ctrlKey && !contextMenu)
+  ) return;
   const wrapper = event.currentTarget instanceof Element
     ? event.currentTarget
     : null;
@@ -256,6 +278,11 @@ function activateColumnPoint(
     event.target,
   );
   if (selection) {
+    const id = chartMarkId(selection.label, selection.series, selection.index);
+    if (
+      !contextMenu && activation === "activate" && svg &&
+      activateNearestChartMark(svg, id, event)
+    ) return;
     onDataClick?.(
       selection.label,
       selection.series,
@@ -268,20 +295,16 @@ function activateColumnPoint(
 
 function columnPointerHandlers(data: ChartData, onDataClick?: ChartDataClick) {
   return {
-    onClick: (state: Record<string, unknown>, event: ColumnPointerEvent) => {
+    onClick: (state: Record<string, unknown>, event: ChartPointerEvent) => {
       if (isMacControlClickEcho(event, getBrowserPlatform())) {
         event.stopPropagation();
         return;
       }
-      activateColumnPoint(data, onDataClick, state, event, "inspect");
+      activateColumnPoint(data, onDataClick, state, event, "activate");
     },
-    onDoubleClick: (
-      state: Record<string, unknown>,
-      event: ColumnPointerEvent,
-    ) => activateColumnPoint(data, onDataClick, state, event, "drilldown"),
     onContextMenu: (
       state: Record<string, unknown>,
-      event: ColumnPointerEvent,
+      event: ChartPointerEvent,
     ) => {
       if (!isMacControlClick(event, getBrowserPlatform())) return;
       activateColumnPoint(data, onDataClick, state, event, "inspect", true);
@@ -299,6 +322,7 @@ function activateCategoricalPoint(
   event: ChartPointerEvent,
   activation: ChartPointActivation,
 ) {
+  if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
   const label = chartPointLabel(data.labels, state);
   if (!label) return;
   const series = chartSeriesFromTarget(
@@ -307,6 +331,14 @@ function activateCategoricalPoint(
   );
   if (!series) return;
   event.stopPropagation();
+  const plot = event.currentTarget;
+  if (
+    plot instanceof Element && activateNearestChartMark(
+      plot,
+      chartMarkId(label, series, data.labels.indexOf(label)),
+      event,
+    )
+  ) return;
   onDataClick(label, series, activation, event.detail);
 }
 
@@ -402,12 +434,17 @@ interface SelectedBarShapeProps extends Partial<BarShapeProps> {
 function SelectedBarShape(
   { rows, series, opacityAt, isSelected, ...props }: SelectedBarShapeProps,
 ) {
-  const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
   const index = typeof props.index === "number" ? props.index : -1;
   const label = String(rows[index]?.name ?? "");
-  const selected = label !== "" && selectedAt?.(label, series, index) === true;
+  const { shared, selected } = useChartMarkState(
+    label,
+    series,
+    index,
+    isSelected,
+  );
   return (
     <g
+      {...chartMark(label, series, index)}
       data-chart-series={series}
       data-chart-point-index={index}
       data-chart-mark="bar"
@@ -419,15 +456,16 @@ function SelectedBarShape(
       <Rectangle
         key="bar"
         {...props}
+        data-chart-geometry
         data-chart-series={series}
         opacity={selected ? 1 : opacityAt(index)}
-        stroke={selected ? "var(--color-accent)" : "none"}
-        strokeWidth={selected ? 6 : 0}
-        style={selected
+        stroke={shared ? "var(--color-accent)" : "none"}
+        strokeWidth={shared ? 6 : 0}
+        style={shared
           ? { filter: "drop-shadow(0 0 2.5px var(--color-accent))" }
           : undefined}
       />
-      {selected && (
+      {shared && (
         <Rectangle
           key="selection-border"
           {...props}
@@ -456,14 +494,19 @@ function SelectedPointShape(
   { rows, series, color, showBase, isSelected, ...props }:
     SelectedPointShapeProps,
 ) {
-  const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
   const index = typeof props.index === "number" ? props.index : -1;
   const label = String(props.payload?.name ?? rows[index]?.name ?? "");
-  const selected = label !== "" && selectedAt?.(label, series, index) === true;
+  const { shared, selected } = useChartMarkState(
+    label,
+    series,
+    index,
+    isSelected,
+  );
   const cx = props.cx ?? 0;
   const cy = props.cy ?? 0;
   return (
     <g
+      {...chartMark(label, series, index)}
       data-chart-series={series}
       data-chart-point-index={index}
       data-chart-mark="point"
@@ -478,18 +521,19 @@ function SelectedPointShape(
           r={7.5}
           fill="var(--color-surface)"
           stroke="var(--color-accent)"
-          strokeWidth={3}
+          strokeWidth={shared ? 4 : 2}
         />
       )}
-      {(showBase || selected) && (
-        <circle
-          key="point"
-          cx={cx}
-          cy={cy}
-          r={selected ? 3.2 : 2.6}
-          fill={color}
-        />
-      )}
+      <circle
+        data-chart-geometry
+        opacity={showBase || selected ? 1 : 0}
+        pointerEvents="all"
+        key="point"
+        cx={cx}
+        cy={cy}
+        r={selected ? 3.2 : 2.6}
+        fill={color}
+      />
     </g>
   );
 }
@@ -548,10 +592,10 @@ interface LegendItem {
   dashed?: boolean;
 }
 function ChartLegend(
-  { items, onToggle, pinSeries }: {
+  { items, canShareSeries, isSeriesSelected }: {
     items: LegendItem[];
-    pinSeries(name: string): ComponentChildren;
-    onToggle: (series: string) => void;
+    canShareSeries: boolean;
+    isSeriesSelected(name: string): boolean;
   },
 ) {
   const t = useT();
@@ -578,18 +622,18 @@ function ChartLegend(
               aria-pressed={item.visible}
               aria-label={label}
               title={label}
-              disabled={lastVisible}
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggle(item.name);
-              }}
-              onDblClick={(event) => event.stopPropagation()}
+              disabled={lastVisible && !canShareSeries}
+              data-visual-item={JSON.stringify(["series", item.name])}
+              aria-keyshortcuts={canShareSeries ? "Shift+Space" : undefined}
               class={cx(
                 "inline-flex items-center gap-[5px] rounded-[3px] px-1.5 py-1 font-mono text-[10px] transition-colors",
                 item.visible
                   ? "text-ink-muted hover:bg-row-hover hover:text-ink"
                   : "text-ink-faint line-through hover:bg-row-hover hover:text-ink-muted",
-                lastVisible && "cursor-not-allowed opacity-60",
+                isSeriesSelected(item.name) &&
+                  "ring-1 ring-accent ring-offset-1",
+                lastVisible && !canShareSeries &&
+                  "cursor-not-allowed opacity-60",
                 "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
               )}
             >
@@ -606,7 +650,6 @@ function ChartLegend(
               />
               {item.name}
             </button>
-            {pinSeries(item.name)}
           </span>
         );
       })}
@@ -974,28 +1017,6 @@ function HorizontalBarChart(
             maxBarSize={24}
             isAnimationActive={false}
             cursor={onDataClick ? "pointer" : undefined}
-            onClick={onDataClick
-              ? (entry, _index, event) => {
-                event.stopPropagation();
-                onDataClick(
-                  String(entry.payload?.name ?? ""),
-                  ds.label || undefined,
-                  "inspect",
-                  event.detail,
-                );
-              }
-              : undefined}
-            onDoubleClick={onDataClick
-              ? (entry, _index, event) => {
-                event.stopPropagation();
-                onDataClick(
-                  String(entry.payload?.name ?? ""),
-                  ds.label || undefined,
-                  "drilldown",
-                  event.detail,
-                );
-              }
-              : undefined}
             shape={
               <SelectedBarShape
                 rows={rows}
@@ -1012,7 +1033,7 @@ function HorizontalBarChart(
 }
 
 function ActiveColumnPoint(
-  { cx, cy, index, fill, series, interactive }: ChartDotShapeProps & {
+  { cx, cy, index, payload, fill, series, interactive }: ChartDotShapeProps & {
     fill?: string;
     series?: string;
     interactive: boolean;
@@ -1025,6 +1046,8 @@ function ActiveColumnPoint(
       cy={cy}
       fill={fill}
       cursor={interactive ? "pointer" : undefined}
+      {...chartMark(String(payload?.name ?? ""), series, index)}
+      data-chart-no-range
       data-chart-point-index={index}
       data-chart-series={series}
       data-chart-mark="point"
@@ -1355,17 +1378,34 @@ interface SelectedPieShapeProps extends SectorProps {
 function SelectedPieShape(
   { series, isSelected, ...props }: SelectedPieShapeProps,
 ) {
-  const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
-  const selected = selectedAt?.(String(props.name ?? ""), series) === true;
+  const { shared, selected } = useChartMarkState(
+    String(props.name ?? ""),
+    series,
+    undefined,
+    isSelected,
+  );
   return (
-    <Sector
-      {...props}
-      stroke={selected ? "var(--color-accent)" : "none"}
-      strokeWidth={selected ? 4 : 0}
-      style={selected
-        ? { filter: "drop-shadow(0 0 2.5px var(--color-accent))" }
-        : undefined}
-    />
+    <g
+      {...chartMark(String(props.name ?? ""), series)}
+      data-chart-sector={[
+        props.cx,
+        props.cy,
+        props.innerRadius,
+        props.outerRadius,
+        props.startAngle,
+        props.endAngle,
+      ].join(",")}
+    >
+      <Sector
+        {...props}
+        data-chart-geometry
+        stroke={selected ? "var(--color-accent)" : "none"}
+        strokeWidth={shared ? 4 : selected ? 2 : 0}
+        style={selected
+          ? { filter: "drop-shadow(0 0 2.5px var(--color-accent))" }
+          : undefined}
+      />
+    </g>
   );
 }
 
@@ -1375,7 +1415,6 @@ function PieLegend({
   total,
   isDonut,
   onDataClick,
-  onDataKeyDown,
   isSelected,
   canDrillDown,
 }: {
@@ -1384,11 +1423,11 @@ function PieLegend({
   total: number;
   isDonut: boolean;
   onDataClick?: ChartDataClick;
-  onDataKeyDown?: ChartDataKeyDown;
   isSelected?: ChartSelectionPredicate;
   canDrillDown?: ChartSelectionPredicate;
 }) {
   const t = useT();
+  const sharedAt = useContext(ChartBasketContext);
   const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
   return (
     <div class="flex min-w-0 flex-col gap-[7px]">
@@ -1401,31 +1440,19 @@ function PieLegend({
             type="button"
             disabled={!onDataClick}
             aria-current={selectedAt?.(entry.name, series)}
-            aria-keyshortcuts={detailEnabled ? "Space Enter" : "Space"}
+            aria-pressed={sharedAt?.(entry.name, series)}
+            data-visual-item={chartMarkId(entry.name, series)}
+            data-chart-no-range
+            aria-keyshortcuts={sharedAt ? "Shift+Space" : undefined}
             title={hintKey ? t(hintKey) : undefined}
-            onClick={(event) => {
-              event.stopPropagation();
-              // Enter et Espace emettent aussi un clic detail=0 sur un bouton.
-              if (event.detail === 0) return;
-              onDataClick?.(entry.name, series, "inspect", event.detail);
-            }}
-            onDblClick={(event) => {
-              event.stopPropagation();
-              onDataClick?.(entry.name, series, "drilldown", event.detail);
-            }}
-            onKeyDown={(event) => {
-              if (event.repeat) return;
-              if (event.key === " " || event.key === "Enter") {
-                event.stopPropagation();
-                onDataKeyDown?.(entry.name, series, event);
-              }
-            }}
             class={cx(
               "inline-flex items-center gap-1.5 rounded-[3px] font-mono text-chip text-ink-2",
               onDataClick &&
                 "cursor-pointer hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
-              selectedAt?.(entry.name, series) &&
+              (selectedAt?.(entry.name, series) ||
+                sharedAt?.(entry.name, series)) &&
                 "outline outline-2 outline-offset-1 outline-accent",
+              sharedAt?.(entry.name, series) && "ring-1 ring-accent",
             )}
           >
             <span
@@ -1452,14 +1479,12 @@ function PieDonutChart(
     data,
     isDonut,
     onDataClick,
-    onDataKeyDown,
     isSelected,
     canDrillDown,
   }: {
     data: ChartData;
     isDonut: boolean;
     onDataClick?: ChartDataClick;
-    onDataKeyDown?: ChartDataKeyDown;
     isSelected?: ChartSelectionPredicate;
     canDrillDown?: ChartSelectionPredicate;
   },
@@ -1509,28 +1534,6 @@ function PieDonutChart(
                 />
               }
               cursor={onDataClick ? "pointer" : undefined}
-              onClick={onDataClick
-                ? (entry, _index, event) => {
-                  event.stopPropagation();
-                  onDataClick(
-                    String(entry.name ?? ""),
-                    ds.label || undefined,
-                    "inspect",
-                    event.detail,
-                  );
-                }
-                : undefined}
-              onDoubleClick={onDataClick
-                ? (entry, _index, event) => {
-                  event.stopPropagation();
-                  onDataClick(
-                    String(entry.name ?? ""),
-                    ds.label || undefined,
-                    "drilldown",
-                    event.detail,
-                  );
-                }
-                : undefined}
             >
               {pieData.map((_item, i) => (
                 <Cell
@@ -1582,7 +1585,6 @@ function PieDonutChart(
         total={total}
         isDonut={isDonut}
         onDataClick={onDataClick}
-        onDataKeyDown={onDataKeyDown}
         isSelected={isSelected}
         canDrillDown={canDrillDown}
       />
@@ -1614,17 +1616,7 @@ function RadarChartView(
               onDataClick,
               state as unknown as Record<string, unknown>,
               event,
-              "inspect",
-            )
-          : undefined}
-        onDoubleClick={onDataClick
-          ? (state, event) =>
-            activateCategoricalPoint(
-              data,
-              onDataClick,
-              state as unknown as Record<string, unknown>,
-              event,
-              "drilldown",
+              "activate",
             )
           : undefined}
       >
@@ -1705,15 +1697,21 @@ interface ScatterPointShapeProps extends ScatterShapeProps {
 function ScatterPointShape(
   { series, color, interactive, isSelected, ...props }: ScatterPointShapeProps,
 ) {
-  const selectedAt = useContext(ChartSelectionContext) ?? isSelected;
-  if (props.cx === undefined || props.cy === undefined) return <g />;
   const label = chartScatterPointLabel(props.payload);
-  const selected = label !== undefined &&
-    selectedAt?.(label, series) === true;
+  const { shared, selected } = useChartMarkState(
+    label ?? "",
+    series,
+    undefined,
+    isSelected,
+  );
+  if (props.cx === undefined || props.cy === undefined) return <g />;
   const cx = props.cx ?? 0;
   const cy = props.cy ?? 0;
   return (
-    <g data-chart-series={series}>
+    <g
+      {...chartMark(label ?? "", series || undefined)}
+      data-chart-series={series}
+    >
       {selected && (
         <circle
           key="selection-halo"
@@ -1722,11 +1720,12 @@ function ScatterPointShape(
           r={7.5}
           fill="var(--color-surface)"
           stroke="var(--color-accent)"
-          strokeWidth={3}
+          strokeWidth={shared ? 4 : 2}
         />
       )}
       <circle
         key="point"
+        data-chart-geometry
         cx={cx}
         cy={cy}
         r={4}
@@ -1815,34 +1814,6 @@ function ScatterChartView(
                   isSelected={isSelected}
                 />
               }
-              onClick={interactive
-                ? (entry, _index, event) => {
-                  const label = chartScatterPointLabel(entry);
-                  if (!label) return;
-                  event.stopPropagation();
-                  onDataClick?.(
-                    label,
-                    s.label || undefined,
-                    "inspect",
-                    event.detail,
-                  );
-                }
-                : undefined}
-              onDoubleClick={interactive
-                ? (entry, _index, event) => {
-                  const label = chartScatterPointLabel(entry);
-                  if (!label) {
-                    return;
-                  }
-                  event.stopPropagation();
-                  onDataClick?.(
-                    label,
-                    s.label || undefined,
-                    "drilldown",
-                    event.detail,
-                  );
-                }
-                : undefined}
               isAnimationActive={false}
             />
           );
@@ -1869,7 +1840,6 @@ interface TreemapContentProps {
 
 function TreemapContent(props: TreemapContentProps) {
   const t = useT();
-  const selectedAt = useContext(ChartSelectionContext) ?? props.isSelected;
   const {
     x,
     y,
@@ -1883,8 +1853,13 @@ function TreemapContent(props: TreemapContentProps) {
   } = props;
   // Recharts passe aussi le nœud racine (profondeur 0) : une tuile de la
   // taille du tracé, le total dessus. On ne dessine que les feuilles.
+  const { shared, selected } = useChartMarkState(
+    name,
+    undefined,
+    undefined,
+    props.isSelected,
+  );
   if (depth === 0) return null;
-  const selected = selectedAt?.(name) === true;
   const hintKey = chartTooltipHintKey(props.canDrillDown?.(name) === true);
   const tileTitle = [
     name,
@@ -1893,22 +1868,12 @@ function TreemapContent(props: TreemapContentProps) {
   ].filter(Boolean).join(" · ");
   return (
     <g
+      {...chartMark(name)}
       style={{ cursor: onDataClick ? "pointer" : "default" }}
-      onClick={onDataClick
-        ? (event) => {
-          event.stopPropagation();
-          onDataClick(name, undefined, "inspect", event.detail);
-        }
-        : undefined}
-      onDblClick={onDataClick
-        ? (event) => {
-          event.stopPropagation();
-          onDataClick(name, undefined, "drilldown", event.detail);
-        }
-        : undefined}
     >
       <title>{tileTitle}</title>
       <rect
+        data-chart-geometry
         x={x}
         y={y}
         width={width}
@@ -1917,7 +1882,7 @@ function TreemapContent(props: TreemapContentProps) {
         opacity={0.8}
         rx={3}
         stroke={selected ? "var(--color-accent)" : "var(--color-surface)"}
-        strokeWidth={selected ? 5 : 2}
+        strokeWidth={shared ? 5 : selected ? 3 : 2}
         style={selected
           ? { filter: "drop-shadow(0 0 2.5px var(--color-accent))" }
           : undefined}
@@ -2039,11 +2004,13 @@ function ChartKeyboardNavigator(
     onActivate,
     onKeyActivate,
     canDrillDown,
+    canShare,
     isSelected,
     isExpanded,
   }: {
     data: ChartData;
     focus: ChartFocus | null;
+    canShare: boolean;
     onActivate?: ChartDataClick;
     onKeyActivate?: ChartDataKeyDown;
     canDrillDown?: ChartSelectionPredicate;
@@ -2087,15 +2054,25 @@ function ChartKeyboardNavigator(
     ? isExpanded?.(selection.label, selection.series, selection.index)
     : undefined;
   const help = t(
-    drilldownEnabled
-      ? "chart.keyboard.help_detail"
-      : "chart.keyboard.help_navigation",
+    canShare
+      ? (drilldownEnabled
+        ? "chart.keyboard.help"
+        : "chart.keyboard.help_context")
+      : (drilldownEnabled
+        ? "chart.keyboard.help_detail"
+        : "chart.keyboard.help_navigation"),
   );
-  const shortcuts = "ArrowLeft ArrowRight ArrowUp ArrowDown Space" +
-    (drilldownEnabled ? " Enter" : "");
+  const shortcuts = "ArrowLeft ArrowRight ArrowUp ArrowDown" +
+    (canShare ? " Space Shift+Space" : "") + (drilldownEnabled ? " Enter" : "");
   return (
     <button
       type="button"
+      data-visual-item={chartMarkId(
+        selection.label,
+        selection.series,
+        selection.index,
+      )}
+      data-chart-no-range
       aria-current={isSelected?.(
         selection.label,
         selection.series,
@@ -2141,51 +2118,6 @@ function ChartKeyboardNavigator(
           );
         }
       }}
-      onClick={(event) => {
-        event.stopPropagation();
-        // Enter et Espace emettent aussi un click natif detail=0 sur un
-        // bouton : leur commande a deja ete traitee dans onKeyDown.
-        if (event.detail === 0) return;
-        if (
-          isMacControlClickEcho(event, getBrowserPlatform())
-        ) return;
-        onActivate(
-          selection.label,
-          selection.series,
-          "inspect",
-          event.detail,
-          selection.index,
-        );
-      }}
-      onDblClick={(event) => {
-        event.stopPropagation();
-        if (!drilldownEnabled) return;
-        onActivate(
-          selection.label,
-          selection.series,
-          "drilldown",
-          event.detail,
-          selection.index,
-        );
-      }}
-      onContextMenu={(event) => {
-        event.stopPropagation();
-        if (
-          !isMacControlClick(event, getBrowserPlatform())
-        ) return;
-        event.preventDefault();
-        onActivate(
-          selection.label,
-          selection.series,
-          "inspect",
-          1,
-          selection.index,
-        );
-      }}
-      onPointerDown={(event) => event.stopPropagation()}
-      onPointerUp={(event) => event.stopPropagation()}
-      onPointerMove={(event) => event.stopPropagation()}
-      onPointerCancel={(event) => event.stopPropagation()}
       class={cx(
         "pointer-events-none absolute bottom-1.5 left-1.5 z-20 h-px w-px overflow-hidden whitespace-nowrap border-0 p-0 opacity-0",
         "focus:pointer-events-auto focus:flex focus:h-auto focus:w-auto focus:max-w-[calc(100%-0.75rem)] focus:items-center focus:gap-2 focus:overflow-visible focus:rounded-[4px] focus:border focus:border-accent/50 focus:bg-control focus:px-2.5 focus:py-1.5 focus:opacity-100 focus:shadow-modal",
@@ -2266,13 +2198,11 @@ function ChartRouter(
   {
     data,
     onDataClick,
-    onDataKeyDown,
     isSelected,
     canDrillDown,
   }: {
     data: ChartData;
     onDataClick?: ChartDataClick;
-    onDataKeyDown?: ChartDataKeyDown;
     isSelected?: ChartSelectionPredicate;
     canDrillDown?: ChartSelectionPredicate;
   },
@@ -2349,7 +2279,6 @@ function ChartRouter(
           data={data}
           isDonut={false}
           onDataClick={onDataClick}
-          onDataKeyDown={onDataKeyDown}
           isSelected={isSelected}
           canDrillDown={canDrillDown}
         />
@@ -2360,7 +2289,6 @@ function ChartRouter(
           data={data}
           isDonut
           onDataClick={onDataClick}
-          onDataKeyDown={onDataKeyDown}
           isSelected={isSelected}
           canDrillDown={canDrillDown}
         />
@@ -2478,6 +2406,7 @@ function ChartContent(
   const documentContext: DocumentContextController = {
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
+    activateMany: activeContext.activateMany,
     activateReversible: activeContext.activateReversible,
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,
@@ -2599,6 +2528,10 @@ function ChartContent(
           .id;
   }
 
+  function isPointInContext(label: string, series?: string, index?: number) {
+    return activeContext.isSelected(pointContext(label, series, index));
+  }
+
   function pointExpansionState(
     label: string,
     series?: string,
@@ -2661,23 +2594,27 @@ function ChartContent(
   ) => {
     if (!label) return;
     focusDetailPoint(label, series, index);
-    if (activation === "drilldown") openPointDetail(label, series, index);
+    if (activation === "activate") {
+      if (pointDetailMode(label, series) === "inline") {
+        openPointDetail(label, series, index);
+      }
+    }
   };
   const onDataKeyDown: ChartDataKeyDown = (label, series, event, index) => {
     if (event.repeat || (event.key !== " " && event.key !== "Enter")) return;
     event.preventDefault();
     focusDetailPoint(label, series, index);
-    if (event.key === "Enter") openPointDetail(label, series, index);
+    if (event.key === " " && activeContext.supported) {
+      void activeContext.toggle(pointContext(label, series, index));
+    } else if (event.key === "Enter") openPointDetail(label, series, index);
   };
   const chartHandlers = useRef({
     onDataClick,
-    onDataKeyDown,
     isPointSelected,
     canDrillDownPoint,
   });
   chartHandlers.current = {
     onDataClick,
-    onDataKeyDown,
     isPointSelected,
     canDrillDownPoint,
   };
@@ -2687,10 +2624,6 @@ function ChartContent(
   );
   const stableIsSelected = useCallback<ChartSelectionPredicate>(
     (...args) => chartHandlers.current.isPointSelected(...args),
-    [],
-  );
-  const stableDataKeyDown = useCallback<ChartDataKeyDown>(
-    (...args) => chartHandlers.current.onDataKeyDown?.(...args),
     [],
   );
   const stableCanDrillDown = useCallback<ChartSelectionPredicate>(
@@ -2705,25 +2638,90 @@ function ChartContent(
   const focusedItem = detailFocus && chartFocusExists(visibleData, detailFocus)
     ? pointContext(detailFocus.label, detailFocus.series, detailFocus.index)
     : undefined;
-  const pin = (item: ContextSelectionItem, beforePin?: () => void) => {
-    if (!activeContext.supported) return null;
-    const pressed = activeContext.isSelected(item);
-    return (
-      <ContextPinButton
-        label={t(pressed ? "context.pin.remove" : "context.pin.add", {
-          label: item.label,
-        })}
-        pressed={pressed}
-        onToggle={() => {
-          if (!pressed) beforePin?.();
-          void activeContext.toggle(item);
-        }}
-      />
-    );
-  };
+  const visibleMarks = useMemo(() => {
+    const marks = new Map<string, ChartFocus>();
+    const aliases = new Map<string, number[]>();
+    visibleData.labels.forEach((label, index) => {
+      const indices = aliases.get(label);
+      if (indices) indices.push(index);
+      else aliases.set(label, [index]);
+    });
+    for (const group of chartNavigationGroups(visibleData)) {
+      for (const point of group) {
+        marks.set(chartMarkId(point.label, point.series, point.index), point);
+        // Non-Cartesian dots may carry an internal Recharts index.
+        if (point.index === undefined) {
+          const visualIndex = visibleData.labels.indexOf(point.label);
+          if (visualIndex >= 0) {
+            marks.set(
+              chartMarkId(point.label, point.series, visualIndex),
+              point,
+            );
+          }
+        }
+      }
+    }
+    return marks;
+  }, [visibleData]);
+  const gestureRoot = useChartGestures<HTMLDivElement>({
+    onActivate(id) {
+      const point = visibleMarks.get(id);
+      if (point) {
+        onDataClick(point.label, point.series, "activate", 1, point.index);
+      } else {
+        const name = [...namedSeries.keys()].find((name) =>
+          JSON.stringify(["series", name]) === id
+        );
+        if (name) {
+          setHiddenSeries((current) =>
+            toggleHiddenChartSeries(data, current, name)
+          );
+        }
+      }
+    },
+    onToggle: activeContext.supported
+      ? (id) => {
+        const point = visibleMarks.get(id);
+        if (point) {
+          void activeContext.toggle(
+            pointContext(point.label, point.series, point.index),
+          );
+        } else if (id === chartContext.id) {
+          if (!activeContext.isSelected(chartContext)) {
+            pinnedChart.current = {
+              root: rootKey,
+              hidden: [...normalizedHiddenSeries],
+            };
+          }
+          void activeContext.toggle(chartContext);
+        } else {
+          const member = [...namedSeries].find(([name]) =>
+            JSON.stringify(["series", name]) === id
+          )?.[1];
+          if (member) void activeContext.toggle(member);
+        }
+      }
+      : undefined,
+    onAdd: activeContext.supported
+      ? (ids) => {
+        const members = ids.flatMap((id) => {
+          const point = visibleMarks.get(id);
+          return point
+            ? [pointContext(point.label, point.series, point.index)]
+            : [];
+        });
+        void activeContext.activateMany(members);
+      }
+      : undefined,
+  });
+  const shellRef = useCallback((node: HTMLDivElement | null) => {
+    if (typeof containerRef === "function") containerRef(node);
+    else if (containerRef) containerRef.current = node;
+    gestureRoot(node);
+  }, [containerRef, gestureRoot]);
 
   return (
-    <ViewerShell containerRef={containerRef} style={boundsStyle}>
+    <ViewerShell containerRef={shellRef} style={boundsStyle}>
       {/* En-tête */}
       <header
         class={cx(
@@ -2738,17 +2736,32 @@ function ChartContent(
               narrow ? "gap-2.5" : "gap-3",
             )}
           >
-            {narrow
-              ? (
-                <h3 class="truncate font-display font-semibold text-ink text-[--text-card-title]">
-                  {data.title}
-                </h3>
-              )
-              : (
-                <h2 class="truncate font-display font-semibold text-ink text-[--text-title] tracking-title">
-                  {data.title}
-                </h2>
+            <h2
+              class={cx(
+                "truncate font-display font-semibold text-ink",
+                narrow
+                  ? "text-[--text-card-title]"
+                  : "text-[--text-title] tracking-title",
               )}
+            >
+              {activeContext.supported
+                ? (
+                  <button
+                    type="button"
+                    class={cx(
+                      "block max-w-full truncate rounded-sm border-0 bg-transparent p-0 text-start",
+                      activeContext.isSelected(chartContext) &&
+                        "ring-1 ring-accent ring-offset-1",
+                    )}
+                    data-visual-item={chartContext.id}
+                    aria-pressed={activeContext.isSelected(chartContext)}
+                    aria-keyshortcuts="Shift+Space"
+                  >
+                    {data.title}
+                  </button>
+                )
+                : data.title}
+            </h2>
             {visibleData.subtitle && (
               <span
                 class={cx(
@@ -2792,12 +2805,6 @@ function ChartContent(
             {!narrow
               ? <LiveDot />
               : <span class="size-[5px] shrink-0 rounded-full bg-ok" />}
-            {pin(chartContext, () => {
-              pinnedChart.current = {
-                root: rootKey,
-                hidden: [...normalizedHiddenSeries],
-              };
-            })}
           </div>
         </div>
         <ContextChipRow reserve={activeContext.supported}>
@@ -2841,18 +2848,30 @@ function ChartContent(
             </div>
           )}
           <div class="relative min-h-0 flex-1">
-            <div data-chart-pointer-surface class="h-full">
-              <ChartSelectionContext.Provider
-                value={isPointSelected}
+            <div
+              data-chart-pointer-surface
+              data-visual-selection-surface={activeContext.supported
+                ? ""
+                : undefined}
+              class={cx(
+                "h-full select-none",
+                activeContext.supported && "touch-pan-y",
+              )}
+            >
+              <ChartBasketContext.Provider
+                value={activeContext.supported ? isPointInContext : undefined}
               >
-                <StableChartRouter
-                  data={visibleData}
-                  onDataClick={stableDataClick}
-                  onDataKeyDown={stableDataKeyDown}
-                  isSelected={stableIsSelected}
-                  canDrillDown={stableCanDrillDown}
-                />
-              </ChartSelectionContext.Provider>
+                <ChartSelectionContext.Provider
+                  value={isPointSelected}
+                >
+                  <StableChartRouter
+                    data={visibleData}
+                    onDataClick={stableDataClick}
+                    isSelected={stableIsSelected}
+                    canDrillDown={stableCanDrillDown}
+                  />
+                </ChartSelectionContext.Provider>
+              </ChartBasketContext.Provider>
             </div>
             <ChartKeyboardNavigator
               data={visibleData}
@@ -2860,6 +2879,7 @@ function ChartContent(
               onActivate={onDataClick}
               onKeyActivate={onDataKeyDown}
               canDrillDown={canDrillDownPoint}
+              canShare={activeContext.supported}
               isSelected={isPointSelected}
               isExpanded={pointExpansionState}
             />
@@ -2871,14 +2891,11 @@ function ChartContent(
           )}
           <ChartLegend
             items={legendItems(data, normalizedHiddenSeries)}
-            pinSeries={(name) => {
+            canShareSeries={activeContext.supported}
+            isSeriesSelected={(name) => {
               const item = namedSeries.get(name);
-              return item && pin(item);
+              return item !== undefined && activeContext.isSelected(item);
             }}
-            onToggle={(series) =>
-              setHiddenSeries((current) =>
-                toggleHiddenChartSeries(data, current, series)
-              )}
           />
           {shared && (
             <span class="font-mono text-[10.5px] text-ink-faint">
@@ -2914,7 +2931,6 @@ function ChartContent(
                     )}
                 />
               )}
-              {pin(focusedItem)}
             </div>
           </div>
         )}

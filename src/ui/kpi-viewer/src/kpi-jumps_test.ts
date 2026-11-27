@@ -107,9 +107,11 @@ Deno.test("kpi-jumps : saut trend absent, number seul → trend retombe sur dril
   assertEquals(action?.kind, "drill");
 });
 
-Deno.test("kpi-jumps : seule une courbe peut porter un contexte", () => {
-  assertEquals(kpiContextEnabled(true, true), true);
-  assertEquals(kpiContextEnabled(true, false), false); // KPI scalaire, hôte capable
-  assertEquals(kpiContextEnabled(false, true), false); // courbe, hôte sans contexte
-  assertEquals(kpiContextEnabled(false, false), false);
+Deno.test("kpi-jumps : un KPI scalaire complet est partageable", () => {
+  assertEquals(kpiContextEnabled(true, 0, false), true);
+  assertEquals(kpiContextEnabled(true, 45, false), true);
+  assertEquals(kpiContextEnabled(false, 45, false), false);
+  assertEquals(kpiContextEnabled(true, 45, true), false);
+  assertEquals(kpiContextEnabled(true, undefined, false), false);
+  assertEquals(kpiContextEnabled(true, NaN, false), false);
 });

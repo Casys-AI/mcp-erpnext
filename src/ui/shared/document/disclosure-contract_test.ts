@@ -17,18 +17,22 @@ Deno.test("document surface owns one child-row disclosure across all tables", as
   );
 });
 
-Deno.test("child rows keep context and detail as sibling controls", async () => {
+Deno.test("child rows expose independent detail and context on the same row", async () => {
   const section = await Deno.readTextFile(
     new URL("./ChildTableSection.tsx", import.meta.url),
   );
 
   assertStringIncludes(section, 'clickAction: "detail"');
   assertStringIncludes(section, "onActivate: toggle");
-  assertEquals(
-    [...section.matchAll(/<DocumentPin target=\{presentation.contextTarget\}/g)]
-      .length,
-    2,
+  assertStringIncludes(section, "useVisualItemGestures({");
+  assertStringIncludes(
+    section,
+    "byId.get(id)?.interactionTarget?.onActivate()",
   );
+  assertStringIncludes(section, "byId.get(id)?.contextTarget?.onActivate()");
+  assertEquals(section.includes("DocumentPin"), false);
+  assertStringIncludes(section, "presentation.contextTarget?.selected");
+  assertStringIncludes(section, "onAddRowContext?.(items)");
   assertEquals(section.includes("<DetailToggleButton"), false);
   assertStringIncludes(section, "<RowDisclosurePanel");
   assertStringIncludes(section, "id={presentation.rowPanelId}");
@@ -55,6 +59,8 @@ Deno.test("an embedded document exposes row actions without a nested disclosure"
     'rowActionsPlacement === "disclosure"',
   );
   assertStringIncludes(section, "presentation.visibleActions");
+  assertStringIncludes(panel, "if (rowJumps.length !== 1) return undefined;");
+  assertStringIncludes(panel, "onActivate: () => onJump(jump)");
 });
 
 Deno.test("a breadcrumb document level exposes actions without another disclosure", async () => {

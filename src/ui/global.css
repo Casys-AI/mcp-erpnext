@@ -8,7 +8,13 @@
 
 @import "./shared/tokens.css";
 
-.mcp-view-context-pin, .mcp-view-disclosure-chevron {
+[data-mcp-view-context-row],
+.mcp-view-context-row-outline {
+  --mcp-view-context-row-accent: var(--color-accent);
+}
+
+.mcp-view-context-pin,
+.mcp-view-disclosure-chevron {
   --mcp-view-quiet: var(--color-ink-faint);
   --mcp-view-accent: var(--color-accent);
   --mcp-view-accent-text: var(--color-accent);

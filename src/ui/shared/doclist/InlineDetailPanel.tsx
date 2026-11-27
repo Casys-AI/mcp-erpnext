@@ -494,6 +494,22 @@ function InlineDocument({
       onActivate: () => void context.toggle(contextItem),
     }
     : undefined;
+  const renderChildRowDetailTarget = embedded && onJump
+    ? (
+      table: (typeof model.childTables)[number],
+      row: typeof table.rows[number],
+      rowIndex: number,
+    ): ContextInteractionTarget | undefined => {
+      const { rowJumps } = childRowInteraction(table, row, rowIndex);
+      if (rowJumps.length !== 1) return undefined;
+      const [jump] = rowJumps;
+      return {
+        label: jump.label,
+        clickAction: "detail",
+        onActivate: () => onJump(jump),
+      };
+    }
+    : undefined;
   const renderChildRowContextTarget = embedded
     ? (
       table: (typeof model.childTables)[number],
@@ -505,6 +521,7 @@ function InlineDocument({
         ? {
           label: item.label,
           detailLabel: item.label,
+          item,
           selected: context.isSelected(item),
           onActivate: () => void context.toggle(item),
         }
@@ -537,6 +554,10 @@ function InlineDocument({
         childRowActionsPlacement={embedded ? "visible" : "disclosure"}
         contextTarget={contextTarget}
         renderChildRowContextTarget={renderChildRowContextTarget}
+        onAddChildRowContext={context?.supported
+          ? context.activateMany
+          : undefined}
+        renderChildRowDetailTarget={renderChildRowDetailTarget}
         childRowsExpandable={!embedded}
         class={embedded ? "border-y border-accent/45" : "h-full"}
       />

@@ -13,14 +13,11 @@ import {
   setSelectionGroupMembers,
 } from "../selection-projection.ts";
 import {
-  doclistFilteredSelectionOperation,
   doclistGroupMember,
-  doclistHeaderSelection,
   doclistQueryFields,
   doclistQueryParent,
   extendDoclistRange,
   isDoclistResultComplete,
-  toggleDoclistFilteredMembers,
 } from "./selection.ts";
 import type { DoclistData } from "./types.ts";
 
@@ -216,57 +213,6 @@ Deno.test("doclist group - le refresh efface une ancienne plage quand la devise 
   assertEquals(refreshed.groups[0].members[0].amount, undefined);
   assertEquals(refreshed.groups[0].members[0].currency, undefined);
   assertEquals(selectionGroupSummary(refreshed.groups[0]), "1 Payment Entry");
-});
-
-Deno.test("doclist header - sélectionne toutes les pages filtrées et préserve le hors filtre", () => {
-  const loaded = Array.from(
-    { length: 70 },
-    (_, index) => member(`INV-${index}`),
-  );
-  const filtered = loaded.filter((_, index) => index % 2 === 0);
-  const selected = [loaded[1], filtered[0]];
-  const next = toggleDoclistFilteredMembers(selected, filtered);
-  assertEquals(next.length, 36);
-  assertEquals(names(next), ["INV-1", ...names(filtered)]);
-  assertEquals(names(selected), ["INV-1", "INV-0"]);
-  assertEquals(names(toggleDoclistFilteredMembers(next, filtered)), ["INV-1"]);
-});
-
-Deno.test("doclist header - expose les états vide, mixte et coché sur le filtre entier", () => {
-  const filtered = [member("A"), member("B"), member("C")];
-  assertEquals(doclistHeaderSelection(filtered, [member("outside")]), {
-    checked: false,
-    indeterminate: false,
-    selectedCount: 0,
-    totalCount: 3,
-  });
-  assertEquals(doclistHeaderSelection(filtered, [member("A")]), {
-    checked: false,
-    indeterminate: true,
-    selectedCount: 1,
-    totalCount: 3,
-  });
-  assertEquals(doclistHeaderSelection(filtered, filtered), {
-    checked: true,
-    indeterminate: false,
-    selectedCount: 3,
-    totalCount: 3,
-  });
-  assertEquals(doclistHeaderSelection([], [member("A")]), {
-    checked: false,
-    indeterminate: false,
-    selectedCount: 0,
-    totalCount: 0,
-  });
-});
-
-Deno.test("doclist header - capture la décision affichée et les lignes filtrées au clic", () => {
-  const filtered = [member("A"), member("B")];
-  const add = doclistFilteredSelectionOperation(false, filtered);
-  const remove = doclistFilteredSelectionOperation(true, filtered);
-  filtered.push(member("C"));
-  assertEquals(add, { kind: "add", members: [member("A"), member("B")] });
-  assertEquals(remove, { kind: "remove", names: ["A", "B"] });
 });
 
 Deno.test("doclist Shift - suit l'ordre trié courant sur toutes les pages", () => {

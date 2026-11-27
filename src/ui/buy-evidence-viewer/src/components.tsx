@@ -125,7 +125,9 @@ export function buyComponentRegistry(
 ) {
   return defineComponentRegistry<BuyEvidenceViewData>({
     components: {
-      [BUY_COMPONENT_KEYS.configurationCost]: definePreactComponent<BuyEvidenceViewData>(
+      [BUY_COMPONENT_KEYS.configurationCost]: definePreactComponent<
+        BuyEvidenceViewData
+      >(
         { title: "Buy configuration cost" },
         (props) => <BuyEvidenceCard {...props} lifetime={lifetime} />,
       ),

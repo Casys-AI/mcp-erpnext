@@ -24,7 +24,7 @@
     "dev:funnel:fixture": "UI_NAME=funnel-viewer vite --config vite.single.config.mjs --open /?fixture=1"
   },
   "dependencies": {
-    "@mcpview/components": "file:vendor/mcpview-components-0.14.0-beta.2.tgz",
+    "@mcpview/components": "0.14.0",
     "@mcpview/compose": "file:vendor/mcpview-compose-0.12.1-dev.112cabf.tgz",
     "@mcpview/contracts": "^0.2.1",
     "@mcpview/view": "^0.11.1",

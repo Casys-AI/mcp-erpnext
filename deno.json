@@ -1,6 +1,6 @@
 {
   "name": "@casys/mcp-erpnext",
-  "version": "4.0.0-beta.3",
+  "version": "4.0.0-beta.4",
   "nodeModulesDir": "auto",
   "minimumDependencyAge": {
     "age": "PT24H",

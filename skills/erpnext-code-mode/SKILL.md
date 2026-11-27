@@ -75,17 +75,19 @@ The source is a Sales Invoice list from `erpnext_sales_invoice_list` or
 target is an original result from `erpnext_sales_invoice_get`. Use the exact
 requested invoice as the initial detail, or the first row when the user asks to
 start with the first invoice. Clicking a row opens that invoice in the linked
-panel. The pin beside the row attaches it to the conversation. The header pin
-acts on all loaded invoices matching the filter, including other local pages.
-When answering questions about pinned records, use the host's current context
-and respect any reported limit on the number of records it contains.
-Show just the list if there is no invoice to open.
+panel. Double-clicking or holding a row toggles that invoice in the conversation
+context. Dragging a rectangle adds the rows it covers on the visible page. The
+basket preserves records the user has already joined from other pages. When
+answering questions about pinned records, use the host's current context and
+respect any reported limit on the number of records it contains. Show just the
+list if there is no invoice to open.
 
 To let the user recalculate gross margin for a month in the Sales Order revenue
 series, link the cards as shown below. Clicking a monthly bar updates the margin
-for that month. The two-month control covers a longer period. The pin on the
-active point adds that month to the conversation independently.
-Start the margin at the current month to date and keep any requested
+for that month. The two-month control covers a longer period. Double-clicking or
+holding a month adds or removes that month from context, even while the margin
+shows a different month. Drag a rectangle over several bars to add those months
+together. Start the margin at the current month to date and keep any requested
 company or valuation options in the original margin call.
 
 ```js
@@ -133,8 +135,9 @@ returned rows in JavaScript produces a new value without the list's actions.
 When the user asks to keep a program, such as “save this for Monday”, use the
 execution reference from that successful result. Call `execute` with
 `{"save":{"runId":"<execution reference>","name":"monday-invoices","description":"Overdue EUR invoices by minimum outstanding balance"}}`.
-The save command displays a receipt with the saved name. The ordinary ERP result displays the business view. Scheduling is a separate request. To run
-it again at EUR 3000, call the same tool with
+The save command displays a receipt with the saved name. The ordinary ERP result
+displays the business view. Scheduling is a separate request. To run it again at
+EUR 3000, call the same tool with
 `{"snippet":"monday-invoices","params":{"minimum":3000}}`. In a new
 conversation, when the user refers to a saved procedure, first call `execute`
 with `{"snippets":true}` to find its actual name, description, and parameter

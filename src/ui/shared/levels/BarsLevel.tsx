@@ -4,8 +4,11 @@
  */
 
 import type { JSX } from "preact";
-import { useState } from "preact/hooks";
-import { ContextPinButton } from "@mcpview/components/preact/controls";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import {
+  activateNearestChartMark,
+  useChartGestures,
+} from "./use-chart-gestures.ts";
 import { DetailToggleButton } from "../DetailToggleButton.tsx";
 import { formatCurrency, formatNumber, formatPercent } from "../format";
 import { useT } from "../i18n-hook";
@@ -48,6 +51,7 @@ export function BarsLevel(
     isPointSelected,
     isPointDetailEnabled,
     onPointContext,
+    onPointRange,
     onPointDetail,
     caption,
     narrow,
@@ -64,6 +68,7 @@ export function BarsLevel(
       labelIndex: number,
       seriesIndex: number,
     ) => void;
+    onPointRange?: (points: readonly [number, number][]) => void;
     onPointDetail?: (labelIndex: number, seriesIndex: number) => void;
     caption?: string;
     narrow?: boolean;
@@ -133,9 +138,6 @@ export function BarsLevel(
     } · ${value}`;
   };
 
-  const canSharePoint = (labelIndex: number, seriesIndex: number) =>
-    Boolean(contextEnabled && onPointContext) &&
-    labels[labelIndex] !== undefined && datasets[seriesIndex] !== undefined;
   const canOpenPoint = (labelIndex: number, seriesIndex: number) =>
     Boolean(
       onPointDetail &&
@@ -144,7 +146,7 @@ export function BarsLevel(
   const canUsePoint = (labelIndex: number, seriesIndex: number) =>
     labels[labelIndex] !== undefined && datasets[seriesIndex] !== undefined;
 
-  // Voie tactile du double-clic et d'Entrée : un bouton visible sous l'étiquette
+  // Un bouton visible sous l’étiquette complète l’activation directe
   // de chaque barre qui a un détail. Chaque série garde son emplacement sous
   // l'étiquette (un vide quand elle n'a pas de détail) pour que le bouton reste
   // aligné sur sa barre ; la largeur du graphe, défilable, s'y ajuste.
@@ -161,6 +163,19 @@ export function BarsLevel(
       detailSlotCount > 0 ? detailSlotCount * (detailButtonSize + 4) + 8 : 0,
     ),
   );
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [overflowsHorizontally, setOverflowsHorizontally] = useState(false);
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const measure = () =>
+      setOverflowsHorizontally(chartWidth > viewport.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [chartWidth]);
 
   const inspectPoint = (labelIndex: number, seriesIndex: number) => {
     if (!canUsePoint(labelIndex, seriesIndex)) return;
@@ -180,19 +195,27 @@ export function BarsLevel(
       onPointDetail?.(labelIndex, seriesIndex);
     }
   };
+  const chartRoot = useChartGestures<HTMLDivElement>({
+    onActivate(id) {
+      const [label, series] = id.split(":").map(Number);
+      openPointDetail(label, series);
+    },
+    onToggle: onPointContext && ((id) => {
+      const [label, series] = id.split(":").map(Number);
+      onPointContext(label, series);
+    }),
+    onAdd: onPointRange && ((ids) => {
+      onPointRange(ids.map((id) => {
+        const [label, series] = id.split(":").map(Number);
+        return [label, series];
+      }));
+    }),
+  });
   const keyDownPoint = (
     labelIndex: number,
     seriesIndex: number,
     event: JSX.TargetedKeyboardEvent<HTMLButtonElement>,
   ) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      if (event.repeat) return;
-      if (event.key === "Enter" && canOpenPoint(labelIndex, seriesIndex)) {
-        openPointDetail(labelIndex, seriesIndex);
-      } else inspectPoint(labelIndex, seriesIndex);
-      return;
-    }
     let label = labelIndex;
     let series = seriesIndex;
     switch (event.key) {
@@ -226,7 +249,7 @@ export function BarsLevel(
   });
 
   return (
-    <div class="flex min-h-0 flex-1 flex-col">
+    <div ref={chartRoot} class="flex min-h-0 flex-1 flex-col">
       <div class={narrow ? "px-3.5 pb-3 pt-4" : "px-4 pb-3 pt-[18px]"}>
         {(chart.yAxisLabel || chart.rightAxisLabel) && (
           <div class="mb-2 flex justify-between font-mono text-nano text-ink-faint">
@@ -266,10 +289,13 @@ export function BarsLevel(
             })}
           </div>
         )}
-        <div class="overflow-x-auto pb-1" data-nested-chart>
+        <div ref={viewportRef} class="overflow-x-auto pb-1" data-nested-chart>
           <div style={{ minWidth: `${chartWidth}px` }}>
             <div
-              class="relative h-[132px]"
+              class={`relative h-[132px] select-none ${
+                onPointRange && !overflowsHorizontally ? "touch-pan-y" : ""
+              }`}
+              data-visual-selection-surface={onPointRange ? "" : undefined}
               onMouseLeave={() => setPreview(null)}
             >
               <span
@@ -294,6 +320,10 @@ export function BarsLevel(
                     const selected =
                       inspected?.labelIndex === point.labelIndex &&
                       inspected.seriesIndex === point.seriesIndex;
+                    const shared = isPointSelected?.(
+                      point.labelIndex,
+                      point.seriesIndex,
+                    );
                     const bottom = Math.min(point.y, point.baseY);
                     const height = Math.abs(point.y - point.baseY);
                     return (
@@ -302,28 +332,17 @@ export function BarsLevel(
                         type="button"
                         disabled={!interactive}
                         aria-current={selected}
+                        aria-pressed={shared}
                         data-point={`${point.labelIndex}:${point.seriesIndex}`}
-                        aria-keyshortcuts={canOpenPoint(
-                            point.labelIndex,
-                            point.seriesIndex,
-                          )
-                          ? "ArrowLeft ArrowRight ArrowUp ArrowDown Space Enter"
-                          : "ArrowLeft ArrowRight ArrowUp ArrowDown Space"}
+                        data-visual-item={`${point.labelIndex}:${point.seriesIndex}`}
+                        data-visual-selection-start
+                        aria-keyshortcuts={contextEnabled
+                          ? "ArrowLeft ArrowRight ArrowUp ArrowDown Shift+Space"
+                          : "ArrowLeft ArrowRight ArrowUp ArrowDown"}
                         aria-label={pointLabel(
                           point.labelIndex,
                           point.seriesIndex,
                         )}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          inspectPoint(point.labelIndex, point.seriesIndex);
-                        }}
-                        onDblClick={(event) => {
-                          event.stopPropagation();
-                          openPointDetail(
-                            point.labelIndex,
-                            point.seriesIndex,
-                          );
-                        }}
                         onKeyDown={(event) =>
                           keyDownPoint(
                             point.labelIndex,
@@ -332,8 +351,11 @@ export function BarsLevel(
                           )}
                         onMouseEnter={() =>
                           previewPoint(point.labelIndex, point.seriesIndex)}
-                        onFocus={() =>
-                          inspectPoint(point.labelIndex, point.seriesIndex)}
+                        onFocus={(event) => {
+                          if (event.currentTarget.matches(":focus-visible")) {
+                            inspectPoint(point.labelIndex, point.seriesIndex);
+                          }
+                        }}
                         onBlur={() => setPreview(null)}
                         class={`absolute min-h-px rounded-[2px] border-0 p-0 transition-opacity focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
                           interactive ? "cursor-pointer" : "cursor-default"
@@ -353,7 +375,7 @@ export function BarsLevel(
                             : point.labelIndex === active
                             ? 0.9
                             : 0.65,
-                          boxShadow: selected
+                          boxShadow: shared
                             ? "0 0 0 1px var(--color-accent)"
                             : undefined,
                         }}
@@ -370,7 +392,7 @@ export function BarsLevel(
                 ) => {
                   event.stopPropagation();
                   const svg = event.currentTarget.ownerSVGElement;
-                  if (!svg) return;
+                  if (!svg?.parentElement) return;
                   const rect = svg.getBoundingClientRect();
                   const labelIndex = nearestLabelIndex(
                     event.clientX,
@@ -378,22 +400,11 @@ export function BarsLevel(
                     rect.width,
                     labels.length,
                   );
-                  inspectPoint(labelIndex, seriesModel.seriesIndex);
-                };
-                const doubleActivateFromPath = (
-                  event: MouseEvent & { currentTarget: SVGPathElement },
-                ) => {
-                  event.stopPropagation();
-                  const svg = event.currentTarget.ownerSVGElement;
-                  if (!svg) return;
-                  const rect = svg.getBoundingClientRect();
-                  const labelIndex = nearestLabelIndex(
-                    event.clientX,
-                    rect.left,
-                    rect.width,
-                    labels.length,
+                  activateNearestChartMark(
+                    svg.parentElement,
+                    `${labelIndex}:${seriesModel.seriesIndex}`,
+                    event,
                   );
-                  openPointDetail(labelIndex, seriesModel.seriesIndex);
                 };
                 return (
                   <svg
@@ -415,9 +426,6 @@ export function BarsLevel(
                         onClick={hasInteractivePoint
                           ? activateFromPath
                           : undefined}
-                        onDblClick={hasInteractivePoint
-                          ? doubleActivateFromPath
-                          : undefined}
                       />
                     )}
                     <path
@@ -434,9 +442,6 @@ export function BarsLevel(
                         : undefined}
                       onClick={hasInteractivePoint
                         ? activateFromPath
-                        : undefined}
-                      onDblClick={hasInteractivePoint
-                        ? doubleActivateFromPath
                         : undefined}
                     />
                   </svg>
@@ -458,34 +463,27 @@ export function BarsLevel(
                   );
                   const selected = inspected?.labelIndex === point.labelIndex &&
                     inspected.seriesIndex === point.seriesIndex;
+                  const shared = isPointSelected?.(
+                    point.labelIndex,
+                    point.seriesIndex,
+                  );
                   return (
                     <button
                       key={`point-${point.seriesIndex}-${point.labelIndex}`}
                       type="button"
                       disabled={!interactive}
                       aria-current={selected}
+                      aria-pressed={shared}
                       data-point={`${point.labelIndex}:${point.seriesIndex}`}
-                      aria-keyshortcuts={canOpenPoint(
-                          point.labelIndex,
-                          point.seriesIndex,
-                        )
-                        ? "ArrowLeft ArrowRight ArrowUp ArrowDown Space Enter"
-                        : "ArrowLeft ArrowRight ArrowUp ArrowDown Space"}
+                      data-visual-item={`${point.labelIndex}:${point.seriesIndex}`}
+                      data-visual-selection-start
+                      aria-keyshortcuts={contextEnabled
+                        ? "ArrowLeft ArrowRight ArrowUp ArrowDown Shift+Space"
+                        : "ArrowLeft ArrowRight ArrowUp ArrowDown"}
                       aria-label={pointLabel(
                         point.labelIndex,
                         point.seriesIndex,
                       )}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        inspectPoint(point.labelIndex, point.seriesIndex);
-                      }}
-                      onDblClick={(event) => {
-                        event.stopPropagation();
-                        openPointDetail(
-                          point.labelIndex,
-                          point.seriesIndex,
-                        );
-                      }}
                       onKeyDown={(event) =>
                         keyDownPoint(
                           point.labelIndex,
@@ -494,8 +492,11 @@ export function BarsLevel(
                         )}
                       onMouseEnter={() =>
                         previewPoint(point.labelIndex, point.seriesIndex)}
-                      onFocus={() =>
-                        inspectPoint(point.labelIndex, point.seriesIndex)}
+                      onFocus={(event) => {
+                        if (event.currentTarget.matches(":focus-visible")) {
+                          inspectPoint(point.labelIndex, point.seriesIndex);
+                        }
+                      }}
                       onBlur={() => setPreview(null)}
                       class={`absolute grid -translate-x-1/2 translate-y-1/2 place-items-center rounded-full border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-accent ${
                         narrow ? "size-10" : "size-6"
@@ -504,8 +505,12 @@ export function BarsLevel(
                     >
                       <span
                         aria-hidden="true"
-                        class={dataset.showDots === false
+                        data-chart-geometry
+                        class={dataset.showDots === false && !shared &&
+                            !selected
                           ? "size-1.5 rounded-full opacity-0"
+                          : shared
+                          ? "size-2 rounded-full ring-2 ring-accent ring-offset-1 ring-offset-surface"
                           : selected
                           ? "size-2 rounded-full ring-1 ring-accent ring-offset-1 ring-offset-surface"
                           : "size-1.5 rounded-full"}
@@ -597,37 +602,6 @@ export function BarsLevel(
           ))}
           {caption && (
             <span class="font-sans text-note text-ink-dim">{caption}</span>
-          )}
-          {inspected &&
-            canSharePoint(activePoint.labelIndex, activePoint.seriesIndex) && (
-            <ContextPinButton
-              className="ml-auto"
-              label={t(
-                isPointSelected?.(
-                    activePoint.labelIndex,
-                    activePoint.seriesIndex,
-                  )
-                  ? "context.pin.remove"
-                  : "context.pin.add",
-                {
-                  label: pointLabel(
-                    activePoint.labelIndex,
-                    activePoint.seriesIndex,
-                  ),
-                },
-              )}
-              pressed={Boolean(
-                isPointSelected?.(
-                  activePoint.labelIndex,
-                  activePoint.seriesIndex,
-                ),
-              )}
-              onToggle={() =>
-                onPointContext?.(
-                  activePoint.labelIndex,
-                  activePoint.seriesIndex,
-                )}
-            />
           )}
         </div>
       )}

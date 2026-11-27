@@ -237,10 +237,6 @@ export const ur: Record<string, string> = {
   "kpi.coverage.lines": "سطور: {count}",
   "kpi.coverage.omitted": "نہ دکھائے گئے اضافی شے/گودام کے جوڑے: {count}",
   "kpi.coverage.unknown": "کوریج دستیاب نہیں",
-  "kpi.drilldown.title_message":
-    "گفتگو میں پوچھنے کے لیے ڈبل کلک کریں یا انٹر دبائیں",
-  "kpi.drilldown.title_context":
-    "سیاق میں شامل/خارج کرنے کے لیے کلک یا اسپیس دبائیں · تفصیل کے لیے ڈبل کلک یا انٹر دبائیں",
   // ── /KPI ویوور ───────────────────────────────────────────────────────────
 
   // ── انوائس ویوور ────────────────────────────────────────────────────────
@@ -348,11 +344,6 @@ export const ur: Record<string, string> = {
   "drill.sent": "گفتگو میں بھیجا گیا",
   "message.sending": "بھیجا جا رہا ہے…",
   "message.send_error": "گفتگو میں نہیں بھیجا جا سکا",
-  "context.pin.add": "{label} کو سیاق میں پن کریں",
-  "context.pin.remove_local": "منتخب پنوں سے {label} ہٹائیں (شیئر نہیں ہوا)",
-  "context.pin.remove": "سیاق سے {label} کی پن ہٹائیں",
-  "doclist.pin.all": "تمام {count} مماثل قطاروں کو سیاق میں پن کریں",
-  "doclist.pin.remove_all": "تمام {count} مماثل قطاروں کی پن سیاق سے ہٹائیں",
   "context.active.partly_shared":
     "جزوی طور پر شیئر ہوا (کل {total} میں سے {shared})",
   "context.active.label": "سیاق",
@@ -367,8 +358,8 @@ export const ur: Record<string, string> = {
   "context.active.evicted": "زیادہ سے زیادہ 8 · {label} ہٹایا گیا",
   "interaction.detail.open": "{label} کی تفصیل کھولیں",
   "interaction.detail.close": "{label} کی تفصیل بند کریں",
-  "interaction.detail.open_hint": "تفصیل · ڈبل کلک",
-  "interaction.detail.close_hint": "بند کریں · ڈبل کلک",
+  "interaction.detail.open_hint": "تفصیل",
+  "interaction.detail.close_hint": "بند کریں",
   // ── détail sans double-clic : boutons visibles (tactile) ──
   "interaction.detail.button_hint": "تفصیل",
   "interaction.detail.ask": "{label} کے بارے میں پوچھیں",
@@ -376,26 +367,8 @@ export const ur: Record<string, string> = {
   "chart.detail_bar.open": "تفصیل کھولیں: {label}",
   "chart.detail_bar.close": "تفصیل بند کریں: {label}",
   "chart.detail_bar.ask": "پوچھیں: {label}",
-  "document.row.open_actions":
-    "{label} سیاق میں شامل کرنے یا ہٹانے کے لیے کلک یا اسپیس دبائیں · اقدامات دیکھنے کے لیے ڈبل کلک یا انٹر دبائیں",
-  "document.row.close_actions":
-    "{label} سیاق میں شامل کرنے یا ہٹانے کے لیے کلک یا اسپیس دبائیں · اقدامات بند کرنے کے لیے ڈبل کلک یا انٹر دبائیں",
-  "document.row.open_actions_only":
-    "{label} کے اقدامات دیکھنے کے لیے ڈبل کلک کریں یا انٹر دبائیں",
-  "document.row.close_actions_only":
-    "{label} کے اقدامات بند کرنے کے لیے ڈبل کلک کریں یا انٹر دبائیں",
-  "document.row.open_detail":
-    "{label} سیاق میں شامل کرنے یا ہٹانے کے لیے کلک یا اسپیس دبائیں · تفصیل کھولنے کے لیے ڈبل کلک یا انٹر دبائیں",
-  "document.row.close_detail":
-    "{label} سیاق میں شامل کرنے یا ہٹانے کے لیے کلک یا اسپیس دبائیں · تفصیل بند کرنے کے لیے ڈبل کلک یا انٹر دبائیں",
   "document.row.open_follow": "{label} کی تفصیلات کھولیں",
-  "document.row.open_detail_only":
-    "{label} کی تفصیل کھولنے کے لیے ڈبل کلک کریں یا انٹر دبائیں",
-  "document.row.close_detail_only":
-    "{label} کی تفصیل بند کرنے کے لیے ڈبل کلک کریں یا انٹر دبائیں",
-  "chart.tooltip.click_action_context": "کلک: سیاق شامل/خارج کریں · 2× تفصیل",
-  "chart.tooltip.click_action_context_only": "کلک: سیاق شامل/خارج کریں",
-  "chart.tooltip.click_action_fallback": "2× تفصیل",
+  "chart.tooltip.click_action_fallback": "کلک: تفصیل",
   "chart.tooltip.click_action_detail": "کلک: تفصیل",
   // ── نیویگیشن اسٹیک (راستہ، سطحیں، چھلانگ) ──
   "nav.back": "واپس",
@@ -418,7 +391,6 @@ export const ur: Record<string, string> = {
   "nav.stale_title":
     "اسٹیک میں گہری کسی کارروائی نے اس سطح کے مواد کو بدل دیا ہے۔",
   "nav.trail": "نیویگیشن پگڈنڈی",
-  "kanban.pin.loaded_cards": "{column} میں لوڈ شدہ کارڈز ({count})",
   "kanban.nav.edit_card": "{id} میں ترمیم کریں",
   "nav.bar_click": "کلک: ایک اور سطح",
   "nav.unexpected_body": "اس سطح کو غیر متوقع مواد ملا۔",

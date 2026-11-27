@@ -77,9 +77,8 @@ import {
 import { ActiveContextChip } from "~/shared/ActiveContextChip.tsx";
 import { DetailToggleButton } from "~/shared/DetailToggleButton.tsx";
 import { useActiveContext } from "~/shared/useActiveContext.ts";
-import { ContextPinButton } from "@mcpview/components/preact/controls";
+import { useChartGestures } from "~/shared/levels/use-chart-gestures.ts";
 import type { KpiPeriod } from "../../../code-mode/kpi-period.ts";
-import { acceptsDetailToggleClick } from "~/shared/detail-toggle.ts";
 import {
   canShareActiveContextResource,
   type ContextSelectionItem,
@@ -146,12 +145,16 @@ function kpiContextCandidates(
   data: KpiData,
   tf: TFunction,
 ): ContextSelectionItem[] {
-  if (!data.sparkline || data.sparkline.length < 2) return [];
+  if (!kpiContextEnabled(true, data.value, hasValuationCoverage(data))) {
+    return [];
+  }
+  const number = kpiNumberContext(data, tf);
+  if (!data.sparkline || data.sparkline.length < 2) return [number];
   const pointContexts = kpiSparklinePoints(data).map((point) =>
     kpiTrendPointContext(data, point)
   );
   return [
-    kpiNumberContext(data, tf),
+    number,
     kpiTrendContext(data, tf),
     ...pointContexts,
   ];
@@ -222,8 +225,8 @@ function SparklineBars({
   height,
   gap,
   activeIndex,
-  onInspect,
-  onDetail,
+  pointIds,
+  isInContext,
 }: {
   values: number[];
   labels?: string[];
@@ -231,15 +234,20 @@ function SparklineBars({
   height: number;
   gap: number;
   activeIndex: number;
-  onInspect(index: number): void;
-  onDetail?: () => void;
+  pointIds: string[];
+  isInContext?: (index: number) => boolean;
 }) {
   const pcts = sparklineHeights(values);
   const interactive = labels?.length === values.length;
+  const canSelectRange = interactive && isInContext !== undefined;
   return (
     <div class="min-w-0">
       <div
-        class="flex items-end rounded-bar"
+        class={cx(
+          "flex select-none items-end rounded-bar",
+          canSelectRange && "touch-pan-y",
+        )}
+        data-visual-selection-surface={canSelectRange ? "" : undefined}
         style={{ height: `${height}px`, gap: `${gap}px` }}
       >
         {pcts.map((barHeight, index) => {
@@ -254,22 +262,19 @@ function SparklineBars({
                 aria-label={ariaLabels?.[index] ?? labels![index]}
                 title={ariaLabels?.[index] ?? labels![index]}
                 data-kpi-month={index}
-                aria-pressed={selected}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (acceptsDetailToggleClick(event.detail)) onInspect(index);
-                }}
-                onDblClick={onDetail && ((event) => {
-                  event.stopPropagation();
-                  onDetail();
-                })}
+                aria-current={selected}
+                aria-pressed={isInContext?.(index)}
+                aria-keyshortcuts={isInContext ? "Shift+Space" : undefined}
+                data-visual-item={pointIds[index]}
+                data-visual-selection-start={canSelectRange ? "" : undefined}
               >
                 <span
                   aria-hidden="true"
+                  data-chart-geometry
                   class={cx(
                     "block w-full rounded-bar transition-[opacity,box-shadow] group-hover:opacity-100",
                     sparklineBarClass(index, values.length),
-                    selected &&
+                    isInContext?.(index) &&
                       "ring-1 ring-accent ring-offset-1 ring-offset-sunken",
                   )}
                   style={style}
@@ -561,7 +566,8 @@ function KpiCard({
     : undefined;
   const contextEnabled = kpiContextEnabled(
     activeContext.supported,
-    sparkline !== undefined,
+    data.value,
+    partial,
   );
   const sparklinePoints = kpiSparklinePoints(data);
   const sparklineLabels = sparklinePoints.length > 0
@@ -623,20 +629,6 @@ function KpiCard({
     if (period) periodSelection?.inspect(period);
   }
 
-  function renderPin(item: ContextSelectionItem) {
-    if (!contextEnabled) return null;
-    const pressed = activeContext.isSelected(item);
-    return (
-      <ContextPinButton
-        label={t(pressed ? "context.pin.remove" : "context.pin.add", {
-          label: item.label,
-        })}
-        pressed={pressed}
-        onToggle={() => void activeContext.toggle(item)}
-      />
-    );
-  }
-
   function openDetail(action: ReturnType<typeof kpiNumberAction>) {
     if (action?.kind === "jump") onOpenJump?.(action.jump);
     else if (action?.kind === "drill" && onAsk) {
@@ -647,6 +639,49 @@ function KpiCard({
     }
   }
 
+  const pointById = new Map(
+    trendPointContexts.map((item, index) =>
+      [item.id, { item, index }] as const
+    ),
+  );
+  const gestureRoot = useChartGestures<HTMLDivElement>({
+    onActivate(id) {
+      if (id === numberContext.id) {
+        if (numberAction?.kind === "jump") openDetail(numberAction);
+      } else if (id === trendContext.id) {
+        if (trendAction?.kind === "jump") openDetail(trendAction);
+      } else {
+        const point = pointById.get(id);
+        if (!point) return;
+        inspectPoint(point.index);
+        if (
+          !(periodSelection && alignedPeriods?.[point.index]) &&
+          trendAction?.kind === "jump"
+        ) openDetail(trendAction);
+      }
+    },
+    onToggle: contextEnabled
+      ? (id) => {
+        if (id === numberContext.id || id === trendContext.id) {
+          void activeContext.toggle(
+            id === numberContext.id ? numberContext : trendContext,
+          );
+        } else {
+          const point = pointById.get(id);
+          if (point) void activeContext.toggle(point.item);
+        }
+      }
+      : undefined,
+    onAdd: contextEnabled
+      ? (ids) => {
+        const members = ids.flatMap((id) => {
+          const point = pointById.get(id);
+          return point ? [point.item] : [];
+        });
+        void activeContext.activateMany(members);
+      }
+      : undefined,
+  });
   const numberDetailHint = t(
     numberAction?.kind === "jump" ? "kpi.drilldown.title_detail" : "nav.ask",
   );
@@ -683,13 +718,30 @@ function KpiCard({
     return (
       <div class="flex flex-col gap-1.5">
         <div class="flex min-w-0 items-center justify-between gap-1">
-          <span class="min-w-0 truncate font-mono text-micro text-ink-muted">
-            {periodLabel ?? t("kpi.sparkline.trend_label")}
-          </span>
-          <span class="inline-flex shrink-0 items-center">
-            {renderDetailButton(true)}
-            {renderPin(trendContext)}
-          </span>
+          {contextEnabled || trendAction?.kind === "jump"
+            ? (
+              <button
+                type="button"
+                class={cx(
+                  "min-w-0 truncate rounded-sm border-0 bg-transparent p-0 font-mono text-micro text-ink-muted",
+                  activeContext.isSelected(trendContext) &&
+                    "ring-1 ring-accent ring-offset-1",
+                )}
+                data-visual-item={trendContext.id}
+                aria-pressed={contextEnabled
+                  ? activeContext.isSelected(trendContext)
+                  : undefined}
+                aria-keyshortcuts={contextEnabled ? "Shift+Space" : undefined}
+              >
+                {periodLabel ?? t("kpi.sparkline.trend_label")}
+              </button>
+            )
+            : (
+              <span class="min-w-0 truncate font-mono text-micro text-ink-muted">
+                {periodLabel ?? t("kpi.sparkline.trend_label")}
+              </span>
+            )}
+          {renderDetailButton(true)}
         </div>
         <SparklineBars
           values={sparkline}
@@ -698,9 +750,9 @@ function KpiCard({
           height={compact ? 44 : 56}
           gap={compact ? 4 : 5}
           activeIndex={index}
-          onInspect={inspectPoint}
-          onDetail={trendAction?.kind === "jump" && onOpenJump
-            ? () => openDetail(trendAction)
+          pointIds={trendPointContexts.map((item) => item.id)}
+          isInContext={contextEnabled
+            ? (index) => activeContext.isSelected(trendPointContexts[index])
             : undefined}
         />
         {inspected && (
@@ -708,7 +760,6 @@ function KpiCard({
             <span role="status" class="font-mono text-micro text-ink">
               {sparklinePoints[index].label} · {inspected.value}
             </span>
-            {renderPin(inspected)}
           </div>
         )}
       </div>
@@ -735,24 +786,26 @@ function KpiCard({
     return (
       <div class="kpi-number">
         <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
-          {local
+          {local || contextEnabled
             ? (
               <button
                 type="button"
                 class={cx(
                   numberClass,
                   "cursor-pointer border-0 bg-transparent p-0 text-start focus-visible:outline-2 focus-visible:outline-accent",
+                  activeContext.isSelected(numberContext) &&
+                    "ring-1 ring-accent ring-offset-2",
                 )}
-                aria-label={t("interaction.detail.open", {
-                  label: numberContext.label,
-                })}
-                onClick={(event) => {
-                  if (acceptsDetailToggleClick(event.detail)) {
-                    openDetail(
-                      numberAction,
-                    );
-                  }
-                }}
+                data-visual-item={numberContext.id}
+                aria-label={local
+                  ? t("interaction.detail.open", {
+                    label: numberContext.label,
+                  })
+                  : numberContext.label}
+                aria-pressed={contextEnabled
+                  ? activeContext.isSelected(numberContext)
+                  : undefined}
+                aria-keyshortcuts={contextEnabled ? "Shift+Space" : undefined}
               >
                 {amountText}
               </button>
@@ -760,7 +813,6 @@ function KpiCard({
             : <span class={numberClass}>{amountText}</span>}
           <span class="inline-flex shrink-0 items-center">
             {detail}
-            {renderPin(numberContext)}
           </span>
         </div>
         {detail && (
@@ -776,7 +828,7 @@ function KpiCard({
   if (compact) {
     return (
       <>
-        <div class="flex flex-col gap-[10px] p-[14px_12px]">
+        <div ref={gestureRoot} class="flex flex-col gap-[10px] p-[14px_12px]">
           {/* Label + dot */}
           <div class="flex min-w-0 items-center gap-2">
             <span class="font-mono text-nano uppercase tracking-eyebrow text-ink-faint">
@@ -869,6 +921,7 @@ function KpiCard({
   return (
     <>
       <div
+        ref={gestureRoot}
         class={cx(
           "grid min-h-0 grid-cols-1",
           sparkline &&
@@ -1009,6 +1062,7 @@ function KpiViewerContent({
   const documentContext: DocumentContextController = {
     supported: !fixture && activeContext.supported,
     activate: activeContext.activate,
+    activateMany: activeContext.activateMany,
     activateReversible: activeContext.activateReversible,
     toggle: activeContext.toggle,
     toggleReversible: activeContext.toggleReversible,

@@ -241,10 +241,6 @@ export const en: Record<string, string> = {
   "kpi.coverage.lines": "Lines: {count}",
   "kpi.coverage.omitted": "Additional item/warehouse pairs not shown: {count}",
   "kpi.coverage.unknown": "Coverage unavailable",
-  "kpi.drilldown.title_message":
-    "Double-click or press Enter to ask in the conversation",
-  "kpi.drilldown.title_context":
-    "Click or Space to add or remove from context · double-click or Enter for details",
   // ── /kpi-viewer ───────────────────────────────────────────────────────────
 
   // ── invoice-viewer ────────────────────────────────────────────────────────
@@ -353,11 +349,6 @@ export const en: Record<string, string> = {
   "drill.sent": "Sent to the conversation",
   "message.sending": "Sending…",
   "message.send_error": "Could not send to the conversation",
-  "context.pin.add": "Pin {label} to context",
-  "context.pin.remove_local": "Remove {label} from selected pins (not shared)",
-  "context.pin.remove": "Unpin {label} from context",
-  "doclist.pin.all": "Pin all {count} matching rows to context",
-  "doclist.pin.remove_all": "Unpin all {count} matching rows from context",
   "context.active.partly_shared": "partly shared ({shared} of {total})",
   "context.active.label": "Context",
   "context.active.items": "Active context selections",
@@ -371,8 +362,8 @@ export const en: Record<string, string> = {
   "context.active.evicted": "8 max · removed {label}",
   "interaction.detail.open": "Open details for {label}",
   "interaction.detail.close": "Close details for {label}",
-  "interaction.detail.open_hint": "Details · double-click",
-  "interaction.detail.close_hint": "Close · double-click",
+  "interaction.detail.open_hint": "Details",
+  "interaction.detail.close_hint": "Close",
   // ── détail sans double-clic : boutons visibles (tactile) ──
   "interaction.detail.button_hint": "Details",
   "interaction.detail.ask": "Ask about {label}",
@@ -380,27 +371,8 @@ export const en: Record<string, string> = {
   "chart.detail_bar.open": "Open details: {label}",
   "chart.detail_bar.close": "Close details: {label}",
   "chart.detail_bar.ask": "Ask about: {label}",
-  "document.row.open_actions":
-    "Click or Space to add or remove {label} from context · double-click or Enter to show its actions",
-  "document.row.close_actions":
-    "Click or Space to add or remove {label} from context · double-click or Enter to close its actions",
-  "document.row.open_actions_only":
-    "Double-click or press Enter to show actions for {label}",
-  "document.row.close_actions_only":
-    "Double-click or press Enter to close actions for {label}",
-  "document.row.open_detail":
-    "Click or Space to add or remove {label} from context · double-click or Enter to open its details",
-  "document.row.close_detail":
-    "Click or Space to add or remove {label} from context · double-click or Enter to close its details",
   "document.row.open_follow": "Open details for {label}",
-  "document.row.open_detail_only":
-    "Double-click or press Enter to open details for {label}",
-  "document.row.close_detail_only":
-    "Double-click or press Enter to close details for {label}",
-  "chart.tooltip.click_action_context":
-    "click: add/remove context · 2× details",
-  "chart.tooltip.click_action_context_only": "click: add/remove context",
-  "chart.tooltip.click_action_fallback": "2× details",
+  "chart.tooltip.click_action_fallback": "click: details",
   "chart.tooltip.click_action_detail": "click: details",
   // ── pile de navigation (fil, niveaux, sauts) ──
   "nav.back": "Back",
@@ -423,7 +395,6 @@ export const en: Record<string, string> = {
   "nav.stale_title":
     "An action deeper in the stack changed what this level shows.",
   "nav.trail": "Navigation trail",
-  "kanban.pin.loaded_cards": "Loaded cards in {column} ({count})",
   "kanban.nav.edit_card": "edit {id}",
   "nav.bar_click": "click: one more level",
   "nav.unexpected_body": "This level received an unexpected body.",

@@ -133,7 +133,7 @@ returned rows in JavaScript produces a new value without the list's actions.
 When the user asks to keep a program, such as “save this for Monday”, use the
 execution reference from that successful result. Call `execute` with
 `{"save":{"runId":"<execution reference>","name":"monday-invoices","description":"Overdue EUR invoices by minimum outstanding balance"}}`.
-This saves the program for later use. Scheduling is a separate request. To run
+The save command displays a receipt with the saved name. The ordinary ERP result displays the business view. Scheduling is a separate request. To run
 it again at EUR 3000, call the same tool with
 `{"snippet":"monday-invoices","params":{"minimum":3000}}`. In a new
 conversation, when the user refers to a saved procedure, first call `execute`

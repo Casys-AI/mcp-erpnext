@@ -33,7 +33,7 @@ import { UI_VIEWERS } from "../viewers.ts";
 import { createWriteApproval } from "./approval.ts";
 import { mountComponent } from "./mount.ts";
 import { SnippetPanel } from "./SnippetPanel.tsx";
-import { executionReference, snippetEvent } from "./snippet-contract.ts";
+import { type SnippetEvent, snippetEvent } from "./snippet-contract.ts";
 import { t } from "../shared/i18n.ts";
 import { isResultRecord } from "../shared/refresh.ts";
 
@@ -160,7 +160,6 @@ function resultText(result: HostResult): string {
 }
 
 function showText(text: string) {
-  viewRoot.hidden = false;
   const message = document.createElement("pre");
   message.textContent = text;
   viewRoot.replaceChildren(message);
@@ -182,7 +181,6 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
   if (!readSnippetPanels(result).length) {
     const rendered = await dispatchSingle(result, signal);
     if (signal.aborted) return;
-    viewRoot.hidden = false;
     if (!rendered) showText(resultText(result));
     return;
   }
@@ -212,7 +210,6 @@ async function showExecution(result: HostResult, signal: AbortSignal) {
   );
   const grid = document.createElement("div");
   grid.className = "code-mode-board";
-  viewRoot.hidden = false;
   viewRoot.replaceChildren(grid);
   const mountedKpis = new Map<string, MountedKpiPanel>();
   await Promise.all(board.children.map(async (child) => {
@@ -286,62 +283,35 @@ async function clearExecution(signal: AbortSignal) {
   await dispatchSingle({ content: [] }, signal);
   if (!signal.aborted) {
     viewRoot.replaceChildren();
-    viewRoot.hidden = false;
   }
 }
 
 let delivery = new AbortController();
-let panelRevision = 0;
-function showSnippets(
-  result: HostResult,
-  signal: AbortSignal,
-) {
-  const event = snippetEvent(result);
-  const reference = executionReference(result);
-  const canCall = Boolean(host.getHostCapabilities()?.serverTools);
+function showSnippets(event: SnippetEvent, signal: AbortSignal) {
   render(
-    event || (canCall && reference)
-      ? (
-        <SnippetPanel
-          key={++panelRevision}
-          event={event}
-          reference={reference}
-          canCall={canCall}
-          setResultHidden={event ? undefined : (hidden) => {
-            if (!signal.aborted) viewRoot.hidden = hidden;
-          }}
-          call={async (args) => {
-            signal.throwIfAborted();
-            const result = await host.callServerTool(
-              { name: "execute", arguments: args },
-              { signal },
-            );
-            signal.throwIfAborted();
-            if (result.isError) {
-              throw new Error(
-                resultText(result) || t("code_mode.snippet_failed"),
-              );
-            }
-            const event = snippetEvent(result);
-            const expected = args.save
-              ? "saved"
-              : args.snippets
-              ? "list"
-              : "source";
-            if (
-              event?.kind !== expected ||
-              (event.kind === "source" &&
-                event.snippet.name !== args.inspectSnippet)
-            ) {
-              throw new Error(t("code_mode.snippet_failed"));
-            }
-            if (event.kind === "saved") await clearExecution(signal);
-            signal.throwIfAborted();
-            return event;
-          }}
-        />
-      )
-      : null,
+    <SnippetPanel
+      event={event}
+      canCall={Boolean(host.getHostCapabilities()?.serverTools)}
+      call={async (args) => {
+        signal.throwIfAborted();
+        const result = await host.callServerTool(
+          { name: "execute", arguments: args },
+          { signal },
+        );
+        signal.throwIfAborted();
+        if (result.isError) {
+          throw new Error(resultText(result) || t("code_mode.snippet_failed"));
+        }
+        const next = snippetEvent(result);
+        if (
+          (args.snippets && next?.kind === "list") ||
+          (next?.kind === "source" && next.snippet.name === args.inspectSnippet)
+        ) {
+          return next;
+        }
+        throw new Error(t("code_mode.snippet_failed"));
+      }}
+    />,
     snippetRoot,
   );
 }
@@ -357,12 +327,13 @@ host.ontoolresult = async (result) => {
     if (signal.aborted) return;
     const confirmed = await approval.resolve(result, signal);
     if (signal.aborted) return;
-    if (snippetEvent(confirmed)) {
+    const event = snippetEvent(confirmed);
+    if (event) {
       await clearExecution(signal);
+      if (!signal.aborted) showSnippets(event, signal);
     } else {
       await showExecution(confirmed, signal);
     }
-    if (!signal.aborted) showSnippets(confirmed, signal);
   } catch (error) {
     if (!signal.aborted) {
       render(null, snippetRoot);

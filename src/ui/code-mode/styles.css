@@ -39,17 +39,8 @@
   font-weight: 650;
 }
 
-.erp-snippets-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-}
-
 .erp-snippets button,
-.erp-snippets input,
-.erp-snippets textarea,
-.erp-snippets select {
+.erp-snippets input {
   box-sizing: border-box;
   max-width: 100%;
   min-height: 2.125rem;
@@ -63,12 +54,6 @@
 .erp-snippets button {
   cursor: pointer;
   font-weight: 600;
-}
-
-.erp-snippets .erp-snippets-primary {
-  border-color: var(--color-accent-edge);
-  color: var(--color-accent-text);
-  background: var(--color-sunken);
 }
 
 .erp-snippets button:hover:not(:disabled) {
@@ -86,33 +71,19 @@
   cursor: default;
 }
 
-.erp-snippets-form,
-.erp-snippets fieldset,
 .erp-snippets label {
   display: grid;
   gap: 0.45rem;
   min-width: 0;
 }
 
-.erp-snippets fieldset {
-  gap: 0.75rem;
-  max-block-size: 24rem;
-  overflow: auto;
-}
-
 .erp-snippets label {
   font-weight: 550;
 }
 
-.erp-snippets input,
-.erp-snippets textarea,
-.erp-snippets select {
+.erp-snippets input {
   width: 100%;
   font-weight: 400;
-}
-
-.erp-snippets textarea {
-  resize: vertical;
 }
 
 .erp-snippets .mcp-view-snippet-library {
@@ -145,8 +116,7 @@
 
 @media (pointer: coarse) {
   .erp-snippets button,
-  .erp-snippets input,
-  .erp-snippets select {
+  .erp-snippets input {
     min-height: 2.75rem;
   }
 }

@@ -16,7 +16,6 @@ export const fr: Record<string, string> = {
   "code_mode.confirm_change": "Confirmer la modification dans ERPNext",
   "code_mode.approve": "Approuver",
   "code_mode.waiting": "En attente de la réponse d’ERPNext…",
-  "code_mode.snippet_save": "Enregistrer le snippet",
   "code_mode.snippet_saved": "Snippet enregistré",
   "code_mode.snippet_library": "Mes snippets",
   "code_mode.snippet_view": "Voir le script",
@@ -24,9 +23,6 @@ export const fr: Record<string, string> = {
   "code_mode.snippet_search": "Rechercher par nom ou description",
   "code_mode.snippet_no_match": "Aucun snippet ne correspond à la recherche.",
   "code_mode.snippet_empty": "Aucun snippet enregistré.",
-  "code_mode.snippet_name_required": "Saisissez un nom.",
-  "code_mode.snippet_name": "Nom",
-  "code_mode.snippet_description": "Description (facultative)",
   "code_mode.snippet_failed":
     "Impossible de traiter la demande concernant le snippet.",
   "common.cancel": "Annuler",

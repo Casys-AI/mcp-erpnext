@@ -32,8 +32,8 @@ Works with **self-hosted** and **ERPNext Cloud** (frappe.cloud) instances.
 > ZIP files, download `erpnext-code-mode-skill.zip` from the matching
 > [Code Mode prerelease](https://github.com/Casys-AI/mcp-erpnext/releases).
 >
-> Ask “Save this for Monday” after a successful run. **My snippets** lets you
-> search saved programs and read their JavaScript. In a new chat on the same
+> Ask “Save this for Monday” after a successful run to see a save confirmation.
+> Ask “Show my snippets” to search saved programs and read their JavaScript. In a new chat on the same
 > connection, ask “Run my Monday invoice list at €3,000” to see updated results.
 
 ## Screenshots

@@ -75,10 +75,3 @@ export function snippetEvent(result: Metadata): SnippetEvent | undefined {
     return { kind: "source", snippet: value };
   }
 }
-
-export function executionReference(result: Metadata): string | undefined {
-  const reference = result._meta?.["io.casys/erpnext-execution-ref"];
-  if (!result.isError && typeof reference === "string" && reference) {
-    return reference;
-  }
-}

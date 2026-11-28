@@ -47,8 +47,40 @@ jobs:
             --requested-tag "${REQUESTED_NPM_DIST_TAG:-auto}" \
             --github-output "$GITHUB_OUTPUT"
 
-  publish-jsr:
+  # The installed package must pass its stdio/HTTP Code Mode smoke and the
+  # third-party notices check before either registry receives it: JSR
+  # publishes first, so gating only the npm job would be too late.
+  package_smoke:
     needs: release_guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Build UI viewers
+        run: |
+          cd src/ui
+          npm ci
+          node build-all.mjs
+
+      - name: Build Node.js bundle
+        run: bash scripts/build-node.sh
+
+      - name: Installed Code Mode package over stdio and HTTP
+        run: node --test scripts/code-mode-smoke.mjs
+
+      - name: Third-party notices match the built bundles
+        run: node scripts/third-party-notices.mjs --check
+
+  publish-jsr:
+    needs: [release_guard, package_smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: read

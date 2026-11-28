@@ -9,6 +9,7 @@ import {
   formatToolInputError,
   isToolInputError,
   parseToolInputError,
+  renderErrorText,
   TOOL_INPUT_ERROR_CODES,
   ToolInputError,
 } from "./errors.ts";
@@ -109,4 +110,40 @@ Deno.test("ToolInputError codes - are unique upper-case identifiers", () => {
   for (const code of TOOL_INPUT_ERROR_CODES) {
     assert(/^[A-Z][A-Z0-9_]*$/.test(code), code);
   }
+});
+
+Deno.test("renderErrorText - renders typed errors and keeps other messages", () => {
+  class Typed extends Error {
+    constructor(readonly code: unknown, readonly recovery: unknown) {
+      super("No supplier quotation.");
+    }
+  }
+  assertEquals(
+    renderErrorText(
+      new Typed("BUY_CAPTURE_MISSING_SOURCE", "Capture it first."),
+      "erpnext_buy",
+    ),
+    "[erpnext_buy] BUY_CAPTURE_MISSING_SOURCE: No supplier quotation. Recovery: Capture it first.",
+  );
+  // Already rendered: unchanged, never double-prefixed.
+  const rendered = "[t] INVALID_INPUT: bad. Recovery: fix it.";
+  assertEquals(
+    renderErrorText(new Typed("OTHER", "x"), "t").startsWith("[t] OTHER:"),
+    true,
+  );
+  assertEquals(renderErrorText(new Error(rendered), "other"), rendered);
+  // Not a usable code or recovery (an HTTP status, a lowercase code): message only.
+  assertEquals(
+    renderErrorText(new Typed(404, "retry"), "t"),
+    "No supplier quotation.",
+  );
+  assertEquals(
+    renderErrorText(new Typed("not_a_code", "retry"), "t"),
+    "No supplier quotation.",
+  );
+  assertEquals(
+    renderErrorText(new Typed("CODE", " "), "t"),
+    "No supplier quotation.",
+  );
+  assertEquals(renderErrorText("plain", "t"), "plain");
 });

@@ -40,7 +40,7 @@ import {
   isToolFilterError,
 } from "./src/tools/selection.ts";
 import { readSelectionConfig } from "./src/tools/selection-config.ts";
-import { FrappeAPIError } from "./src/api/frappe-client.ts";
+import { renderErrorText } from "./src/tools/errors.ts";
 import { UI_VIEWERS, withViewerResourceMeta } from "./src/ui/viewers.ts";
 import {
   BUY_VIEW_APP_MANIFEST,
@@ -182,11 +182,10 @@ async function main() {
     validateSchema: true,
     auth: authProvider ? { provider: authProvider } : undefined,
     logger: (msg: string) => console.error(`[mcp-erpnext] ${msg}`),
-    toolErrorMapper: (error: unknown) => {
-      if (error instanceof FrappeAPIError) return error.message;
-      if (error instanceof Error) return error.message;
-      return String(error);
-    },
+    // Only the message reaches the client: render typed errors (code and
+    // recovery as properties) in the `[tool] CODE:` contract on the way out.
+    toolErrorMapper: (error: unknown, toolName: string) =>
+      renderErrorText(error, toolName),
   });
 
   registerBuyViewAppManifest(server);

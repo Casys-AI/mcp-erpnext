@@ -1,6 +1,9 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import type { ToolHandlerContext } from "@mcpview/server";
 import { type Operation, WriteConfirmations } from "./confirmation.ts";
+import { CodeModeError } from "./errors.ts";
+import { SuspendCodeMode } from "./sandbox.ts";
+import { parseToolInputError } from "../tools/errors.ts";
 
 const source = { name: "execute", args: { code: "fixture program" } };
 const operation = (n: number): Operation => ({
@@ -202,4 +205,166 @@ Deno.test("the native upload callback can confirm a maximum-size file inside a d
     "uploaded",
   );
   assertEquals(count, 1);
+});
+
+Deno.test("a declined write tells the agent which approved writes already reached ERPNext", async () => {
+  const no = { action: "decline" };
+  const named = (name: string): Operation => ({
+    name,
+    args: { doc: "SINV-1" },
+  });
+
+  // Form rail: the first write is approved and applied, the second is declined.
+  const form = new WriteConfirmations();
+  const alice = http("alice", true);
+  const writes: string[] = [];
+  const program = (ctx: ToolHandlerContext) =>
+    form.run(ctx, source, false, async (write) => {
+      await write(named("erpnext_doc_create"), async () => {
+        writes.push("create");
+        return { name: "SINV-1" };
+      });
+      return await write(named("erpnext_doc_submit"), async () => {
+        writes.push("submit");
+        return { docstatus: 1 };
+      });
+    });
+  const first = formId(await program(alice));
+  const second = formId(
+    await program({
+      ...alice,
+      retryVerified: true,
+      inputResponses: { [first]: yes },
+    }),
+  );
+  assertEquals(writes, ["create"]);
+  const error = await assertRejects(
+    () =>
+      program({
+        ...alice,
+        retryVerified: true,
+        inputResponses: { [second]: no },
+      }),
+    CodeModeError,
+  );
+  assertEquals(error.code, "CHANGE_CANCELLED");
+  assertEquals(error.context, {
+    declined: "erpnext_doc_submit",
+    sent: ["erpnext_doc_create"],
+    failed: [],
+  });
+  assertEquals(parseToolInputError(error.message)?.code, "CHANGE_CANCELLED");
+  assert(
+    error.message.includes(
+      "Already sent to ERPNext in this program: erpnext_doc_create",
+    ),
+  );
+  assertEquals(writes, ["create"]);
+
+  // Apps rail, nothing approved yet: the agent learns that nothing changed.
+  const app = new WriteConfirmations();
+  const bob = http("bob");
+  const once = (_entry: Operation, ctx: ToolHandlerContext) =>
+    app.run(
+      ctx,
+      source,
+      true,
+      (write) =>
+        write(named("erpnext_doc_cancel"), async () => {
+          throw new Error("unexpected ERP call");
+        }),
+    );
+  const ticket = appTicket(await once(source, bob));
+  const declined = await assertRejects(
+    () => app.confirmInApp({ ticket, decision: "cancel" }, bob, once),
+    CodeModeError,
+  );
+  assertEquals(declined.context, {
+    declined: "erpnext_doc_cancel",
+    sent: [],
+    failed: [],
+  });
+  assert(declined.message.includes("No ERPNext change was made"));
+});
+
+Deno.test("a write that failed after reaching ERPNext is never reported as no change", async () => {
+  const flow = new WriteConfirmations();
+  const alice = http("alice", true);
+  const named = (name: string): Operation => ({
+    name,
+    args: { doc: "TASK-1" },
+  });
+  const program = (ctx: ToolHandlerContext) =>
+    flow.run(ctx, source, false, async (write) => {
+      try {
+        await write(named("erpnext_task_create"), async () => {
+          throw new Error("assignment failed after the task was created");
+        });
+      } catch (error) {
+        // In the sandbox a suspension bypasses guest catch handlers.
+        if (error instanceof SuspendCodeMode) throw error;
+        // The program carries on after the ERP failure, as guest code may.
+      }
+      return await write(named("erpnext_task_assign"), async () => ({}));
+    });
+  const first = formId(await program(alice));
+  const second = formId(
+    await program({
+      ...alice,
+      retryVerified: true,
+      inputResponses: { [first]: yes },
+    }),
+  );
+  const error = await assertRejects(
+    () =>
+      program({
+        ...alice,
+        retryVerified: true,
+        inputResponses: { [second]: { action: "decline" } },
+      }),
+    CodeModeError,
+  );
+  assertEquals(error.context, {
+    declined: "erpnext_task_assign",
+    sent: [],
+    failed: ["erpnext_task_create"],
+  });
+  assert(
+    error.message.includes(
+      "Sent but failed, possibly in part: erpnext_task_create",
+    ),
+  );
+  assert(!error.message.includes("No ERPNext change"));
+});
+
+Deno.test("a program that fails after an approved write tells the agent not to rerun it", async () => {
+  const flow = new WriteConfirmations();
+  const alice = http("alice", true);
+  let creates = 0;
+  const program = (ctx: ToolHandlerContext) =>
+    flow.run(ctx, source, false, async (write) => {
+      await write(
+        { name: "erpnext_doc_submit", args: { doc: "SINV-1" } },
+        async () => {
+          creates++;
+          return { docstatus: 1 };
+        },
+      );
+      // A replayed read now sees the submitted record and rejects it.
+      throw new Error(
+        "[erpnext_doc_get] INVALID_INPUT: SINV-1 is not a draft. Recovery: Pick a draft.",
+      );
+    });
+  const id = formId(await program(alice));
+  const error = await assertRejects(
+    () =>
+      program({ ...alice, retryVerified: true, inputResponses: { [id]: yes } }),
+    Error,
+  );
+  const parsed = parseToolInputError(error.message);
+  assertEquals(parsed?.code, "WRITE_APPLIED_THEN_FAILED");
+  assert(parsed?.message.includes("erpnext_doc_submit"));
+  assert(parsed?.message.includes("INVALID_INPUT: SINV-1 is not a draft"));
+  assert(!parsed?.message.includes("Pick a draft"));
+  assertEquals(creates, 1);
 });

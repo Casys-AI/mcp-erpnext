@@ -111,3 +111,26 @@ export function parseToolInputError(
     recovery: match[4],
   };
 }
+
+const CODE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+
+/**
+ * The text an error leaves as when only its message crosses a boundary (an
+ * MCP error result, a Code Mode program). Typed errors such as
+ * `BuyCaptureError` carry `code` and `recovery` as properties with a plain
+ * message; render them in the `[subject] CODE: …. Recovery: …` contract so
+ * the code survives. Already rendered and untyped errors keep their message.
+ */
+export function renderErrorText(error: unknown, subject: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (parseToolInputError(message)) return message;
+  const typed = error as { code?: unknown; recovery?: unknown } | null;
+  if (
+    typed && typeof typed === "object" &&
+    typeof typed.code === "string" && CODE_PATTERN.test(typed.code) &&
+    typeof typed.recovery === "string" && typed.recovery.trim()
+  ) {
+    return formatToolError(subject, typed.code, message, typed.recovery, true);
+  }
+  return message;
+}

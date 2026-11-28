@@ -62,3 +62,39 @@ Deno.test("write decisions require a click for each operation and consume a doub
     ]);
     assert(panel.hidden && !root.inert);
   }));
+
+Deno.test("a decision answered after the dialog closed is handed back instead of dropped", () =>
+  withDocument(async (root) => {
+    let answer: (value: unknown) => void = () => {};
+    const late: Array<[unknown, boolean]> = [];
+    const approval = createWriteApproval(
+      root,
+      {
+        callServerTool() {
+          return new Promise((resolve) => (answer = resolve)) as never;
+        },
+      },
+      { onLateResult: (result, more) => late.push([result, more]) },
+    );
+    const delivery = new AbortController();
+    const pending = approval.resolve(request("first"), delivery.signal);
+    const panel = root.previousElementSibling as HTMLElement;
+    (panel.querySelector("button") as HTMLButtonElement).click();
+    // A new result replaces the view while the approval is in flight.
+    delivery.abort();
+    await pending.catch(() => {});
+    const committed = { content: [{ type: "text" as const, text: "done" }] };
+    answer(committed);
+    await until(() => late.length === 1, "late result");
+    assertEquals(late, [[committed, false]]);
+
+    // An answer that asks for a further approval is flagged as such.
+    const second = new AbortController();
+    const again = approval.resolve(request("second"), second.signal);
+    (panel.querySelector("button") as HTMLButtonElement).click();
+    second.abort();
+    await again.catch(() => {});
+    answer(request("third"));
+    await until(() => late.length === 2, "second late result");
+    assertEquals(late[1][1], true);
+  }));

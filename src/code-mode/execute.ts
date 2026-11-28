@@ -38,6 +38,7 @@ import {
 import { BoardLayoutRuns } from "@mcpview/compose/code-mode/layout-runs";
 import { VIEWER_META_KEY } from "../tools/model-visible.ts";
 import { runCodeProgram, SuspendCodeMode } from "./sandbox.ts";
+import { codeModeMessage, describeCause } from "./errors.ts";
 
 type Arguments = Record<string, unknown>;
 // Compose's public MCP App-only result envelope. The backend does not render panels.
@@ -462,7 +463,11 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
         catalog,
         async (name, args) => {
           if (!names.has(name)) {
-            throw new Error(`Unknown ERPNext operation: ${name}`);
+            throw new Error(codeModeMessage(
+              "UNKNOWN_OPERATION",
+              `Unknown ERPNext operation: ${name}`,
+              "Use an operation name listed in erp.catalog; operations outside the enabled categories are not available",
+            ));
           }
           const result = await call(name, args, ctx);
           if (isNativeResult(result)) {
@@ -625,9 +630,15 @@ export function createCodeModeExecute(options: CodeModeExecuteOptions): {
         } catch (error) {
           // A request for the next approval must continue through the same journal.
           if (!completedWrite || error instanceof SuspendCodeMode) throw error;
-          throw new SuspendCodeMode(
-            `ERPNext completed ${completedWrite}, but the program or its selected views could not finish. Check the changed record before retrying.`,
-          );
+          // Keep the cause's code and detail, not its own recovery: the only
+          // safe next step is to check the record, never to rerun the write.
+          throw new SuspendCodeMode(codeModeMessage(
+            "WRITE_APPLIED_THEN_FAILED",
+            `ERPNext completed ${completedWrite}, but the program or its selected views could not finish (${
+              describeCause(error)
+            })`,
+            "Check the changed record in ERPNext before retrying, and do not repeat this write",
+          ));
         }
       };
       const result = options.run

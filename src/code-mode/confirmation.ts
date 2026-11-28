@@ -8,6 +8,7 @@ import {
   decodeBase64File,
 } from "../api/frappe-client.ts";
 import { SuspendCodeMode } from "./sandbox.ts";
+import { CodeModeError, codeModeMessage, describeCause } from "./errors.ts";
 
 type Args = Record<string, unknown>;
 export type Operation = { name: string; args: Args };
@@ -15,12 +16,20 @@ type Invoke = (
   operation: Operation,
   invoke: () => Promise<unknown>,
 ) => Promise<unknown>;
-type Entry = { signature: string; result: string; error: boolean };
+/** One approved write already replayed or applied; `operation` names it for the agent. */
+type Entry = {
+  operation: string;
+  signature: string;
+  result: string;
+  error: boolean;
+};
 type Rail = "app" | "form";
 interface Ticket {
   owner: string;
   rail: Rail;
   source: Operation;
+  /** The write awaiting this decision. */
+  operation: string;
   signature: string;
   journal: Entry[];
   expires: number;
@@ -105,6 +114,45 @@ function formCapable(ctx?: ToolHandlerContext): boolean {
     ("form" in cap || !Object.keys(cap).length);
 }
 
+/**
+ * Approved writes of this program that ERPNext already received. A failed one
+ * may still have committed part of its work (a task created before its
+ * assignment failed), so it is reported apart, never as "nothing changed".
+ */
+function outcomes(journal: readonly Entry[]) {
+  return {
+    sent: journal.filter((step) => !step.error).map((step) => step.operation),
+    failed: journal.filter((step) => step.error).map((step) => step.operation),
+  };
+}
+
+/**
+ * The agent reads this when the user declines a write. Earlier approvals in
+ * the same program already reached ERPNext; say which, so it neither repeats
+ * them nor reports that nothing changed.
+ */
+function cancelled(ticket: Ticket): CodeModeError {
+  const { sent, failed } = outcomes(ticket.journal);
+  const touched = sent.length > 0 || failed.length > 0;
+  return new CodeModeError(
+    "CHANGE_CANCELLED",
+    [
+      `The user cancelled ${ticket.operation}`,
+      sent.length &&
+      `Already sent to ERPNext in this program: ${sent.join(", ")}`,
+      failed.length &&
+      `Sent but failed, possibly in part: ${failed.join(", ")}`,
+      !touched && "No ERPNext change was made",
+    ].filter(Boolean).join(". "),
+    {
+      recovery: touched
+        ? "Check these records in ERPNext and tell the user what changed; do not repeat them, and ask before proposing another change"
+        : "Ask the user before proposing this change again",
+      context: { declined: ticket.operation, sent, failed },
+    },
+  );
+}
+
 /** Tickets stay private to the connected host and expire with this server process. */
 export class WriteConfirmations {
   private pending = new Map<string, Ticket>();
@@ -143,9 +191,7 @@ export class WriteConfirmations {
       throw new Error("ERPNext confirmation requires a decision in the app.");
     }
     const ticket = this.claim(args.ticket, "app", ctx);
-    if (args.decision === "cancel") {
-      throw new Error("ERPNext change cancelled.");
-    }
+    if (args.decision === "cancel") throw cancelled(ticket);
     const fresh = {
       ...ctx,
       toolName: ticket.source.name,
@@ -180,7 +226,7 @@ export class WriteConfirmations {
         !answer.content || typeof answer.content !== "object" ||
         !("confirm" in answer.content) || answer.content.confirm !== true
       ) {
-        throw new Error("ERPNext change cancelled.");
+        throw cancelled(grant);
       }
     }
     if (grant && canonical(grant.source) !== canonical(source)) {
@@ -213,6 +259,7 @@ export class WriteConfirmations {
           result = await invoke();
         } catch (error) {
           journal.push({
+            operation: operation.name,
             signature: key,
             error: true,
             result: error instanceof Error ? error.message : String(error),
@@ -221,11 +268,18 @@ export class WriteConfirmations {
         }
         const stored = JSON.stringify(result);
         if (stored === undefined || stored.length > MAX_BYTES) {
-          throw new SuspendCodeMode(
-            "The approved ERPNext operation completed; its receipt cannot be retained for further writes.",
-          );
+          throw new SuspendCodeMode(codeModeMessage(
+            "WRITE_APPLIED_THEN_FAILED",
+            `ERPNext completed ${operation.name}, but its receipt is too large to keep for the next writes of this program`,
+            "Check the record in ERPNext before retrying, and do not repeat this write",
+          ));
         }
-        journal.push({ signature: key, error: false, result: stored });
+        journal.push({
+          operation: operation.name,
+          signature: key,
+          error: false,
+          result: stored,
+        });
         return result;
       }
       const identity = owner(ctx);
@@ -271,6 +325,7 @@ export class WriteConfirmations {
         owner: identity,
         rail,
         source: structuredClone(source),
+        operation: operation.name,
         signature: key,
         journal,
         expires: this.clock() + TTL,
@@ -326,7 +381,27 @@ export class WriteConfirmations {
       return result;
     } catch (error) {
       if (error instanceof NeedApproval) return error.result;
-      throw error;
+      if (error instanceof SuspendCodeMode) throw error;
+      // A replay re-runs the program's reads against records that earlier
+      // approvals already changed, so it can fail before it reaches those
+      // writes again. Never let that read as "safe to rerun".
+      const { sent, failed } = outcomes(journal);
+      if (!sent.length && !failed.length) throw error;
+      throw new SuspendCodeMode(codeModeMessage(
+        "WRITE_APPLIED_THEN_FAILED",
+        `${
+          [
+            sent.length && `ERPNext already received ${sent.join(", ")}`,
+            failed.length &&
+            `${
+              failed.join(", ")
+            } failed after being sent and may have applied in part`,
+          ].filter(Boolean).join("; ")
+        } in this program, but the program could not finish (${
+          describeCause(error)
+        })`,
+        "Check these records in ERPNext before retrying, and do not repeat these writes",
+      ));
     }
   }
 }

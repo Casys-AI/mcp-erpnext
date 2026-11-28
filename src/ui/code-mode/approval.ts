@@ -28,9 +28,19 @@ function confirmationFrom(result: HostResult): WriteConfirmation | undefined {
   };
 }
 
+export interface WriteApprovalOptions {
+  /**
+   * A decision was sent, then the dialog closed (a new result replaced the
+   * view) before its answer came back. The server acted on it anyway.
+   * `needsAnotherApproval` is true when the answer asks for a further write.
+   */
+  onLateResult?(result: HostResult, needsAnotherApproval: boolean): void;
+}
+
 export function createWriteApproval(
   root: HTMLElement,
   host: Pick<App, "callServerTool">,
+  options: WriteApprovalOptions = {},
 ) {
   const panel = document.createElement("section");
   panel.className = "erp-write-approval";
@@ -88,7 +98,13 @@ export function createWriteApproval(
             name: "erpnext_confirm_write",
             arguments: { ticket: request.ticket, decision },
           });
-          if (!active) return;
+          if (!active) {
+            options.onLateResult?.(
+              result,
+              confirmationFrom(result) !== undefined,
+            );
+            return;
+          }
           finish();
           resolve(result);
         } catch (error) {

@@ -4,6 +4,32 @@ All notable changes to `@casys/mcp-erpnext` will be documented in this file.
 
 ## [Unreleased]
 
+- Code Mode errors carry a code and a recovery in the
+  `[execute] CODE: … Recovery: …` format: `CALL_LIMIT`, `PROGRAM_TIMEOUT`,
+  `UNKNOWN_OPERATION`, `PROGRAM_FAILED`, `UNAWAITED_CALLS`, `CHANGE_CANCELLED`
+  and `WRITE_APPLIED_THEN_FAILED`. Syntax errors and results that cannot be
+  serialized are coded too.
+- `erp.call` reaches ERPNext only when the program consumes its result with
+  `await`, `then` or `Promise.all`. A write the program never consumes is not
+  sent, even if the program awaits other calls afterwards, and the execution
+  fails with `UNAWAITED_CALLS` instead of reporting success. An unconsumed read
+  is dropped silently. A call's arguments are captured, and validated, where the
+  program creates it.
+- When the user cancels a write, the error lists the writes of the same program
+  already sent to ERPNext, and those that failed after being sent. If the
+  program fails after an approved write, including during a replay, the agent is
+  told not to repeat it.
+- On hosts that confirm writes in the app, the outcome (finished, cancelled or
+  failed) reaches the model context until the next execution, since the agent's
+  own call only saw the pending confirmation. This includes a decision answered
+  after a new result replaced the view.
+- Errors that carry their code and recovery as properties, such as Buy capture
+  errors, keep them in tool results and inside programs: a program's `catch`
+  receives an `Error` with `code` and `recovery`.
+- CI runs the installed-package Code Mode smoke and the third-party notices
+  check on every pull request and before publishing to JSR or npm. The smoke
+  accepts a stable version on the `latest` channel.
+
 ## [4.0.0-beta.5] - 2026-11-27
 
 - Update a saved dashboard's panel positions and widths through `execute`.

@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { resolveDistTag } from "./release-guard.mjs";
+import { isPrerelease, resolveDistTag } from "./release-guard.mjs";
 
 const VERSION = "2026-07-28";
 const APP_MIME = "text/html;profile=mcp-app";
@@ -648,20 +648,25 @@ async function checkUpload(client, fixture) {
   assert.deepEqual(fixture.uploads, [{ name, bytes: file.length, sha256 }]);
 }
 
-test("installed Code Mode beta over stdio and Streamable HTTP", {
+test("installed Code Mode package over stdio and Streamable HTTP", {
   timeout: 60_000,
 }, async (t) => {
   const cwd = mkdtempSync(join(tmpdir(), "mcp-erpnext-code-mode-"));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
   const { bin, version } = installPackage(cwd);
-  assert.match(version, /-beta\.\d+$/);
+  // This smoke gates every publish, stable included: check that the installed
+  // version lands on its own channel, and leave channel policy to the
+  // release-guard tests.
+  const prerelease = isPrerelease(version);
   assert.equal(
     resolveDistTag({ version, requestedTag: "auto" }).npmDistTag,
-    "next",
+    prerelease ? "next" : "latest",
   );
-  assert.throws(() => resolveDistTag({ version, requestedTag: "latest" }), {
-    code: "DIST_TAG_MISMATCH",
-  });
+  if (prerelease) {
+    assert.throws(() => resolveDistTag({ version, requestedTag: "latest" }), {
+      code: "DIST_TAG_MISMATCH",
+    });
+  }
 
   const frappe = await startFrappe(t);
   const env = {

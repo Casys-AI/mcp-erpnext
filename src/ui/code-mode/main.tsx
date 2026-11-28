@@ -34,6 +34,10 @@ import { applyCasysTheme, themeFromSearch } from "../shared/casys-theme.ts";
 import { bindHostContext } from "../shared/host-context-hook.ts";
 import { UI_VIEWERS } from "../viewers.ts";
 import { createWriteApproval } from "./approval.ts";
+import {
+  WRITE_OUTCOME_CONTEXT_ID,
+  writeOutcomeContext,
+} from "./write-outcome.ts";
 import { mountComponent } from "./mount.ts";
 import { SnippetPanel } from "./SnippetPanel.tsx";
 import { type SnippetEvent, snippetEvent } from "./snippet-contract.ts";
@@ -87,7 +91,16 @@ controlsStyle.textContent = getPanelControlsCss();
 document.head.append(controlsStyle);
 const root = document.getElementById("root")!;
 const host = new App({ name: "ERPNext", version: "1.0.0" }, {});
-const approval = createWriteApproval(root, host);
+const approval = createWriteApproval(root, host, {
+  // A decision sent before a new result replaced this view still reached the
+  // server: report it to the model instead of dropping it.
+  onLateResult(result, needsAnotherApproval) {
+    reportWriteOutcome(
+      needsAnotherApproval ? INTERRUPTED_APPROVAL : result,
+      delivery.signal,
+    );
+  },
+});
 const snippetRoot = document.createElement("div");
 const viewRoot = document.createElement("div");
 viewRoot.tabIndex = -1;
@@ -166,6 +179,36 @@ function resultText(result: HostResult): string {
   return result.content?.flatMap((entry) =>
     entry.type === "text" ? [entry.text] : []
   ).join("\n") ?? "";
+}
+
+/**
+ * Publish the outcome of an in-app confirmation to the model. It joins the
+ * merged panel context and is dropped by the next delivery's clear.
+ */
+const INTERRUPTED_APPROVAL: HostResult = {
+  isError: true,
+  content: [{
+    type: "text",
+    text:
+      "[execute] WRITE_APPLIED_THEN_FAILED: The user approved an ERPNext change, then a new result replaced this view before the next approval. Recovery: Check the record in ERPNext before running the program again.",
+  }],
+};
+
+// The delivery whose outcome is in the model context, until a clear is acknowledged.
+let outcomeSignal: AbortSignal | undefined;
+function reportWriteOutcome(result: HostResult, signal: AbortSignal) {
+  outcomeSignal = signal;
+  const update = panelContexts.forPanel(
+    WRITE_OUTCOME_CONTEXT_ID,
+    "ERPNext confirmation",
+    signal,
+  );
+  update(writeOutcomeContext(result)).catch(() => {
+    if (!signal.aborted) {
+      contextStatus.textContent = t("context.active.error");
+      contextStatus.hidden = false;
+    }
+  });
 }
 
 function showText(text: string) {
@@ -365,11 +408,27 @@ host.ontoolresult = async (result) => {
   approval.close();
   delivery = new AbortController();
   const { signal } = delivery;
+  if (outcomeSignal?.aborted) {
+    // The previous outcome must not stand while this delivery waits for a
+    // decision. Keep it marked until the host acknowledges the clear.
+    const previous = outcomeSignal;
+    panelContexts.clear().then(() => {
+      if (outcomeSignal === previous) outcomeSignal = undefined;
+    }, () => {
+      if (!signal.aborted) {
+        contextStatus.textContent = t("context.active.error");
+        contextStatus.hidden = false;
+      }
+    });
+  }
   try {
     await ready;
     if (signal.aborted) return;
     const confirmed = await approval.resolve(result, signal);
     if (signal.aborted) return;
+    // The agent's call only saw "waiting for confirmation in the app". Tell it
+    // how the decision ended, for this delivery's lifetime.
+    if (confirmed !== result) reportWriteOutcome(confirmed, signal);
     const event = snippetEvent(confirmed);
     if (event) {
       await clearExecution(

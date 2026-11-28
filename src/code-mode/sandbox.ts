@@ -194,6 +194,9 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
         argsHandle: QuickJSHandle | undefined,
         fromInput: boolean,
       ): number {
+        // Count at creation: each declared call holds detached arguments (up
+        // to the JSON limit) in the host, consumed or not.
+        if (nextCall >= MAX_CALLS) throw callLimit();
         if (!nameHandle || vm.typeof(nameHandle) !== "string") {
           throw new Error("Use erp.call(name, args).");
         }
@@ -225,16 +228,7 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
         const entry = declared.get(id);
         if (!entry) throw new Error("Use erp.call(name, args).");
         declared.delete(id);
-        if (++calls > MAX_CALLS) {
-          throw new CodeModeError(
-            "CALL_LIMIT",
-            `Maximum of ${MAX_CALLS} ERP calls per program`,
-            {
-              recovery:
-                "Read more per call with filters, fields and limit, or split the work across several execute calls",
-            },
-          );
-        }
+        if (++calls > MAX_CALLS) throw callLimit();
         const { name, mutating, args, fromInput } = entry;
         const deferred = keep(vm.newPromise());
         // Only start host I/O when the guest yields. No background work can
@@ -302,8 +296,16 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
       }
       const declareCall = keep(vm.newFunction(
         "declare",
-        (name, args, fromInput) =>
-          vm.newNumber(declare(name, args, vm.dump(fromInput) === true)),
+        (name, args, fromInput) => {
+          try {
+            return vm.newNumber(
+              declare(name, args, vm.dump(fromInput) === true),
+            );
+          } catch (error) {
+            // Throw the coded Error in the program, where erp.call is written.
+            return { error: guestError(error, "execute") };
+          }
+        },
       ));
       const startCall = keep(vm.newFunction("start", (id) => {
         try {
@@ -509,6 +511,17 @@ export async function runCodeProgram<T extends { readonly data: unknown }>(
   } catch (error) {
     throw atBoundary(error);
   }
+}
+
+function callLimit(): CodeModeError {
+  return new CodeModeError(
+    "CALL_LIMIT",
+    `Maximum of ${MAX_CALLS} ERP calls per program`,
+    {
+      recovery:
+        "Read more per call with filters, fields and limit, or split the work across several execute calls",
+    },
+  );
 }
 
 const PROGRAM_RECOVERY =

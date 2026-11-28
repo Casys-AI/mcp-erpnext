@@ -358,20 +358,36 @@ Deno.test("a lazy call sends the arguments it was created with and fails once", 
     Error,
     "Expected an argument object",
   );
-  // A start that fails (here the call budget) is not retried by consuming again.
+  // The call budget is spent where calls are created, consumed or not, so a
+  // loop cannot pile detached arguments up in the host.
   seen.length = 0;
   assertEquals(
     await runCodeProgram(
       `
-      for (let i = 0; i < 12; i++) await erp.call("read", {});
-      const last = erp.call("read", {});
-      const settled = await Promise.allSettled(Array(20).fill(last));
-      return settled.filter((s) => s.status === "rejected" && s.reason.code === "CALL_LIMIT").length;
+      let created = 0;
+      try {
+        for (;;) { erp.call("read", { blob: "x".repeat(100000) }); created++; }
+      } catch (e) {
+        return [created, e.code];
+      }
     `,
       [],
       call,
     ),
-    { value: 20 },
+    { value: [12, "CALL_LIMIT"] },
+  );
+  assertEquals(seen.length, 0);
+  // Consumed calls share the same budget.
+  assertEquals(
+    await runCodeProgram(
+      `
+      for (let i = 0; i < 12; i++) await erp.call("read", {});
+      try { erp.call("read", {}); } catch (e) { return e.code; }
+    `,
+      [],
+      call,
+    ),
+    { value: "CALL_LIMIT" },
   );
   assertEquals(seen.length, 12);
 });
